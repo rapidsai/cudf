@@ -64,7 +64,7 @@ rapids_cython_create_modules(
 
 # All modules need to include the header containing the exception handler.
 foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/cpp)
+  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 endforeach()
 
 target_link_libraries(strings_udf cudf_strings_udf)

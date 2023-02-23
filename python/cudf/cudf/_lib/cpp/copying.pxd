@@ -9,12 +9,12 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.exception_handler cimport cudf_exception_handler
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.exception_handler cimport cudf_exception_handler
 
 ctypedef const scalar constscalar
 
