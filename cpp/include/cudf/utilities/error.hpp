@@ -89,7 +89,7 @@ struct fatal_cuda_error : public cuda_error {
  * @brief Exception thrown when an operation is attempted on an unsupported dtype.
  *
  * This exception should be thrown when an operation is attempted on an
- * unsupported dtype. This exception should not be thrown directly and is
+ * unsupported data_type. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
 struct data_type_error : public std::invalid_argument {
