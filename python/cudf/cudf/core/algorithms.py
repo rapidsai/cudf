@@ -96,7 +96,7 @@ def factorize(
 
     if use_na_sentinel is not None and na_sentinel is not None:
         raise ValueError(
-            "Cannot specify both `na_sentinel` and `use_na_sentile`; "
+            "Cannot specify both `na_sentinel` and `use_na_sentinel`; "
             f"got `na_sentinel={na_sentinel}` and "
             f"`use_na_sentinel={use_na_sentinel}`"
         )
