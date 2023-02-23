@@ -34,7 +34,7 @@ repos:
         rev: 5.0.4
         hooks:
               - id: flake8
-                args: ["--config=setup.cfg"]
+                args: ["--config=.flake8"]
                 files: python/.*$
                 types: [file]
                 types_or: [python, cython]
