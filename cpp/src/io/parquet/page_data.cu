@@ -1885,7 +1885,11 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
-// should only be called from InitDeltaBinaryBlock or SetupNextMiniBlock
+// read mini-block header into state object. should only be called from InitDeltaBinaryBlock or
+// SetupNextMiniBlock
+//
+// | min delta (int) | bit-width array (1 byte * mini_block_count) |
+//
 __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
 {
   auto d_start      = db->block_start;
@@ -1922,6 +1926,8 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
 // should only be called on thread 0
 __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 {
+  if (db->current_value_idx >= db->value_count) { return; }
+
   db->current_value_idx += db->values_per_mb;
 
   // just set pointer to start of next mini_block
@@ -1937,15 +1943,18 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   }
 }
 
+// FIXME assumes only 32 values per mini-block
 // called by all threads in a warp, currently only one warp supported.
-__device__ int64_t DeltaForThread(delta_binary_state_s* db, int lane_id)
+__device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
 {
+  if (db->current_value_idx >= db->value_count) { return; }
+
   // position at end of the current mini-block since the following calculates
   // negative indexes
   int const mb_bits = db->cur_bitwidths[db->cur_mb];
   auto d_start      = db->cur_mb_start + (db->values_per_mb * mb_bits) / 8;
 
-  // TODO this is only good up to 24 bits
+  // FIXME this is only good up to 24 bits
   // unpack deltas
   int64_t delta = 0;
   if (lane_id + db->current_value_idx < db->value_count) {
@@ -1970,9 +1979,34 @@ __device__ int64_t DeltaForThread(delta_binary_state_s* db, int lane_id)
   __syncwarp();
 
   // add min delta to get true delta
-  return delta + db->cur_min_delta;
+  delta += db->cur_min_delta;
+
+  // do inclusive scan to get value - first_value at each position
+  __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage;
+  cub::WarpScan<int64_t>(temp_storage).InclusiveSum(delta, delta);
+
+  // now add first_value to get true value
+  delta += db->last_value;
+
+  // need to save first value from header on first pass
+  if (db->current_value_idx == 0) {
+    if (lane_id == 0) {
+      db->current_value_idx++;
+      db->value[0] = db->last_value;
+    }
+  }
+  __syncwarp();
+
+  db->value[rolling_index(db->current_value_idx + lane_id)] = delta;
+
+  // save delta from last lane in warp
+  if (lane_id == 31) { db->last_value = delta; }
 }
 
+// Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
+// only used for int32 and int64 physical types (and appears to only be used
+// with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html)
+//
 // TODO
 // 1) test with nulls
 // 2) test with nesting
@@ -1987,87 +2021,74 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   __shared__ __align__(16) delta_binary_state_s state_g;
 
   int t                    = threadIdx.x;
+  int lane_id              = t & 0x1f;
   delta_binary_state_s* db = &state_g;
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
-  __syncthreads();
-
-  // each mini-block should be 32 values, to match the ~32 levels that are decoded.s
-  //
-  // copying logic from gpuDecodePageData.  I didn't realize that target_pos on warp0 was
-  // ahead of warp1...so warp0 decodes a batch, but warp1 doesn't consume on the first go around
-  // because of sync issues.  so then on iteration 2 of this loop, warp0 produces another
-  // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
-  // nothting when target_pos hits num_input_values
+  // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  if (blockIdx.x == 0 && t == 0) printf("skipped leaf vals %d\n", skipped_leaf_values);
+
+  // initialize delta state
+  if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
+  __syncthreads();
+
+  // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
+  // that has a value we need (add 1 for first value in header)
+  while (db->current_value_idx < skipped_leaf_values && db->current_value_idx < db->value_count) {
+    if (t < 32) {
+      DeltaForThread(db, lane_id);
+      if (lane_id == 0) { SetupNextMiniBlock(db); }
+    }
+    __syncthreads();
+  }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
-    int src_pos               = s->src_pos;
-    constexpr int out_thread0 = 96;
+    int src_pos = s->src_pos;
 
-    if (t < out_thread0) {
-      target_pos =
-        min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
-      if (src_pos == 0) target_pos++;
-    } else {
-      target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
+    if (t < 64) {  // warp0..1
+      target_pos = s->nz_count + 32;
+      // first pass will have 33 values because the first value is in the header
+      if (target_pos == 32) target_pos++;
+    } else {  // warp2...
+      target_pos = min(s->nz_count, src_pos + 32);
     }
 
-    // FIXME eventually should produce 96 values in warp0 and get all of the other warps
-    // busy, but that's going to lead to weird issues with miniblocks.  would be so much
-    // simpler to just have warp0 decode levels, sync, and then have all 4 warps process
-    // a block.  It depends on the relative cost of decoding level data vs consuming.
-    // now use two warps to do the decode. warp0 will decode the rep/def levels, warp3
-    // will decode the bit-packed values and place into the output array. warps 1 and 2
-    // will make tea.
+    // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
+    // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs values
+    // into the proper location in the output.  warp 3 makes tea.
     if (t < 32) {
+      // warp 0
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
 
-    } else if (t < out_thread0) {
-      // warps 1 & 2 do nothing (kettle's on)
-    } else if (src_pos < target_pos) {
-      // warp 3
+    } else if (t < 64) {
+      // warp 1
+      // unpack deltas and save in db->value
+      DeltaForThread(db, lane_id);
+
+      // set up for next mini-block
+      if (lane_id == 0) { SetupNextMiniBlock(db); }
+
+    } else if (t < 96 && src_pos < target_pos) {
+      // warp 2
       // need to bump src_pos by one because of the first_value being in the header
       bool const first_pass = src_pos == 0;
       if (first_pass) { src_pos++; }
-      int me = t & 0x1f;
-      src_pos += me;
+      src_pos += lane_id;
 
       int dst_pos = src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
 
       // handle skip_rows here. flat hierarchies can just skip up to first_row.
-      if (!has_repetition) {
-        dst_pos -= s->first_row;
-      } else {
-        // nested with skipped rows is a different beast. gpuDecodeLevels assumes
-        // use of the original code, so it will only work up until
-        // num_input_values - skipped_leaf_values. so we need to do some finagling
-        // because the the bit-packing has to start at least at the start of a
-        // mini-block and then skip values.
-        if (first_pass) { src_pos -= skipped_leaf_values; }
-        dst_pos =
-          src_pos >= 0 && src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
-      }
-
-      // unpack deltas
-      int64_t delta = DeltaForThread(db, me);
-
-      // do inclusive scan to get value - first_value at each position
-      __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
-      cub::WarpScan<int64_t>(temp_storage[0]).InclusiveSum(delta, delta);
-
-      // now add first_value to get true value
-      delta += db->last_value;
+      if (!has_repetition) { dst_pos -= s->first_row; }
 
       // nesting level that is storing actual leaf values
       int leaf_level_index = s->col.max_nesting_depth - 1;
@@ -2079,9 +2100,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
         void* dst = nesting_info_base[leaf_level_index].data_out +
                     static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
         if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = db->last_value;
+          *static_cast<int64_t*>(dst) = db->value[rolling_index(0)];
         } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = db->last_value;
+          *static_cast<int32_t*>(dst) = db->value[rolling_index(0)];
         }
       }
 
@@ -2089,20 +2110,13 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = delta;
+          *static_cast<int64_t*>(dst) = db->value[rolling_index(src_pos + skipped_leaf_values)];
         } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = delta;
+          *static_cast<int32_t*>(dst) = db->value[rolling_index(src_pos + skipped_leaf_values)];
         }
       }
 
-      // last lane in warp has the last_value now
-      __syncwarp();
-      if (me == 31) { db->last_value = delta; }
-
-      if (me == 0) {
-        s->src_pos = src_pos + 32;
-        SetupNextMiniBlock(db);
-      }
+      if (lane_id == 0) { s->src_pos = src_pos + 32; }
     }
     __syncthreads();
   }
@@ -2118,9 +2132,11 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 // find the start/end of each structure.
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
+#if 0
   __shared__ __align__(16) delta_binary_state_s db_state[2];
   __shared__ __align__(16) uint8_t const* data_start;
 
+  return;
   int t           = threadIdx.x;
   auto* prefix_db = &db_state[0];
   auto* suffix_db = &db_state[1];
@@ -2155,9 +2171,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   // because of sync issues.  so then on iteration 2 of this loop, warp0 produces another
   // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
   // nothting when target_pos hits num_input_values
-#if 0
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
-#endif
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -2201,21 +2215,10 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int dst_pos = src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
 
       // handle skip_rows here. flat hierarchies can just skip up to first_row.
-      if (!has_repetition) {
-        dst_pos -= s->first_row;
-      } else {
-        // nested with skipped rows is a different beast. gpuDecodeLevels assumes
-        // use of the original code, so it will only work up until
-        // num_input_values - skipped_leaf_values. so we need to do some finagling
-        // because the the bit-packing has to start at least at the start of a
-        // mini-block and then skip values.
-        if (first_pass) { src_pos -= skipped_leaf_values; }
-        dst_pos =
-          src_pos >= 0 && src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
-      }
+      if (!has_repetition) { dst_pos -= s->first_row; }
 
       // unpack deltas
-      int64_t delta = DeltaForThread(db, me);
+      int64_t delta = 0;  // DeltaForThread(db, me);
 
       // do inclusive scan to get value - first_value at each position
       __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
@@ -2231,14 +2234,11 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       db->value[rolling_index(db->current_value_idx + me + 1)] = delta;
 
       // nesting level that is storing actual leaf values
-#if 0
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
-#endif
 
       // special case for first value in the page, which is stored in db->last_value.
       // if skip_rows is non-zero, first_row will be as well.
-#if 0
       if (blockIdx.x == 0 && db->current_value_idx + me + 1 < db->value_count) {
         if (is_prefixes) {
           if (src_pos == 1 && s->first_row == 0)
@@ -2250,8 +2250,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
           printf("%02d: suffix_len %d %ld\n", t, db->current_value_idx + me + 1, delta);
         }
       }
-#endif
-#if 0
+
       if (src_pos == 1 && s->first_row == 0) {
         void* dst = nesting_info_base[leaf_level_index].data_out +
                     static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
@@ -2271,7 +2270,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
           *static_cast<int32_t*>(dst) = delta;
         }
       }
-#endif
 
       // last lane in warp has the last_value now
       __syncwarp();
@@ -2297,6 +2295,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     }
     __syncthreads();
   }
+#endif
 }
 
 /**
