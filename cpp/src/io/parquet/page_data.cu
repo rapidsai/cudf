@@ -2072,7 +2072,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
 
-  auto const batch_size = 32;  // db->values_per_mb;
+  auto const batch_size = db->values_per_mb;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need
@@ -2089,12 +2089,10 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     int src_pos = s->src_pos;
 
     if (t < 64) {  // warp0..1
-      target_pos = min(src_pos + 2 * (batch_size), s->nz_count + batch_size);
+      target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
     } else {  // warp2...
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    // first pass will have an extra value because the first value is in the header
-    if (target_pos == batch_size) target_pos++;
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
@@ -2117,34 +2115,27 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
     } else if (t < 96 && src_pos < target_pos) {
       // warp 2
-      // need to bump src_pos by one because of the first_value being in the header
-      if (src_pos == 0 && s->first_row == 0) { src_pos++; }
-      src_pos += lane_id;
-
-      // the position in the output column/buffer
-      int dst_pos = s->nz_idx[rolling_index(src_pos)];
-
-      // handle skip_rows here. flat hierarchies can just skip up to first_row.
-      if (!has_repetition) { dst_pos -= s->first_row; }
-
       // nesting level that is storing actual leaf values
       int leaf_level_index = s->col.max_nesting_depth - 1;
 
-      auto place_output = [=](int src_idx, size_t dst_idx) {
-        void* dst = nesting_info_base[leaf_level_index].data_out + dst_idx * s->dtype_len;
-        if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = db->value[rolling_index(src_idx + skipped_leaf_values)];
-        } else if (s->dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = db->value[rolling_index(src_idx + skipped_leaf_values)];
+      // process the mini-block in batches of 32
+      for (int sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
+        // the position in the output column/buffer
+        int dst_pos = s->nz_idx[rolling_index(sp)];
+
+        // handle skip_rows here. flat hierarchies can just skip up to first_row.
+        if (!has_repetition) { dst_pos -= s->first_row; }
+
+        // place value for this thread
+        if (dst_pos >= 0 && sp < target_pos) {
+          void* dst = nesting_info_base[leaf_level_index].data_out + dst_pos * s->dtype_len;
+          if (s->dtype_len == 8) {
+            *static_cast<int64_t*>(dst) = db->value[rolling_index(sp + skipped_leaf_values)];
+          } else if (s->dtype_len == 4) {
+            *static_cast<int32_t*>(dst) = db->value[rolling_index(sp + skipped_leaf_values)];
+          }
         }
-      };
-
-      // special case for first value in the page, which is stored in db->last_value.
-      // if skip_rows is non-zero, first_row will be as well.
-      if (src_pos == 1 && s->first_row == 0) { place_output(0, s->nz_idx[0]); }
-
-      // now place value for this thread
-      if (dst_pos >= 0 && src_pos < target_pos) { place_output(src_pos, dst_pos); }
+      }
 
       if (lane_id == 0) { s->src_pos = src_pos + batch_size; }
     }
@@ -2194,7 +2185,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   }
   __syncthreads();
 
-  auto const batch_size = 32;  // db->values_per_mb;
+  // TODO assert that prefix and suffix have same mini-block size
+  auto const batch_size = prefix_db->values_per_mb;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need
@@ -2220,8 +2212,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    // first pass will have an extra value because the first value is in the header
-    if (target_pos == batch_size) target_pos++;
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
@@ -2246,42 +2236,29 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
     } else if (src_pos < target_pos) {
       // warp 3
-      // need to bump src_pos by one because of the first_value being in the header
-      if (src_pos == 0) { src_pos++; }
-      src_pos += lane_id;
-
-      // the position in the output column/buffer
-      int dst_pos = s->nz_idx[rolling_index(src_pos)];
-
-      // handle skip_rows here. flat hierarchies can just skip up to first_row.
-      if (!has_repetition) { dst_pos -= s->first_row; }
-
       // nesting level that is storing actual leaf values
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
-      // special case for first value in the page, which is stored in db->last_value.
-      // if skip_rows is non-zero, first_row will be as well.
-      if (src_pos == 1 && s->first_row == 0) {
-        void* dst = nesting_info_base[leaf_level_index].data_out +
-                    static_cast<size_t>(s->nz_idx[0]) * dtype_len;
-        int len      = prefix_db->value[0] + suffix_db->value[0];
-        auto* dstp   = static_cast<string_index_pair*>(dst);
-        dstp->first  = (char*)data_start;
-        dstp->second = len;
+      // process the mini-block in batches of 32
+      for (int sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
+        // the position in the output column/buffer
+        int dst_pos = s->nz_idx[rolling_index(sp)];
+
+        // handle skip_rows here. flat hierarchies can just skip up to first_row.
+        if (!has_repetition) { dst_pos -= s->first_row; }
+
+        if (dst_pos >= 0 && sp < target_pos) {
+          void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
+          int src_idx  = rolling_index(sp + skipped_leaf_values);
+          int len      = prefix_db->value[src_idx] + suffix_db->value[src_idx];
+          auto* dstp   = static_cast<string_index_pair*>(dst);
+          dstp->first  = (char*)data_start;  // FIXME need the read value
+          dstp->second = len;
+        }
       }
 
-      if (dst_pos >= 0 && src_pos < target_pos) {
-        void* dst =
-          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        int src_idx  = rolling_index(src_pos + skipped_leaf_values);
-        int len      = prefix_db->value[src_idx] + suffix_db->value[src_idx];
-        auto* dstp   = static_cast<string_index_pair*>(dst);
-        dstp->first  = (char*)data_start;
-        dstp->second = len;
-      }
-
-      if (lane_id == 0) { *(volatile int32_t*)&s->src_pos = src_pos + batch_size; }
+      if (lane_id == 0) { s->src_pos = src_pos + batch_size; }
     }
 
     __syncthreads();
