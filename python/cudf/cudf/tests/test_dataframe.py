@@ -7309,10 +7309,26 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
     actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
 
+    # In some cases, Pandas creates an empty Index([], dtype="object") for
+    # columns whereas cudf creates a RangeIndex(0, 0).
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
+
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
 
 
 @pytest_unmark_spilling
@@ -7535,10 +7551,26 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
         [gdf] + other_gd, sort=sort, ignore_index=ignore_index
     )
 
+    # In some cases, Pandas creates an empty Index([], dtype="object") for
+    # columns whereas cudf creates a RangeIndex(0, 0).
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
+
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
 
 
 @pytest.mark.parametrize(
