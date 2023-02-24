@@ -1900,8 +1900,7 @@ class Frame(BinaryOperand, Scannable):
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         numeric_only: bool, default False
-            Include only float, int, boolean columns. If False, will attempt to
-            use everything.
+            Include only float, int, boolean columns.
 
         Returns
         -------
@@ -1911,10 +1910,14 @@ class Frame(BinaryOperand, Scannable):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.min()
+        >>> min_series = df.min()
+        >>> min_series
         a    1
         b    7
         dtype: int64
+
+        >>> min_series.min()
+        1
         """
         return self._reduce(
             "min",

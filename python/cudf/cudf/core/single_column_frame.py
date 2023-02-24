@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_integer_dtype,
+    is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
@@ -41,19 +43,16 @@ class SingleColumnFrame(Frame, NotIterable):
         self,
         op,
         axis=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only:
-            raise NotImplementedError(
-                f"Series.{op} does not implement numeric_only"
+        if numeric_only and not is_numeric_dtype(self._column):
+            raise TypeError(
+                f"Series.{op} does not allow numeric_only={numeric_only} "
+                "with non-numeric dtypes."
             )
         try:
             return getattr(self._column, op)(**kwargs)
