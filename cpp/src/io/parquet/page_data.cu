@@ -2045,17 +2045,13 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
 
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
 // only used for int32 and int64 physical types (and appears to only be used
-// with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html)
+// with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 //
 // TODO
 // 1) test with nulls
 // 2) test with nesting
 // 3) test with nest and nulls
 // 4) test all the above with skip_rows
-// 5) make more general so it will work if block_size > 128 or
-//    values/mini-block > 32
-// 6) if skip_rows, then fast forward to correct block/mini-block
-// decode page data encoded as DELTA_BINARY_PACKED
 __device__ void DecodeDeltaBinary(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s state_g;
@@ -2076,6 +2072,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
 
+  auto const batch_size = 32;  // db->values_per_mb;
+
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need
   while (db->current_value_idx < skipped_leaf_values && db->current_value_idx < db->value_count) {
@@ -2091,12 +2089,12 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     int src_pos = s->src_pos;
 
     if (t < 64) {  // warp0..1
-      target_pos = s->nz_count + 32;
+      target_pos = min(src_pos + 2 * (batch_size), s->nz_count + batch_size);
     } else {  // warp2...
-      target_pos = min(s->nz_count, src_pos + 32);
+      target_pos = min(s->nz_count, src_pos + batch_size);
     }
-    // first pass will have 33 values because the first value is in the header
-    if (target_pos == 32) target_pos++;
+    // first pass will have an extra value because the first value is in the header
+    if (target_pos == batch_size) target_pos++;
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
@@ -2109,7 +2107,6 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
-
     } else if (t < 64) {
       // warp 1
       // unpack deltas and save in db->value
@@ -2121,7 +2118,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     } else if (t < 96 && src_pos < target_pos) {
       // warp 2
       // need to bump src_pos by one because of the first_value being in the header
-      if (src_pos == 0) { src_pos++; }
+      if (src_pos == 0 && s->first_row == 0) { src_pos++; }
       src_pos += lane_id;
 
       // the position in the output column/buffer
@@ -2132,42 +2129,35 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
       // nesting level that is storing actual leaf values
       int leaf_level_index = s->col.max_nesting_depth - 1;
-      uint32_t dtype_len   = s->dtype_len;
+
+      auto place_output = [=](int src_idx, size_t dst_idx) {
+        void* dst = nesting_info_base[leaf_level_index].data_out + dst_idx * s->dtype_len;
+        if (s->dtype_len == 8) {
+          *static_cast<int64_t*>(dst) = db->value[rolling_index(src_idx + skipped_leaf_values)];
+        } else if (s->dtype_len == 4) {
+          *static_cast<int32_t*>(dst) = db->value[rolling_index(src_idx + skipped_leaf_values)];
+        }
+      };
 
       // special case for first value in the page, which is stored in db->last_value.
       // if skip_rows is non-zero, first_row will be as well.
-      if (src_pos == 1 && s->first_row == 0) {
-        void* dst = nesting_info_base[leaf_level_index].data_out +
-                    static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
-        if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = db->value[rolling_index(0)];
-        } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = db->value[rolling_index(0)];
-        }
-      }
+      if (src_pos == 1 && s->first_row == 0) { place_output(0, s->nz_idx[0]); }
 
-      if (dst_pos >= 0 && src_pos < target_pos) {
-        void* dst =
-          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = db->value[rolling_index(src_pos + skipped_leaf_values)];
-        } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = db->value[rolling_index(src_pos + skipped_leaf_values)];
-        }
-      }
+      // now place value for this thread
+      if (dst_pos >= 0 && src_pos < target_pos) { place_output(src_pos, dst_pos); }
 
-      if (lane_id == 0) { s->src_pos = src_pos + 32; }
+      if (lane_id == 0) { s->src_pos = src_pos + batch_size; }
     }
     __syncthreads();
   }
 }
 
-// this encoding consists of a DeltaBinaryPacked array of prefix lengths, followed by a
-// DeltaBinaryPacked array of suffix lengths, followed by the suffixes. The latter two can be used
-// to create an offsets array for the suffix data, but then this needs to be combined with the
-// prefix lengths to do the final decode for each value. because the lengths of the prefixes and
-// suffixes are not encoded in the header, we're going to have to first do a quick pass through them
-// to find the start/end of each structure.
+// Decode page data that is DELTA_BINARY_ARRAY packed. This encoding consists of a DeltaBinaryPacked
+// array of prefix lengths, followed by a DeltaBinaryPacked array of suffix lengths, followed by the
+// suffixes. The latter two can be used to create an offsets array for the suffix data, but then
+// this needs to be combined with the prefix lengths to do the final decode for each value. because
+// the lengths of the prefixes and suffixes are not encoded in the header, we're going to have to
+// first do a quick pass through them to find the start/end of each structure.
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state[2];
@@ -2204,6 +2194,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   }
   __syncthreads();
 
+  auto const batch_size = 32;  // db->values_per_mb;
+
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need
   while (prefix_db->current_value_idx < skipped_leaf_values &&
@@ -2224,12 +2216,12 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     int src_pos = s->src_pos;
 
     if (t < 96) {  // warp 0..2
-      target_pos = s->nz_count + 32;
-      // first pass will have 33 values because the first value is in the header
-      if (target_pos == 32) target_pos++;
+      target_pos = min(src_pos + 2 * (batch_size), s->nz_count + batch_size);
     } else {  // warp 3
-      target_pos = min(s->nz_count, src_pos + 32);
+      target_pos = min(s->nz_count, src_pos + batch_size);
     }
+    // first pass will have an extra value because the first value is in the header
+    if (target_pos == batch_size) target_pos++;
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
@@ -2289,7 +2281,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         dstp->second = len;
       }
 
-      if (lane_id == 0) { *(volatile int32_t*)&s->src_pos = src_pos + 32; }
+      if (lane_id == 0) { *(volatile int32_t*)&s->src_pos = src_pos + batch_size; }
     }
 
     __syncthreads();
