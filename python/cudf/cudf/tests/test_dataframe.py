@@ -9704,17 +9704,15 @@ def test_dataframe_pct_change(data, periods, fill_method):
     assert_eq(expected, actual)
 
 
-def test_mean_timeseries():
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_mean_timeseries(numeric_only):
     gdf = cudf.datasets.timeseries()
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
 
-    expected = pdf.mean(numeric_only=True)
-    actual = gdf.mean(numeric_only=True)
-
-    assert_eq(expected, actual)
-
-    expected = pdf.mean()
-    actual = gdf.mean()
+    expected = pdf.mean(numeric_only=numeric_only)
+    actual = gdf.mean(numeric_only=numeric_only)
 
     assert_eq(expected, actual)
 
@@ -9729,19 +9727,15 @@ def test_mean_timeseries():
         }
     ],
 )
-def test_std_different_dtypes(data):
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_std_different_dtypes(data, numeric_only):
     gdf = cudf.DataFrame(data)
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
 
-    expected = pdf.std(numeric_only=True)
-    actual = gdf.std(numeric_only=True)
-
-    assert_eq(expected, actual)
-
-    with pytest.warns(FutureWarning):
-        expected = pdf.std()
-    with pytest.warns(FutureWarning):
-        actual = gdf.std()
+    expected = pdf.std(numeric_only=numeric_only)
+    actual = gdf.std(numeric_only=numeric_only)
 
     assert_eq(expected, actual)
 
