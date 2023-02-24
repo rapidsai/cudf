@@ -460,9 +460,10 @@ class CategoricalAccessor(ColumnMethods):
         """
         if inplace:
             warnings.warn(
-                "The `inplace` parameter in cudf.Series.cat.reorder_categories"
-                " is deprecated and will be removed in a future version of "
-                "cudf. Reordering categories will always return a new "
+                "The `inplace` parameter in "
+                "cudf.Series.cat.remove_categories is deprecated and "
+                "will be removed in a future version of cudf. "
+                "Removing categories will always return a new "
                 "Categorical object.",
                 FutureWarning,
             )
@@ -665,9 +666,10 @@ class CategoricalAccessor(ColumnMethods):
         """
         if inplace:
             warnings.warn(
-                "The `inplace` parameter in cudf.Series.cat.reorder_categories"
-                " is deprecated and will be removed in a future version of "
-                "cudf. Reordering categories will always return a new "
+                "The `inplace` parameter in "
+                "cudf.Series.cat.reorder_categories is deprecated "
+                "and will be removed in a future version of cudf. "
+                "Reordering categories will always return a new "
                 "Categorical object.",
                 FutureWarning,
             )
