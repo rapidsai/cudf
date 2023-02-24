@@ -1961,23 +1961,46 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
   for (int i = 0; i < num_pass; i++) {
     d_start += (32 * mb_bits) / 8;
 
-    // FIXME this is only good up to 24 bits
-    // unpack deltas
+    // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
+    // that one only unpacks up to bitwidths of 24. simplified some since this
+    // will always do batches of 32.
     int64_t delta = 0;
     if (lane_id + db->current_value_idx < db->value_count) {
-      int32_t ofs      = (lane_id - ((32 + 7) & ~7)) * mb_bits;
+      int32_t ofs      = (lane_id - 32) * mb_bits;
       const uint8_t* p = d_start + (ofs >> 3);
       ofs &= 7;
       if (p < db->block_end) {
-        uint32_t c = 8 - ofs;
+        uint32_t c = 8 - ofs;  // 0 - 7 bits
         delta      = (*p++) >> ofs;
-        if (c < mb_bits && p < db->block_end) {
+        if (c < mb_bits && p < db->block_end) {  // up to 8 bits
           delta |= (*p++) << c;
           c += 8;
-          if (c < mb_bits && p < db->block_end) {
+          if (c < mb_bits && p < db->block_end) {  // 16 bits
             delta |= (*p++) << c;
             c += 8;
-            if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
+            if (c < mb_bits && p < db->block_end) {  // 24 bits
+              delta |= (*p++) << c;
+              c += 8;
+              if (c < mb_bits && p < db->block_end) {  // 32 bits
+                delta |= (*p++) << c;
+                c += 8;
+                if (c < mb_bits && p < db->block_end) {  // 40 bits
+                  delta |= (*p++) << c;
+                  c += 8;
+                  if (c < mb_bits && p < db->block_end) {  // 48 bits
+                    delta |= (*p++) << c;
+                    c += 8;
+                    if (c < mb_bits && p < db->block_end) {  // 56 bits
+                      delta |= (*p++) << c;
+                      c += 8;
+                      if (c < mb_bits && p < db->block_end) {  // 64 bits
+                        delta |= (*p++) << c;
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         delta &= (1 << mb_bits) - 1;
