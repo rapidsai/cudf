@@ -4829,6 +4829,13 @@ class IndexedFrame(Frame):
 
         source = self
         if numeric_only:
+            if isinstance(
+                source, cudf.Series
+            ) and not _is_non_decimal_numeric_dtype(self.dtype):
+                raise TypeError(
+                    "Series.rank does not allow numeric_only=True with "
+                    "non-numeric dtype."
+                )
             numeric_cols = (
                 name
                 for name in self._data.names
