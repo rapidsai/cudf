@@ -2870,7 +2870,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    3
         2.0    2
         1.0    1
-        dtype: int32
+        Name: count, dtype: int32
 
         The order of the counts can be changed by passing ``ascending=True``:
 
@@ -2878,7 +2878,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1.0    1
         2.0    2
         3.0    3
-        dtype: int32
+        Name: count, dtype: int32
 
         With ``normalize`` set to True, returns the relative frequency
         by dividing all values by the sum of values.
@@ -2887,7 +2887,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    0.500000
         2.0    0.333333
         1.0    0.166667
-        dtype: float32
+        Name: proportion, dtype: float32
 
         To include ``NA`` value counts, pass ``dropna=False``:
 
@@ -2907,24 +2907,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2.0     2
         <NA>    2
         1.0     1
-        dtype: int32
+        Name: count, dtype: int32
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
         >>> s.value_counts(bins=3)
         (2.0, 3.0]      2
         (0.996, 2.0]    2
         (3.0, 4.0]      1
-        dtype: int32
+        Name: count, dtype: int32
         """
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
-
+        result_name = "proportion" if normalize else "count"
         if dropna and self.null_count == len(self):
             return Series(
                 [],
                 dtype=np.int32,
-                name=self.name,
-                index=cudf.Index([], dtype=self.dtype),
+                name=result_name,
+                index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
 
         if bins is not None:
@@ -2933,7 +2933,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
 
-        res.index.name = None
+        res.index.name = self.name
 
         if sort:
             res = res.sort_values(ascending=ascending)
@@ -2948,7 +2948,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 res.index._column, res.index.categories.dtype
             )
             res.index = int_index
-
+        res.name = result_name
         return res
 
     @_cudf_nvtx_annotate
