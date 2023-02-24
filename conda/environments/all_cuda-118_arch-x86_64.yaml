@@ -37,6 +37,7 @@ dependencies:
 - moto>=4.0.8
 - myst-nb
 - nbsphinx
+- nbval
 - ninja
 - notebook
 - numba>=0.56.2

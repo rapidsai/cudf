@@ -209,7 +209,10 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - ipython
+          - nbval
           - notebook
+          - pytest
+          - pytest-xdist
           - scipy
   py_version:
     specific:

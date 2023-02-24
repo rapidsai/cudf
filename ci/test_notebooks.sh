@@ -29,33 +29,5 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
 
-NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
-pushd notebooks
-
-# Add notebooks that should be skipped here
-# (space-separated list of filenames without paths)
-SKIPNBS=""
-
-EXITCODE=0
-trap "EXITCODE=1" ERR
-set +e
-for nb in $(find . -name "*.ipynb"); do
-    nbBasename=$(basename ${nb})
-    # Skip all notebooks that use dask (in the code or even in their name)
-    if ((echo ${nb} | grep -qi dask) || \
-        (grep -q dask ${nb})); then
-        echo "--------------------------------------------------------------------------------"
-        echo "SKIPPING: ${nb} (suspected Dask usage, not currently automatable)"
-        echo "--------------------------------------------------------------------------------"
-    elif (echo " ${SKIPNBS} " | grep -q " ${nbBasename} "); then
-        echo "--------------------------------------------------------------------------------"
-        echo "SKIPPING: ${nb} (listed in skip list)"
-        echo "--------------------------------------------------------------------------------"
-    else
-        nvidia-smi
-        ${NBTEST} ${nbBasename}
-    fi
-done
-
-rapids-logger "Test script exiting with value: $EXITCODE"
-exit ${EXITCODE}
+# Run all notebooks with nbval
+python -m pytest -v --nbval --nbval-lax notebooks/
