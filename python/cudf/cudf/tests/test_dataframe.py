@@ -9713,10 +9713,8 @@ def test_mean_timeseries():
 
     assert_eq(expected, actual)
 
-    with pytest.warns(FutureWarning):
-        expected = pdf.mean()
-    with pytest.warns(FutureWarning):
-        actual = gdf.mean()
+    expected = pdf.mean()
+    actual = gdf.mean()
 
     assert_eq(expected, actual)
 

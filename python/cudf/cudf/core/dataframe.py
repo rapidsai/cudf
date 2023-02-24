@@ -5834,12 +5834,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self,
         op,
         axis=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
 
         source = self
         if numeric_only:
@@ -5875,33 +5872,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "skew",
                 )
 
-                if numeric_only is None and op in numeric_ops:
-                    warnings.warn(
-                        f"The default value of numeric_only in DataFrame.{op} "
-                        "is deprecated. In a future version, it will default "
-                        "to False. In addition, specifying "
-                        "'numeric_only=None' is deprecated. Select only valid "
-                        "columns or specify the value of numeric_only to "
-                        "silence this warning.",
-                        FutureWarning,
-                    )
-                    numeric_cols = (
-                        name
-                        for name in self._data.names
-                        if is_numeric_dtype(self._data[name])
-                    )
-                    source = self._get_columns_by_label(numeric_cols)
-                    if source.empty:
-                        return Series(index=cudf.StringIndex([]))
-                    try:
-                        result = [
-                            getattr(source._data[col], op)(**kwargs)
-                            for col in source._data.names
-                        ]
-                    except AttributeError:
-                        raise TypeError(
-                            f"Not all column dtypes support op {op}"
+                if op in numeric_ops:
+                    if numeric_only:
+                        numeric_cols = (
+                            name
+                            for name in self._data.names
+                            if is_numeric_dtype(self._data[name])
                         )
+                        source = self._get_columns_by_label(numeric_cols)
+                        if source.empty:
+                            return Series(index=cudf.StringIndex([]))
+                        try:
+                            result = [
+                                getattr(source._data[col], op)(**kwargs)
+                                for col in source._data.names
+                            ]
+                        except AttributeError:
+                            raise TypeError(
+                                f"Not all column dtypes support op {op}"
+                            )
+                    elif not all(
+                        is_numeric_dtype(self._data[name])
+                        for name in self._data.names
+                    ):
+                        raise TypeError(
+                            "Non numeric columns passed with "
+                            "`numeric_only=False`, pass `numeric_only=True` "
+                            f"to perform DataFrame.{op}"
+                        )
+                    else:
+                        raise
                 else:
                     raise
 
