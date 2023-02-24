@@ -44,6 +44,13 @@ Homepage = "https://github.com/rapidsai/cudf"
 
 [tool.setuptools]
 license-files = ["LICENSE"]
+zip-safe = false
+
+[tools.setuptools.packages.find]
+include = [
+    "custreamz",
+    "custreamz.*",
+]
 
 [tool.isort]
 line_length = 79

@@ -1,9 +1,5 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
-setup(
-    include_package_data=True,
-    packages=find_packages(include=["custreamz", "custreamz.*"]),
-    zip_safe=False,
-)
+setup()
