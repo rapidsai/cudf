@@ -6693,6 +6693,9 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
+  /**
+   * The caller needs to make sure to close the returned ColumnView
+   */
   private ColumnView getColumnViewWithNonEmptyNulls() {
     List<Integer> list0 = Arrays.asList(1, 2, 3);
     List<Integer> list1 = Arrays.asList(4, 5, null);
@@ -6722,26 +6725,28 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testPurgeNonEmptyNullsList() {
-    ColumnView colWithNonEmptyNulls = getColumnViewWithNonEmptyNulls();
-    // purge non-empty nulls
-    assertTrue(colWithNonEmptyNulls.hasNonEmptyNulls());
-    ColumnView colWithEmptyNulls = colWithNonEmptyNulls.purgeNonEmptyNulls();
-    ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
-    ColumnView offsetsCvAfterPurge = colWithEmptyNulls.getListOffsetsView();
-    assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
-    assertFalse(colWithEmptyNulls.hasNonEmptyNulls());
+    try (ColumnView colWithNonEmptyNulls = getColumnViewWithNonEmptyNulls();
+         // purge non-empty nulls
+         ColumnView colWithEmptyNulls = colWithNonEmptyNulls.purgeNonEmptyNulls();
+         ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+         ColumnView offsetsCvAfterPurge = colWithEmptyNulls.getListOffsetsView()) {
+      assertTrue(colWithNonEmptyNulls.hasNonEmptyNulls());
+      assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+      assertFalse(colWithEmptyNulls.hasNonEmptyNulls());
+    }
   }
 
   @Test
   void testPurgeNonEmptyNullsStruct() {
-    ColumnView listCol = getColumnViewWithNonEmptyNulls();
-    ColumnView stringsCol = ColumnVector.fromStrings("A", "col", "of", "Strings");
-    ColumnView structView = ColumnView.makeStructView(stringsCol, listCol);
-    ColumnView structWithEmptyNulls = structView.purgeNonEmptyNulls();
-    ColumnView newListChild = structWithEmptyNulls.getChildColumnView(1);
-    ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
-    ColumnView offsetsCvAfterPurge = newListChild.getListOffsetsView();
-    assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
-    assertFalse(newListChild.hasNonEmptyNulls());
+    try (ColumnView listCol = getColumnViewWithNonEmptyNulls();
+         ColumnView stringsCol = ColumnVector.fromStrings("A", "col", "of", "Strings");
+         ColumnView structView = ColumnView.makeStructView(stringsCol, listCol);
+         ColumnView structWithEmptyNulls = structView.purgeNonEmptyNulls();
+         ColumnView newListChild = structWithEmptyNulls.getChildColumnView(1);
+         ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+         ColumnView offsetsCvAfterPurge = newListChild.getListOffsetsView()) {
+      assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+      assertFalse(newListChild.hasNonEmptyNulls());
+    }
   }
 }
