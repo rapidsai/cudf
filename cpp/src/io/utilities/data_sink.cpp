@@ -96,7 +96,7 @@ class file_sink : public data_sink {
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
-  // The read/write size above which GDS is faster then host read + copy
+  // The write size above which GDS is faster then d2h-copy + posix-write
   static constexpr size_t _gds_io_preferred_threshold = 128 << 10;
 };
 

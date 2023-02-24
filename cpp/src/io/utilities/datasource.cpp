@@ -98,7 +98,7 @@ class file_source : public datasource {
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
-  // The read size above which GDS is faster then host read + copy
+  // The read size above which GDS is faster then posix-read + h2d-copy
   static constexpr size_t _gds_io_preferred_threshold = 128 << 10;
 };
 
