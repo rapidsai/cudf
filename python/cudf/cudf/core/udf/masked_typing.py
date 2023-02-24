@@ -1,7 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import operator
-from typing import Any, Dict
 
 from numba import types
 from numba.core.extending import (
@@ -27,6 +26,18 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.strings_typing import (
+    StringView,
+    UDFString,
+    bool_binary_funcs,
+    id_unary_funcs,
+    int_binary_funcs,
+    size_type,
+    string_return_attrs,
+    string_unary_funcs,
+    string_view,
+    udf_string,
+)
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -34,18 +45,32 @@ from cudf.utils.dtypes import (
     TIMEDELTA_TYPES,
 )
 
+SUPPORTED_NUMPY_TYPES = (
+    NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
+)
+supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
+
+_units = ["ns", "ms", "us", "s"]
+_datetime_cases = {types.NPDatetime(u) for u in _units}
+_timedelta_cases = {types.NPTimedelta(u) for u in _units}
+_supported_masked_types = (
+    types.integer_domain
+    | types.real_domain
+    | _datetime_cases
+    | _timedelta_cases
+    | {types.boolean}
+    | {string_view, udf_string}
+)
+
+
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
     types.Boolean,
     types.NPDatetime,
     types.NPTimedelta,
+    StringView,
+    UDFString,
 )
-
-SUPPORTED_NUMPY_TYPES = (
-    NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
-)
-supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
-MASKED_INIT_MAP: Dict[Any, Any] = {}
 
 
 def _format_error_string(err):
@@ -56,31 +81,19 @@ def _format_error_string(err):
 
 
 def _type_to_masked_type(t):
-    result = MASKED_INIT_MAP.get(t)
-    if result is None:
-        if isinstance(t, SUPPORTED_NUMBA_TYPES):
-            return t
-        else:
-            # Unsupported Dtype. Numba tends to print out the type info
-            # for whatever operands and operation failed to type and then
-            # output its own error message. Putting the message in the repr
-            # then is one way of getting the true cause to the user
-            err = _format_error_string(
-                "Unsupported MaskedType. This is usually caused by "
-                "attempting to use a column of unsupported dtype in a UDF. "
-                f"Supported dtypes are:\n{supported_type_str}"
-            )
-            return types.Poison(err)
+    if isinstance(t, SUPPORTED_NUMBA_TYPES):
+        return t
     else:
-        return result
-
-
-MASKED_INIT_MAP[types.pyobject] = types.Poison(
-    _format_error_string(
-        "strings_udf library required for usage of string dtypes "
-        "inside user defined functions."
-    )
-)
+        # Unsupported Dtype. Numba tends to print out the type info
+        # for whatever operands and operation failed to type and then
+        # output its own error message. Putting the message in the repr
+        # then is one way of getting the true cause to the user
+        err = _format_error_string(
+            "Unsupported MaskedType. This is usually caused by "
+            "attempting to use a column of unsupported dtype in a UDF. "
+            f"Supported dtypes are:\n{supported_type_str}"
+        )
+        return types.Poison(err)
 
 
 # Masked scalars of all types
@@ -169,30 +182,30 @@ def typeof_masked(val, c):
 
 # Implemented typing for Masked(value, valid) - the construction of a Masked
 # type in a kernel.
-def _register_masked_constructor_typing(supported_masked_types):
-    class MaskedConstructor(ConcreteTemplate):
-        key = api.Masked
-        cases = [
-            nb_signature(MaskedType(t), t, types.boolean)
-            for t in supported_masked_types
-        ]
+@cuda_decl_registry.register
+class MaskedConstructor(ConcreteTemplate):
+    key = api.Masked
+    cases = [
+        nb_signature(MaskedType(t), t, types.boolean)
+        for t in _supported_masked_types
+    ]
 
-    cuda_decl_registry.register(MaskedConstructor)
 
-    # Typing for `api.Masked`
-    @cuda_decl_registry.register_attr
-    class ClassesTemplate(AttributeTemplate):
-        key = types.Module(api)
+# Typing for `api.Masked`
+@cuda_decl_registry.register_attr
+class ClassesTemplate(AttributeTemplate):
+    key = types.Module(api)
 
-        def resolve_Masked(self, mod):
-            return types.Function(MaskedConstructor)
+    def resolve_Masked(self, mod):
+        return types.Function(MaskedConstructor)
 
-    # Registration of the global is also needed for Numba to type api.Masked
-    cuda_decl_registry.register_global(api, types.Module(api))
-    # For typing bare Masked (as in `from .api import Masked`
-    cuda_decl_registry.register_global(
-        api.Masked, types.Function(MaskedConstructor)
-    )
+
+# Registration of the global is also needed for Numba to type api.Masked
+cuda_decl_registry.register_global(api, types.Module(api))
+# For typing bare Masked (as in `from .api import Masked`
+cuda_decl_registry.register_global(
+    api.Masked, types.Function(MaskedConstructor)
+)
 
 
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
@@ -423,3 +436,203 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 
 for unary_op in unary_ops:
     cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
+
+
+# Strings functions and utilities
+def _is_valid_string_arg(ty):
+    return (
+        isinstance(ty, MaskedType) and isinstance(ty.value_type, StringView)
+    ) or isinstance(ty, types.StringLiteral)
+
+
+def register_masked_string_function(func):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to associate a signature with a function or
+    operator to be overloaded.
+    """
+
+    def deco(generic):
+        class MaskedStringFunction(AbstractTemplate):
+            pass
+
+        MaskedStringFunction.generic = generic
+        cuda_decl_registry.register_global(func)(MaskedStringFunction)
+
+    return deco
+
+
+@register_masked_string_function(len)
+def len_typing(self, args, kws):
+    if isinstance(args[0], MaskedType) and isinstance(
+        args[0].value_type, StringView
+    ):
+        return nb_signature(MaskedType(size_type), args[0])
+    elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
+        return nb_signature(size_type, args[0])
+
+
+@register_masked_string_function(operator.add)
+def concat_typing(self, args, kws):
+    if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
+        return nb_signature(
+            MaskedType(udf_string),
+            MaskedType(string_view),
+            MaskedType(string_view),
+        )
+
+
+@register_masked_string_function(operator.contains)
+def contains_typing(self, args, kws):
+    if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
+        return nb_signature(
+            MaskedType(types.boolean),
+            MaskedType(string_view),
+            MaskedType(string_view),
+        )
+
+
+class MaskedStringViewCmpOp(AbstractTemplate):
+    """
+    return the boolean result of `cmpop` between to strings
+    since the typing is the same for every comparison operator,
+    we can reuse this class for all of them.
+    """
+
+    def generic(self, args, kws):
+        if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
+            return nb_signature(
+                MaskedType(types.boolean),
+                MaskedType(string_view),
+                MaskedType(string_view),
+            )
+
+
+for op in comparison_ops:
+    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
+
+
+def create_masked_binary_attr(attrname, retty):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a binary function of two masked
+    string objects as an attribute of one, e.g. `string.func(other)`.
+    """
+
+    class MaskedStringViewBinaryAttr(AbstractTemplate):
+        key = attrname
+
+        def generic(self, args, kws):
+            return nb_signature(
+                MaskedType(retty), MaskedType(string_view), recvr=self.this
+            )
+
+    def attr(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewBinaryAttr,
+            MaskedType(string_view),
+        )
+
+    return attr
+
+
+def create_masked_unary_attr(attrname, retty):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a unary function of a masked
+    string object as an attribute, e.g. `string.func()`.
+    """
+
+    class MaskedStringViewIdentifierAttr(AbstractTemplate):
+        key = attrname
+
+        def generic(self, args, kws):
+            return nb_signature(MaskedType(retty), recvr=self.this)
+
+    def attr(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIdentifierAttr,
+            MaskedType(string_view),
+        )
+
+    return attr
+
+
+class MaskedStringViewCount(AbstractTemplate):
+    key = "MaskedType.count"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(size_type), MaskedType(string_view), recvr=self.this
+        )
+
+
+class MaskedStringViewReplace(AbstractTemplate):
+    key = "MaskedType.replace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(udf_string),
+            MaskedType(string_view),
+            MaskedType(string_view),
+            recvr=self.this,
+        )
+
+
+class MaskedStringViewAttrs(AttributeTemplate):
+    key = MaskedType(string_view)
+
+    def resolve_replace(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewReplace, MaskedType(string_view)
+        )
+
+    def resolve_count(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewCount, MaskedType(string_view)
+        )
+
+    def resolve_value(self, mod):
+        return string_view
+
+    def resolve_valid(self, mod):
+        return types.boolean
+
+
+# Build attributes for `MaskedType(string_view)`
+for func in bool_binary_funcs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", types.boolean),
+    )
+
+for func in int_binary_funcs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", size_type),
+    )
+
+for func in string_return_attrs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", udf_string),
+    )
+
+for func in id_unary_funcs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_unary_attr(f"MaskedType.{func}", types.boolean),
+    )
+
+for func in string_unary_funcs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_unary_attr(f"MaskedType.{func}", udf_string),
+    )
+
+cuda_decl_registry.register_attr(MaskedStringViewAttrs)
