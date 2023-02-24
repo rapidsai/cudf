@@ -49,9 +49,6 @@ test = [
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
 
-[project.entry-points]
-dask.dataframe.backends = { cudf = "dask_cudf.backends:CudfBackendEntrypoint" }
-
 [tool.setuptools]
 license-files = ["LICENSE"]
 zip-safe = false
