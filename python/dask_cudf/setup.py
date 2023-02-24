@@ -10,4 +10,5 @@ setup(
             "cudf = dask_cudf.backends:CudfBackendEntrypoint",
         ]
     },
+    zip_safe=False,
 )

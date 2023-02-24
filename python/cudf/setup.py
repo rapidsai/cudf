@@ -9,4 +9,5 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
+    zip_safe=False,
 )
