@@ -34,7 +34,7 @@ repos:
         rev: 5.0.4
         hooks:
               - id: flake8
-                args: ["--config=setup.cfg"]
+                args: ["--config=.flake8"]
                 files: python/.*$
                 types: [file]
                 types_or: [python, cython]
@@ -48,7 +48,7 @@ repos:
         hooks:
               - id: mypy
                 additional_dependencies: [types-cachetools]
-                args: ["--config-file=setup.cfg",
+                args: ["--config-file=pyproject.toml",
                        "python/cudf/cudf",
                        "python/custreamz/custreamz",
                        "python/cudf_kafka/cudf_kafka",
@@ -58,7 +58,9 @@ repos:
         rev: 6.1.1
         hooks:
               - id: pydocstyle
-                args: ["--config=setup.cfg"]
+                # https://github.com/PyCQA/pydocstyle/issues/603
+                additional_dependencies: [toml]
+                args: ["--config=pyproject.toml"]
       - repo: https://github.com/pre-commit/mirrors-clang-format
         rev: v11.1.0
         hooks:
@@ -138,9 +140,11 @@ repos:
                 pass_filenames: false
                 verbose: false
       - repo: https://github.com/codespell-project/codespell
-        rev: v2.1.0
+        rev: v2.2.2
         hooks:
               - id: codespell
+                additional_dependencies: [tomli]
+                args: ["--toml", "pyproject.toml"]
                 exclude: |
                   (?x)^(
                     .*test.*|
