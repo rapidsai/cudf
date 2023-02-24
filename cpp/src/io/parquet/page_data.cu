@@ -1964,6 +1964,8 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
     // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
     // that one only unpacks up to bitwidths of 24. simplified some since this
     // will always do batches of 32.
+    //
+    // TODO(ets): faster as loop or the unrolled version???
     int64_t delta = 0;
     if (lane_id + db->current_value_idx < db->value_count) {
       int32_t ofs      = (lane_id - 32) * mb_bits;
@@ -1972,6 +1974,12 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
       if (p < db->block_end) {
         uint32_t c = 8 - ofs;  // 0 - 7 bits
         delta      = (*p++) >> ofs;
+#if 0
+        while (c < mb_bits && p < db->block_end) {
+          delta |= (*p++) << c;
+          c += 8;
+        }
+#else
         if (c < mb_bits && p < db->block_end) {  // up to 8 bits
           delta |= (*p++) << c;
           c += 8;
@@ -2003,6 +2011,7 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
             }
           }
         }
+#endif
         delta &= (1 << mb_bits) - 1;
       }
     }
