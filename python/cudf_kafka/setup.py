@@ -6,7 +6,6 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
@@ -87,7 +86,7 @@ extensions = [
 
 setup(
     name="cudf_kafka",
-    version=versioneer.get_version(),
+    version="23.04.00",
     description="cuDF Kafka Datasource",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -116,7 +115,6 @@ setup(
         find_packages(include=["cudf_kafka._lib*"]),
         ["*.pxd"],
     ),
-    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
