@@ -144,8 +144,7 @@ repos:
                 exclude: |
                   (?x)^(
                     .*test.*|
-                    ^CHANGELOG.md$|
-                    ^.*versioneer.py$
+                    ^CHANGELOG.md$
                   )
       - repo: https://github.com/rapidsai/dependency-file-generator
         rev: v1.4.0
