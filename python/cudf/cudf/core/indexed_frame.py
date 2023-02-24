@@ -4771,7 +4771,7 @@ class IndexedFrame(Frame):
         self,
         axis=0,
         method="average",
-        numeric_only=None,
+        numeric_only=False,
         na_option="keep",
         ascending=True,
         pct=False,
@@ -4794,7 +4794,7 @@ class IndexedFrame(Frame):
             * max: highest rank in the group
             * first: ranks assigned in order they appear in the array
             * dense: like 'min', but rank always increases by 1 between groups.
-        numeric_only : bool, optional
+        numeric_only : bool, default False
             For DataFrame objects, rank only numeric columns if set to True.
         na_option : {'keep', 'top', 'bottom'}, default 'keep'
             How to rank NaN values:
