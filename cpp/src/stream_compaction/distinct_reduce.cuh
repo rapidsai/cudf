@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  *        comparisons
  * @param num_rows The number of all input rows
  * @param has_nulls Indicate whether the input rows has any nulls at any nested levels
+ * @param has_nested_columns Indicates whether the input table has any nested columns
  * @param keep The parameter to determine what type of reduction to perform
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -76,6 +77,7 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
   cudf::nullate::DYNAMIC has_nulls,
+  bool has_nested_columns,
   duplicate_keep_option keep,
   null_equality nulls_equal,
   nan_equality nans_equal,

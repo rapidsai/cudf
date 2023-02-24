@@ -6,7 +6,6 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
@@ -43,7 +42,7 @@ CUDF_ROOT = os.environ.get(
     ),
 )
 CUDF_KAFKA_ROOT = os.environ.get(
-    "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
+    "CUDF_KAFKA_ROOT", "../../cpp/libcudf_kafka/build"
 )
 
 try:
@@ -72,16 +71,22 @@ extensions = [
             pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
+        library_dirs=(
+            [
+                get_python_lib(),
+                os.path.join(os.sys.prefix, "lib"),
+                CUDF_KAFKA_ROOT,
+            ]
+        ),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++17"],
+        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1"],
     )
 ]
 
 setup(
     name="cudf_kafka",
-    version=versioneer.get_version(),
+    version="23.04.00",
     description="cuDF Kafka Datasource",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -110,7 +115,6 @@ setup(
         find_packages(include=["cudf_kafka._lib*"]),
         ["*.pxd"],
     ),
-    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
