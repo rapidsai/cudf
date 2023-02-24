@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -33,6 +33,7 @@ from . import (
     stream_compaction,
     string_casting,
     strings,
+    strings_udf,
     text,
     transpose,
     unary,
