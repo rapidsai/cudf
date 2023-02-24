@@ -5891,8 +5891,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             raise TypeError(
                                 f"Not all column dtypes support op {op}"
                             )
-                    elif not all(
-                        is_numeric_dtype(self._data[name])
+                    elif any(
+                        not is_numeric_dtype(self._data[name])
                         for name in self._data.names
                     ):
                         raise TypeError(
