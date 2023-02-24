@@ -1885,7 +1885,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def min(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
         numeric_only=False,
         **kwargs,
@@ -1900,7 +1900,9 @@ class Frame(BinaryOperand, Scannable):
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         numeric_only: bool, default False
-            Include only float, int, boolean columns.
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -1930,7 +1932,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def max(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
         level=None,
         numeric_only=None,
@@ -1949,8 +1951,9 @@ class Frame(BinaryOperand, Scannable):
             If the axis is a MultiIndex (hierarchical), count along a
             particular level, collapsing into a Series.
         numeric_only: bool, default None
-            Include only float, int, boolean columns. If None, will attempt to
-            use everything, then use only numeric data.
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -1999,6 +2002,10 @@ class Frame(BinaryOperand, Scannable):
             Exclude NA/null values when computing the result.
         dtype: data type
             Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -2051,6 +2058,10 @@ class Frame(BinaryOperand, Scannable):
             Exclude NA/null values when computing the result.
         dtype: data type
             Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -2089,7 +2100,7 @@ class Frame(BinaryOperand, Scannable):
     prod = product
 
     @_cudf_nvtx_annotate
-    def mean(self, axis=None, skipna=True, numeric_only=False, **kwargs):
+    def mean(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return the mean of the values for the requested axis.
 
@@ -2100,8 +2111,9 @@ class Frame(BinaryOperand, Scannable):
         skipna : bool, default True
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
-            Include only float, int, boolean columns. If False, will attempt to
-            use everything. Not implemented for Series.
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         **kwargs
             Additional keyword arguments to be passed to the function.
 
@@ -2151,6 +2163,10 @@ class Frame(BinaryOperand, Scannable):
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations
             is N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -2200,6 +2216,10 @@ class Frame(BinaryOperand, Scannable):
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations is
             N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -2224,7 +2244,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def kurtosis(self, axis=None, skipna=True, numeric_only=False, **kwargs):
+    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
@@ -2237,6 +2257,10 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -2275,7 +2299,7 @@ class Frame(BinaryOperand, Scannable):
     kurt = kurtosis
 
     @_cudf_nvtx_annotate
-    def skew(self, axis=None, skipna=True, numeric_only=False, **kwargs):
+    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return unbiased Fisher-Pearson skew of a sample.
 
@@ -2283,6 +2307,10 @@ class Frame(BinaryOperand, Scannable):
         ----------
         skipna: bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -2434,14 +2462,21 @@ class Frame(BinaryOperand, Scannable):
         return self._reduce("sum_of_squares", dtype=dtype)
 
     @_cudf_nvtx_annotate
-    def median(self, axis=None, skipna=True, numeric_only=False, **kwargs):
+    def median(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return the median of the values for the requested axis.
 
         Parameters
         ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on. For Series this
+            parameter is unused and defaults to 0.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
