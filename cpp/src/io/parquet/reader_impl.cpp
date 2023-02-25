@@ -24,10 +24,11 @@ namespace cudf::io::detail::parquet {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  auto& chunks              = _file_itm_data.chunks;
-  auto& pages               = _file_itm_data.pages_info;
-  auto& page_nesting        = _file_itm_data.page_nesting_info;
-  auto& page_nesting_decode = _file_itm_data.page_nesting_decode_info;
+  auto& chunks                 = _file_itm_data.chunks;
+  auto& pages                  = _file_itm_data.pages_info;
+  auto& page_nesting           = _file_itm_data.page_nesting_info;
+  auto& page_nesting_decode    = _file_itm_data.page_nesting_decode_info;
+  auto& delta_binary_page_data = _file_itm_data.delta_binary_page_data;
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -120,6 +121,30 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
+
+  // see if space is needed for decoding strings
+  hostdevice_vector<size_type> page_string_sizes(pages.size(), _stream);
+  std::vector<size_type> page_string_offsets;
+
+  ComputePageStringSizes(pages, page_string_sizes, _stream);
+  page_string_sizes.device_to_host(_stream, true);
+
+  std::exclusive_scan(page_string_sizes.host_ptr(),
+                      page_string_sizes.host_ptr(page_string_sizes.size() + 1),
+                      std::back_inserter(page_string_offsets),
+                      0);
+  if (page_string_offsets.back() != 0) {
+    delta_binary_page_data = rmm::device_buffer(page_string_offsets.back(), _stream);
+
+    // set pointers in pages
+    for (size_t i = 0; i < pages.size(); i++) {
+      pages[i].page_string_data =
+        page_string_sizes[i] != 0
+          ? static_cast<uint8_t*>(delta_binary_page_data.data()) + page_string_offsets[i]
+          : nullptr;
+    }
+    pages.host_to_device(_stream);
+  }
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
 

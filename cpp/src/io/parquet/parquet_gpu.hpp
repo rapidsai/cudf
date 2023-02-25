@@ -145,6 +145,7 @@ struct PageNestingInfo {
 struct PageInfo {
   uint8_t* page_data;  // Compressed page data before decompression, or uncompressed data after
                        // decompression
+  uint8_t* page_string_data;       // Temporary storage for decoded DELTA_BINARY_ARRAY data
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
@@ -280,6 +281,7 @@ struct ColumnChunkDesc {
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
   rmm::device_buffer decomp_page_data;
+  rmm::device_buffer delta_binary_page_data;
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
@@ -429,6 +431,16 @@ void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_st
 void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compute the amount of string data in DELTA_BYTE_ARRAY encoded pages.
+ *
+ * @param pages All pages to compute lengths for
+ * @param page_string_sizes Array to hold computed lengths
+ */
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
+                            hostdevice_vector<size_type>& page_string_sizes,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.

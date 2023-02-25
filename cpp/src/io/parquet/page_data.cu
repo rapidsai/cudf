@@ -1945,7 +1945,7 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 
 // decode the current mini-batch of deltas, and convert to values.
 // called by all threads in a warp, currently only one warp supported.
-__device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
+__device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 {
   if (db->current_value_idx >= db->value_count) { return; }
 
@@ -2043,6 +2043,85 @@ __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
   }
 }
 
+/**
+ * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
+ */
+__global__ void __launch_bounds__(64)
+  gpuComputePageStringSizes(PageInfo* pages, device_span<size_type> page_string_sizes)
+{
+  // using this to get atomicAdd happy
+  using u64 = unsigned long long int;
+  __shared__ __align__(16) delta_binary_state_s db_state[2];
+  __shared__ __align__(8) u64 total_bytes;
+
+  int t           = threadIdx.x;
+  int lane_id     = t & 0x1f;
+  auto* prefix_db = &db_state[0];
+  auto* suffix_db = &db_state[1];
+  PageInfo* page  = &pages[blockIdx.x];
+
+  if (page->encoding != Encoding::DELTA_BYTE_ARRAY || page->num_input_values == 0) {
+    if (t == 0) { page_string_sizes[blockIdx.x] = 0; }
+    return;
+  }
+
+  // page_data should be at the start of the rep/def level data (if present).s
+  uint8_t* cur = page->page_data;
+  uint8_t* end = cur + page->uncompressed_page_size;
+
+  // DELTA_BYTE_ARRAY should only be used with V2 headers
+  cur += page->def_lvl_bytes + page->rep_lvl_bytes;
+
+  if (t == 0) {
+    auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
+      InitDeltaBinaryBlock(db, start, end);
+      while (db->current_value_idx < db->value_count) {
+        SetupNextMiniBlock(db);
+      }
+      auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
+      // re-init block with correct end
+      InitDeltaBinaryBlock(db, start, new_end);
+      return new_end;
+    };
+
+    // initialize the prefixes and suffixes blocks
+    auto const* suffix_start = find_end(prefix_db, cur, end);
+    find_end(suffix_db, suffix_start, end);
+
+    // initialize total_bytes
+    total_bytes = prefix_db->last_value + suffix_db->last_value;
+  }
+  __syncthreads();
+
+  // step through prefixes and suffixes to get total length
+  while (prefix_db->current_value_idx < prefix_db->value_count) {
+    auto* db = t < 32 ? prefix_db : suffix_db;
+
+    for (int i = 0; i < db->values_per_mb; i += 32) {
+      CalcMiniBlockValues(db, lane_id);
+
+      int idx    = db->current_value_idx + i + lane_id;
+      u64 my_len = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
+
+      // get sum for warp
+      using WarpReduce = cub::WarpReduce<u64>;
+      __shared__ typename WarpReduce::TempStorage temp_storage;
+      // note: sum_len will only be valid on thread 0.
+      u64 sum_len = WarpReduce(temp_storage).Sum(my_len);
+
+      if (lane_id == 0) { atomicAdd(&total_bytes, sum_len); }
+      __syncthreads();
+    }
+
+    if (lane_id == 0) { SetupNextMiniBlock(db); }
+  }
+  __syncthreads();
+
+  // return -1 if overflow
+  page_string_sizes[blockIdx.x] =
+    total_bytes < std::numeric_limits<int32_t>::max() ? static_cast<size_type>(total_bytes) : -1;
+}
+
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
 // only used for int32 and int64 physical types (and appears to only be used
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
@@ -2078,7 +2157,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // that has a value we need
   while (db->current_value_idx < skipped_leaf_values && db->current_value_idx < db->value_count) {
     if (t < 32) {
-      DeltaForThread(db, lane_id);
+      CalcMiniBlockValues(db, lane_id);
       if (lane_id == 0) { SetupNextMiniBlock(db); }
     }
     __syncthreads();
@@ -2108,7 +2187,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     } else if (t < 64) {
       // warp 1
       // unpack deltas and save in db->value
-      DeltaForThread(db, lane_id);
+      CalcMiniBlockValues(db, lane_id);
 
       // set up for next mini-block
       if (lane_id == 0) { SetupNextMiniBlock(db); }
@@ -2153,11 +2232,14 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state[2];
   __shared__ __align__(16) uint8_t const* data_start;
+  __shared__ __align__(16) uint8_t* strings_start;
 
   int t           = threadIdx.x;
   int lane_id     = t & 0x1f;
   auto* prefix_db = &db_state[0];
   auto* suffix_db = &db_state[1];
+
+  // TODO assert string_data != nullptr
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -2182,6 +2264,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     // initialize the prefixes and suffixes blocks
     auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
     data_start               = find_end(suffix_db, suffix_start, s->data_end);
+    strings_start            = s->page.page_string_data;
   }
   __syncthreads();
 
@@ -2194,10 +2277,10 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
          prefix_db->current_value_idx < prefix_db->value_count) {
     // prefixes and suffixes should be same length, so only testing prefix_db above
     if (t < 32) {  // warp 0 does prefixes
-      DeltaForThread(prefix_db, lane_id);
+      CalcMiniBlockValues(prefix_db, lane_id);
       if (lane_id == 0) { SetupNextMiniBlock(prefix_db); }
     } else if (t < 64) {  // warp 1 does suffixes
-      DeltaForThread(suffix_db, lane_id);
+      CalcMiniBlockValues(suffix_db, lane_id);
       if (lane_id == 0) { SetupNextMiniBlock(suffix_db); }
     }
     __syncthreads();
@@ -2229,7 +2312,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       auto* db = t < 64 ? prefix_db : suffix_db;
 
       // unpack deltas and save in db->value
-      DeltaForThread(db, lane_id);
+      CalcMiniBlockValues(db, lane_id);
 
       // set up for next mini-block
       if (lane_id == 0) { SetupNextMiniBlock(db); }
@@ -2248,14 +2331,36 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
 
+        // calculate suffix offsets (done outside of the `if` because all warps need to
+        // participate).
+        int src_idx         = rolling_index(sp + skipped_leaf_values);
+        uint64_t suffix_len = sp < target_pos ? suffix_db->value[src_idx] : 0;
+        uint64_t suffix_off = 0;
+        __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
+        cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
+
+        // calculate offsets into string data
+        uint64_t prefix_len = sp < target_pos ? prefix_db->value[src_idx] : 0;
+        uint64_t string_len = prefix_len + suffix_len;
+        uint64_t string_off = 0;
+        cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
+
         if (dst_pos >= 0 && sp < target_pos) {
+          uint8_t* p = strings_start + string_off;
+          memset(p, '_', prefix_len);
+          memcpy(p + prefix_len, data_start + suffix_off, suffix_len);
+
           void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
-          int src_idx  = rolling_index(sp + skipped_leaf_values);
-          int len      = prefix_db->value[src_idx] + suffix_db->value[src_idx];
           auto* dstp   = static_cast<string_index_pair*>(dst);
-          dstp->first  = (char*)data_start;  // FIXME need the read value
-          dstp->second = len;
+          dstp->first  = reinterpret_cast<char*>(p);
+          dstp->second = string_len;
         }
+
+        if (lane_id == 31) {
+          strings_start += string_off + string_len;
+          data_start += suffix_off + suffix_len;
+        }
+        __syncwarp();
       }
 
       if (lane_id == 0) { s->src_pos = src_pos + batch_size; }
@@ -2470,6 +2575,18 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 }
 
 }  // anonymous namespace
+
+/**
+ * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
+ */
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
+                            hostdevice_vector<size_type>& page_string_sizes,
+                            rmm::cuda_stream_view stream)
+{
+  // need 2 warps, one for prefixes and one for suffixes
+  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(pages.device_ptr(),
+                                                                     page_string_sizes);
+}
 
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageSizes
