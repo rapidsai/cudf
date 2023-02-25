@@ -30,6 +30,8 @@ jobs:
   checks:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@branch-23.04
+    with:
+      enable_check_generated_files: false
   conda-cpp-build:
     needs: checks
     secrets: inherit
