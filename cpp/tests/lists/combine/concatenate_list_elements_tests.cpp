@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/combine.hpp>
+
+#include <stdexcept>
 
 using namespace cudf::test::iterators;
 
@@ -47,13 +49,13 @@ TEST_F(ConcatenateListElementsTest, InvalidInput)
   // Input lists is not a 2-level depth lists column.
   {
     auto const col = IntCol{};
-    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), std::invalid_argument);
   }
 
   // Input lists is not at least 2-level depth lists column.
   {
     auto const col = IntListsCol{1, 2, 3};
-    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), std::invalid_argument);
   }
 }
 

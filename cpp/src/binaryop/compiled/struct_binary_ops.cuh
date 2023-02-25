@@ -149,7 +149,8 @@ void apply_struct_equality_op(mutable_column_view& out,
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
                  op == binary_operator::NULL_EQUALS,
-               "Unsupported operator for these types");
+               "Unsupported operator for these types",
+               cudf::data_type_error);
 
   auto tlhs = table_view{{lhs}};
   auto trhs = table_view{{rhs}};
