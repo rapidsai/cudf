@@ -2231,8 +2231,10 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state[2];
-  __shared__ __align__(16) uint8_t const* data_start;
-  __shared__ __align__(16) uint8_t* strings_start;
+  __shared__ __align__(8) uint8_t const* data_start;
+  __shared__ __align__(8) uint8_t* strings_start;
+  __shared__ __align__(8) uint8_t* last_string;
+  __shared__ __align__(8) uint64_t string_offsets[32];
 
   int t           = threadIdx.x;
   int lane_id     = t & 0x1f;
@@ -2265,6 +2267,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
     data_start               = find_end(suffix_db, suffix_start, s->data_end);
     strings_start            = s->page.page_string_data;
+    last_string              = nullptr;
   }
   __syncthreads();
 
@@ -2273,6 +2276,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need
+  // FIXME need to decode strings too or there will be chaos
   while (prefix_db->current_value_idx < skipped_leaf_values &&
          prefix_db->current_value_idx < prefix_db->value_count) {
     // prefixes and suffixes should be same length, so only testing prefix_db above
@@ -2331,33 +2335,57 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
 
-        // calculate suffix offsets (done outside of the `if` because all warps need to
-        // participate).
-        int src_idx         = rolling_index(sp + skipped_leaf_values);
+        // start reconstructing strings. need to do all strings in the page even if
+        // skipping rows because we need to know the first strings in the page for the
+        // deltas to make sense.
+        // calculate offsets into suffix data
+        int src_idx         = rolling_index(sp);
         uint64_t suffix_len = sp < target_pos ? suffix_db->value[src_idx] : 0;
         uint64_t suffix_off = 0;
         __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
         cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
 
-        // calculate offsets into string data
+        // calculate offsets into string data and save in string_offsets
         uint64_t prefix_len = sp < target_pos ? prefix_db->value[src_idx] : 0;
         uint64_t string_len = prefix_len + suffix_len;
         uint64_t string_off = 0;
         cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
+        string_offsets[lane_id] = string_off;
+        if (string_offsets == nullptr) ;
+
+        // copy suffixes into string data
+        uint8_t* p = strings_start + string_off;
+        memset(p, '_', prefix_len); // debug. remove this
+        memcpy(p + prefix_len, data_start + suffix_off, suffix_len);
+        __syncwarp();
+
+        // copy prefixes into string data. this has to be done serially.
+        if (lane_id == 0) {
+          if (last_string != nullptr) { memcpy(strings_start, last_string, prefix_len); }
+          for (int i = 1; i < 32; i++) {
+            int lsp = sp + i;
+            if (lsp < target_pos) {
+              int lsp_idx = rolling_index(lsp);
+              memcpy(strings_start + string_offsets[i],
+                     strings_start + string_offsets[i - 1],
+                     prefix_db->value[lsp_idx]);
+            }
+          }
+        }
 
         if (dst_pos >= 0 && sp < target_pos) {
-          uint8_t* p = strings_start + string_off;
-          memset(p, '_', prefix_len);
-          memcpy(p + prefix_len, data_start + suffix_off, suffix_len);
-
           void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
           auto* dstp   = static_cast<string_index_pair*>(dst);
+
+          // FIXME will be wrong if skipping rows
           dstp->first  = reinterpret_cast<char*>(p);
           dstp->second = string_len;
         }
+        __syncwarp();
 
         if (lane_id == 31) {
-          strings_start += string_off + string_len;
+          last_string = strings_start + string_off;
+          strings_start = last_string + string_len;
           data_start += suffix_off + suffix_len;
         }
         __syncwarp();
