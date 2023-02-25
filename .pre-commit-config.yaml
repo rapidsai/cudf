@@ -61,6 +61,16 @@ repos:
                 # https://github.com/PyCQA/pydocstyle/issues/603
                 additional_dependencies: [toml]
                 args: ["--config=pyproject.toml"]
+      - repo: https://github.com/nbQA-dev/nbQA
+        rev: 1.6.3
+        hooks:
+              - id: nbqa-isort
+                # Use the cudf_kafka isort orderings in notebooks so that dask
+                # and RAPIDS packages have their own sections.
+                args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
+              - id: nbqa-black
+                # Explicitly specify the pyproject.toml at the repo root, not per-project.
+                args: ["--config=pyproject.toml"]
       - repo: https://github.com/pre-commit/mirrors-clang-format
         rev: v11.1.0
         hooks:
@@ -150,6 +160,11 @@ repos:
                     .*test.*|
                     ^CHANGELOG.md$
                   )
+      - repo: https://github.com/rapidsai/dependency-file-generator
+        rev: v1.4.0
+        hooks:
+            - id: rapids-dependency-file-generator
+              args: ["--clean"]
 
 default_language_version:
       python: python3
