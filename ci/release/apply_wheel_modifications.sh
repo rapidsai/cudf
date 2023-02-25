@@ -13,10 +13,10 @@ sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/cudf_kafka/cud
 sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/custreamz/custreamz/__init__.py
 
 # pyproject.toml versions
-sed -i "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/cudf/pyproject.toml
-sed -i "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/pyproject.toml
-sed -i "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/pyproject.toml
-sed -i "s/^version = .*/version = \"${NEXT_FULL_TAG}\"/g" python/custreamz/pyproject.toml
+sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/cudf/pyproject.toml
+sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/dask_cudf/pyproject.toml
+sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/cudf_kafka/pyproject.toml
+sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/custreamz/pyproject.toml
 
 # cudf pyproject.toml cuda suffixes
 sed -i "s/^name = \"cudf\"/name = \"cudf${CUDA_SUFFIX}\"/g" python/cudf/pyproject.toml
