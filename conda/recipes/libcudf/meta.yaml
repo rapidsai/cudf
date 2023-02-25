@@ -70,7 +70,7 @@ outputs:
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
-        - test -f $PREFIX/lib/libcudftestutil.a
+        - test -f $PREFIX/lib/libcudftestutil.so
         - test -f $PREFIX/include/cudf/aggregation.hpp
         - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
         - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
