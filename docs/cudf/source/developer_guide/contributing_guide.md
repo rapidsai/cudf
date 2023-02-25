@@ -22,16 +22,16 @@ Specifically, cuDF uses the following tools:
   In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
   `mypy` can help catch various bugs that are otherwise difficult to find.
 - [`pydocstyle`](https://github.com/PyCQA/pydocstyle/) lints docstring style.
+- [`codespell`](https://github.com/codespell-project/codespell) finds spelling errors.
 
 Linter config data is stored in a number of files.
-We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `setup.cfg` > `python/cudf/setup.cfg`).
+We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `pyproject.toml` > `python/cudf/pyproject.toml`).
 However, differences between tools and the different packages in the repo result in the following caveats:
 
-- `flake8` has no plans to support `pyproject.toml`, so it must live in `setup.cfg`.
+- `flake8` has no plans to support `pyproject.toml`, so it must live in `.flake8`.
 - `isort` must be configured per project to set which project is the "first party" project.
 
-Additionally, our use of `versioneer` means that each project must have a `setup.cfg`.
-As a result, we currently maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
+As a result, we currently maintain both root and project-level `pyproject.toml` files as well as a `.flake8` file.
 
 For more information on how to use pre-commit hooks, see the code formatting section of the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
