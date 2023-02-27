@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -510,7 +510,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._step < 0 or len(self) <= 1
 
     @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
+    def get_slice_bound(self, label, side):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -521,20 +521,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         label : int
             A valid value in the ``RangeIndex``
         side : {'left', 'right'}
-        kind : Unused
-            To keep consistency with other index types.
 
         Returns
         -------
         int
             Index of label.
         """
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
@@ -1413,14 +1405,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     notnull = notna
 
     @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
-        return self._values.get_slice_bound(label, side, kind)
+    def get_slice_bound(self, label, side):
+        return self._values.get_slice_bound(label, side)
 
     def is_numeric(self):
         return False
