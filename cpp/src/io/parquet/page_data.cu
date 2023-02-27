@@ -2278,17 +2278,16 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   auto const batch_size = prefix_db->values_per_mb;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
-  // that has a value we need
+  // that has a value we need. prefixes and suffixes should be the same length, so only
+  // testing prefix_db.
   // FIXME need to decode strings too or there will be chaos
   while (prefix_db->current_value_idx < skipped_leaf_values &&
          prefix_db->current_value_idx < prefix_db->value_count) {
-    // prefixes and suffixes should be same length, so only testing prefix_db above
-    if (t < 32) {  // warp 0 does prefixes
-      CalcMiniBlockValues(prefix_db, lane_id);
-      if (lane_id == 0) { SetupNextMiniBlock(prefix_db); }
-    } else if (t < 64) {  // warp 1 does suffixes
-      CalcMiniBlockValues(suffix_db, lane_id);
-      if (lane_id == 0) { SetupNextMiniBlock(suffix_db); }
+    // warp 0 gets prefixes and warp 1 gets suffixes
+    auto* db = t < 32 ? prefix_db : suffix_db;
+    if (t < 64) {  // warp 1 does suffixes
+      CalcMiniBlockValues(db, lane_id);
+      if (lane_id == 0) { SetupNextMiniBlock(db); }
     }
     __syncthreads();
   }
