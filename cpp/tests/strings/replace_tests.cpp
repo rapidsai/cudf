@@ -173,6 +173,22 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlap)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsReplaceTest, ReplaceTargetOverlap2)
+{
+  auto input        = cudf::test::strings_column_wrapper({"banana", "nanananananana"});
+  auto strings_view = cudf::strings_column_view(input);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
+
+  auto results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("nana"), cudf::string_scalar(""), -1, stream, mr);
+  cudf::test::print(results->view());
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("nana"), cudf::string_scalar(""), -1, stream, mr);
+  cudf::test::print(results->view());
+}
+
 TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
 {
   auto input        = build_corpus();
@@ -290,28 +306,22 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
 
 TEST_F(StringsReplaceTest, ReplaceSliceError)
 {
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "are not", "important", ""};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto strings_view = cudf::strings_column_view(strings);
-  EXPECT_THROW(cudf::strings::replace_slice(strings_view, cudf::string_scalar(""), 4, 1),
-               cudf::logic_error);
+  cudf::test::strings_column_wrapper input({"Héllo", "thesé", "are not", "important", ""});
+  EXPECT_THROW(
+    cudf::strings::replace_slice(cudf::strings_column_view(input), cudf::string_scalar(""), 4, 1),
+    cudf::logic_error);
 }
 
 TEST_F(StringsReplaceTest, ReplaceMulti)
 {
-  auto strings      = build_corpus();
-  auto strings_view = cudf::strings_column_view(strings);
+  auto input        = build_corpus();
+  auto strings_view = cudf::strings_column_view(input);
 
-  std::vector<const char*> h_targets{"the ", "a ", "to "};
-  cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
+  cudf::test::strings_column_wrapper targets({"the ", "a ", "to "});
   auto targets_view = cudf::strings_column_view(targets);
 
   {
-    std::vector<const char*> h_repls{"_ ", "A ", "2 "};
-    cudf::test::strings_column_wrapper repls(h_repls.begin(), h_repls.end());
+    cudf::test::strings_column_wrapper repls({"_ ", "A ", "2 "});
     auto repls_view = cudf::strings_column_view(repls);
 
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
@@ -331,8 +341,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
   }
 
   {
-    std::vector<const char*> h_repls{"* "};
-    cudf::test::strings_column_wrapper repls(h_repls.begin(), h_repls.end());
+    cudf::test::strings_column_wrapper repls({"* "});
     auto repls_view = cudf::strings_column_view(repls);
 
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
@@ -348,6 +357,56 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsReplaceTest, ReplaceMultiLong)
+{
+  auto input = cudf::test::strings_column_wrapper(
+    {"This string needs to be very long to trigger the long-replace internal functions.",
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
+     "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
+     "",
+     ""},
+    {1, 1, 1, 1, 0, 1});
+  auto strings_view = cudf::strings_column_view(input);
+
+  cudf::test::strings_column_wrapper targets({"901", "bananá", "ápple"});
+  auto targets_view = cudf::strings_column_view(targets);
+
+  {
+    cudf::test::strings_column_wrapper repls({"x", "PEAR", "avocado"});
+    auto repls_view = cudf::strings_column_view(repls);
+
+    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+
+    cudf::test::strings_column_wrapper expected(
+      {"This string needs to be very long to trigger the long-replace internal functions.",
+       "012345678x2345678x2345678x2345678x2345678x2345678x2345678x23456789",
+       "012345678x2345678x2345678x2345678x2345678x2345678x2345678x23456789",
+       "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR",
+       "",
+       ""},
+      {1, 1, 1, 1, 0, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  {
+    cudf::test::strings_column_wrapper repls({"*"});
+    auto repls_view = cudf::strings_column_view(repls);
+
+    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+
+    cudf::test::strings_column_wrapper expected(
+      {"This string needs to be very long to trigger the long-replace internal functions.",
+       "012345678*2345678*2345678*2345678*2345678*2345678*2345678*23456789",
+       "012345678*2345678*2345678*2345678*2345678*2345678*2345678*23456789",
+       "Test string for overlap check: banana* * ** ban* * *",
+       "",
+       ""},
+      {1, 1, 1, 1, 0, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
