@@ -1,0 +1,24 @@
+# Copyright (c) 2017-2023, NVIDIA CORPORATION.
+
+[flake8]
+filename = *.py, *.pyx, *.pxd, *.pxi
+exclude = __init__.py, *.egg, build, docs, .git
+force-check = True
+ignore =
+    # line break before binary operator
+    W503,
+    # whitespace before :
+    E203
+per-file-ignores =
+    # Rules ignored only in Cython:
+    # E211: whitespace before '(' (used in multi-line imports)
+    # E225: Missing whitespace around operators (breaks cython casting syntax like <int>)
+    # E226: Missing whitespace around arithmetic operators (breaks cython pointer syntax like int*)
+    # E227: Missing whitespace around bitwise or shift operator (Can also break casting syntax)
+    # E275: Missing whitespace after keyword (Doesn't work with Cython except?)
+    # E402: invalid syntax (works for Python, not Cython)
+    # E999: invalid syntax (works for Python, not Cython)
+    # W504: line break after binary operator (breaks lines that end with a pointer)
+    *.pyx: E211, E225, E226, E227, E275, E402, E999, W504
+    *.pxd: E211, E225, E226, E227, E275, E402, E999, W504
+    *.pxi: E211, E225, E226, E227, E275, E402, E999, W504
