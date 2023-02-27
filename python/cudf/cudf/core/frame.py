@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
 from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -1448,7 +1449,7 @@ class Frame(BinaryOperand, Scannable):
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view)
+        result = cupy.asarray(outcol.data_array_view(mode="read"))
         if scalar_flag:
             return result[0].item()
         else:
@@ -1701,9 +1702,10 @@ class Frame(BinaryOperand, Scannable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        lmask = as_column(left_column.nullmask)
-                        rmask = as_column(right_column.nullmask)
-                        output_mask = (lmask | rmask).data
+                        with acquire_spill_lock():
+                            lmask = as_column(left_column.nullmask)
+                            rmask = as_column(right_column.nullmask)
+                            output_mask = (lmask | rmask).data
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1738,6 +1740,7 @@ class Frame(BinaryOperand, Scannable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
+    @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
     ):

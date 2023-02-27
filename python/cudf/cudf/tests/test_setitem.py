@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -215,7 +215,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_1], {}),
         ([mask, replace_data_1], {}),
-        compare_error_message=False,
     )
 
     psr = pd.Series(data)
@@ -225,7 +224,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_2], {}),
         ([mask, replace_data_2], {}),
-        compare_error_message=False,
     )
 
 
@@ -239,9 +237,6 @@ def test_categorical_setitem_invalid():
             rfunc=gs.__setitem__,
             lfunc_args_and_kwargs=([0, 5], {}),
             rfunc_args_and_kwargs=([0, 5], {}),
-            compare_error_message=False,
-            expected_error_message="Cannot setitem on a Categorical with a "
-            "new category, set the categories first",
         )
     else:
         # Following workaround is needed because:
@@ -352,3 +347,13 @@ def test_series_setitem_upcasting_string_value():
     assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
     with pytest.raises(ValueError):
         sr[0] = "non-integer"
+
+
+def test_scatter_by_slice_with_start_and_step():
+    source = pd.Series([1, 2, 3, 4, 5])
+    csource = cudf.from_pandas(source)
+    target = pd.Series([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    ctarget = cudf.from_pandas(target)
+    target[1::2] = source
+    ctarget[1::2] = csource
+    assert_eq(target, ctarget)

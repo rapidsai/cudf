@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.02.00
+  VERSION 23.04.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -71,6 +71,18 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+if(${CUDA_STATIC_RUNTIME})
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+)
+mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
@@ -343,6 +355,7 @@ add_library(
   src/io/json/reader_impl.cu
   src/io/json/experimental/byte_range_info.cu
   src/io/json/experimental/read_json.cpp
+  src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -381,7 +394,7 @@ add_library(
   src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
-  src/jit/type.cpp
+  src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
@@ -440,13 +453,19 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
-  src/reductions/segmented_all.cu
-  src/reductions/segmented_any.cu
-  src/reductions/segmented_max.cu
-  src/reductions/segmented_min.cu
-  src/reductions/segmented_product.cu
-  src/reductions/segmented_reductions.cpp
-  src/reductions/segmented_sum.cu
+  src/reductions/segmented/all.cu
+  src/reductions/segmented/any.cu
+  src/reductions/segmented/counts.cu
+  src/reductions/segmented/max.cu
+  src/reductions/segmented/mean.cu
+  src/reductions/segmented/min.cu
+  src/reductions/segmented/product.cu
+  src/reductions/segmented/reductions.cpp
+  src/reductions/segmented/std.cu
+  src/reductions/segmented/sum.cu
+  src/reductions/segmented/sum_of_squares.cu
+  src/reductions/segmented/update_validity.cu
+  src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
@@ -530,6 +549,7 @@ add_library(
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
+  src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_re.cu
@@ -538,7 +558,6 @@ add_library(
   src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
-  src/strings/substring.cu
   src/strings/translate.cu
   src/strings/utilities.cu
   src/strings/wrap.cu
@@ -580,6 +599,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+  src/utilities/type_dispatcher.cpp
 )
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
@@ -747,10 +767,34 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
+
+# * build cudf_identify_stream_usage --------------------------------------------------------------
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  if(CUDA_STATIC_RUNTIME)
+    message(
+      FATAL_ERROR
+        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+    )
+  endif()
+
+  # Libraries for stream-related testing.
+  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+
+  set_target_properties(
+    cudf_identify_stream_usage
+    PROPERTIES # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
+  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+endif()
+
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
 
@@ -777,12 +821,9 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
   rapids_cpm_gbench()
 
-  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
-  # do not support the latest version of fmt, which is automatically pulled into our conda
-  # environments by mamba.
-  set(CPM_DOWNLOAD_fmt TRUE)
-  include(${rapids-cmake-dir}/cpm/nvbench.cmake)
-  rapids_cpm_nvbench()
+  # Find or install nvbench
+  include(cmake/thirdparty/get_nvbench.cmake)
+
   add_subdirectory(benchmarks)
 endif()
 
@@ -824,6 +865,10 @@ if(CUDF_BUILD_TESTUTIL)
     INSTALL cudf-testing-exports
     "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
   )
+endif()
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
 endif()
 
 set(doc_string

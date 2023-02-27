@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -141,6 +141,13 @@ class CategoricalAccessor(ColumnMethods):
             or return a copy of this categorical with
             added categories.
 
+            .. deprecated:: 23.02
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Setting categories as ordered will always
+               return a new Categorical object.
+
         Returns
         -------
         Categorical
@@ -203,6 +210,13 @@ class CategoricalAccessor(ColumnMethods):
             Whether or not to set the ordered attribute
             in-place or return a copy of this
             categorical with ordered set to False.
+
+            .. deprecated:: 23.02
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Setting categories as unordered will always
+               return a new Categorical object.
 
         Returns
         -------
@@ -286,6 +300,13 @@ class CategoricalAccessor(ColumnMethods):
             or return a copy of this categorical with
             added categories.
 
+            .. deprecated:: 23.04
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Adding categories will always return a
+               new Categorical object.
+
         Returns
         -------
         cat
@@ -318,7 +339,14 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (5, int64): [1, 2, 0, 3, 4]
         """
-
+        if inplace:
+            warnings.warn(
+                "The `inplace` parameter in cudf.Series.cat.add_categories "
+                "is deprecated and will be removed in a future version of "
+                "cudf. Adding categories will always return a new "
+                "Categorical object.",
+                FutureWarning,
+            )
         old_categories = self._column.categories
         new_categories = column.as_column(
             new_categories,
@@ -370,6 +398,13 @@ class CategoricalAccessor(ColumnMethods):
             Whether or not to remove the categories
             inplace or return a copy of this categorical
             with removed categories.
+
+            .. deprecated:: 23.04
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Removing categories will always return a
+               new Categorical object.
 
         Returns
         -------
@@ -423,6 +458,16 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 2]
         """
+        if inplace:
+            warnings.warn(
+                "The `inplace` parameter in "
+                "cudf.Series.cat.remove_categories is deprecated and "
+                "will be removed in a future version of cudf. "
+                "Removing categories will always return a new "
+                "Categorical object.",
+                FutureWarning,
+            )
+
         cats = self.categories.to_series()
         removals = cudf.Series(removals, dtype=cats.dtype)
         removals_mask = removals.isin(cats)
@@ -485,6 +530,13 @@ class CategoricalAccessor(ColumnMethods):
             or return a copy of this categorical with
             reordered categories.
 
+            .. deprecated:: 23.04
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Setting categories will always return a
+               new Categorical object.
+
         Returns
         -------
         cat
@@ -524,6 +576,14 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (2, int64): [1, 10]
         """
+        if inplace:
+            warnings.warn(
+                "The `inplace` parameter in cudf.Series.cat.set_categories is "
+                "deprecated and will be removed in a future version of cudf. "
+                "Setting categories will always return a new Categorical "
+                "object.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.set_categories(
                 new_categories=new_categories, ordered=ordered, rename=rename
@@ -555,6 +615,13 @@ class CategoricalAccessor(ColumnMethods):
             Whether or not to reorder the categories
             inplace or return a copy of this categorical
             with reordered categories.
+
+            .. deprecated:: 23.04
+
+               The `inplace` parameter is is deprecated and
+               will be removed in a future version of cudf.
+               Reordering categories will always return a
+               new Categorical object.
 
         Returns
         -------
@@ -597,6 +664,15 @@ class CategoricalAccessor(ColumnMethods):
         ValueError: items in new_categories are not the same as in
         old categories
         """
+        if inplace:
+            warnings.warn(
+                "The `inplace` parameter in "
+                "cudf.Series.cat.reorder_categories is deprecated "
+                "and will be removed in a future version of cudf. "
+                "Reordering categories will always return a new "
+                "Categorical object.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.reorder_categories(new_categories, ordered=ordered),
             inplace=inplace,
@@ -733,7 +809,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @categories.setter
     def categories(self, value):
-        self.dtype = CategoricalDtype(
+        self._dtype = CategoricalDtype(
             categories=value, ordered=self.dtype.ordered
         )
 
@@ -956,9 +1032,10 @@ class CategoricalColumn(column.ColumnBase):
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view(mode=mode)
 
     def unique(self, preserve_order=False) -> CategoricalColumn:
         codes = self.as_numerical.unique(preserve_order=preserve_order)
@@ -1269,37 +1346,18 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype("int32").fillna(0)
+        gather_map = self.codes.astype(libcudf.types.size_type_dtype).fillna(0)
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out
 
     def copy(self, deep: bool = True) -> CategoricalColumn:
+        result_col = super().copy(deep=deep)
         if deep:
-            copied_col = libcudf.copying.copy_column(self)
-            copied_cat = libcudf.copying.copy_column(self.dtype._categories)
-
-            return column.build_categorical_column(
-                categories=copied_cat,
-                codes=column.build_column(
-                    copied_col.base_data, dtype=copied_col.dtype
-                ),
-                offset=copied_col.offset,
-                size=copied_col.size,
-                mask=copied_col.base_mask,
-                ordered=self.dtype.ordered,
+            result_col.categories = libcudf.copying.copy_column(
+                self.dtype._categories
             )
-        else:
-            return column.build_categorical_column(
-                categories=self.dtype.categories._values,
-                codes=column.build_column(
-                    self.codes.base_data, dtype=self.codes.dtype
-                ),
-                mask=self.base_mask,
-                ordered=self.dtype.ordered,
-                offset=self.offset,
-                size=self.size,
-            )
+        return result_col
 
     @cached_property
     def memory_usage(self) -> int:

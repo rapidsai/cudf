@@ -1,14 +1,20 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 import contextlib
 import doctest
 import inspect
 import io
+import itertools
 import os
 
 import numpy as np
 import pytest
 
 import cudf
+
+pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
+
+# modules that will be searched for doctests
+tests = [cudf, cudf.core.groupby]
 
 
 def _name_in_all(parent, name):
@@ -76,7 +82,7 @@ class TestDoctests:
 
     @pytest.mark.parametrize(
         "docstring",
-        _find_doctests_in_obj(cudf),
+        itertools.chain(*[_find_doctests_in_obj(mod) for mod in tests]),
         ids=lambda docstring: docstring.name,
     )
     def test_docstring(self, docstring):

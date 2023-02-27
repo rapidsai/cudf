@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1702,6 +1702,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 (
                     cudf.core.column.DecimalBaseColumn,
                     cudf.core.column.StructColumn,
+                    cudf.core.column.ListColumn,
                 ),
             ):
                 out._data[name] = col._with_type_metadata(
@@ -3801,6 +3802,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 for codes in result_columns
             ]
+        elif isinstance(
+            source_dtype,
+            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
+        ):
+            result_columns = [
+                result_column._with_type_metadata(source_dtype)
+                for result_column in result_columns
+            ]
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
@@ -4183,11 +4192,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -4590,18 +4596,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         partitioned: list of DataFrame
         """
-
         key_indices = [self._column_names.index(k) for k in columns]
+        if keep_index:
+            cols = [*self._index._columns, *self._columns]
+            key_indices = [i + len(self._index._columns) for i in key_indices]
+        else:
+            cols = [*self._columns]
+
         output_columns, offsets = libcudf.hash.hash_partition(
-            [*self._columns], key_indices, nparts
+            cols, key_indices, nparts
         )
         outdf = self._from_columns_like_self(
-            [*(self._index._columns if keep_index else ()), *output_columns],
+            output_columns,
             self._column_names,
             self._index_names if keep_index else None,
         )
-        # Slice into partition
-        return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
+        # Slice into partitions. Notice, `hash_partition` returns the start
+        # offset of each partition thus we skip the first offset
+        ret = outdf._split(offsets[1:], keep_index=keep_index)
+
+        # Calling `_split()` on an empty dataframe returns an empty list
+        # so we add empty partitions here
+        ret += [self._empty_like(keep_index) for _ in range(nparts - len(ret))]
+        return ret
 
     def info(
         self,
@@ -5156,13 +5173,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if index_col:
             if isinstance(index_col[0], dict):
-                out = out.set_index(
-                    cudf.RangeIndex(
-                        index_col[0]["start"],
-                        index_col[0]["stop"],
-                        name=index_col[0]["name"],
-                    )
+                idx = cudf.RangeIndex(
+                    index_col[0]["start"],
+                    index_col[0]["stop"],
+                    name=index_col[0]["name"],
                 )
+                if len(idx) == len(out):
+                    # `idx` is generated from arrow `pandas_metadata`
+                    # which can get out of date with many of the
+                    # arrow operations. Hence verifying if the
+                    # lengths match, or else don't need to set
+                    # an index at all i.e., Default RangeIndex
+                    # will be set.
+                    # See more about the discussion here:
+                    # https://github.com/apache/arrow/issues/15178
+                    out = out.set_index(idx)
             else:
                 out = out.set_index(index_col[0])
 
@@ -5727,6 +5752,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         common_dtype = find_common_type(filtered.dtypes)
 
         if filtered._num_columns < self._num_columns:
+            # When we update our pandas compatibility target to 2.0, pandas
+            # will stop supporting numeric_only=None and users will have to
+            # specify True/False. At that time we should also top our implicit
+            # removal of non-numeric columns here.
+            assert Version(pd.__version__) < Version("2.0.0")
             msg = (
                 "Row-wise operations currently only support int, float "
                 "and bool dtypes. Non numeric columns are ignored."
@@ -6519,12 +6549,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         field_names = [str(name) for name in self._data.names]
 
         col = cudf.core.column.build_struct_column(
-            names=field_names, children=self._data.columns, size=len(self)
+            names=field_names,
+            children=tuple(col.copy(deep=True) for col in self._data.columns),
+            size=len(self),
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                {name: col.copy(deep=True)}
-            ),
+            cudf.core.column_accessor.ColumnAccessor({name: col}),
             index=self.index,
             name=name,
         )
@@ -6562,6 +6592,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._data.to_pandas_index()
 
     def itertuples(self, index=True, name="Pandas"):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             "cuDF does not support iteration of DataFrame "
             "via itertuples. Consider using "
@@ -6570,6 +6606,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     def iterrows(self):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             "cuDF does not support iteration of DataFrame "
             "via iterrows. Consider using "

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,11 +149,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                              input_row_not_null);
                    });
 
-  auto new_offsets =
-    strings::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
-                                               new_sizes->view().template end<size_type>(),
-                                               stream,
-                                               mr);
+  auto new_offsets = std::get<0>(
+    cudf::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
+                                            new_sizes->view().template end<size_type>(),
+                                            stream,
+                                            mr));
 
   return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(std::move(new_gather_map),
                                                                           std::move(new_offsets));

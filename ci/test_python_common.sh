@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 
@@ -27,11 +27,10 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
-SUITEERROR=0
 
 rapids-print-env
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
   cudf libcudf

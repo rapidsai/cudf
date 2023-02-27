@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,15 +32,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
+#include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <type_traits>
-
-#define NVCOMP_ZSTD_HEADER <nvcomp/zstd.h>
-#if __has_include(NVCOMP_ZSTD_HEADER)
-#define ZSTD_SUPPORTED 1
-#else
-#define ZSTD_SUPPORTED 0
-#endif
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
@@ -1109,10 +1103,11 @@ TEST_F(OrcReaderTest, SingleInputs)
 
 TEST_F(OrcReaderTest, zstdCompressionRegression)
 {
+  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+    GTEST_SKIP() << "Newer nvCOMP version is required";
+  }
+
   // Test with zstd compressed orc file with high compression ratio.
-#if !ZSTD_SUPPORTED
-  GTEST_SKIP();
-#endif
   constexpr uint8_t input_buffer[] = {
     0x4f, 0x52, 0x43, 0x5a, 0x00, 0x00, 0x28, 0xb5, 0x2f, 0xfd, 0xa4, 0x34, 0xc7, 0x03, 0x00, 0x74,
     0x00, 0x00, 0x18, 0x41, 0xff, 0xaa, 0x02, 0x00, 0xbb, 0xff, 0x45, 0xc8, 0x01, 0x25, 0x30, 0x04,
@@ -1693,6 +1688,31 @@ TEST_F(OrcMetadataReaderTest, TestNested)
   auto const& out_float_col = out_list_struct_col.child(1);
   EXPECT_EQ(out_float_col.name(), "float_field");
   EXPECT_EQ(out_float_col.type_kind(), cudf::io::orc::FLOAT);
+}
+
+TEST_F(OrcReaderTest, ZstdMaxCompressionRate)
+{
+  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD) or
+      cudf::io::nvcomp::is_compression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+    GTEST_SKIP() << "Newer nvCOMP version is required";
+  }
+
+  // Encodes as 64KB of zeros, which compresses to 18 bytes with ZSTD
+  std::vector<float> const h_data(8 * 1024);
+  float32_col col(h_data.begin(), h_data.end());
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcHugeCompRatio.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

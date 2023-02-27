@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -365,6 +366,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     name : str, optional
         The name to give to the Series.
 
+    copy : bool, default False
+        Copy input data. Only affects Series or 1d ndarray input.
+
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -490,6 +494,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index=None,
         dtype=None,
         name=None,
+        copy=False,
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
@@ -520,6 +525,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if name is None:
                 name = data.name
             data = data._column
+            if copy:
+                data = data.copy(deep=True)
             if dtype is not None:
                 data = data.astype(dtype)
 
@@ -538,7 +545,30 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
-            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            # Using `getattr_static` to check if
+            # `data` is on device memory and perform
+            # a deep copy later. This is different
+            # from `hasattr` because, it doesn't
+            # invoke the property we are looking
+            # for and the latter actually invokes
+            # the property, which in this case could
+            # be expensive or mark a buffer as
+            # unspillable.
+            has_cai = (
+                type(
+                    inspect.getattr_static(
+                        data, "__cuda_array_interface__", None
+                    )
+                )
+                is property
+            )
+            data = column.as_column(
+                data,
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+            )
+            if copy and has_cai:
+                data = data.copy(deep=True)
         else:
             if dtype is not None:
                 data = data.astype(dtype)
@@ -1497,6 +1527,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             (
                 cudf.core.column.DecimalBaseColumn,
                 cudf.core.column.StructColumn,
+                cudf.core.column.ListColumn,
             ),
         ):
             col = col._with_type_metadata(objs[0].dtype)
@@ -2231,18 +2262,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
@@ -2296,11 +2327,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -4854,6 +4882,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@acquire_spill_lock()
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.
@@ -4958,10 +4987,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         index = as_index(a.index)
 
     a_col = column.as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view)
+    a_array = cupy.asarray(a_col.data_array_view(mode="read"))
 
     b_col = column.as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view)
+    b_array = cupy.asarray(b_col.data_array_view(mode="read"))
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -95,7 +95,9 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,15 @@ std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
   cudf::io::parquet_reader_options const read_options =
     cudf::io::parquet_reader_options::builder(source);
-  return cudf::io::read_parquet(read_options).metadata.column_names;
+  auto const schema = cudf::io::read_parquet(read_options).metadata.schema_info;
+
+  std::vector<std::string> names;
+  names.reserve(schema.size());
+  std::transform(schema.cbegin(), schema.cend(), std::back_inserter(names), [](auto const& c) {
+    CUDF_EXPECTS(c.children.empty(), "nested types are not supported");
+    return c.name;
+  });
+  return names;
 }
 
 template <column_selection ColSelection,
@@ -49,8 +57,6 @@ void BM_parquet_read_options(nvbench::state& state,
                                                 nvbench::enum_type<UsesPandasMetadata>,
                                                 nvbench::enum_type<Timestamp>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto constexpr str_to_categories = ConvertsStrings == converts_strings::YES;
   auto constexpr uses_pd_metadata  = UsesPandasMetadata == uses_pandas_metadata::YES;
 

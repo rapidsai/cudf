@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,7 @@ enum class compression_type {
 enum class io_type {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
   VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
   USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
@@ -100,6 +101,15 @@ enum statistics_freq {
 };
 
 /**
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum dictionary_policy {
+  NEVER,     ///< Never use dictionary encoding
+  ADAPTIVE,  ///< Use dictionary when it will not impact compression
+  ALWAYS     ///< Use dictionary reqardless of impact on compression
+};
+
+/**
  * @brief Detailed name information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
@@ -118,23 +128,9 @@ struct column_name_info {
 };
 
 /**
- * @brief Table metadata for io readers/writers (primarily column names)
- *
- * For nested types (structs, maps, unions), the ordering of names in the column_names vector
- * corresponds to a pre-order traversal of the column tree.
- * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
- *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
- *
- *     col1     col2
- *      / \
- *     /   \
- *   s3    f4
- *   / \
- *  /   \
- * f5    f6
+ * @brief Table metadata returned by IO readers.
  */
 struct table_metadata {
-  std::vector<std::string> column_names;  //!< Names of columns contained in the table
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
@@ -154,10 +150,13 @@ struct table_with_metadata {
 /**
  * @brief Non-owning view of a host memory buffer
  *
+ * @deprecated Since 23.04
+ *
  * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
-  const char* data = nullptr;  //!< Pointer to the buffer
+  // TODO: to be replaced by `host_span`
+  char const* data = nullptr;  //!< Pointer to the buffer
   size_t size      = 0;        //!< Size of the buffer
   host_buffer()    = default;
   /**
@@ -168,6 +167,22 @@ struct host_buffer {
    */
   host_buffer(const char* data, size_t size) : data(data), size(size) {}
 };
+
+/**
+ * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer to
+ * bytes.
+ *
+ * @tparam T The representation type
+ * @return `true` if the type is considered a byte-like type
+ */
+template <typename T>
+constexpr inline auto is_byte_like_type()
+{
+  using non_cv_T = std::remove_cv_t<T>;
+  return std::is_same_v<non_cv_T, int8_t> || std::is_same_v<non_cv_T, char> ||
+         std::is_same_v<non_cv_T, uint8_t> || std::is_same_v<non_cv_T, unsigned char> ||
+         std::is_same_v<non_cv_T, std::byte>;
+}
 
 /**
  * @brief Source information for read interfaces
@@ -194,21 +209,90 @@ struct source_info {
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
    *
+   * @deprecated Since 23.04
+   *
    * @param host_buffers Input buffers in host memory
    */
-  explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
+  explicit source_info(std::vector<host_buffer> const& host_buffers) : _type(io_type::HOST_BUFFER)
   {
+    _host_buffers.reserve(host_buffers.size());
+    std::transform(host_buffers.begin(),
+                   host_buffers.end(),
+                   std::back_inserter(_host_buffers),
+                   [](auto const hb) {
+                     return cudf::host_span<std::byte const>{
+                       reinterpret_cast<std::byte const*>(hb.data), hb.size};
+                   });
+  }
+
+  /**
+   * @brief Construct a new source info object for a single buffer
+   *
+   * @deprecated Since 23.04
+   *
+   * @param host_data Input buffer in host memory
+   * @param size Size of the buffer
+   */
+  explicit source_info(const char* host_data, size_t size)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers(
+        {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in host memory
+   *
+   * @param host_buffers Input buffers in host memory
+   */
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<cudf::host_span<T>> const host_buffers)
+    : _type(io_type::HOST_BUFFER)
+  {
+    if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
+      _host_buffers.reserve(host_buffers.size());
+      std::transform(host_buffers.begin(),
+                     host_buffers.end(),
+                     std::back_inserter(_host_buffers),
+                     [](auto const s) {
+                       return cudf::host_span<std::byte const>{
+                         reinterpret_cast<std::byte const*>(s.data()), s.size()};
+                     });
+    } else {
+      _host_buffers.assign(host_buffers.begin(), host_buffers.end());
+    }
   }
 
   /**
    * @brief Construct a new source info object for a single buffer
    *
    * @param host_data Input buffer in host memory
-   * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<T> host_data)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers{cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(host_data.data()), host_data.size())}
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in device memory
+   *
+   * @param device_buffers Input buffers in device memory
+   */
+  explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers.begin(), device_buffers.end())
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object from a device buffer
+   *
+   * @param d_buffer Input buffer in device memory
+   */
+  explicit source_info(cudf::device_span<std::byte const> d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer}})
   {
   }
 
@@ -249,7 +333,13 @@ struct source_info {
    *
    * @return The host buffers of the input
    */
-  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& host_buffers() const { return _host_buffers; }
+  /**
+   * @brief Get the device buffers of the input
+   *
+   * @return The device buffers of the input
+   */
+  [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
    * @brief Get the input files
    *
@@ -266,7 +356,8 @@ struct source_info {
  private:
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _buffers;
+  std::vector<cudf::host_span<std::byte const>> _host_buffers;
+  std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 

@@ -1,5 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
-
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -321,29 +320,68 @@ def test_series_compare_nulls(cmpop, dtypes):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "obj", [pd.Series(["a", "b", None, "d", "e", None], dtype="string"), "a"]
-)
-@pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize(
-    "cmp_obj",
-    [pd.Series(["b", "a", None, "d", "f", None], dtype="string"), "a"],
-)
-def test_string_series_compare(obj, cmpop, cmp_obj):
+@pytest.fixture
+def str_series_cmp_data():
+    return pd.Series(["a", "b", None, "d", "e", None], dtype="string")
 
-    g_obj = obj
-    if isinstance(g_obj, pd.Series):
-        g_obj = Series.from_pandas(g_obj)
-    g_cmp_obj = cmp_obj
-    if isinstance(g_cmp_obj, pd.Series):
-        g_cmp_obj = Series.from_pandas(g_cmp_obj)
-    got = cmpop(g_obj, g_cmp_obj)
-    expected = cmpop(obj, cmp_obj)
 
-    if isinstance(expected, pd.Series):
-        expected = cudf.from_pandas(expected)
+@pytest.fixture(ids=[op.__name__ for op in _cmpops], params=_cmpops)
+def str_series_compare_str_cmpop(request):
+    return request.param
 
-    utils.assert_eq(expected, got)
+
+@pytest.fixture(ids=["eq", "ne"], params=[operator.eq, operator.ne])
+def str_series_compare_num_cmpop(request):
+    return request.param
+
+
+@pytest.fixture(ids=["int", "float", "bool"], params=[1, 1.5, True])
+def cmp_scalar(request):
+    return request.param
+
+
+def test_str_series_compare_str(
+    str_series_cmp_data, str_series_compare_str_cmpop
+):
+    expect = str_series_compare_str_cmpop(str_series_cmp_data, "a")
+    got = str_series_compare_str_cmpop(
+        Series.from_pandas(str_series_cmp_data), "a"
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
+
+
+def test_str_series_compare_str_reflected(
+    str_series_cmp_data, str_series_compare_str_cmpop
+):
+    expect = str_series_compare_str_cmpop("a", str_series_cmp_data)
+    got = str_series_compare_str_cmpop(
+        "a", Series.from_pandas(str_series_cmp_data)
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
+
+
+def test_str_series_compare_num(
+    str_series_cmp_data, str_series_compare_num_cmpop, cmp_scalar
+):
+    expect = str_series_compare_num_cmpop(str_series_cmp_data, cmp_scalar)
+    got = str_series_compare_num_cmpop(
+        Series.from_pandas(str_series_cmp_data), cmp_scalar
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
+
+
+def test_str_series_compare_num_reflected(
+    str_series_cmp_data, str_series_compare_num_cmpop, cmp_scalar
+):
+    expect = str_series_compare_num_cmpop(cmp_scalar, str_series_cmp_data)
+    got = str_series_compare_num_cmpop(
+        cmp_scalar, Series.from_pandas(str_series_cmp_data)
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -910,19 +948,11 @@ def test_binop_bool_uint(func, rhs):
 
 
 @pytest.mark.parametrize(
-    "series_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+    "series_dtype", (np.int8, np.uint8, np.int64, np.uint64)
 )
 @pytest.mark.parametrize(
     "divisor_dtype",
     (
-        pytest.param(
-            np.bool_,
-            marks=pytest_xfail(
-                reason=(
-                    "Pandas handling of division by zero-bool is too strange"
-                )
-            ),
-        ),
         np.int8,
         np.uint8,
         np.int64,
@@ -940,7 +970,28 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     else:
         pd_div = pd.Series([0], dtype=divisor_dtype)
         cudf_div = cudf.from_pandas(pd_div)
-    utils.assert_eq((sr // pd_div), (cr // cudf_div))
+    utils.assert_eq(sr // pd_div, cr // cudf_div)
+
+
+@pytest.mark.parametrize("scalar_divisor", [False, True])
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12162")
+def test_floordiv_zero_bool(scalar_divisor):
+    sr = pd.Series([True, True, False], dtype=np.bool_)
+    cr = cudf.from_pandas(sr)
+
+    if scalar_divisor:
+        pd_div = np.bool_(0)
+        cudf_div = cudf.Scalar(0, dtype=np.bool_)
+    else:
+        pd_div = pd.Series([0], dtype=np.bool_)
+        cudf_div = cudf.from_pandas(pd_div)
+
+    with pytest.raises((NotImplementedError, ZeroDivisionError)):
+        # Pandas does raise
+        sr // pd_div
+    with pytest.raises((NotImplementedError, ZeroDivisionError)):
+        # Cudf does not
+        cr // cudf_div
 
 
 @pytest.mark.parametrize(
@@ -1706,22 +1757,25 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
         pytest.param(
             {"milliseconds": 4},
-            marks=pytest_xfail(
-                reason="Pandas gets the wrong answer for milliseconds"
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="Pandas gets the wrong answer for milliseconds",
             ),
         ),
         pytest.param(
             {"milliseconds": 4, "years": 2},
             marks=pytest_xfail(
-                reason="Pandas construction fails with these keywords"
+                reason="https://github.com/pandas-dev/pandas/issues/49897"
             ),
         ),
         pytest.param(
             {"nanoseconds": 12},
-            marks=pytest_xfail(
-                reason="Pandas gets the wrong answer for nanoseconds"
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="Pandas gets the wrong answer for nanoseconds",
             ),
         ),
+        {"nanoseconds": 12},
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])

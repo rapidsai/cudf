@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -155,7 +155,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -169,7 +169,10 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/segmented_sort.cpp sort/sort_lists.cpp sort/sort_structs.cpp)
+ConfigureNVBench(
+  SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
+  sort/sort_lists.cpp sort/sort_structs.cpp
+)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -187,7 +190,8 @@ ConfigureBench(
   reduction/reduce.cpp reduction/scan.cpp
 )
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
+  reduction/segment_reduce.cu
 )
 
 # ##################################################################################################
@@ -285,8 +289,8 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
+  string/slice.cpp
   string/split.cpp
-  string/substring.cpp
   string/translate.cpp
   string/url_decode.cu
 )

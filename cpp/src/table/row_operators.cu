@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_checks.hpp>
-
-#include <jit/type.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -265,7 +264,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   std::vector<detail::dremel_device_view> dremel_device_views;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      dremel_data.push_back(detail::get_dremel_data(col, {}, false, stream));
+      dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
       dremel_device_views.push_back(dremel_data.back());
     }
   }
@@ -299,7 +298,7 @@ void check_lex_compatibility(table_view const& input)
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +
-                     jit::get_type_name(c.type()));
+                     cudf::type_to_name(c.type()));
     }
   };
   for (column_view const& c : input) {
@@ -318,7 +317,7 @@ void check_eq_compatibility(table_view const& input)
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_equality_comparable(c.type()),
                    "Cannot compare equality for a table with a column of type " +
-                     jit::get_type_name(c.type()));
+                     cudf::type_to_name(c.type()));
     }
     for (auto child = c.child_begin(); child < c.child_end(); ++child) {
       check_column(*child);
@@ -398,13 +397,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 {
   check_eq_compatibility(t);
 
-  auto [null_pushed_table, null_masks] = structs::detail::push_down_nulls(t, stream);
-  auto struct_offset_removed_table     = remove_struct_child_offsets(null_pushed_table);
-  auto [verticalized_lhs, _, __, ___]  = decompose_structs(struct_offset_removed_table);
+  auto [null_pushed_table, nullable_data] = structs::detail::push_down_nulls(t, stream);
+  auto struct_offset_removed_table        = remove_struct_child_offsets(null_pushed_table);
+  auto verticalized_t = std::get<0>(decompose_structs(struct_offset_removed_table));
 
-  auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
-  return std::shared_ptr<preprocessed_table>(
-    new preprocessed_table(std::move(d_t), std::move(null_masks)));
+  auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
+  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
+    std::move(d_t), std::move(nullable_data.new_null_masks), std::move(nullable_data.new_columns)));
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,

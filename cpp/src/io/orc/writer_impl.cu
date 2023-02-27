@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1322,16 +1322,18 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
     auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
-                      chunk_bytes,
-                      cudaMemcpyDeviceToDevice,
-                      stream);
-      cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
-                      merge_bytes,
-                      cudaMemcpyDeviceToDevice,
-                      stream);
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
+                        chunk_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
+                        merge_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
     }
     num_entries_seen += stripes_per_col;
   }
@@ -1346,11 +1348,11 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  cudaMemcpyAsync(d_file_stats_merge,
-                  file_stats_merge.data(),
-                  num_file_blobs * sizeof(statistics_merge_group),
-                  cudaMemcpyHostToDevice,
-                  stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_file_stats_merge,
+                                file_stats_merge.data(),
+                                num_file_blobs * sizeof(statistics_merge_group),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -1497,7 +1499,7 @@ std::future<void> writer::impl::write_data_stream(gpu::StripeStream const& strm_
       return out_sink_->device_write_async(stream_in, length, stream);
     } else {
       CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
+        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
 
       out_sink_->host_write(stream_out, length);

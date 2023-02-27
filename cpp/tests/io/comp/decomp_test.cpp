@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,8 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_stat.host_to_device(stream);
 
     static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
-    cudaMemcpyAsync(
-      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value());
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
     inf_stat.device_to_host(stream, true);
     ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from cudf.utils.gpu_utils import validate_setup
 
@@ -10,7 +10,6 @@ from numba import config as numba_config, cuda
 import rmm
 
 from cudf import api, core, datasets, testing
-from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
@@ -88,7 +87,13 @@ except ImportError:
     pass
 else:
     # Patch Numba to support CUDA enhanced compatibility.
-    patch_numba_linker_if_needed()
+    # cuDF requires a stronger set of conditions than what is
+    # checked by patch_numba_linker_if_needed due to the PTX
+    # files needed for JIT Groupby Apply and string UDFs
+    from cudf.core.udf.utils import _PTX_FILE, _setup_numba_linker
+
+    _setup_numba_linker(_PTX_FILE)
+
     del patch_numba_linker_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
@@ -106,8 +111,7 @@ del numba_config
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = get_versions()["version"]
-del get_versions
+__version__ = "23.04.00"
 
 __all__ = [
     "BaseIndex",

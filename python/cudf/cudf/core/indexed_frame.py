@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtypes import ListDtype
@@ -193,7 +194,7 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic is False
+        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -1628,7 +1629,7 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    def hash_values(self, method="murmur3"):
+    def hash_values(self, method="murmur3", seed=None):
         """Compute the hash of values in this column.
 
         Parameters
@@ -1637,6 +1638,12 @@ class IndexedFrame(Frame):
             Hash function to use:
             * murmur3: MurmurHash3 hash function.
             * md5: MD5 hash function.
+
+        seed : int, optional
+            Seed value to use for the hash function.
+            Note - This only has effect for the following supported
+            hash functions:
+            * murmur3: MurmurHash3 hash function.
 
         Returns
         -------
@@ -1664,6 +1671,11 @@ class IndexedFrame(Frame):
         1    947ca8d2c5f0f27437f156cfbfab0969
         2    d0580ef52d27c043c8e341fd5039b166
         dtype: object
+        >>> series.hash_values(method="murmur3", seed=42)
+        0    2364453205
+        1     422621911
+        2    3353449140
+        dtype: uint32
 
         **DataFrame**
 
@@ -1685,11 +1697,20 @@ class IndexedFrame(Frame):
         2    fe061786ea286a515b772d91b0dfcd70
         dtype: object
         """
+        seed_hash_methods = {"murmur3"}
+        if seed is None:
+            seed = 0
+        elif method not in seed_hash_methods:
+            warnings.warn(
+                "Provided seed value has no effect for hash method"
+                f" `{method}`. Refer to the docstring for information"
+                " on hash methods that support the `seed` param"
+            )
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
         return cudf.Series._from_data(
-            {None: libcudf.hash.hash([*self._columns], method)},
+            {None: libcudf.hash.hash([*self._columns], method, seed)},
             index=self.index,
         )
 
@@ -1706,7 +1727,7 @@ class IndexedFrame(Frame):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
+            gather_map = gather_map.astype(size_type_dtype)
 
         if not libcudf.copying._gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify
@@ -2105,12 +2126,12 @@ class IndexedFrame(Frame):
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
 
+    @acquire_spill_lock()
     @_cudf_nvtx_annotate
     def _apply(self, func, kernel_getter, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
-
         try:
             kernel, retty = _compile_or_get(
                 self, func, args, kernel_getter=kernel_getter
@@ -2122,11 +2143,12 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        ans_mask = cudf.core.column.full(
+            size=len(self), fill_value=True, dtype="bool"
+        )
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
-
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:
@@ -2492,7 +2514,11 @@ class IndexedFrame(Frame):
 
         cols = {
             name: col.round(decimals[name], how=how)
-            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
+            if (
+                name in decimals
+                and _is_non_decimal_numeric_dtype(col.dtype)
+                and not is_bool_dtype(col.dtype)
+            )
             else col.copy(deep=True)
             for name, col in self._data.items()
         }

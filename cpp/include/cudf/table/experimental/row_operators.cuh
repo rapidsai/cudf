@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,6 +245,16 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
+ *        `type_dispatcher` to help select an overload instance for each column in a table.
+ *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+ *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+ *
+ * @tparam has_nested_columns compile-time optimization for primitive types.
+ *         This template parameter is to be used by the developer by querying
+ *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         overloads for nested types, while `false` only compiles operator
+ *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalElementComparator A relational comparator functor that compares individual values
  * rather than logical elements, defaults to `NaN` aware relational comparator that evaluates `NaN`
@@ -408,8 +418,17 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
+      // only order top-NULLs according to null_order
+      auto const is_l_row_null = _lhs.is_null(lhs_element_index);
+      auto const is_r_row_null = _rhs.is_null(rhs_element_index);
+      if (is_l_row_null || is_r_row_null) {
+        return cuda::std::pair(null_compare(is_l_row_null, is_r_row_null, _null_precedence),
+                               _depth);
+      }
+
       // These are all the values from the Dremel encoding.
       auto const l_max_def_level = _l_dremel_device_view->max_def_level;
+      auto const r_max_def_level = _r_dremel_device_view->max_def_level;
       auto const l_def_levels    = _l_dremel_device_view->def_levels;
       auto const r_def_levels    = _r_dremel_device_view->def_levels;
       auto const l_rep_levels    = _l_dremel_device_view->rep_levels;
@@ -419,6 +438,7 @@ class device_row_comparator {
       // pointing to the underlying child data.
       column_device_view lcol = _lhs.slice(lhs_element_index, 1);
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
+
       while (lcol.type().id() == type_id::LIST) {
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
@@ -442,44 +462,49 @@ class device_row_comparator {
       // and empty lists, so not every index corresponds to an actual element
       // in the child column. The element_index is used to keep track of the current
       // child element that we're actually comparing.
-      weak_ordering state{weak_ordering::EQUIVALENT};
       for (int l_dremel_index = l_start, r_dremel_index = r_start, element_index = 0;
            l_dremel_index < l_end and r_dremel_index < r_end;
            ++l_dremel_index, ++r_dremel_index) {
-        // First early exit: the definition levels do not match.
-        if (l_def_levels[l_dremel_index] != r_def_levels[r_dremel_index]) {
-          state = (l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index])
-                    ? weak_ordering::LESS
-                    : weak_ordering::GREATER;
-          return cuda::std::pair(state, _depth);
+        auto const l_rep_level = l_rep_levels[l_dremel_index];
+        auto const r_rep_level = r_rep_levels[r_dremel_index];
+
+        // early exit for smaller sub-list
+        if (l_rep_level != r_rep_level) {
+          // the lower repetition level is a smaller sub-list
+          return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                           : cuda::std::pair(weak_ordering::GREATER, _depth);
         }
 
-        // Second early exit: the repetition levels do not match.
-        if (l_rep_levels[l_dremel_index] != r_rep_levels[r_dremel_index]) {
-          state = (l_rep_levels[l_dremel_index] < r_rep_levels[r_dremel_index])
-                    ? weak_ordering::LESS
-                    : weak_ordering::GREATER;
-          return cuda::std::pair(state, _depth);
+        // only compare if left and right are at same nesting level
+        auto const l_def_level = l_def_levels[l_dremel_index];
+        auto const r_def_level = r_def_levels[r_dremel_index];
+
+        // either left or right are empty or NULLs of arbitrary nesting
+        if (l_def_level < l_max_def_level || r_def_level < r_max_def_level) {
+          // in the fully unraveled version of the list column, only the
+          // most nested NULLs and leafs are present
+          // In this rare condition that we get to the most nested NULL, we increment
+          // element_index because either both rows have a deeply nested NULL at the
+          // same position, and we'll "continue" in our iteration, or we will early
+          // exit if only one of the rows has a deeply nested NULL
+          if ((lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) or
+              (rcol.nullable() and r_def_levels[r_dremel_index] == r_max_def_level - 1)) {
+            ++element_index;
+          }
+          if (l_def_level == r_def_level) { continue; }
+          // We require [] < [NULL] < [leaf] for nested nulls.
+          // The null_precedence only affects top level nulls.
+          return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                           : cuda::std::pair(weak_ordering::GREATER, _depth);
         }
 
-        // Third early exit: This case has two branches.
-        // 1) If we are at the maximum definition level, then we actually have
-        //    an underlying element to compare, not just an empty list or a
-        //    null. Therefore, we access the element_index element of each list
-        //    and compare the values.
-        // 2) If we are one level below the maximum definition level and the
-        //    column is nullable, the current element must be a null in the
-        //    leaf data. In this case we ignore the null and skip to the next
-        //    element.
-        if (l_def_levels[l_dremel_index] == l_max_def_level) {
-          int last_null_depth                    = _depth;
-          cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
-            lcol.type(), comparator, element_index, element_index);
-          if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
-          ++element_index;
-        } else if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
-          ++element_index;
-        }
+        // finally, compare leaf to leaf
+        weak_ordering state{weak_ordering::EQUIVALENT};
+        int last_null_depth                    = _depth;
+        cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
+          lcol.type(), comparator, element_index, element_index);
+        if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
+        ++element_index;
       }
 
       // If we have reached this stage, we know that definition levels,
@@ -843,6 +868,16 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
@@ -995,6 +1030,16 @@ class two_table_comparator {
    * only if row `i` of the right table compares lexicographically less than row
    * `j` of the left table.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
@@ -1117,11 +1162,22 @@ struct nan_equal_physical_equality_comparator {
  * returns false, representing unequal rows. If the rows are compared without mismatched elements,
  * the rows are equal.
  *
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
+ *        `type_dispatcher` to help select an overload instance for each column in a table.
+ *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+ *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+ *
+ * @tparam has_nested_columns compile-time optimization for primitive types.
+ *         This template parameter is to be used by the developer by querying
+ *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         overloads for nested types, while `false` only compiles operator
+ *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual values
  * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
  */
-template <typename Nullate,
+template <bool has_nested_columns,
+          typename Nullate,
           typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
 class device_row_comparator {
   friend class self_comparator;       ///< Allow self_comparator to access private members
@@ -1232,14 +1288,14 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             not cudf::is_nested<Element>()),
+                             (not has_nested_columns or not cudf::is_nested<Element>())),
               typename... Args>
     __device__ bool operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
+    template <typename Element, CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1366,8 +1422,11 @@ struct preprocessed_table {
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
   preprocessed_table(table_device_view_owner&& table,
-                     std::vector<rmm::device_buffer>&& null_buffers)
-    : _t(std::move(table)), _null_buffers(std::move(null_buffers))
+                     std::vector<rmm::device_buffer>&& null_buffers,
+                     std::vector<std::unique_ptr<column>>&& tmp_columns)
+    : _t(std::move(table)),
+      _null_buffers(std::move(null_buffers)),
+      _tmp_columns(std::move(tmp_columns))
   {
   }
 
@@ -1380,6 +1439,7 @@ struct preprocessed_table {
 
   table_device_view_owner _t;
   std::vector<rmm::device_buffer> _null_buffers;
+  std::vector<std::unique_ptr<column>> _tmp_columns;
 };
 
 /**
@@ -1419,6 +1479,16 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
@@ -1427,13 +1497,15 @@ class self_comparator {
    * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator};
+    return device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>{
+      nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
 
  private:
@@ -1521,6 +1593,16 @@ class two_table_comparator {
    * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
    * right table compares equal to row `j` of the left table.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a `NaN == NaN` equality comparator.
@@ -1529,14 +1611,16 @@ class two_table_comparator {
    * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return strong_index_comparator_adapter{
-      device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
+      device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>(
+        nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 
  private:

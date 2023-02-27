@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -64,7 +64,12 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    as_buffer,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -113,19 +118,77 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             {None: self.copy(deep=False)}
         )
 
-    @property
-    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+    def data_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
-        """
-        return cuda.as_cuda_array(self.data).view(self.dtype)
 
-    @property
-    def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
+        """
+        if self.data is not None:
+            if mode == "read":
+                obj = _proxy_cai_obj(
+                    self.data._get_cuda_array_interface(readonly=True),
+                    owner=self.data,
+                )
+            elif mode == "write":
+                obj = self.data
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(self.dtype)
+
+    def mask_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
+
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
         """
-        return cuda.as_cuda_array(self.mask).view(mask_dtype)
+        if self.mask is not None:
+            if mode == "read":
+                obj = _proxy_cai_obj(
+                    self.mask._get_cuda_array_interface(readonly=True),
+                    owner=self.mask,
+                )
+            elif mode == "write":
+                obj = self.mask
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(mask_dtype)
 
     def __len__(self) -> int:
         return self.size
@@ -163,7 +226,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view.copy_to_host()
+        with acquire_spill_lock():
+            return self.data_array_view(mode="read").copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
@@ -176,7 +240,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self.data_array_view)
+        return cupy.asarray(self.data_array_view(mode="write"))
 
     def find_and_replace(
         self: T,
@@ -363,26 +427,52 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
-        return self.mask_array_view
+        return self.mask_array_view(mode="read")
+
+    def force_deep_copy(self: T) -> T:
+        """
+        A method to create deep copy irrespective of whether
+        `copy-on-write` is enabled.
+        """
+        result = libcudf.copying.copy_column(self)
+        return cast(T, result._with_type_metadata(self.dtype))
 
     def copy(self: T, deep: bool = True) -> T:
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        Makes a copy of the Column.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, a true physical copy of the column
+            is made.
+            If False and `copy_on_write` is False, the same
+            memory is shared between the buffers of the Column
+            and changes made to one Column will propagate to
+            its copy and vice-versa.
+            If False and `copy_on_write` is True, the same
+            memory is shared between the buffers of the Column
+            until there is a write operation being performed on
+            them.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return cast(T, result._with_type_metadata(self.dtype))
+            return self.force_deep_copy()
         else:
             return cast(
                 T,
                 build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
+                    data=self.base_data
+                    if self.base_data is None
+                    else self.base_data.copy(deep=False),
+                    dtype=self.dtype,
+                    mask=self.base_mask
+                    if self.base_mask is None
+                    else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
-                    children=self.base_children,
+                    children=tuple(
+                        col.copy(deep=False) for col in self.base_children
+                    ),
                 ),
             )
 
@@ -517,7 +607,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
-        num_keys = (stop - start) // step
+        num_keys = len(range(start, stop, step))
 
         self._check_scatter_key_length(num_keys, value)
 
@@ -685,7 +775,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
-            indices = indices.astype("int32")
+            indices = indices.astype(libcudf.types.size_type_dtype)
         if not libcudf.copying._gather_map_is_valid(
             indices, len(self), check_bounds, nullify
         ):
@@ -1305,7 +1395,7 @@ def column_empty_like(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            children=(codes,),
             size=codes.size,
         )
 
@@ -1344,7 +1434,7 @@ def column_empty(
     elif is_list_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
@@ -1353,16 +1443,17 @@ def column_empty(
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype("int32").itemsize
+                        size=row_count
+                        * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
-                dtype="int32",
+                dtype=libcudf.types.size_type_dtype,
             ),
         )
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
@@ -1832,7 +1923,9 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary, exposed=True)
+        data = as_buffer(arbitrary)
+        if cudf.get_option("copy_on_write"):
+            data._zero_copied = True
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -2289,7 +2382,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = as_buffer(data=ptr, size=mask_size, owner=obj, exposed=True)
+            mask = as_buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)
@@ -2494,16 +2587,26 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
         )
     elif newsize == 0:
-        col = column_empty(0, head.dtype, masked=True)
-    else:
-        # Filter out inputs that have 0 length, then concatenate.
-        objs = [o for o in objs if len(o)]
-        try:
-            col = libcudf.concat.concat_columns(objs)
-        except RuntimeError as e:
-            if "exceeds size_type range" in str(e):
-                raise OverflowError(
-                    "total size of output is too large for a cudf column"
-                ) from e
-            raise
-    return col
+        return column_empty(0, head.dtype, masked=True)
+
+    # Filter out inputs that have 0 length, then concatenate.
+    return libcudf.concat.concat_columns([o for o in objs if len(o)])
+
+
+def _proxy_cai_obj(cai, owner):
+    """
+    Returns a proxy CAI SimpleNameSpace wrapped
+    with the provided `cai` as `__cuda_array_interface__`
+    and owner as `owner` to keep the object alive.
+    This is an internal utility for `data_array_view`
+    and `mask_array_view` where an object with
+    read-only CAI is required.
+    """
+    return cuda_array_interface_wrapper(
+        ptr=cai["data"][0],
+        size=cai["shape"][0],
+        owner=owner,
+        readonly=cai["data"][1],
+        typestr=cai["typestr"],
+        version=cai["version"],
+    )

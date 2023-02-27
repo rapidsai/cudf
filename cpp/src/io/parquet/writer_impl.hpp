@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,8 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger parquet file/table write,
    * normally used for chunked writing.
    *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
+   *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
@@ -120,32 +122,42 @@ class writer::impl {
 
  private:
   /**
-   * @brief Gather page fragments
+   * @brief Gather row group fragments
    *
-   * @param frag Destination page fragments
+   * This calculates fragments to be used in determining row group boundariesa.
+   *
+   * @param frag Destination row group fragments
    * @param col_desc column description array
    * @param[in] partitions Information about partitioning of table
    * @param[in] part_frag_offset A Partition's offset into fragment array
    * @param fragment_size Number of rows per fragment
    */
-  void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
-                           device_span<gpu::parquet_column_device_view const> col_desc,
-                           host_span<partition_info const> partitions,
-                           device_span<int const> part_frag_offset,
-                           uint32_t fragment_size);
+  void init_row_group_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
+                                device_span<gpu::parquet_column_device_view const> col_desc,
+                                host_span<partition_info const> partitions,
+                                device_span<int const> part_frag_offset,
+                                uint32_t fragment_size);
+
+  /**
+   * @brief Recalculate page fragments
+   *
+   * This calculates fragments to be used to determine page boundaries within
+   * column chunks.
+   *
+   * @param frag Destination page fragments
+   * @param frag_sizes Array of fragment sizes for each column
+   */
+  void calculate_page_fragments(device_span<gpu::PageFragment> frag,
+                                host_span<size_type const> frag_sizes);
 
   /**
    * @brief Gather per-fragment statistics
    *
-   * @param dst_stats output statistics
-   * @param frag Input page fragments
-   * @param col_desc column description array
-   * @param num_fragments Total number of fragments per column
+   * @param frag_stats output statistics
+   * @param frags Input page fragments
    */
-  void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
-                                  device_2dspan<gpu::PageFragment const> frag,
-                                  device_span<gpu::parquet_column_device_view const> col_desc,
-                                  uint32_t num_fragments);
+  void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
+                                  device_span<gpu::PageFragment const> frags);
 
   /**
    * @brief Initialize encoder pages
@@ -170,7 +182,9 @@ class writer::impl {
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
   /**
-   * @brief Encode a batch pages
+   * @brief Encode a batch of pages
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
@@ -214,8 +228,11 @@ class writer::impl {
   size_t max_page_size_bytes           = default_max_page_size_bytes;
   size_type max_page_size_rows         = default_max_page_size_rows;
   statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
+  dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
+  size_t max_dictionary_size_          = default_max_dictionary_size;
   bool int96_timestamps                = false;
   int32_t column_index_truncate_length = default_column_index_truncate_length;
+  std::optional<size_type> max_page_fragment_size_;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()

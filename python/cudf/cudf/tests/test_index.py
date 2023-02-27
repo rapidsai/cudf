@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -392,6 +392,7 @@ def test_index_copy_category(name, dtype, deep=True):
     with pytest.warns(FutureWarning):
         cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
+    assert_column_memory_ne(cidx._values, cidx_copy._values)
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -407,13 +408,27 @@ def test_index_copy_category(name, dtype, deep=True):
         cudf.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-def test_index_copy_deep(idx, deep):
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_index_copy_deep(idx, deep, copy_on_write):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    if not deep:
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", copy_on_write)
+    if (
+        isinstance(idx, cudf.StringIndex)
+        or not deep
+        or (cudf.get_option("copy_on_write") and not deep)
+    ):
+        # StringColumn is immutable hence, deep copies of a
+        # StringIndex will share the same StringColumn.
+
+        # When `copy_on_write` is turned on, Index objects will
+        # have unique column object but they all point to same
+        # data pointers.
         assert_column_memory_eq(idx._values, idx_copy._values)
     else:
         assert_column_memory_ne(idx._values, idx_copy._values)
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
@@ -676,7 +691,6 @@ def test_index_where(data, condition, other, error):
             rfunc=gs.where,
             lfunc_args_and_kwargs=([ps_condition], {"other": ps_other}),
             rfunc_args_and_kwargs=([gs_condition], {"other": gs_other}),
-            compare_error_message=False,
         )
 
 
@@ -1116,7 +1130,6 @@ def test_index_append_error(data, other):
         rfunc=gd_data.append,
         lfunc_args_and_kwargs=([[sr.to_pandas()]],),
         rfunc_args_and_kwargs=([[sr]],),
-        expected_error_message=r"all inputs must be Index",
     )
 
 
@@ -1993,7 +2006,6 @@ def test_get_loc_single_unique_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2026,7 +2038,6 @@ def test_get_loc_rangeindex(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2056,7 +2067,6 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2090,7 +2100,6 @@ def test_get_loc_single_unique_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2116,7 +2125,6 @@ def test_get_loc_single_duplicate_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2153,7 +2161,6 @@ def test_get_loc_multi_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2201,7 +2208,6 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
                 rfunc=gi.get_loc,
                 lfunc_args_and_kwargs=([], {"key": key, "method": method}),
                 rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-                compare_error_message=False,
             )
     else:
         expected = result
@@ -2280,7 +2286,6 @@ def test_get_loc_multi_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2571,10 +2576,6 @@ def test_isin_multiindex(data, values, level, err):
             lfunc_args_and_kwargs=([values], {"level": level}),
             rfunc_args_and_kwargs=([values], {"level": level}),
             check_exception_type=False,
-            expected_error_message=re.escape(
-                "values need to be a Multi-Index or set/list-like tuple "
-                "squences  when `level=None`."
-            ),
         )
 
 

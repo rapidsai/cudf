@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -588,7 +588,7 @@ class path_state : private parser {
         return path_operator{path_operator_type::CHILD_WILDCARD};
       } break;
 
-      default: CUDF_FAIL("Unrecognized JSONPath operator"); break;
+      default: CUDF_FAIL("Unrecognized JSONPath operator", std::invalid_argument); break;
     }
     return {path_operator_type::ERROR};
   }
@@ -624,7 +624,8 @@ class path_state : private parser {
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONPath query string");
+    CUDF_EXPECTS(
+      name.size_bytes() > 0, "Invalid empty name in JSONPath query string", std::invalid_argument);
 
     return true;
   }
@@ -969,6 +970,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
+
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
 
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(

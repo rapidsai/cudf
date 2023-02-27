@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -810,13 +810,11 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
       return d_strings.is_null(idx) ? d_repl.size_bytes()
                                     : d_strings.element<string_view>(idx).size_bytes();
     });
-  auto offsets_column = make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),

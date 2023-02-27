@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -433,7 +433,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
       CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
                                     valid_alias[i],
                                     out_buffers[i].null_mask_size(),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
     }
   }
@@ -570,11 +570,13 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     }
   }
 
-  // Return column names (must match order of returned columns)
-  metadata_out.column_names.resize(selected_columns.size());
-  for (size_t i = 0; i < selected_columns.size(); i++) {
-    metadata_out.column_names[i] = selected_columns[i].second;
-  }
+  // Return column names
+  metadata_out.schema_info.reserve(selected_columns.size());
+  std::transform(selected_columns.cbegin(),
+                 selected_columns.cend(),
+                 std::back_inserter(metadata_out.schema_info),
+                 [](auto const& c) { return column_name_info{c.second}; });
+
   // Return user metadata
   metadata_out.user_data          = meta.user_data;
   metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};

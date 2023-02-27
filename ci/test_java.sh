@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -13,6 +13,8 @@ rapids-dependency-file-generator \
 
 rapids-mamba-retry env create --force -f env.yaml -n test
 
+export CMAKE_GENERATOR=Ninja
+
 # Temporarily allow unbound variables for conda activation.
 set +u
 conda activate test
@@ -24,25 +26,20 @@ rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
   libcudf
-
-SUITEERROR=0
 
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "Run Java tests"
 pushd java
 mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF -DCUDF_JNI_ENABLE_PROFILING=OFF
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf Java"
-fi
 popd
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}
