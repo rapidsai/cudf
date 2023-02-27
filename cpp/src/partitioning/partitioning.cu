@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/partitioning.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -489,9 +489,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows, stream);
 
-  auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, nullate::DYNAMIC>(
-    nullate::DYNAMIC{hash_has_nulls}, *device_input, seed);
+  auto const row_hasher = experimental::row::hash::row_hasher(table_to_hash, stream);
+  auto const hasher =
+    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -578,7 +578,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                           mr);
     });
 
-    if (has_nulls(input)) {
+    if (has_nested_nulls(input)) {
       // Use copy_block_partitions to compute a gather map
       auto gather_map = compute_gather_map(num_rows,
                                            num_partitions,
@@ -730,7 +730,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
-  if (has_nulls(table_to_hash)) {
+  if (has_nested_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
