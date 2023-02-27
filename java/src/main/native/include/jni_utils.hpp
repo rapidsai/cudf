@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
 constexpr char const *CUDA_FATAL_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const *CUDF_DTYPE_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
 constexpr char const *NPE_CLASS = "java/lang/NullPointerException";
@@ -860,6 +861,9 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
     JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
+  }                                                                                                \
+  catch (const cudf::data_type_error &e) {                                                         \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), ret_val);                \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
