@@ -1,9 +1,9 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -222,25 +222,6 @@ class SingleColumnFrame(Frame, NotIterable):
         bool
         """
         return self._column.is_unique
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
-    def is_monotonic(self):
-        """Return boolean if values in the object are monotonically increasing.
-
-        This property is an alias for :attr:`is_monotonic_increasing`.
-
-        Returns
-        -------
-        bool
-        """
-        warnings.warn(
-            "is_monotonic is deprecated and will be removed in a future "
-            "version. Use is_monotonic_increasing instead.",
-            FutureWarning,
-        )
-
-        return self.is_monotonic_increasing
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
