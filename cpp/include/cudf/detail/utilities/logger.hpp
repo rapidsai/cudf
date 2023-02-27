@@ -18,8 +18,6 @@
 
 #include <cudf/utilities/logger.hpp>
 
-// The default is INFO, but it should be used sparingly, so that by default a log file is only
-// output if there is important information, warnings, errors, and critical failures
 // Log messages that require computation should only be used at level TRACE and DEBUG
 #define CUDF_LOG_TRACE(...)    SPDLOG_LOGGER_TRACE(&cudf::logger(), __VA_ARGS__)
 #define CUDF_LOG_DEBUG(...)    SPDLOG_LOGGER_DEBUG(&cudf::logger(), __VA_ARGS__)
