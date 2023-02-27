@@ -479,7 +479,7 @@ def test_contains_null_search_key(data, expect):
 def test_contains_invalid(data, scalar):
     sr = cudf.Series(data)
     with pytest.raises(
-        TypeError,
+        ValueError,
         match="Type/Scale of search key does not "
         "match list column element type.",
     ):
@@ -565,7 +565,7 @@ def test_index(data, search_key, expect):
 def test_index_invalid_type(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
-        TypeError,
+        ValueError,
         match="Type/Scale of search key does not "
         "match list column element type.",
     ):
