@@ -25,15 +25,14 @@ def check_serialization(df):
     assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
-    if pickle.HIGHEST_PROTOCOL >= 5:
-        buffers = []
-        serialbytes = pickle.dumps(
-            df, protocol=5, buffer_callback=buffers.append
-        )
-        for b in buffers:
-            assert isinstance(b, pickle.PickleBuffer)
-        loaded = pickle.loads(serialbytes, buffers=buffers)
-        assert_eq(loaded, df)
+    buffers = []
+    serialbytes = pickle.dumps(
+        df, protocol=5, buffer_callback=buffers.append
+    )
+    for b in buffers:
+        assert isinstance(b, pickle.PickleBuffer)
+    loaded = pickle.loads(serialbytes, buffers=buffers)
+    assert_eq(loaded, df)
 
 
 def assert_frame_picklable(df):
