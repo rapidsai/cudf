@@ -25,7 +25,9 @@
 namespace {
 
 /**
- * @brief TODO
+ * @brief Creates a sink for libcudf logging. 
+ * 
+ * Returns a file sink if the file name has been specified, otherwise returns a stderr sink.
  */
 [[nodiscard]] spdlog::sink_ptr make_libcudf_sink()
 {
