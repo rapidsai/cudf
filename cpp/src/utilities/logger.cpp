@@ -32,7 +32,7 @@ namespace {
   if (auto filename = std::getenv("LIBCUDF_DEBUG_LOG_FILE"); filename != nullptr) {
     return std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
   } else {
-    return std::make_shared<spdlog::sinks::stdout_sink_mt>();
+    return std::make_shared<spdlog::sinks::stderr_sink_mt>();
   }
 }
 
