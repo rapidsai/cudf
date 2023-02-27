@@ -203,7 +203,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
     return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
-    CUDF_FAIL("Unsupported operator for these types");
+    CUDF_FAIL("Unsupported operator for these types", cudf::data_type_error);
 
   if (cudf::is_fixed_point(lhs.type()) or cudf::is_fixed_point(rhs.type())) {
     cudf::binops::compiled::fixed_point_binary_operation_validation(

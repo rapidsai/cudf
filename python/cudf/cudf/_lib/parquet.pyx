@@ -170,7 +170,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     allow_range_index = True
     if columns is not None:
         cpp_columns.reserve(len(columns))
-        allow_range_index = False
+        allow_range_index = len(columns) > 0
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
