@@ -1885,8 +1885,10 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+// DELTA_XXX encoding support
+//
 // read mini-block header into state object. should only be called from InitDeltaBinaryBlock or
-// SetupNextMiniBlock
+// SetupNextMiniBlock. header format is:
 //
 // | min delta (int) | bit-width array (1 byte * mini_block_count) |
 //
@@ -1923,7 +1925,7 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
   InitDeltaMiniBlock(db);
 }
 
-// skip to the start of the next mini-block. should only be called on thread 0
+// skip to the start of the next mini-block. should only be called on thread 0.
 __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 {
   if (db->current_value_idx >= db->value_count) { return; }
@@ -2065,7 +2067,7 @@ __global__ void __launch_bounds__(64)
     return;
   }
 
-  // page_data should be at the start of the rep/def level data (if present).s
+  // page_data should be at the start of the rep/def level data (if present).
   uint8_t* cur = page->page_data;
   uint8_t* end = cur + page->uncompressed_page_size;
 
@@ -2222,12 +2224,13 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   }
 }
 
-// Decode page data that is DELTA_BINARY_ARRAY packed. This encoding consists of a DeltaBinaryPacked
-// array of prefix lengths, followed by a DeltaBinaryPacked array of suffix lengths, followed by the
-// suffixes. The latter two can be used to create an offsets array for the suffix data, but then
-// this needs to be combined with the prefix lengths to do the final decode for each value. because
-// the lengths of the prefixes and suffixes are not encoded in the header, we're going to have to
-// first do a quick pass through them to find the start/end of each structure.
+// Decode page data that is DELTA_BYTE_ARRAY packed. This encoding consists of a DELTA_BINARY_PACKED
+// array of prefix lengths, followed by a DELTA_BINARY_PACKED array of suffix lengths, followed by
+// the suffixes (technically the suffixes are DELTA_LENGTH_BYTE_ARRAY encoded). The latter two can
+// be used to create an offsets array for the suffix data, but then this needs to be combined with
+// the prefix lengths to do the final decode for each value. Because the lengths of the prefixes and
+// suffixes are not encoded in the header, we're going to have to first do a quick pass through them
+// to find the start/end of each structure.
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state[2];
@@ -2351,11 +2354,9 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         uint64_t string_off = 0;
         cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
         string_offsets[lane_id] = string_off;
-        if (string_offsets == nullptr) ;
 
         // copy suffixes into string data
         uint8_t* p = strings_start + string_off;
-        memset(p, '_', prefix_len); // debug. remove this
         memcpy(p + prefix_len, data_start + suffix_off, suffix_len);
         __syncwarp();
 
@@ -2374,8 +2375,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         }
 
         if (dst_pos >= 0 && sp < target_pos) {
-          void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
-          auto* dstp   = static_cast<string_index_pair*>(dst);
+          void* dst  = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
+          auto* dstp = static_cast<string_index_pair*>(dst);
 
           // FIXME will be wrong if skipping rows
           dstp->first  = reinterpret_cast<char*>(p);
@@ -2384,7 +2385,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         __syncwarp();
 
         if (lane_id == 31) {
-          last_string = strings_start + string_off;
+          last_string   = strings_start + string_off;
           strings_start = last_string + string_len;
           data_start += suffix_off + suffix_len;
         }
