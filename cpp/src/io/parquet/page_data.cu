@@ -119,7 +119,8 @@ struct delta_binary_state_s {
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 
-  uint64_t value[non_zero_buffer_size];  // circular buffer of delta values
+  uint64_t value[non_zero_buffer_size];   // circular buffer of delta values
+  uint64_t offset[non_zero_buffer_size];  // circular buffer for string data offsets
 };
 
 /**
@@ -2045,6 +2046,66 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   }
 }
 
+// given prefix and suffix state, plus pointers to the page suffix data
+// and page output data, calculate a batch of output strings.  called
+// by all threads in a warp.
+// returns tuple of pointers to new locations of suffix_data, strings_out, and
+// last_string.
+__device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
+                                      delta_binary_state_s* suffix_db,
+                                      uint8_t const*& suffix_data,
+                                      uint8_t*& strings_out,
+                                      uint8_t*& last_string,
+                                      int start_idx,
+                                      int lane_id)
+{
+  if (start_idx >= suffix_db->value_count) { return; }
+
+  for (int idx = start_idx + lane_id; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
+    // calculate offsets into suffix data
+    int src_idx         = rolling_index(idx);
+    uint64_t suffix_len = idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
+    uint64_t suffix_off = 0;
+    __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
+    cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
+
+    // calculate offsets into string data and save in string_offsets
+    uint64_t prefix_len = idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
+    uint64_t string_len = prefix_len + suffix_len;
+    uint64_t string_off = 0;
+    cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
+    suffix_db->offset[src_idx] = string_off;
+
+    // copy suffixes into string data
+    uint8_t* so_ptr = strings_out + string_off;
+    memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len);
+    __syncwarp();
+
+    // copy prefixes into string data. this has to be done serially.
+    if (lane_id == 0) {
+      if (last_string != nullptr && idx < suffix_db->value_count) {
+        memcpy(strings_out, last_string, prefix_len);
+      }
+      for (int i = 1; i < 32; i++) {
+        int l_idx = rolling_index(idx + i);
+        if (idx + i < suffix_db->value_count) {
+          memcpy(strings_out + suffix_db->offset[l_idx],
+                 strings_out + suffix_db->offset[rolling_index(idx + i - 1)],
+                 prefix_db->value[l_idx]);
+        }
+      }
+    }
+    __syncwarp();
+
+    if (lane_id == 31) {
+      last_string = strings_out + string_off;
+      strings_out = last_string + string_len;
+      suffix_data += suffix_off + suffix_len;
+    }
+    __syncwarp();
+  }
+}
+
 /**
  * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
  */
@@ -2149,6 +2210,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
+  if (t == 0) printf("skipped leaf %d\n", skipped_leaf_values);
+
   // initialize delta state
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
@@ -2234,10 +2297,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state[2];
-  __shared__ __align__(8) uint8_t const* data_start;
-  __shared__ __align__(8) uint8_t* strings_start;
+  __shared__ __align__(8) uint8_t const* suffix_data;
+  __shared__ __align__(8) uint8_t* strings_data;
   __shared__ __align__(8) uint8_t* last_string;
-  __shared__ __align__(8) uint64_t string_offsets[32];
 
   int t           = threadIdx.x;
   int lane_id     = t & 0x1f;
@@ -2253,6 +2315,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  if (t == 0) printf("skipped leaf %d\n", skipped_leaf_values);
 
   if (t == 0) {
     auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
@@ -2268,8 +2331,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
     // initialize the prefixes and suffixes blocks
     auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
-    data_start               = find_end(suffix_db, suffix_start, s->data_end);
-    strings_start            = s->page.page_string_data;
+    suffix_data              = find_end(suffix_db, suffix_start, s->data_end);
+    strings_data             = s->page.page_string_data;
     last_string              = nullptr;
   }
   __syncthreads();
@@ -2280,15 +2343,21 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need. prefixes and suffixes should be the same length, so only
   // testing prefix_db.
-  // FIXME need to decode strings too or there will be chaos
+  int skip_pos = 0;
   while (prefix_db->current_value_idx < skipped_leaf_values &&
          prefix_db->current_value_idx < prefix_db->value_count) {
     // warp 0 gets prefixes and warp 1 gets suffixes
     auto* db = t < 32 ? prefix_db : suffix_db;
-    if (t < 64) {  // warp 1 does suffixes
+    if (t < 64) {
       CalcMiniBlockValues(db, lane_id);
       if (lane_id == 0) { SetupNextMiniBlock(db); }
     }
+    __syncthreads();
+    if (t < 32) {
+      CalculateStringValues(
+        prefix_db, suffix_db, suffix_data, strings_data, last_string, skip_pos, lane_id);
+    }
+    skip_pos += prefix_db->values_per_mb;
     __syncthreads();
   }
 
@@ -2329,6 +2398,13 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
+      // need to save strings_data position since it's updated by CalculateStringValues()
+      char* str_start = reinterpret_cast<char*>(strings_data);
+
+      CalculateStringValues(
+        prefix_db, suffix_db, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      skip_pos += batch_size;
+
       // process the mini-block in batches of 32
       for (int sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
@@ -2337,56 +2413,13 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
 
-        // start reconstructing strings. need to do all strings in the page even if
-        // skipping rows because we need to know the first strings in the page for the
-        // deltas to make sense.
-        // calculate offsets into suffix data
-        int src_idx         = rolling_index(sp);
-        uint64_t suffix_len = sp < target_pos ? suffix_db->value[src_idx] : 0;
-        uint64_t suffix_off = 0;
-        __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
-        cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
-
-        // calculate offsets into string data and save in string_offsets
-        uint64_t prefix_len = sp < target_pos ? prefix_db->value[src_idx] : 0;
-        uint64_t string_len = prefix_len + suffix_len;
-        uint64_t string_off = 0;
-        cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
-        string_offsets[lane_id] = string_off;
-
-        // copy suffixes into string data
-        uint8_t* p = strings_start + string_off;
-        memcpy(p + prefix_len, data_start + suffix_off, suffix_len);
-        __syncwarp();
-
-        // copy prefixes into string data. this has to be done serially.
-        if (lane_id == 0) {
-          if (last_string != nullptr) { memcpy(strings_start, last_string, prefix_len); }
-          for (int i = 1; i < 32; i++) {
-            int lsp = sp + i;
-            if (lsp < target_pos) {
-              int lsp_idx = rolling_index(lsp);
-              memcpy(strings_start + string_offsets[i],
-                     strings_start + string_offsets[i - 1],
-                     prefix_db->value[lsp_idx]);
-            }
-          }
-        }
-
         if (dst_pos >= 0 && sp < target_pos) {
-          void* dst  = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
-          auto* dstp = static_cast<string_index_pair*>(dst);
+          void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
+          auto* dstp   = static_cast<string_index_pair*>(dst);
+          auto src_idx = rolling_index(sp + skipped_leaf_values);
 
-          // FIXME will be wrong if skipping rows
-          dstp->first  = reinterpret_cast<char*>(p);
-          dstp->second = string_len;
-        }
-        __syncwarp();
-
-        if (lane_id == 31) {
-          last_string   = strings_start + string_off;
-          strings_start = last_string + string_len;
-          data_start += suffix_off + suffix_len;
+          dstp->first  = str_start + suffix_db->offset[src_idx];
+          dstp->second = prefix_db->value[src_idx] + suffix_db->value[src_idx];
         }
         __syncwarp();
       }
@@ -2456,6 +2489,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     return;
   }
 
+
+  if (t == 0) printf("skipped leaf %d has_rep %d %d\n", s->page.skipped_leaf_values, has_repetition, s->first_row);
   if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
     DecodeDeltaBinary(s);
     restore_decode_cache(s);
