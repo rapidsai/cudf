@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,6 +83,29 @@ struct cuda_error : public std::runtime_error {
 
 struct fatal_cuda_error : public cuda_error {
   using cuda_error::cuda_error;  // Inherit constructors
+};
+
+/**
+ * @brief Exception thrown when an operation is attempted on an unsupported dtype.
+ *
+ * This exception should be thrown when an operation is attempted on an
+ * unsupported data_type. This exception should not be thrown directly and is
+ * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
+ */
+struct data_type_error : public std::invalid_argument {
+  /**
+   * @brief Constructs a data_type_error with the error message.
+   *
+   * @param message Message to be associated with the exception
+   */
+  data_type_error(char const* const message) : std::invalid_argument(message) {}
+
+  /**
+   * @brief Construct a new data_type_error object with error message
+   *
+   * @param message Message to be associated with the exception
+   */
+  data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
 /** @} */
 

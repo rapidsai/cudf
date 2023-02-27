@@ -487,7 +487,8 @@ class device_row_comparator {
           // element_index because either both rows have a deeply nested NULL at the
           // same position, and we'll "continue" in our iteration, or we will early
           // exit if only one of the rows has a deeply nested NULL
-          if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
+          if ((lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) or
+              (rcol.nullable() and r_def_levels[r_dremel_index] == r_max_def_level - 1)) {
             ++element_index;
           }
           if (l_def_level == r_def_level) { continue; }
