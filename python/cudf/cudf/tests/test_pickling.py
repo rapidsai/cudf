@@ -26,9 +26,7 @@ def check_serialization(df):
     assert_frame_picklable(sortvaldf)
     # out-of-band
     buffers = []
-    serialbytes = pickle.dumps(
-        df, protocol=5, buffer_callback=buffers.append
-    )
+    serialbytes = pickle.dumps(df, protocol=5, buffer_callback=buffers.append)
     for b in buffers:
         assert isinstance(b, pickle.PickleBuffer)
     loaded = pickle.loads(serialbytes, buffers=buffers)
