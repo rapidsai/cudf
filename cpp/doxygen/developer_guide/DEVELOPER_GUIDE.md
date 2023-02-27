@@ -916,7 +916,7 @@ execution
 * `CUDF_LOG_ERROR` - recoverable errors
 * `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
 
-By default, messages below the `INFO` level are excluded from the log. In public builds, the code
+By default, `TRACE` and `DEBUG` messages are excluded from the log. In public builds, the code
 that logs at these levels is compiled out. This prevents logging of potentially sensitive data that
 might be done for debug purposes. Also, this allows developers to include expensive computation in
 the trace/debug logs, as the overhead will not be present in the public builds. The minimum enabled
