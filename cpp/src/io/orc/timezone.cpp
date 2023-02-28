@@ -371,7 +371,7 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string> const& tzif_dir,
+std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string> tzif_dir,
                                                        std::string const& timezone_name,
                                                        rmm::cuda_stream_view stream)
 {

@@ -42,7 +42,7 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return The transition table for the given timezone
  */
-std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string> const& tzif_dir,
+std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string> tzif_dir,
                                                        std::string const& timezone_name,
                                                        rmm::cuda_stream_view stream);
 
