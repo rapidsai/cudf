@@ -25,7 +25,6 @@ Properties
    Index.has_duplicates
    Index.duplicated
    Index.hasnans
-   Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
    Index.is_unique
