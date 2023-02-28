@@ -135,6 +135,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
                       0);
   if (page_string_offsets.back() != 0) {
     delta_binary_page_data = rmm::device_buffer(page_string_offsets.back(), _stream);
+    pages.device_to_host(_stream, true);
 
     // set pointers in pages
     for (size_t i = 0; i < pages.size(); i++) {
