@@ -919,9 +919,9 @@ execution
 By default, `TRACE`, `DEBUG` and `INFO` messages are excluded from the log. In addition, in public
 builds, the code that logs at `TRACE` and `DEBUG` levels is compiled out. This prevents logging of
 potentially sensitive data that might be done for debug purposes. Also, this allows developers to
-include expensive computation in the trace/debug logs, as the overhead will not be present in the 
- public builds.
- The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
+include expensive computation in the trace/debug logs, as the overhead will not be present in the
+public builds.
+The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
 
 * CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
 will be compiled in the build.
@@ -930,8 +930,8 @@ Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and 
 The difference is that disabled levels are present in the build, but the messages are excluded from
 the log.
 * Global logger object exposed via `cudf::logger()`. This API should not be used within libcudf to
-manipulate logging,
-its purpose is to allow upstream users to configure libcudf logging to fit their application.
+manipulate logging, its purpose is to allow upstream users to configure libcudf logging to fit their
+application.
 
 By default, logging messages are output to stderr.
 Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
