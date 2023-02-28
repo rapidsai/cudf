@@ -23,7 +23,6 @@
 #include "orc_gpu.hpp"
 
 #include "reader_impl.hpp"
-#include "timezone.cuh"
 
 #include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
@@ -32,6 +31,7 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/timezone.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -929,7 +929,7 @@ std::unique_ptr<table> reader::impl::compute_timezone_table(
     });
   if (not has_timestamp_column) return std::make_unique<cudf::table>();
 
-  return build_timezone_transition_table(
+  return cudf::detail::make_timezone_transition_table(
     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 
