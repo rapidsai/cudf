@@ -2049,31 +2049,44 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 // given prefix and suffix state, plus pointers to the page suffix data
 // and page output data, calculate a batch of output strings.  called
 // by all threads in a warp.
-// returns tuple of pointers to new locations of suffix_data, strings_out, and
-// last_string.
+// updates suffix_data and last_string pointers.
 __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
                                       delta_binary_state_s* suffix_db,
                                       uint8_t const*& suffix_data,
-                                      uint8_t*& strings_out,
+                                      uint8_t* strings_out,
                                       uint8_t*& last_string,
                                       int start_idx,
                                       int lane_id)
 {
+  __shared__ __align__(8) uint64_t strings_offset;
+
   if (start_idx >= suffix_db->value_count) { return; }
 
   for (int idx = start_idx + lane_id; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
     // calculate offsets into suffix data
-    int src_idx         = rolling_index(idx);
-    uint64_t suffix_len = idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
-    uint64_t suffix_off = 0;
+    int const src_idx         = rolling_index(idx);
+    uint64_t const suffix_len = idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
+    uint64_t suffix_off       = 0;
     __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
     cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
 
     // calculate offsets into string data and save in string_offsets
-    uint64_t prefix_len = idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
-    uint64_t string_len = prefix_len + suffix_len;
+    uint64_t const prefix_len = idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
+    uint64_t const string_len = prefix_len + suffix_len;
+
+    // string_off will be 0 when last_string is null, otherwise need to look back to get it
     uint64_t string_off = 0;
     cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
+    if (lane_id == 0) {
+      strings_offset = 0;
+      if (last_string != nullptr) {
+        int last_idx = rolling_index(idx - 1);
+        strings_offset =
+          suffix_db->offset[last_idx] + suffix_db->value[last_idx] + prefix_db->value[last_idx];
+      }
+    }
+    __syncwarp();
+    string_off += strings_offset;
     suffix_db->offset[src_idx] = string_off;
 
     // copy suffixes into string data
@@ -2084,7 +2097,7 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
     // copy prefixes into string data. this has to be done serially.
     if (lane_id == 0) {
       if (last_string != nullptr && idx < suffix_db->value_count) {
-        memcpy(strings_out, last_string, prefix_len);
+        memcpy(so_ptr, last_string, prefix_len);
       }
       for (int i = 1; i < 32; i++) {
         int l_idx = rolling_index(idx + i);
@@ -2099,7 +2112,6 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
 
     if (lane_id == 31) {
       last_string = strings_out + string_off;
-      strings_out = last_string + string_len;
       suffix_data += suffix_off + suffix_len;
     }
     __syncwarp();
@@ -2210,8 +2222,6 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
-  if (t == 0) printf("skipped leaf %d\n", skipped_leaf_values);
-
   // initialize delta state
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
@@ -2315,7 +2325,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
-  if (t == 0) printf("skipped leaf %d\n", skipped_leaf_values);
 
   if (t == 0) {
     auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
@@ -2398,9 +2407,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
-      // need to save strings_data position since it's updated by CalculateStringValues()
-      char* str_start = reinterpret_cast<char*>(strings_data);
-
       CalculateStringValues(
         prefix_db, suffix_db, suffix_data, strings_data, last_string, skip_pos, lane_id);
       skip_pos += batch_size;
@@ -2417,8 +2423,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
           void* dst    = nesting_info_base[leaf_level_index].data_out + dst_pos * dtype_len;
           auto* dstp   = static_cast<string_index_pair*>(dst);
           auto src_idx = rolling_index(sp + skipped_leaf_values);
-
-          dstp->first  = str_start + suffix_db->offset[src_idx];
+          dstp->first  = reinterpret_cast<char*>(strings_data) + suffix_db->offset[src_idx];
           dstp->second = prefix_db->value[src_idx] + suffix_db->value[src_idx];
         }
         __syncwarp();
@@ -2489,8 +2494,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     return;
   }
 
-
-  if (t == 0) printf("skipped leaf %d has_rep %d %d\n", s->page.skipped_leaf_values, has_repetition, s->first_row);
   if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
     DecodeDeltaBinary(s);
     restore_decode_cache(s);
