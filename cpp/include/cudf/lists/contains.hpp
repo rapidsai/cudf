@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,9 +126,7 @@ enum class duplicate_find_option : int32_t {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
  *
- * @throw cudf::logic_error If `search_key` type does not match the element type in `lists`
- * @throw cudf::logic_error If `search_key` is of a nested type, or `lists` contains nested
- * elements (LIST, STRUCT)
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
@@ -163,8 +161,7 @@ std::unique_ptr<column> index_of(
  * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
  *
  * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
- * @throw cudf::logic_error If `search_keys` type does not match the element type in `lists`
- * @throw cudf::logic_error If `lists` or `search_keys` contains nested elements (LIST, STRUCT)
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
