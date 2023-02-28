@@ -8,9 +8,10 @@ import cupy
 from numba import config as numba_config, cuda
 
 import rmm
+from rmm.allocators.cupy import rmm_cupy_allocator
+from rmm.allocators.numba import RMMNumbaManager
 
 from cudf import api, core, datasets, testing
-from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
@@ -97,8 +98,8 @@ else:
 
     del patch_numba_linker_if_needed
 
-cuda.set_memory_manager(rmm.RMMNumbaManager)
-cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
+cuda.set_memory_manager(RMMNumbaManager)
+cupy.cuda.set_allocator(rmm_cupy_allocator)
 
 try:
     # Numba 0.54: Disable low occupancy warnings
@@ -112,8 +113,7 @@ del numba_config
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = get_versions()["version"]
-del get_versions
+__version__ = "23.04.00"
 
 __all__ = [
     "BaseIndex",

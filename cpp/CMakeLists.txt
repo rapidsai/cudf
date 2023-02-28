@@ -455,6 +455,7 @@ add_library(
   src/reductions/scan/scan_inclusive.cu
   src/reductions/segmented/all.cu
   src/reductions/segmented/any.cu
+  src/reductions/segmented/counts.cu
   src/reductions/segmented/max.cu
   src/reductions/segmented/mean.cu
   src/reductions/segmented/min.cu
