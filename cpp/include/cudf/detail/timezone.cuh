@@ -25,13 +25,6 @@
 
 namespace cudf::detail {
 
-inline __device__ auto project_to_cycle(timestamp_s ts)
-{
-  static constexpr duration_s cycle_s =
-    cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)});
-  return timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s};
-}
-
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
@@ -65,6 +58,11 @@ inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestam
       // Search the file entries if the timestamp is in range
       return last_less_equal(ttimes.begin(), file_entry_end, ts);
     } else {
+      auto project_to_cycle = [](timestamp_s ts) {
+        static constexpr duration_s cycle_s =
+          cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)});
+        return timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s};
+      };
       // Search the 400-year cycle if outside of the file entries range
       return last_less_equal(file_entry_end, ttimes.end(), project_to_cycle(ts));
     }
