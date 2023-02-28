@@ -55,7 +55,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-  auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
@@ -66,8 +67,13 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
   auto const insert_keys = [&](auto const value_comp) {
-    auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
-    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    if (has_nested_columns) {
+      auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
+      map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    } else {
+      auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
+      map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    }
   };
 
   if (nans_equal == nan_equality::ALL_EQUAL) {
@@ -92,6 +98,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                                                     std::move(preprocessed_input),
                                                     input.num_rows(),
                                                     has_nulls,
+                                                    has_nested_columns,
                                                     keep,
                                                     nulls_equal,
                                                     nans_equal,

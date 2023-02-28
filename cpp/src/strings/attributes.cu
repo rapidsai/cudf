@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/attributes.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -29,6 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -37,10 +40,24 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+#include <cub/warp/warp_reduce.cuh>
+
 namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
+/**
+ * @brief Threshold to decide on using string or warp parallel functions.
+ *
+ * If the average byte length of a string in a column exceeds this value then
+ * the warp-parallel function is used.
+ * Otherwise, a regular string-parallel function is used.
+ *
+ * This value was found using the strings_lengths benchmark results.
+ */
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
+
 /**
  * @brief Returns a numeric column containing lengths of each string in
  * based on the provided unary function.
@@ -85,21 +102,85 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   return results;
 }
 
+/**
+ * @brief Count characters using a warp per string
+ *
+ * @param d_strings Column with strings to count
+ * @param d_lengths Results of the counts per string
+ */
+__global__ void count_characters_parallel_fn(column_device_view const d_strings,
+                                             size_type* d_lengths)
+{
+  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  using warp_reduce   = cub::WarpReduce<size_type>;
+  __shared__ typename warp_reduce::TempStorage temp_storage;
+
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
+
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
+  if (d_strings.is_null(str_idx)) {
+    d_lengths[str_idx] = 0;
+    return;
+  }
+  auto const d_str   = d_strings.element<string_view>(str_idx);
+  auto const str_ptr = d_str.data();
+
+  auto count = 0;
+  for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
+    count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
+  }
+  auto const char_count = warp_reduce(temp_storage).Sum(count);
+  if (lane_idx == 0) { d_lengths[str_idx] = char_count; }
+}
+
+std::unique_ptr<column> count_characters_parallel(strings_column_view const& input,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  // create output column
+  auto results = make_numeric_column(data_type{type_to_id<size_type>()},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+
+  auto const d_lengths = results->mutable_view().data<size_type>();
+  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
+
+  // fill in the lengths
+  constexpr int block_size = 256;
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  count_characters_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    *d_strings, d_lengths);
+
+  // reset null count after call to mutable_view()
+  results->set_null_count(input.null_count());
+
+  return results;
+}
+
 }  // namespace
 
-std::unique_ptr<column> count_characters(strings_column_view const& strings,
+std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
-  return counts_fn(strings, ufn, stream, mr);
+  if ((input.size() == input.null_count()) ||
+      ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
+    auto ufn = [] __device__(string_view const& d_str) { return d_str.length(); };
+    return counts_fn(input, ufn, stream, mr);
+  }
+
+  return count_characters_parallel(input, stream, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& strings,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto ufn = [] __device__(const string_view& d_str) { return d_str.size_bytes(); };
+  auto ufn = [] __device__(string_view const& d_str) { return d_str.size_bytes(); };
   return counts_fn(strings, ufn, stream, mr);
 }
 
