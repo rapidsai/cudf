@@ -75,7 +75,7 @@ dependencies:
           - c-compiler
           - cxx-compiler
           - librdkafka=1.7.0
-          - protobuf>=4.22,<4.23
+          - protobuf>=4.21.6,<4.22
     specific:
       - output_types: conda
         matrices:
