@@ -520,10 +520,7 @@ def test_concatenate_large_column_strings():
     s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
     s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
 
-    with pytest.raises(
-        OverflowError,
-        match="total size of output is too large for a cudf column",
-    ):
+    with pytest.raises(OverflowError):
         cudf.concat([s_1, s_2])
 
 

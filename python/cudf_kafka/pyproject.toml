@@ -7,3 +7,49 @@ requires = [
     "setuptools",
     "cython>=0.29,<0.30",
 ]
+
+[tool.isort]
+line_length = 79
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+combine_as_imports = true
+order_by_type = true
+known_dask = [
+    "dask",
+    "distributed",
+    "dask_cuda",
+    "streamz",
+]
+known_rapids = [
+    "rmm",
+    "cudf",
+    "dask_cudf",
+]
+known_first_party = [
+    "cudf_kafka",
+]
+default_section = "THIRDPARTY"
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "THIRDPARTY",
+    "DASK",
+    "RAPIDS",
+    "FIRSTPARTY",
+    "LOCALFOLDER",
+]
+skip = [
+    "thirdparty",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "__init__.py",
+]
