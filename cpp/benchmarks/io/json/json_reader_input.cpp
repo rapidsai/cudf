@@ -126,4 +126,3 @@ NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_read_io")
   .set_type_axes_names({"io"})
   .set_min_samples(4);
-// TODO compression, cardinality, run_length
