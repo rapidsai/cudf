@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,7 @@ enum class binary_operator : int32_t {
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -136,6 +137,7 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -163,6 +165,7 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
