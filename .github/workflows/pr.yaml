@@ -113,8 +113,7 @@ jobs:
       build_type: pull-request
       package-name: cudf
       # Install cupy-cuda11x for arm from a special index url
-      # Install tokenizers last binary wheel to avoid a Rust compile from the latest sdist
-      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-before-arm64: "pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
       test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
