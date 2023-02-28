@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <filesystem>
 
 namespace cudf::detail {
 
@@ -125,12 +126,12 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::optional<std::string> const& tzif_dir, std::string const& timezone_name)
+  timezone_file(std::optional<std::string_view> const& tzif_dir, std::string_view timezone_name)
   {
     using std::ios_base;
 
     // Open the input file
-    auto const tz_filename = tzif_dir.value_or(tzif_system_directory) + timezone_name;
+    auto const tz_filename = std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
     CUDF_EXPECTS(fin, "Failed to open the timezone file.");
