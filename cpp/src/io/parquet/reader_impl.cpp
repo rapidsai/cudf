@@ -123,28 +123,42 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device(_stream);
 
   // see if space is needed for decoding strings
-  hostdevice_vector<size_type> page_string_sizes(pages.size(), _stream);
-  std::vector<size_type> page_string_offsets;
-
-  ComputePageStringSizes(pages, page_string_sizes, _stream);
-  page_string_sizes.device_to_host(_stream, true);
-
-  std::exclusive_scan(page_string_sizes.host_ptr(),
-                      page_string_sizes.host_ptr(page_string_sizes.size() + 1),
-                      std::back_inserter(page_string_offsets),
-                      0);
-  if (page_string_offsets.back() != 0) {
-    delta_binary_page_data = rmm::device_buffer(page_string_offsets.back(), _stream);
+  if (std::any_of(pages.begin(), pages.end(), [](auto& page) {
+        return page.encoding == Encoding::DELTA_BYTE_ARRAY;
+      })) {
+    ComputePageStringSizes(pages, _stream);
     pages.device_to_host(_stream, true);
 
-    // set pointers in pages
-    for (size_t i = 0; i < pages.size(); i++) {
-      pages[i].page_string_data =
-        page_string_sizes[i] != 0
-          ? static_cast<uint8_t*>(delta_binary_page_data.data()) + page_string_offsets[i]
-          : nullptr;
+    if (std::any_of(
+          pages.begin(), pages.end(), [](auto& page) { return page.page_strings_size != 0; })) {
+      std::vector<int64_t> page_string_offsets;
+      std::transform_exclusive_scan(pages.begin(),
+                                    pages.end() + 1,
+                                    std::back_inserter(page_string_offsets),
+                                    0,
+                                    std::plus<size_type>{},
+                                    [](auto& page) { return page.page_strings_size; });
+
+      auto total_size = page_string_offsets.back();
+      // check that the string data doesn't exceed 2GB
+      CUDF_EXPECTS(total_size <= std::numeric_limits<int32_t>::max(), "string data is too large");
+
+      delta_binary_page_data = rmm::device_buffer(total_size, _stream);
+
+      std::transform(pages.begin(),
+                     pages.end(),
+                     page_string_offsets.begin(),
+                     pages.begin(),
+                     [&delta_binary_page_data](auto& page, auto offset) {
+                       if (page.page_strings_size != 0) {
+                         page.page_string_data =
+                           static_cast<uint8_t*>(delta_binary_page_data.data()) + offset;
+                       }
+                       return page;
+                     });
+
+      pages.host_to_device(_stream);
     }
-    pages.host_to_device(_stream);
   }
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);

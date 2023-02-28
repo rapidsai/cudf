@@ -2121,8 +2121,7 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
 /**
  * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
  */
-__global__ void __launch_bounds__(64)
-  gpuComputePageStringSizes(PageInfo* pages, device_span<size_type> page_string_sizes)
+__global__ void __launch_bounds__(64) gpuComputePageStringSizes(PageInfo* pages)
 {
   // using this to get atomicAdd happy
   using u64 = unsigned long long int;
@@ -2135,10 +2134,13 @@ __global__ void __launch_bounds__(64)
   auto* suffix_db = &db_state[1];
   PageInfo* page  = &pages[blockIdx.x];
 
-  if (page->encoding != Encoding::DELTA_BYTE_ARRAY || page->num_input_values == 0) {
-    if (t == 0) { page_string_sizes[blockIdx.x] = 0; }
-    return;
+  // initialize strings info
+  if (t == 0) {
+    page->page_string_data  = nullptr;
+    page->page_strings_size = 0;
   }
+
+  if (page->encoding != Encoding::DELTA_BYTE_ARRAY || page->num_input_values == 0) { return; }
 
   // page_data should be at the start of the rep/def level data (if present).
   uint8_t* cur = page->page_data;
@@ -2192,9 +2194,7 @@ __global__ void __launch_bounds__(64)
   }
   __syncthreads();
 
-  // return -1 if overflow
-  page_string_sizes[blockIdx.x] =
-    total_bytes < std::numeric_limits<int32_t>::max() ? static_cast<size_type>(total_bytes) : -1;
+  if (t == 0) { page->page_strings_size = total_bytes; }
 }
 
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
@@ -2645,13 +2645,10 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
-                            hostdevice_vector<size_type>& page_string_sizes,
-                            rmm::cuda_stream_view stream)
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view stream)
 {
   // need 2 warps, one for prefixes and one for suffixes
-  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(pages.device_ptr(),
-                                                                     page_string_sizes);
+  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(pages.device_ptr());
 }
 
 /**

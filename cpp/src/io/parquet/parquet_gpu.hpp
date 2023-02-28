@@ -148,6 +148,7 @@ struct PageInfo {
   uint8_t* page_string_data;       // Temporary storage for decoded DELTA_BINARY_ARRAY data
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
+  int64_t page_strings_size;       // amount of storage needed to decode DELTA_BINARY_ARRAY data
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
   // indicator. instead the lengths for these are stored in the header.
   int32_t def_lvl_bytes;  // length of the definition levels (V2 header)
@@ -435,12 +436,10 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
 /**
  * @brief Compute the amount of string data in DELTA_BYTE_ARRAY encoded pages.
  *
- * @param pages All pages to compute lengths for
- * @param page_string_sizes Array to hold computed lengths
+ * @param[in,out] pages All pages to compute lengths for
+ * @param[in] stream CUDA stream to use, default 0
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
-                            hostdevice_vector<size_type>& page_string_sizes,
-                            rmm::cuda_stream_view stream);
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
