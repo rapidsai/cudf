@@ -916,11 +916,12 @@ execution
 * `CUDF_LOG_ERROR` - recoverable errors
 * `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
 
-By default, `TRACE` and `DEBUG` messages are excluded from the log. In public builds, the code
-that logs at these levels is compiled out. This prevents logging of potentially sensitive data that
-might be done for debug purposes. Also, this allows developers to include expensive computation in
-the trace/debug logs, as the overhead will not be present in the public builds. The minimum enabled
-logging level is `INFO`, and it can be modified in multiple ways:
+By default, `TRACE`, `DEBUG` and `INFO` messages are excluded from the log. In addition, in public
+builds, the code that logs at `TRACE` and `DEBUG` levels is compiled out. This prevents logging of
+potentially sensitive data that might be done for debug purposes. Also, this allows developers to
+include expensive computation in the trace/debug logs, as the overhead will not be present in the 
+ public builds.
+ The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
 
 * CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
 will be compiled in the build.
@@ -932,10 +933,11 @@ the log.
 manipulate logging,
 its purpose is to allow upstream users to configure libcudf logging to fit their application.
 
-The default log file is `cudf_log.txt` in the current working directory.
-The environment variable `LIBCUDF_DEBUG_LOG_FILE` can be set to specify the path and file name.
-Upstream users can also manipulate `cudf::logger().sinks()` to add sinks or divert the log to standard
-output or even a custom spdlog sink.
+By default, logging messages are output to stderr.
+Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
+specified path (can be relative to the current directory).
+Upstream users can also manipulate `cudf::logger().sinks()` to add sinks or divert the log to
+standard output or even a custom spdlog sink.
 
 # Data Types
 
