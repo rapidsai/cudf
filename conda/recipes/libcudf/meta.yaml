@@ -120,6 +120,8 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
         - test -f $PREFIX/include/cudf/detail/transform.hpp
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
+        - test -f $PREFIX/include/cudf/detail/timezone.cuh
+        - test -f $PREFIX/include/cudf/detail/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/default_stream.hpp

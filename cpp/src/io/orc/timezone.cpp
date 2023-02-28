@@ -20,8 +20,8 @@
 #include <cudf/table/table.hpp>
 
 #include <algorithm>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 
 namespace cudf::detail {
 
@@ -126,12 +126,13 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::optional<std::string_view> const& tzif_dir, std::string_view timezone_name)
+  timezone_file(std::optional<std::string_view> tzif_dir, std::string_view timezone_name)
   {
     using std::ios_base;
 
     // Open the input file
-    auto const tz_filename = std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
+    auto const tz_filename =
+      std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
     CUDF_EXPECTS(fin, "Failed to open the timezone file.");
@@ -373,8 +374,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 }
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
-                                                       std::string_view timezone_name,
-                                                       rmm::cuda_stream_view stream)
+                                                      std::string_view timezone_name,
+                                                      rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -488,4 +489,4 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
 }
 
-}  // namespace cudf
+}  // namespace cudf::detail

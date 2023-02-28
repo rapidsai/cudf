@@ -13,18 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- #pragma once
+#pragma once
 
+#include <cudf/detail/timezone.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/detail/timezone.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
 namespace cudf::detail {
-
 
 inline __device__ auto project_to_cycle(timestamp_s ts)
 {
@@ -74,4 +73,4 @@ inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestam
   return tz_table.column(1).element<duration_s>(ts_ttime_it - ttimes.begin());
 }
 
-}
+}  // namespace cudf::detail
