@@ -389,7 +389,15 @@ rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
 }
 
 struct copy_block_partitions_dispatcher {
-  template <typename DataType, std::enable_if_t<is_fixed_width<DataType>()>* = nullptr>
+  template <typename DataType>
+  constexpr static bool is_copy_block_supported()
+  {
+    // The shared-memory used for fixed-width types in the copy_block_partitions_impl function
+    // will be too large for any DataType greater than int64_t.
+    return is_fixed_width<DataType>() && (sizeof(DataType) <= sizeof(int64_t));
+  }
+
+  template <typename DataType, std::enable_if_t<is_copy_block_supported<DataType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
@@ -416,7 +424,7 @@ struct copy_block_partitions_dispatcher {
     return std::make_unique<column>(input.type(), input.size(), std::move(output));
   }
 
-  template <typename DataType, std::enable_if_t<not is_fixed_width<DataType>()>* = nullptr>
+  template <typename DataType, std::enable_if_t<not is_copy_block_supported<DataType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
