@@ -372,8 +372,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string> tzif_dir,
-                                                       std::string const& timezone_name,
+std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
+                                                       std::string_view timezone_name,
                                                        rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
@@ -462,7 +462,7 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string>
   }
 
   CUDF_EXPECTS(ttimes.size() == offsets.size(),
-               "Error reading TZif file for timezone " + timezone_name);
+               "Error reading TZif file for timezone " + std::string{timezone_name});
 
   std::vector<timestamp_s> ttimes_typed;
   ttimes_typed.reserve(ttimes.size());
