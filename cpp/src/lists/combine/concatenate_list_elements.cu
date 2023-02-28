@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -257,11 +257,13 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   rmm::mr::device_memory_resource* mr)
 {
   auto type = input.type();  // Column that is lists of lists.
-  CUDF_EXPECTS(type.id() == type_id::LIST, "Input column must be a lists column.");
+  CUDF_EXPECTS(
+    type.id() == type_id::LIST, "Input column must be a lists column.", std::invalid_argument);
 
   auto col = lists_column_view(input).child();  // Rows, which are lists.
   type     = col.type();
-  CUDF_EXPECTS(type.id() == type_id::LIST, "Rows of the input column must be lists.");
+  CUDF_EXPECTS(
+    type.id() == type_id::LIST, "Rows of the input column must be lists.", std::invalid_argument);
 
   col  = lists_column_view(col).child();  // The last level entries what we need to check.
   type = col.type();
