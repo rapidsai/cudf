@@ -152,7 +152,7 @@ struct file_segmentation {
  * @brief ORC per-chunk streams of encoded data.
  */
 struct encoded_data {
-  rmm::device_uvector<uint8_t> data;                        // Owning array of the encoded data
+  std::vector<rmm::device_uvector<uint8_t>> data;           // Owning array of the encoded data
   hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 

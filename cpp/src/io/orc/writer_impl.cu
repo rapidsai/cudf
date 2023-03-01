@@ -911,9 +911,9 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
-  auto const stream_offsets =
-    streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
-  rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
+  std::vector<rmm::device_uvector<uint8_t>> encoded_data;
+  for (auto i = 0ul; i < streams.size(); ++i)
+    encoded_data.emplace_back(streams[i].length, stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
@@ -1054,13 +1054,9 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                 const int32_t dict_stride = column.dict_stride();
                 const auto stripe_dict    = column.host_stripe_dict(stripe.id);
                 if (stripe.id == 0) {
-                  strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
-                  // Dictionary lengths are encoded as RLE, which are all stored after non-RLE data:
-                  // include non-RLE data size in the offset only in that case
-                  if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
-                    strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
+                  strm.data_ptrs[strm_type] = encoded_data[strm_id].data();
                 } else {
-                  // don't think this branch makes sense
+                  // don't think this branch makes sense with per-stripe buffers
                   auto const& strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
                   strm.data_ptrs[strm_type] =
                     strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
@@ -1068,22 +1064,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
               } else {
                 strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
               }
-            } else if ((strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
-                        ck.encoding_kind == DIRECT_V2) or
-                       (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA)) {
+            } else {
               strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                                            ? encoded_data[strm_id].data()
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
-            } else {
-              // RLE encoded streams are stored after all non-RLE streams
-              strm.data_ptrs[strm_type] =
-                (rg_idx == 0) ? (encoded_data.data() + stream_offsets.non_rle_data_size +
-                                 stream_offsets.offsets[strm_id])
-                              : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                 col_streams[rg_idx - 1].lengths[strm_type]);
             }
           }
+          // This will go away with per-stripe buffers
           auto const misalignment =
             reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
           if (misalignment != 0) {
