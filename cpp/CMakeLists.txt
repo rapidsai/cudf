@@ -731,8 +731,6 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
-    # TODO: We need this to be a shared library in order to support runtime
-    # symbol patching with LD_PRELOAD. Are we OK with that change?
     cudftestutil SHARED
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
