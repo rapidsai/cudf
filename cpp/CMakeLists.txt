@@ -83,15 +83,6 @@ option(
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 
-# Option for whether the default stream is an error or whether we should search for a specific
-# stream.
-option(
-  STREAM_MODE_TESTING
-  "Change the behavior of cudf::test::get_default_stream instead of cudf::get_default_stream. This option has no effect if CUDF_BUILD_STREAMS_TEST_UTIL is OFF."
-  OFF
-)
-mark_as_advanced(STREAM_MODE_TESTING)
-
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
@@ -793,22 +784,27 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
   endif()
 
-  # Libraries for stream-related testing.
-  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+  # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
+  # on and one with it set to off. Each test will then be configured to use the appropriate library
+  # depending via ctest and whether it has been updated to expose public stream APIs.
+  foreach(_mode in cudf testing)
+    set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
+    add_library(${tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
-  set_target_properties(
-    cudf_identify_stream_usage
-    PROPERTIES # set target compile options
-               CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-  )
-  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
-  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+    set_target_properties(
+      ${_tgt}
+      PROPERTIES # set target compile options
+                 CXX_STANDARD 17
+                 CXX_STANDARD_REQUIRED ON
+                 POSITION_INDEPENDENT_CODE ON
+    )
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    add_library(cudf::${_tgt} ALIAS ${_tgt})
 
-  if(STREAM_MODE_TESTING)
-    target_compile_definitions(cudf_identify_stream_usage PUBLIC STREAM_MODE_TESTING)
-  endif()
+    if(${mode} EQUAL testing)
+      target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
+    endif()
+  endforeach()
 endif()
 
 # ##################################################################################################
