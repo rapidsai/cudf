@@ -113,8 +113,8 @@ jobs:
       build_type: pull-request
       package-name: cudf
       # Install cupy-cuda11x for arm from a special index url
-      test-before-arm64: "pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
-      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
+      test-before-arm64: "python -m pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-unittest: "python -m pytest -v -n 8 ./python/cudf/cudf/tests"
       test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
@@ -124,7 +124,7 @@ jobs:
       build_type: pull-request
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
+      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && python -m pip install --no-deps ./local-cudf/cudf*.whl"
       uses-setup-env-vars: false
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
@@ -133,5 +133,5 @@ jobs:
     with:
       build_type: pull-request
       package-name: dask_cudf
-      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
-      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
+      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl"
+      test-unittest: "python -m pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
