@@ -87,6 +87,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+
 size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.size() == 0) { return 0; }
