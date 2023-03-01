@@ -396,6 +396,21 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
 
 
 def sv_to_udf_str(sv):
+    """
+    Cast a string_view object to a udf_string object
+
+    This placeholder function never runs in python
+    It exists only for numba to have something to replace
+    with the typing and lowering code below
+
+    This is similar conceptually to needing a translation
+    engine to emit an expression in target language "B" when
+    there is no equivalent in the source language "A" to
+    translate from. This function effectively defines the
+    expression in language "A" and the associated typing
+    and lowering describe the translation process, despite
+    the expression having no meaning in language "A"
+    """
     pass
 
 
