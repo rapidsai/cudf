@@ -28,7 +28,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 
-uint32_t ProtobufReader::read_field_size(const uint8_t* end)
+uint32_t ProtobufReader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
   CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
@@ -268,7 +268,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   }
 }
 
-size_t ProtobufWriter::write(const PostScript& s)
+size_t ProtobufWriter::write(PostScript const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.footerLength);
@@ -280,7 +280,7 @@ size_t ProtobufWriter::write(const PostScript& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const FileFooter& s)
+size_t ProtobufWriter::write(FileFooter const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.headerLength);
@@ -294,7 +294,7 @@ size_t ProtobufWriter::write(const FileFooter& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeInformation& s)
+size_t ProtobufWriter::write(StripeInformation const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.offset);
@@ -305,7 +305,7 @@ size_t ProtobufWriter::write(const StripeInformation& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const SchemaType& s)
+size_t ProtobufWriter::write(SchemaType const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -317,7 +317,7 @@ size_t ProtobufWriter::write(const SchemaType& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const UserMetadataItem& s)
+size_t ProtobufWriter::write(UserMetadataItem const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_blob(1, s.name);
@@ -325,7 +325,7 @@ size_t ProtobufWriter::write(const UserMetadataItem& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeFooter& s)
+size_t ProtobufWriter::write(StripeFooter const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.streams);
@@ -334,7 +334,7 @@ size_t ProtobufWriter::write(const StripeFooter& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Stream& s)
+size_t ProtobufWriter::write(Stream const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -343,7 +343,7 @@ size_t ProtobufWriter::write(const Stream& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const ColumnEncoding& s)
+size_t ProtobufWriter::write(ColumnEncoding const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -351,14 +351,14 @@ size_t ProtobufWriter::write(const ColumnEncoding& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeStatistics& s)
+size_t ProtobufWriter::write(StripeStatistics const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct_blob(1, s.colStats);
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Metadata& s)
+size_t ProtobufWriter::write(Metadata const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.stripeStats);
@@ -443,13 +443,13 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
 
 metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source(src)
 {
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
+  auto const len         = source->size();
+  auto const max_ps_size = std::min(len, static_cast<size_t>(256));
 
   // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
+  size_t const ps_length = buffer->data()[max_ps_size - 1];
+  uint8_t const* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   ProtobufReader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
