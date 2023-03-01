@@ -45,7 +45,7 @@ extensions = [
     "myst_nb",
 ]
 
-nb_execution_timeout = "force"
+nb_execution_mode = "force"
 nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
