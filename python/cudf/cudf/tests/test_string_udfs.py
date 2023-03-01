@@ -26,9 +26,11 @@ from cudf.testing._utils import assert_eq, sv_to_udf_str
 
 def get_kernels(func, dtype, size):
     """
-    Create a kernel for testing a single scalar string function
+    Create two kernels for testing a single scalar string function.
+    The first tests the function's action on a string_view object and
+    the second tests the same except using a udf_string object.
     Allocates an output vector with a dtype specified by the caller
-    The returned kernel executes the input function on each data
+    The returned kernels execute the input function on each data
     element of the input and returns the output into the output vector
     """
 

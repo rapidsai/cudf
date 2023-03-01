@@ -15,23 +15,6 @@ import rmm
 size_type = types.int32
 
 
-bool_binary_funcs = ["startswith", "endswith"]
-int_binary_funcs = ["find", "rfind"]
-id_unary_funcs = [
-    "isalpha",
-    "isalnum",
-    "isdecimal",
-    "isdigit",
-    "isupper",
-    "islower",
-    "isspace",
-    "isnumeric",
-    "istitle",
-]
-string_unary_funcs = ["upper", "lower"]
-string_return_attrs = ["strip", "lstrip", "rstrip"]
-
-
 # String object definitions
 class UDFString(types.Type):
 
@@ -217,34 +200,62 @@ class StringViewReplace(AbstractTemplate):
 class StringViewAttrs(AttributeTemplate):
     key = string_view
 
-    resolve_startswith = create_binary_attr("startswith", types.boolean)
-    resolve_endswith = create_binary_attr("endswith", types.boolean)
-
-    resolve_strip = create_binary_attr("strip", udf_string)
-    resolve_lstrip = create_binary_attr("lstrip", udf_string)
-    resolve_rstrip = create_binary_attr("rstrip", udf_string)
-
-    resolve_find = create_binary_attr("find", size_type)
-    resolve_rfind = create_binary_attr("rfind", size_type)
-
-    resolve_isalpha = create_identifier_attr("isalpha", types.boolean)
-    resolve_isalnum = create_identifier_attr("isalnum", types.boolean)
-    resolve_isdecimal = create_identifier_attr("isdecimal", types.boolean)
-    resolve_isdigit = create_identifier_attr("isdigit", types.boolean)
-    resolve_isupper = create_identifier_attr("isupper", types.boolean)
-    resolve_islower = create_identifier_attr("islower", types.boolean)
-    resolve_isspace = create_identifier_attr("isspace", types.boolean)
-    resolve_isnumeric = create_identifier_attr("isnumeric", types.boolean)
-    resolve_istitle = create_identifier_attr("istitle", types.boolean)
-
-    resolve_upper = create_identifier_attr("upper", udf_string)
-    resolve_lower = create_identifier_attr("lower", udf_string)
-
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
 
     def resolve_replace(self, mod):
         return types.BoundFunction(StringViewReplace, string_view)
+
+
+bool_binary_funcs = ["startswith", "endswith"]
+int_binary_funcs = ["find", "rfind"]
+id_unary_funcs = [
+    "isalpha",
+    "isalnum",
+    "isdecimal",
+    "isdigit",
+    "isupper",
+    "islower",
+    "isspace",
+    "isnumeric",
+    "istitle",
+]
+string_unary_funcs = ["upper", "lower"]
+string_return_attrs = ["strip", "lstrip", "rstrip"]
+
+for func in bool_binary_funcs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attr(func, types.boolean),
+    )
+
+for func in string_return_attrs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attr(func, udf_string),
+    )
+
+
+for func in int_binary_funcs:
+    setattr(
+        StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type)
+    )
+
+for func in id_unary_funcs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attr(func, types.boolean),
+    )
+
+for func in string_unary_funcs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attr(func, udf_string),
+    )
 
 
 @cuda_decl_registry.register_attr

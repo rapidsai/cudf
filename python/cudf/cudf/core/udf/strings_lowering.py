@@ -162,7 +162,7 @@ def cast_udf_string_to_string_view(context, builder, fromty, toty, val):
     sv_ptr = builder.alloca(default_manager[toty].get_value_type())
     builder.store(val, udf_str_ptr)
 
-    _ = context.compile_internal(
+    context.compile_internal(
         builder,
         call_create_string_view_from_udf_string,
         nb_signature(types.void, _UDF_STRING_PTR, _STR_VIEW_PTR),
@@ -201,7 +201,6 @@ def call_len_string_view(st):
 
 
 @cuda_lower(len, string_view)
-@cuda_lower(len, udf_string)
 def len_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
