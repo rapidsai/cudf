@@ -9,16 +9,18 @@ files:
       - build
       - cudatoolkit
       - develop
-      - doc
+      - docs
       - notebooks
       - py_version
       - run
+      - test_cpp
       - test_python
   test_cpp:
     output: none
     includes:
       - cudatoolkit
       - libidentify_stream_usage_build
+      - test_cpp
   test_python:
     output: none
     includes:
@@ -40,6 +42,12 @@ files:
     output: none
     includes:
       - develop
+      - py_version
+  docs:
+    output: none
+    includes:
+      - cudatoolkit
+      - docs
       - py_version
 channels:
   - rapidsai
@@ -121,10 +129,11 @@ dependencies:
       - output_types: conda
         packages:
           - doxygen=1.8.20 # pre-commit hook needs a specific version.
-  doc:
+  docs:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda]
         packages:
+          - doxygen=1.8.20
           - myst-nb
           - nbsphinx
           - numpydoc
@@ -266,6 +275,16 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
+  test_cpp:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.8"
+            packages:
+              - cuda-sanitizer-api=11.8.86
+          - matrix:
+            packages:
   test_java:
     common:
       - output_types: conda
