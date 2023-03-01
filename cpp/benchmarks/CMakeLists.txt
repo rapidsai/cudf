@@ -295,13 +295,14 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp)
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
-ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
+ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
+ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
