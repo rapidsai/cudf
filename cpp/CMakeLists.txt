@@ -801,7 +801,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
-    if("${_mode}" EQUAL "testing")
+    if("${_mode}" STREQUAL "testing")
       target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
     endif()
   endforeach()
