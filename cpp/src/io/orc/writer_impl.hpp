@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,7 +152,7 @@ struct file_segmentation {
  * @brief ORC per-chunk streams of encoded data.
  */
 struct encoded_data {
-  std::vector<rmm::device_uvector<uint8_t>> data;           // Owning array of the encoded data
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
   hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 

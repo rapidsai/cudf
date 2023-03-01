@@ -911,9 +911,6 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
-  std::vector<rmm::device_uvector<uint8_t>> encoded_data;
-  for (auto i = 0ul; i < streams.size(); ++i)
-    encoded_data.emplace_back(streams[i].length, stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
@@ -989,7 +986,12 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
+  // per-stripe, per-stream owning buffers
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> encoded_data(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
+    for (auto i = 0ul; i < streams.size(); ++i) {
+      encoded_data[stripe.id].emplace_back(0, stream);
+    }
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
         auto const& column = orc_table.column(col_idx);
@@ -1003,6 +1005,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
           auto const& ck    = chunks[col_idx][rg_idx];
           auto& strm        = col_streams[rg_idx];
 
+          // TODO we can skip this case on a higher level
           strm.ids[strm_type] = strm_id;
           if (strm_id < 0) {
             strm.lengths[strm_type] = 0;
@@ -1022,7 +1025,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             }
           } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                      ck.encoding_kind == DIRECT_V2) {
-            strm.lengths[strm_type] = column.host_dict_chunk(rg_idx)->string_char_count;
+            strm.lengths[strm_type] =
+              std::max(column.host_dict_chunk(rg_idx)->string_char_count, 1u);
           } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                      (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
             // Pass-through
@@ -1032,13 +1036,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
           } else {
             strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
           }
-          stripe_size += strm.lengths[strm_type];
+          // Allow extra space for alignment
+          stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
         }
 
-        // TODO: allocate sum of sizes
-        // std::cout << stripe_size << std::endl;
+        if (strm_id >= 0) {
+          encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream);
+        }
 
-        // scan to set offsets
+        // Set offsets
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
           auto const& ck    = chunks[col_idx][rg_idx];
@@ -1050,28 +1056,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
           } else {
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
-              if (rg_idx_it == stripe.cbegin()) {
-                const int32_t dict_stride = column.dict_stride();
-                const auto stripe_dict    = column.host_stripe_dict(stripe.id);
-                if (stripe.id == 0) {
-                  strm.data_ptrs[strm_type] = encoded_data[strm_id].data();
-                } else {
-                  // don't think this branch makes sense with per-stripe buffers
-                  auto const& strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
-                  strm.data_ptrs[strm_type] =
-                    strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
-                }
-              } else {
-                strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
-              }
+              strm.data_ptrs[strm_type] = encoded_data[stripe.id][strm_id].data();
             } else {
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data[strm_id].data()
+              strm.data_ptrs[strm_type] = (rg_idx_it == stripe.cbegin())
+                                            ? encoded_data[stripe.id][strm_id].data()
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
             }
           }
-          // This will go away with per-stripe buffers
           auto const misalignment =
             reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
           if (misalignment != 0) {
