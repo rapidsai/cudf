@@ -787,9 +787,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
   # on and one with it set to off. Each test will then be configured to use the appropriate library
   # depending via ctest and whether it has been updated to expose public stream APIs.
-  foreach(_mode in cudf testing)
+  foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(${tgt} SHARED tests/utilities/identify_stream_usage.cpp)
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
     set_target_properties(
       ${_tgt}
@@ -801,7 +801,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
-    if(${mode} EQUAL testing)
+    if("${_mode}" EQUAL "testing")
       target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
     endif()
   endforeach()
@@ -880,7 +880,8 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
 endif()
 
 set(doc_string
