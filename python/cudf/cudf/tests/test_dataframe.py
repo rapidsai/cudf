@@ -38,6 +38,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,
@@ -1323,9 +1324,10 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_values(nrows, method):
+@pytest.mark.parametrize("seed", [None, 42])
+def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
+    data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
@@ -1334,12 +1336,41 @@ def test_dataframe_hash_values(nrows, method):
     assert len(out) == nrows
     assert out.dtype == np.uint32
 
+    warning_expected = (
+        True if seed is not None and method not in {"murmur3"} else False
+    )
     # Check single column
-    out_one = gdf[["a"]].hash_values(method=method)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
+    else:
+        out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+    else:
+        assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+
+
+@pytest.mark.parametrize("method", ["murmur3"])
+def test_dataframe_hash_values_seed(method):
+    gdf = cudf.DataFrame()
+    data = np.arange(10)
+    data[0] = data[-1]  # make first and last the same
+    gdf["a"] = data
+    gdf["b"] = gdf.a + 100
+    out_one = gdf.hash_values(method=method, seed=0)
+    out_two = gdf.hash_values(method=method, seed=1)
+    assert out_one.iloc[0] == out_one.iloc[-1]
+    assert out_two.iloc[0] == out_two.iloc[-1]
+    assert_neq(out_one, out_two)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
@@ -3813,17 +3844,22 @@ def test_ndim():
         -3,
         0,
         5,
-        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
-        cudf.Series([-4, -2, 12], index=["x", "y", "z"]),
-        {"w": -1, "x": 15, "y": 2},
+        pd.Series(
+            [1, 4, 3, -6],
+            index=["floats", "ints", "floats_with_nan", "floats_same"],
+        ),
+        cudf.Series(
+            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
+        ),
+        {"floats": -1, "ints": 15, "floats_will_nan": 2},
     ],
 )
 def test_dataframe_round(decimals):
-    pdf = pd.DataFrame(
+    gdf = cudf.DataFrame(
         {
-            "w": np.arange(0.5, 10.5, 1),
-            "x": np.random.normal(-100, 100, 10),
-            "y": np.array(
+            "floats": np.arange(0.5, 10.5, 1),
+            "ints": np.random.normal(-100, 100, 10),
+            "floats_with_na": np.array(
                 [
                     14.123,
                     2.343,
@@ -3832,30 +3868,24 @@ def test_dataframe_round(decimals):
                     -8.302,
                     np.nan,
                     94.313,
-                    -112.236,
+                    None,
                     -8.029,
                     np.nan,
                 ]
             ),
-            "z": np.repeat([-0.6459412758761901], 10),
+            "floats_same": np.repeat([-0.6459412758761901], 10),
+            "bools": np.random.choice([True, None, False], 10),
+            "strings": np.random.choice(["abc", "xyz", None], 10),
+            "struct": np.random.choice([{"abc": 1}, {"xyz": 2}, None], 10),
+            "list": [[1], [2], None, [4], [3]] * 2,
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf = gdf.to_pandas()
 
     if isinstance(decimals, cudf.Series):
         pdecimals = decimals.to_pandas()
     else:
         pdecimals = decimals
-
-    result = gdf.round(decimals)
-    expected = pdf.round(pdecimals)
-    assert_eq(result, expected)
-
-    # with nulls, maintaining existing null mask
-    for c in pdf.columns:
-        arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
-        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
-        pdf[c] = gdf[c] = arr
 
     result = gdf.round(decimals)
     expected = pdf.round(pdecimals)
@@ -10010,5 +10040,19 @@ def test_dataframe_transpose_complex_types(data):
 
     expected = pdf.T
     actual = gdf.T
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
 
     assert_eq(expected, actual)

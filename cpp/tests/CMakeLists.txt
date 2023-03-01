@@ -84,6 +84,7 @@ ConfigureTest(
   groupby/count_scan_tests.cpp
   groupby/count_tests.cpp
   groupby/covariance_tests.cpp
+  groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
@@ -507,6 +508,19 @@ ConfigureTest(
 # ##################################################################################################
 # * bin tests ----------------------------------------------------------------------------------
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
+
+# ##################################################################################################
+# * stream identification tests -------------------------------------------------------------------
+ConfigureTest(
+  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+)
+# Note that this only works when the test is invoked via ctest. At the moment CI is running all
+# tests by manually invoking the executable, so we'll have to manually pass this environment
+# variable in that setup.
+set_tests_properties(
+  STREAM_IDENTIFICATION_TEST PROPERTIES ENVIRONMENT
+                                        LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage>
+)
 
 # ##################################################################################################
 # enable testing ################################################################################
