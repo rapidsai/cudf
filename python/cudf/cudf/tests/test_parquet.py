@@ -2770,7 +2770,7 @@ def test_parquet_reader_malformed_file(datadir):
 
 
 def test_parquet_reader_unsupported_page_encoding(datadir):
-    fname = datadir / "delta_encoding.parquet"
+    fname = datadir / "delta_length.parquet"
 
     # expect a failure when reading the whole file
     with pytest.raises(RuntimeError):
