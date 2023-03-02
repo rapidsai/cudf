@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
@@ -23,11 +22,6 @@ import sys
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
 
-import cudf
-
-sys.path.insert(0, os.path.abspath(cudf.__path__[0]))
-sys.path.insert(0, os.path.abspath("."))
-sys.path.insert(0, os.path.abspath("../.."))
 sys.path.append(os.path.abspath("./_ext"))
 
 # -- General configuration ------------------------------------------------
@@ -51,8 +45,8 @@ extensions = [
     "myst_nb",
 ]
 
-jupyter_execute_notebooks = "force"
-execution_timeout = 300
+nb_execution_mode = "force"
+nb_execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
@@ -109,6 +103,8 @@ todo_include_todos = False
 
 html_theme_options = {
     "external_links": [],
+    # https://github.com/pydata/pydata-sphinx-theme/issues/1220
+    "icon_links": [],
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,

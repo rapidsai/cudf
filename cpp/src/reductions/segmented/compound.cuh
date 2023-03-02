@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "counts.hpp"
 #include "update_validity.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -63,34 +64,26 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
     data_type{type_to_id<ResultType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
   auto out_itr = result->mutable_view().template begin<ResultType>();
 
-  // Compute valid counts
-  rmm::device_uvector<size_type> valid_counts(num_segments, stream);
-  if (col.has_nulls() && (null_handling == null_policy::EXCLUDE)) {
-    auto valid_fn = [] __device__(auto p) -> size_type { return static_cast<size_type>(p.second); };
-    auto itr      = thrust::make_transform_iterator(d_col->pair_begin<InputType, true>(), valid_fn);
-    cudf::reduction::detail::segmented_reduce(itr,
-                                              offsets.begin(),
-                                              offsets.end(),
-                                              valid_counts.data(),
-                                              thrust::plus<size_type>{},
-                                              0,
-                                              stream);
-  } else {
-    thrust::adjacent_difference(
-      rmm::exec_policy(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
-  }
+  // Compute counts
+  rmm::device_uvector<size_type> counts =
+    cudf::reduction::detail::segmented_counts(col.null_mask(),
+                                              col.has_nulls(),
+                                              offsets,
+                                              null_handling,
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
 
   // Run segmented reduction
   if (col.has_nulls()) {
     auto nrt = compound_op.template get_null_replacing_element_transformer<ResultType>();
     auto itr = thrust::make_transform_iterator(d_col->pair_begin<InputType, true>(), nrt);
     cudf::reduction::detail::segmented_reduce(
-      itr, offsets.begin(), offsets.end(), out_itr, compound_op, ddof, valid_counts.data(), stream);
+      itr, offsets.begin(), offsets.end(), out_itr, compound_op, ddof, counts.data(), stream);
   } else {
     auto et  = compound_op.template get_element_transformer<ResultType>();
     auto itr = thrust::make_transform_iterator(d_col->begin<InputType>(), et);
     cudf::reduction::detail::segmented_reduce(
-      itr, offsets.begin(), offsets.end(), out_itr, compound_op, ddof, valid_counts.data(), stream);
+      itr, offsets.begin(), offsets.end(), out_itr, compound_op, ddof, counts.data(), stream);
   }
 
   // Compute the output null mask
