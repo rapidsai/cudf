@@ -73,7 +73,7 @@ type_id to_type_id(avro::schema_entry const* col)
   //      them in the future.
   switch (col->logical_kind) {
     case avro::logicaltype_date: kind = static_cast<avro::type_kind_e>(col->logical_kind); break;
-    case avro::logicaltype_not_set:
+    case avro::logicaltype_not_set: [[fallthrough]];
     default: kind = col->kind; break;
   }
 
@@ -83,7 +83,7 @@ type_id to_type_id(avro::schema_entry const* col)
     case avro::type_long: return type_id::INT64;
     case avro::type_float: return type_id::FLOAT32;
     case avro::type_double: return type_id::FLOAT64;
-    case avro::type_bytes:
+    case avro::type_bytes: [[fallthrough]];
     case avro::type_string: return type_id::STRING;
     case avro::type_date: return type_id::TIMESTAMP_DAYS;
     case avro::type_timestamp_millis: return type_id::TIMESTAMP_MILLISECONDS;
@@ -96,12 +96,12 @@ type_id to_type_id(avro::schema_entry const* col)
     // 23:59:59.9999 (or .999999 for micros).  There's no equivalent cudf
     // type for this; type_id::DURATION_MILLISECONDS/MICROSECONDS are close,
     // but they're not semantically the same.
-    case avro::type_time_millis:
-    case avro::type_time_micros:
+    case avro::type_time_millis: [[fallthrough]];
+    case avro::type_time_micros: [[fallthrough]];
     // There's no cudf equivalent for the avro duration type, which is a fixed
     // 12 byte value which stores three little-endian unsigned 32-bit integers
     // representing months, days, and milliseconds, respectively.
-    case avro::type_duration:
+    case avro::type_duration: [[fallthrough]];
     default: return type_id::EMPTY;
   }
 }

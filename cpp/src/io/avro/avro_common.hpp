@@ -106,21 +106,21 @@ enum logicaltype_kind_e {
  *
  * @return true if the logical type is supported, false otherwise.
  */
-inline bool __host__ __device__ is_supported_logical_type(logicaltype_kind_e logical_kind)
+inline constexpr bool is_supported_logical_type(logicaltype_kind_e logical_kind)
 {
   switch (logical_kind) {
     case logicaltype_date: return true;
 
-    case logicaltype_not_set:
-    case logicaltype_decimal:
-    case logicaltype_uuid:
-    case logicaltype_time_millis:
-    case logicaltype_time_micros:
-    case logicaltype_timestamp_millis:
-    case logicaltype_timestamp_micros:
-    case logicaltype_local_timestamp_millis:
-    case logicaltype_local_timestamp_micros:
-    case logicaltype_duration:
+    case logicaltype_not_set: [[fallthrough]];
+    case logicaltype_decimal: [[fallthrough]];
+    case logicaltype_uuid: [[fallthrough]];
+    case logicaltype_time_millis: [[fallthrough]];
+    case logicaltype_time_micros: [[fallthrough]];
+    case logicaltype_timestamp_millis: [[fallthrough]];
+    case logicaltype_timestamp_micros: [[fallthrough]];
+    case logicaltype_local_timestamp_millis: [[fallthrough]];
+    case logicaltype_local_timestamp_micros: [[fallthrough]];
+    case logicaltype_duration: [[fallthrough]];
     default: return false;
   }
 }

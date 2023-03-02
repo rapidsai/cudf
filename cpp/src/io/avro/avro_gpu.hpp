@@ -26,15 +26,12 @@ namespace io {
 namespace avro {
 namespace gpu {
 
-using namespace cudf::io::avro;
-using namespace cudf::io;
-
 /**
  * @brief Struct to describe the avro schema
  */
 struct schemadesc_s {
-  avro::type_kind_e kind;                 // avro type kind
-  avro::logicaltype_kind_e logical_kind;  // avro logicaltype kind
+  cudf::io::avro::type_kind_e kind;                 // avro type kind
+  cudf::io::avro::logicaltype_kind_e logical_kind;  // avro logicaltype kind
   uint32_t count;  // for records/unions: number of following child columns, for nulls: global
                    // null_count, for enums: dictionary ofs
   void* dataptr;   // Ptr to column data, or null if column not selected

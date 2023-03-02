@@ -110,12 +110,12 @@ avro_decode_row(schemadesc_s const* schema,
         }
         break;
 
-      case type_int:
-      case type_long:
-      case type_bytes:
-      case type_fixed:
-      case type_string:
-      case type_uuid:
+      case type_int: [[fallthrough]];
+      case type_long: [[fallthrough]];
+      case type_bytes: [[fallthrough]];
+      case type_fixed: [[fallthrough]];
+      case type_string: [[fallthrough]];
+      case type_uuid: [[fallthrough]];
       case type_enum: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
         if (kind == type_int) {
@@ -125,7 +125,7 @@ avro_decode_row(schemadesc_s const* schema,
         } else if (kind == type_long) {
           if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
         } else if (kind == type_fixed) {
-          // XXX TODO: Not yet implemented.
+          CUDF_UNREACHABLE("avro type 'fixed' type not yet implemented");
         } else {  // string, uuid, or enum
           size_t count    = 0;
           const char* ptr = nullptr;
@@ -205,19 +205,17 @@ avro_decode_row(schemadesc_s const* schema,
         // at different granularities of time. The first stores a number in
         // months, the second stores a number in days, and the third stores a
         // number in milliseconds.
-
-        // XXX TODO: Not yet implemented.
-
+        CUDF_UNREACHABLE("avro type 'duration' not yet implemented");
       } break;
 
       // N.B. These aren't handled yet, see the discussion on
       //      https://github.com/rapidsai/cudf/pull/12788.  The decoding logic
       //      is correct, though, so there's no harm in having them here.
-      case type_timestamp_millis:
-      case type_timestamp_micros:
-      case type_local_timestamp_millis:
-      case type_local_timestamp_micros:
-      case type_time_millis:
+      case type_timestamp_millis: [[fallthrough]];
+      case type_timestamp_micros: [[fallthrough]];
+      case type_local_timestamp_millis: [[fallthrough]];
+      case type_local_timestamp_micros: [[fallthrough]];
+      case type_time_millis: [[fallthrough]];
       case type_time_micros: {
         // N.B. time-millis is stored as a 32-bit int, however, cudf expects an
         //      int64 for DURATION_MILLISECONDS.  From our perspective, the fact
@@ -225,6 +223,7 @@ avro_decode_row(schemadesc_s const* schema,
         //      way of the zig-zag varint encoding, so we can safely treat them
         //      both as int64_t.  Everything else is 64-bit in both avro and
         //      cudf.
+        CUDF_UNREACHABLE("avro type yet implemented");
         int64_t v = avro_decode_zigzag_varint(cur, end);
         if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
       } break;
