@@ -213,8 +213,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          TypeKind kind,
                                          ColStatsBlob const* stats)
 {
-  std::vector<uint8_t> positions_data;
-  ProtobufWriter position_writer(&positions_data);
+  ProtobufWriter position_writer;
   auto const positions_size_offset = position_writer.put_uint(
     encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
   position_writer.put_byte(0xcd);                   // positions size placeholder
@@ -246,19 +245,22 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
       positions_size += position_writer.put_byte(0);
     }
   }
+
+  auto positions_data = position_writer.release();
+
   // size of the field 1
-  positions_data[positions_size_offset] = static_cast<uint8_t>(positions_size);
+  (*positions_data)[positions_size_offset] = static_cast<uint8_t>(positions_size);
 
   auto const stats_size = (stats == nullptr)
                             ? 0
                             : varint_size(encode_field_number<decltype(*stats)>(2)) +
                                 varint_size(stats->size()) + stats->size();
-  auto const entry_size = positions_data.size() + stats_size;
+  auto const entry_size = positions_data->size() + stats_size;
 
   // 1:RowIndex.entry
   put_uint(encode_field_number(1, ProtofType::FIXEDLEN));
   put_uint(entry_size);
-  put_bytes<uint8_t>(positions_data);
+  put_bytes<uint8_t>(*positions_data);
 
   if (stats != nullptr) {
     put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
