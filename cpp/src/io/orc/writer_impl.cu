@@ -2378,12 +2378,12 @@ void writer::impl::close()
 
   // File-level statistics
   if (not statistics.file_level.empty()) {
-    ProtobufWriter pbw_;
-    pbw_.put_uint(encode_field_number<size_type>(1));
-    pbw_.put_uint(persisted_stripe_statistics.num_rows);
+    ProtobufWriter pbw;
+    pbw.put_uint(encode_field_number<size_type>(1));
+    pbw.put_uint(persisted_stripe_statistics.num_rows);
     // First entry contains total number of rows
     ff.statistics.reserve(ff.types.size());
-    ff.statistics.emplace_back(std::move(*pbw_.release()));
+    ff.statistics.emplace_back(std::move(*pbw.release()));
     // Add file stats, stored after stripe stats in `column_stats`
     ff.statistics.insert(ff.statistics.end(),
                          std::make_move_iterator(statistics.file_level.begin()),
@@ -2395,10 +2395,10 @@ void writer::impl::close()
     md.stripeStats.resize(ff.stripes.size());
     for (size_t stripe_id = 0; stripe_id < ff.stripes.size(); stripe_id++) {
       md.stripeStats[stripe_id].colStats.resize(ff.types.size());
-      ProtobufWriter pbw_;
-      pbw_.put_uint(encode_field_number<size_type>(1));
-      pbw_.put_uint(ff.stripes[stripe_id].numberOfRows);
-      md.stripeStats[stripe_id].colStats[0] = std::move(*pbw_.release());
+      ProtobufWriter pbw;
+      pbw.put_uint(encode_field_number<size_type>(1));
+      pbw.put_uint(ff.stripes[stripe_id].numberOfRows);
+      md.stripeStats[stripe_id].colStats[0] = std::move(*pbw.release());
       for (size_t col_idx = 0; col_idx < ff.types.size() - 1; col_idx++) {
         size_t idx                                      = ff.stripes.size() * col_idx + stripe_id;
         md.stripeStats[stripe_id].colStats[1 + col_idx] = std::move(statistics.stripe_level[idx]);
@@ -2416,20 +2416,20 @@ void writer::impl::close()
 
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {
-    ProtobufWriter pbw_;
-    pbw_.resize((compression_kind_ != NONE) ? 3 : 0);
-    pbw_.write(md);
-    auto const buff = pbw_.release();
+    ProtobufWriter pbw;
+    pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+    pbw.write(md);
+    auto const buff = pbw.release();
     add_uncompressed_block_headers(*buff);
     ps.metadataLength = buff->size();
     out_sink_->host_write(buff->data(), buff->size());
   } else {
     ps.metadataLength = 0;
   }
-  ProtobufWriter pbw_;
-  pbw_.resize((compression_kind_ != NONE) ? 3 : 0);
-  pbw_.write(ff);
-  auto buff = pbw_.release();
+  ProtobufWriter pbw;
+  pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+  pbw.write(ff);
+  auto buff = pbw.release();
   add_uncompressed_block_headers(*buff);  // todo
 
   // Write postscript metadata
@@ -2439,10 +2439,10 @@ void writer::impl::close()
   ps.version              = {0, 12};
   ps.magic                = MAGIC;
 
-  pbw_                 = ProtobufWriter{std::move(buff)};
-  const auto ps_length = static_cast<uint8_t>(pbw_.write(ps));
-  pbw_.put_byte(ps_length);
-  buff = pbw_.release();
+  pbw                  = ProtobufWriter{std::move(buff)};
+  const auto ps_length = static_cast<uint8_t>(pbw.write(ps));
+  pbw.put_byte(ps_length);
+  buff = pbw.release();
   out_sink_->host_write(buff->data(), buff->size());
   out_sink_->flush();
 }
