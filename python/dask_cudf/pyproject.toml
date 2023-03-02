@@ -36,6 +36,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]
+dynamic = ["entry_points"]
 
 [project.optional-dependencies]
 test = [
