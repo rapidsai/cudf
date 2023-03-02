@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,18 +62,6 @@ TEST_F(HashTest, MultiValue)
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
-}
-
-TEST_F(HashTest, StringVariance)
-{
-  cudf::test::strings_column_wrapper const strings_col({"hello world"});
-
-  auto const input1 = cudf::table_view({strings_col});
-  for (int i = 0; i < 5; ++i) {
-    auto output1 = cudf::hash(input1, cudf::hash_id::HASH_MURMUR3, i);
-    std::cout << i << ": ";
-    cudf::test::print(output1->view());
-  }
 }
 
 TEST_F(HashTest, MultiValueNulls)
