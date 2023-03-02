@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,12 +68,13 @@ struct column_fast_sort_fn {
                  column_view const& segment_offsets,
                  mutable_column_view& indices,
                  bool ascending,
-                 rmm::cuda_stream_view stream)
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr)
   {
     // CUB's segmented sort functions cannot accept iterators.
     // We create a temporary column here for it to use.
     auto temp_col =
-      cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
+      cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
     mutable_column_view output_view = temp_col->mutable_view();
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
@@ -128,14 +129,19 @@ struct column_fast_sort_fn {
                   column_view const& segment_offsets,
                   mutable_column_view& indices,
                   bool ascending,
-                  rmm::cuda_stream_view stream)
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr)
   {
-    fast_sort<T>(input, segment_offsets, indices, ascending, stream);
+    fast_sort<T>(input, segment_offsets, indices, ascending, stream, mr);
   }
 
   template <typename T, CUDF_ENABLE_IF(!is_fast_sort_supported<T>())>
-  void operator()(
-    column_view const&, column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
+  void operator()(column_view const&,
+                  column_view const&,
+                  mutable_column_view&,
+                  bool,
+                  rmm::cuda_stream_view,
+                  rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Column type cannot be used with fast-sort function");
   }
@@ -171,7 +177,8 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                segment_offsets,
                                                indices_view,
                                                column_order == order::ASCENDING,
-                                               stream);
+                                               stream,
+                                               mr);
   return sorted_indices;
 }
 

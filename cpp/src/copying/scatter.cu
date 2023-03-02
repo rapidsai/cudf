@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -253,7 +253,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
-      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+      auto row_slr = get_element(typed_s->view().column(i), 0, stream, mr);
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
