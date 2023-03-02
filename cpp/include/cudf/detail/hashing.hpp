@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,29 +31,25 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> hash(
-  table_view const& input,
-  hash_id hash_function               = hash_id::HASH_MURMUR3,
-  uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
+                             uint32_t seed,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> murmur_hash3_32(
-  table_view const& input,
-  uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
+                                        rmm::cuda_stream_view,
+                                        rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> spark_murmur_hash3_32(
-  table_view const& input,
-  uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
+                                              uint32_t seed,
+                                              rmm::cuda_stream_view,
+                                              rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> md5_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> md5_hash(table_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /* Copyright 2005-2014 Daniel James.
  *

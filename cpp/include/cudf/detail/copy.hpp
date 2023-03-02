@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,9 +285,9 @@ std::unique_ptr<column> copy_if_else(
 std::unique_ptr<table> sample(
   table_view const& input,
   size_type const n,
-  sample_with_replacement replacement = sample_with_replacement::FALSE,
-  int64_t const seed                  = 0,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  sample_with_replacement replacement,
+  int64_t const seed,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
