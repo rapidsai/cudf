@@ -86,7 +86,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       package-name: cudf
-      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-before-arm64: "pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
   wheel-tests-dask-cudf:
     secrets: inherit
