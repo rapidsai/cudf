@@ -393,7 +393,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
 
   // The scatter map is actually a table with only one column, which is scatter map.
   auto scatter_map =
-    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream);
+    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream, mr);
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 

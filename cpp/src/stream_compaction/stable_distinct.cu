@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   }
 
   auto const distinct_indices =
-    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
+    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream, mr);
 
   // Markers to denote which rows to be copied to the output.
   auto const output_markers = [&] {

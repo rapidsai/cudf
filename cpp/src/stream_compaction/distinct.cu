@@ -146,7 +146,7 @@ std::unique_ptr<table> distinct(table_view const& input,
   }
 
   auto const gather_map =
-    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
+    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream, mr);
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,
