@@ -19,11 +19,45 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/sorting.hpp>
 
 using int32s_lists = cudf::test::lists_column_wrapper<int32_t>;
 using int32s_col   = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col  = cudf::test::structs_column_wrapper;
+
+namespace {
+std::vector<cudf::column_view> flatten_lists_of_structs(cudf::column_view const& input)
+{
+  if (input.type().id() != cudf::type_id::LIST ||
+      input.child(cudf::lists_column_view::child_column_index).type().id() !=
+        cudf::type_id::STRUCT) {
+    return {input};
+  }
+
+  // TODO: Deal with sliced input.
+  CUDF_EXPECTS(input.offset() == 0, "Sliced input is not yet supported.");
+
+  auto const offsets  = input.child(cudf::lists_column_view::offsets_column_index);
+  auto const children = input.child(cudf::lists_column_view::child_column_index);
+  std::vector<cudf::column_view> output;
+
+  for (auto it = children.child_begin(); it != children.child_end(); ++it) {
+    auto const new_column = cudf::column_view{cudf::data_type{cudf::type_id::LIST},
+                                              input.size(),
+                                              nullptr,
+                                              input.null_mask(),
+                                              input.null_count(),
+                                              0,
+                                              {offsets, *it}};
+    // The new column may still be lists of structs, thus we recursively call this:
+    auto const flattened_new_column = flatten_lists_of_structs(new_column);
+    output.insert(output.end(), flattened_new_column.begin(), flattened_new_column.end());
+  }
+
+  return output;
+}
+}  // namespace
 
 struct structs_test : public cudf::test::BaseFixture {
 };
@@ -39,15 +73,31 @@ TEST_F(structs_test, StructsHaveLists)
   printf("line %d\n", __LINE__);
   cudf::test::print(input);
 
-  auto const order = cudf::sorted_order(cudf::table_view{{input}});
+  {
+    auto const order = cudf::sorted_order(cudf::table_view{{input}});
 
-  printf("line %d\n", __LINE__);
-  cudf::test::print(*order);
+    printf("line %d\n", __LINE__);
+    cudf::test::print(*order);
 
-  auto const sorted = cudf::sort(cudf::table_view{{input}});
+    auto const sorted = cudf::sort(cudf::table_view{{input}});
 
-  printf("line %d\n", __LINE__);
-  cudf::test::print(sorted->get_column(0).view());
+    printf("line %d\n", __LINE__);
+    cudf::test::print(sorted->get_column(0).view());
+  }
+
+  {
+    auto const flattened =
+      cudf::structs::detail::flatten_nested_columns(cudf::table_view{{input}}, {}, {});
+    auto const order = cudf::sorted_order(flattened.flattened_columns());
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(*order);
+
+    auto const sorted = cudf::sort(cudf::table_view{{flattened.flattened_columns()}});
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(sorted->get_column(0).view());
+  }
 }
 
 TEST_F(structs_test, ListsHaveStructs)
@@ -66,13 +116,29 @@ TEST_F(structs_test, ListsHaveStructs)
   printf("line %d\n", __LINE__);
   cudf::test::print(*input);
 
-  auto const order = cudf::sorted_order(cudf::table_view{{*input}});
+  {
+    auto const order = cudf::sorted_order(cudf::table_view{{*input}});
 
-  printf("line %d\n", __LINE__);
-  cudf::test::print(*order);
+    printf("line %d\n", __LINE__);
+    cudf::test::print(*order);
 
-  auto const sorted = cudf::sort(cudf::table_view{{*input}});
+    auto const sorted = cudf::sort(cudf::table_view{{*input}});
 
-  printf("line %d\n", __LINE__);
-  cudf::test::print(sorted->get_column(0).view());
+    printf("line %d\n", __LINE__);
+    cudf::test::print(sorted->get_column(0).view());
+  }
+
+  {
+    auto const flattened = flatten_lists_of_structs(*input);
+
+    auto const order = cudf::sorted_order(cudf::table_view{flattened});
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(*order);
+
+    auto const sorted = cudf::sort(cudf::table_view{flattened});
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(sorted->get_column(0).view());
+  }
 }
