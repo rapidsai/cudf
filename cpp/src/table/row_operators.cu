@@ -285,13 +285,13 @@ void check_lex_compatibility(table_view const& input)
   column_checker_fn_t check_column = [&](column_view const& c) {
     if (c.type().id() == type_id::LIST) {
       auto const& list_col = lists_column_view(c);
-      //      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
-      //                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
+                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
-        //        CUDF_EXPECTS(child->type().id() != type_id::LIST,
-        //                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }
