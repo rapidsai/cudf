@@ -378,7 +378,7 @@ bool has_structs_of_lists(column_view const& input)
     return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
       return child.type().id() == type_id::LIST || has_structs_of_lists(child);
     });
-  } else if (id == type_id::LIST) {
+  } else if (input.type().id() == type_id::LIST) {
     return has_structs_of_lists(input.child(lists_column_view::child_column_index));
   }
 
@@ -454,7 +454,7 @@ flatten_nested_lists_or_structs(table_view const& input)
   // Firstly, extract lists of structs (if any) into multiple lists of primitive types.
   auto lists_flattened = flatten_lists(input);
 
-  if (has_structs_of_lists(input)) {
+  if (std::any_of(lists_flattened.begin(), lists_flattened.end(), has_structs_of_lists)) {
     auto structs_flattened = cudf::structs::detail::flatten_nested_columns(lists_flattened, {}, {});
     auto output_table      = flatten_lists(structs_flattened->flattened_columns());
     return {std::move(output_table), std::move(structs_flattened)};
@@ -500,6 +500,40 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_depths),
                              std::move(flattened_t_aux_data)));
   }
+}
+
+preprocessed_table::preprocessed_table(
+  table_device_view_owner&& table,
+  rmm::device_uvector<order>&& column_order,
+  rmm::device_uvector<null_order>&& null_precedence,
+  rmm::device_uvector<size_type>&& depths,
+  std::vector<detail::dremel_data>&& dremel_data,
+  rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data)
+  : _t(std::move(table)),
+    _column_order(std::move(column_order)),
+    _null_precedence(std::move(null_precedence)),
+    _depths(std::move(depths)),
+    _dremel_data(std::move(dremel_data)),
+    _dremel_device_views(std::move(dremel_device_views)),
+    _flattened_input_aux_data(std::move(flattened_input_aux_data))
+{
+}
+
+preprocessed_table::preprocessed_table(
+  table_device_view_owner&& table,
+  rmm::device_uvector<order>&& column_order,
+  rmm::device_uvector<null_order>&& null_precedence,
+  rmm::device_uvector<size_type>&& depths,
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data)
+  : _t(std::move(table)),
+    _column_order(std::move(column_order)),
+    _null_precedence(std::move(null_precedence)),
+    _depths(std::move(depths)),
+    _dremel_data{},
+    _dremel_device_views{},
+    _flattened_input_aux_data(std::move(flattened_input_aux_data))
+{
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,

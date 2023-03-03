@@ -735,32 +735,14 @@ struct preprocessed_table {
     rmm::device_uvector<size_type>&& depths,
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data(std::move(dremel_data)),
-      _dremel_device_views(std::move(dremel_device_views)),
-      _flattened_input_aux_data(std::move(flattened_input_aux_data))
-  {
-  }
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data);
 
   preprocessed_table(
     table_device_view_owner&& table,
     rmm::device_uvector<order>&& column_order,
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data{},
-      _dremel_device_views{},
-      _flattened_input_aux_data(std::move(flattened_input_aux_data))
-  {
-  }
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.

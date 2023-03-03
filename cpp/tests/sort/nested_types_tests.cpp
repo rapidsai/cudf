@@ -85,12 +85,12 @@ TEST_F(structs_test, StructsHaveLists)
   {
     auto const flattened =
       cudf::structs::detail::flatten_nested_columns(cudf::table_view{{input}}, {}, {});
-    auto const order = cudf::sorted_order(flattened.flattened_columns());
+    auto const order = cudf::sorted_order(flattened->flattened_columns());
 
     printf("line %d\n", __LINE__);
     cudf::test::print(*order);
 
-    auto const sorted = cudf::sort(cudf::table_view{{flattened.flattened_columns()}});
+    auto const sorted = cudf::sort(cudf::table_view{{flattened->flattened_columns()}});
 
     printf("line %d\n", __LINE__);
     cudf::test::print(sorted->get_column(0).view());
