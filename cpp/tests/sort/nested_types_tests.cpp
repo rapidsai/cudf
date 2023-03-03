@@ -35,9 +35,6 @@ std::vector<cudf::column_view> flatten_lists_of_structs(cudf::column_view const&
     return {input};
   }
 
-  // TODO: Deal with sliced input.
-  CUDF_EXPECTS(input.offset() == 0, "Sliced input is not yet supported.");
-
   auto const offsets  = input.child(cudf::lists_column_view::offsets_column_index);
   auto const children = input.child(cudf::lists_column_view::child_column_index);
   std::vector<cudf::column_view> output;
@@ -48,7 +45,7 @@ std::vector<cudf::column_view> flatten_lists_of_structs(cudf::column_view const&
                                               nullptr,
                                               input.null_mask(),
                                               input.null_count(),
-                                              0,
+                                              input.offset(),
                                               {offsets, *it}};
     // The new column may still be lists of structs, thus we recursively call this:
     auto const flattened_new_column = flatten_lists_of_structs(new_column);
