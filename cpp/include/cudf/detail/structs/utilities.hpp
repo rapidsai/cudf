@@ -167,7 +167,7 @@ class flattened_table {
  * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
  * alongside the supporting columns and device_buffers for the flattened table.
  */
-[[nodiscard]] flattened_table flatten_nested_columns(
+[[nodiscard]] std::unique_ptr<flattened_table> flatten_nested_columns(
   table_view const& input,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
