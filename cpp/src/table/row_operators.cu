@@ -347,27 +347,6 @@ namespace lexicographic {
 namespace {
 
 /**
- * @brief has_mixed_lists_and_structs
- * @param input
- * @return
- */
-// bool has_mixed_lists_and_structs(column_view const& input)
-//{
-//  auto const id = input.type().id();
-
-//  if (id == type_id::LIST) {
-//    auto const child = input.child(lists_column_view::child_column_index);
-//    return child.type().id() == type_id::STRUCT || has_mixed_lists_and_structs(child);
-//  } else if (id == type_id::STRUCT) {
-//    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
-//      return child.type().id() == type_id::LIST || has_mixed_lists_and_structs(child);
-//    });
-//  }
-
-//  return false;
-//}
-
-/**
  * @brief has_structs_of_lists
  * @param input
  * @return
@@ -384,22 +363,6 @@ bool has_structs_of_lists(column_view const& input)
 
   return false;
 }
-
-/**
- * @brief has_structs_of_lists
- * @param input
- * @return
- */
-// bool has_lists_of_structs(column_view const& input)
-//{
-//  if (input.type().id() == type_id::LIST) {
-//    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
-//      return child.type().id() == type_id::STRUCT || has_lists_of_structs(child);
-//    });
-//  }
-
-//  return false;
-//}
 
 /**
  * @brief flatten_lists
