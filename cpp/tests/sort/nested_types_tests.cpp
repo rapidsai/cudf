@@ -73,7 +73,7 @@ TEST_F(structs_test, StructsHaveLists)
   printf("line %d\n", __LINE__);
   cudf::test::print(input);
 
-  {
+  if (1) {
     auto const order = cudf::sorted_order(cudf::table_view{{input}});
 
     printf("line %d\n", __LINE__);
@@ -116,7 +116,7 @@ TEST_F(structs_test, ListsHaveStructs)
   printf("line %d\n", __LINE__);
   cudf::test::print(*input);
 
-  {
+  if (1) {
     auto const order = cudf::sorted_order(cudf::table_view{{*input}});
 
     printf("line %d\n", __LINE__);
