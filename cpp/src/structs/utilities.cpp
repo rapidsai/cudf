@@ -121,8 +121,8 @@ struct table_flattener {
 
   void fail_if_unsupported_types(table_view const& input) const
   {
-    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
-    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
+    //    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
+    //    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
