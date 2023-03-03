@@ -2430,7 +2430,7 @@ void writer::impl::close()
   pbw.resize((compression_kind_ != NONE) ? 3 : 0);
   pbw.write(ff);
   auto buff = pbw.release();
-  add_uncompressed_block_headers(*buff);  // todo
+  add_uncompressed_block_headers(*buff);
 
   // Write postscript metadata
   ps.footerLength         = buff->size();
