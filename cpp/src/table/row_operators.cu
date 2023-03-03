@@ -344,23 +344,145 @@ namespace row {
 
 namespace lexicographic {
 
+namespace {
+
+/**
+ * @brief has_mixed_lists_and_structs
+ * @param input
+ * @return
+ */
+// bool has_mixed_lists_and_structs(column_view const& input)
+//{
+//  auto const id = input.type().id();
+
+//  if (id == type_id::LIST) {
+//    auto const child = input.child(lists_column_view::child_column_index);
+//    return child.type().id() == type_id::STRUCT || has_mixed_lists_and_structs(child);
+//  } else if (id == type_id::STRUCT) {
+//    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
+//      return child.type().id() == type_id::LIST || has_mixed_lists_and_structs(child);
+//    });
+//  }
+
+//  return false;
+//}
+
+/**
+ * @brief has_structs_of_lists
+ * @param input
+ * @return
+ */
+bool has_structs_of_lists(column_view const& input)
+{
+  if (input.type().id() == type_id::STRUCT) {
+    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
+      return child.type().id() == type_id::LIST || has_structs_of_lists(child);
+    });
+  } else if (id == type_id::LIST) {
+    return has_structs_of_lists(input.child(lists_column_view::child_column_index));
+  }
+
+  return false;
+}
+
+/**
+ * @brief has_structs_of_lists
+ * @param input
+ * @return
+ */
+// bool has_lists_of_structs(column_view const& input)
+//{
+//  if (input.type().id() == type_id::LIST) {
+//    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
+//      return child.type().id() == type_id::STRUCT || has_lists_of_structs(child);
+//    });
+//  }
+
+//  return false;
+//}
+
+/**
+ * @brief flatten_lists
+ * @param input
+ * @return
+ */
+std::vector<column_view> flatten_lists_column(column_view const& input)
+{
+  if (input.type().id() != type_id::LIST ||
+      input.child(lists_column_view::child_column_index).type().id() != type_id::STRUCT) {
+    return {input};
+  }
+
+  auto const offsets  = input.child(lists_column_view::offsets_column_index);
+  auto const children = input.child(lists_column_view::child_column_index);
+  std::vector<column_view> output;
+
+  for (auto it = children.child_begin(); it != children.child_end(); ++it) {
+    auto const new_column = column_view{data_type{type_id::LIST},
+                                        input.size(),
+                                        nullptr,
+                                        input.null_mask(),
+                                        input.null_count(),
+                                        input.offset(),
+                                        {offsets, *it}};
+    // The new column may still be lists of structs, thus we recursively call this:
+    auto const flattened_new_column = flatten_lists_column(new_column);
+    output.insert(output.end(), flattened_new_column.begin(), flattened_new_column.end());
+  }
+
+  return output;
+}
+
+table_view flatten_lists(table_view const& input)
+{
+  std::vector<column_view> out_cols;
+  for (auto it = input.begin(); it != input.end(); ++it) {
+    auto const flattened = flatten_lists_column(*it);
+    out_cols.insert(out_cols.end(), flattened.begin(), flattened.end());
+  }
+
+  return table_view{out_cols};
+}
+
+/**
+ * @brief flatten
+ * @param t
+ */
+std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
+flatten_nested_lists_or_structs(table_view const& input)
+{
+  // Firstly, extract lists of structs (if any) into multiple lists of primitive types.
+  auto lists_flattened = flatten_lists(input);
+
+  if (has_structs_of_lists(input)) {
+    auto structs_flattened = cudf::structs::detail::flatten_nested_columns(lists_flattened, {}, {});
+    auto output_table      = flatten_lists(structs_flattened->flattened_columns());
+    return {std::move(output_table), std::move(structs_flattened)};
+  }
+
+  return {std::move(lists_flattened), nullptr};
+}
+
+}  // namespace
+
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& t,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  check_lex_compatibility(t);
+  auto [flattened_t, flattened_t_aux_data] = flatten_nested_lists_or_structs(t);
+  check_lex_compatibility(flattened_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(t, column_order, null_precedence);
+    decompose_structs(flattened_t, column_order, null_precedence);
 
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
   auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
   auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  if (detail::has_nested_columns(t)) {
+  if (detail::has_nested_columns(flattened_t)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
@@ -368,12 +490,15 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(dremel_data),
-                             std::move(d_dremel_device_view)));
+                             std::move(d_dremel_device_view),
+                             std::move(flattened_t_aux_data)));
   } else {
-    return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t),
-                                                                      std::move(d_column_order),
-                                                                      std::move(d_null_precedence),
-                                                                      std::move(d_depths)));
+    return std::shared_ptr<preprocessed_table>(
+      new preprocessed_table(std::move(d_t),
+                             std::move(d_column_order),
+                             std::move(d_null_precedence),
+                             std::move(d_depths),
+                             std::move(flattened_t_aux_data)));
   }
 }
 
