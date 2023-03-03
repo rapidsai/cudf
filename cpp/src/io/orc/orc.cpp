@@ -249,7 +249,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   auto positions_data = position_writer.release();
 
   // size of the field 1
-  (*positions_data)[positions_size_offset] = static_cast<uint8_t>(positions_size);
+  positions_data->at(positions_size_offset) = static_cast<uint8_t>(positions_size);
 
   auto const stats_size = (stats == nullptr)
                             ? 0
