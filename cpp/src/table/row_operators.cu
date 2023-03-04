@@ -412,18 +412,26 @@ table_view flatten_lists(table_view const& input)
  * @param t
  */
 std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
-flatten_nested_lists_or_structs(table_view const& input)
+flatten_nested_lists_or_structs(table_view const& input,
+                                host_span<order const> column_order,
+                                host_span<null_order const> null_precedence)
 {
-  // Firstly, extract lists of structs (if any) into multiple lists of primitive types.
-  auto lists_flattened = flatten_lists(input);
+  if (std::any_of(input.begin(), input.end(), has_structs_of_lists)) {
+    auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
+      input,
+      std::vector<order>{column_order.begin(), column_order.end()},
+      std::vector<null_order>{null_precedence.begin(), null_precedence.end()},
+      cudf::structs::detail::column_nullability::FORCE);
 
-  if (std::any_of(lists_flattened.begin(), lists_flattened.end(), has_structs_of_lists)) {
-    auto structs_flattened = cudf::structs::detail::flatten_nested_columns(lists_flattened, {}, {});
-    auto output_table      = flatten_lists(structs_flattened->flattened_columns());
+    // TODO: pass in column order/null preced
+    // Extract lists of structs (if any) into multiple lists of primitive types.
+    auto output_table = flatten_lists(structs_flattened->flattened_columns());
+
     return {std::move(output_table), std::move(structs_flattened)};
   }
 
-  return {std::move(lists_flattened), nullptr};
+  // TODO: pass in column order/null preced
+  return {flatten_lists(input), nullptr};
 }
 
 }  // namespace
@@ -434,11 +442,15 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  auto [flattened_t, flattened_t_aux_data] = flatten_nested_lists_or_structs(t);
+  auto [flattened_t, flattened_t_aux_data] =
+    flatten_nested_lists_or_structs(t, column_order, null_precedence);
   check_lex_compatibility(flattened_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(flattened_t, column_order, null_precedence);
+    flattened_t_aux_data
+      ? decompose_structs(
+          flattened_t, flattened_t_aux_data->orders(), flattened_t_aux_data->null_orders())
+      : decompose_structs(flattened_t, {}, {});
 
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
