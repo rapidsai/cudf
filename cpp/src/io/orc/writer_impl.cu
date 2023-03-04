@@ -2246,6 +2246,10 @@ void writer::impl::write(table_view const& table)
                                   enc_data.streams,
                                   comp_results,
                                   stream);
+
+      // deallocate encoded data as it is not needed anymore
+      enc_data.data = rmm::device_uvector<uint8_t>{0, stream};
+
       strm_descs.device_to_host(stream);
       comp_results.device_to_host(stream, true);
     }
