@@ -101,6 +101,8 @@ struct page_state_s {
   PageNestingDecodeInfo* nesting_info;
 };
 
+// TODO refactor so offset is not in this struct. maybe have a delta_byte_array_state_s
+// that has two delta_binary_state_s's and the offset array.
 struct delta_binary_state_s {
   uint8_t const* block_start;  // start of data, but updated as data is read
   uint8_t const* block_end;    // end of data
@@ -2046,6 +2048,108 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   }
 }
 
+#define STRING_SCAN 0
+#if STRING_SCAN
+__device__ void StringScan(delta_binary_state_s* prefix_db,
+                           delta_binary_state_s* suffix_db,
+                           uint8_t* strings_out,
+                           uint8_t const* last_string,
+                           int start_idx,
+                           int target_pos,
+                           int lane_id)
+{
+  // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
+  // a warp will take 32 iterations.
+  // exceptions:
+  // 1) all prefix_lens are 0. all data is in the suffix, done in one copy.
+  // 2) all prefix_lens are equal.  copy suffixes in parallel and all threads copy
+  //    last_string[0:prefix_len].
+  // 2a) all prefix_n-1 > prefix_n, can still go to last_string
+  // 2b) all prefix_lens are != 0, so there's a chance to copy the first
+  //     min(prefix_len) bytes from last_string, but this optimization probably
+  //     isn't worth the effort
+  // if neither 1 nor 2, then do a loop like
+  // for i = 0 -> 31:
+  //   copy prefix_i bytes from string i-1 (last_string if i==0), update prefix_lens
+  //   check for cases where prefix_i < prefix_i+1, copy left->right, update prefix_lens
+  //   if all prefix_len == 0 break
+  //   if case 2 is now true, finish up and break
+  // worst case for above is O(n) iterations, but hopefully will average out to O(log(n))
+  //
+  __shared__ __align__(8) uint8_t const* last_ptr;
+  __shared__ __align__(8) int64_t prefix_lens[32];
+  __shared__ __align__(8) uint8_t const* offsets[32];
+
+  int ln_idx              = start_idx + lane_id;
+  int const src_idx       = rolling_index(ln_idx);
+  uint64_t prefix_len     = ln_idx < target_pos ? prefix_db->value[src_idx] : 0;
+  uint8_t* const lane_out = strings_out + suffix_db->offset[src_idx];
+  prefix_lens[lane_id]    = prefix_len;
+  offsets[lane_id]        = lane_out;
+
+  // if all prefix_len's are zero, then there's nothing to do
+  if (__all_sync(0xffff'ffff, prefix_len == 0)) {
+    printf("%d: all zero\n", lane_id);
+    return;
+  }
+
+  // initialize mask so thread 0 doesn't vote. will remove thread "i+1" at the end of each iteration
+  int mask = 0xffff'fffe;
+  if (lane_id == 0) { last_ptr = last_string; }
+  __syncwarp();
+
+  for (int i = 0; i < 32; i++) {
+    // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
+    // bytes from last_string and return.
+    if (__all_sync(mask, prefix_len <= prefix_lens[lane_id - 1])) {
+      if (lane_id >= i && ln_idx < target_pos) {
+        // printf(
+        //  "%d: %d %d all equal %ld %p %p\n", lane_id, i, ln_idx, prefix_len, last_ptr, lane_out);
+        memcpy(lane_out, last_ptr, prefix_len);
+      }
+      return;
+    }
+
+    if (prefix_lens[i] != 0) {
+      // printf("%d: %d different %ld %p %p\n", lane_id, i, prefix_len, last_ptr, lane_out);
+      // current leader gets data from last_ptr
+      if (lane_id == i) {
+        memcpy(lane_out, last_ptr, prefix_len);
+        prefix_lens[lane_id] = prefix_len = 0;
+      }
+      __syncwarp();
+
+      if (lane_id > i) {
+        // copy data from the nearest prefix_len==0 neighbor to the left (if any),
+        // but stop if we hit a neighbor with a prefix_len < ours.
+        int l = lane_id - 1;
+        while (l > i and prefix_lens[l] != 0 and prefix_len <= prefix_lens[l]) {
+          l--;
+        }
+
+        if (prefix_lens[l] == 0) {
+          memcpy(lane_out, offsets[l], prefix_len);
+          prefix_lens[lane_id] = prefix_len = 0;
+        }
+      }
+      __syncwarp();
+
+      // check for finished
+      if (__all_sync(0xffff'ffff, prefix_len == 0)) {
+        // printf("%d: all zero %d\n", lane_id, i);
+        return;
+      }
+    }
+
+    if (lane_id == i) { last_ptr = lane_out; }
+    __syncwarp();
+
+    // turn off next thread
+    mask &= ~(1 << (i + 1));
+  }
+}
+#endif
+
 // given prefix and suffix state, plus pointers to the page suffix data
 // and page output data, calculate a batch of output strings.  called
 // by all threads in a warp.
@@ -2056,31 +2160,34 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
                                       uint8_t* strings_out,
                                       uint8_t*& last_string,
                                       int start_idx,
+                                      int target_pos,
                                       int lane_id)
 {
   __shared__ __align__(8) uint64_t strings_offset;
 
   if (start_idx >= suffix_db->value_count) { return; }
 
-  for (int idx = start_idx + lane_id; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
+  for (int idx = start_idx; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
+    int ln_idx = idx + lane_id;
+
     // calculate offsets into suffix data
-    int const src_idx         = rolling_index(idx);
-    uint64_t const suffix_len = idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
+    int const src_idx         = rolling_index(ln_idx);
+    uint64_t const suffix_len = ln_idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
     uint64_t suffix_off       = 0;
     __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
     cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(suffix_len, suffix_off);
 
     // calculate offsets into string data and save in string_offsets
-    uint64_t const prefix_len = idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
+    uint64_t const prefix_len = ln_idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
     uint64_t const string_len = prefix_len + suffix_len;
 
-    // string_off will be 0 when last_string is null, otherwise need to look back to get it
+    // string_off will be 0 when last_string is null, otherwise need to look back to get it.
     uint64_t string_off = 0;
     cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
     if (lane_id == 0) {
       strings_offset = 0;
       if (last_string != nullptr) {
-        int last_idx = rolling_index(idx - 1);
+        int last_idx = rolling_index(ln_idx - 1);
         strings_offset =
           suffix_db->offset[last_idx] + suffix_db->value[last_idx] + prefix_db->value[last_idx];
       }
@@ -2091,24 +2198,28 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
 
     // copy suffixes into string data
     uint8_t* so_ptr = strings_out + string_off;
-    memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len);
+    if (ln_idx < target_pos) { memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len); }
     __syncwarp();
 
     // copy prefixes into string data. this has to be done serially.
+#if STRING_SCAN
+    StringScan(prefix_db, suffix_db, strings_out, last_string, idx, target_pos, lane_id);
+#else
     if (lane_id == 0) {
-      if (last_string != nullptr && idx < suffix_db->value_count) {
+      if (last_string != nullptr && ln_idx < suffix_db->value_count) {
         memcpy(so_ptr, last_string, prefix_len);
       }
       for (int i = 1; i < 32; i++) {
-        int l_idx = rolling_index(idx + i);
-        if (idx + i < suffix_db->value_count) {
+        int l_idx = rolling_index(ln_idx + i);
+        if (ln_idx + i < suffix_db->value_count) {
           memcpy(strings_out + suffix_db->offset[l_idx],
-                 strings_out + suffix_db->offset[rolling_index(idx + i - 1)],
+                 strings_out + suffix_db->offset[rolling_index(ln_idx + i - 1)],
                  prefix_db->value[l_idx]);
         }
       }
     }
     __syncwarp();
+#endif
 
     if (lane_id == 31) {
       last_string = strings_out + string_off;
@@ -2363,8 +2474,14 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     }
     __syncthreads();
     if (t < 32) {
-      CalculateStringValues(
-        prefix_db, suffix_db, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      CalculateStringValues(prefix_db,
+                            suffix_db,
+                            suffix_data,
+                            strings_data,
+                            last_string,
+                            skip_pos,
+                            prefix_db->value_count,
+                            lane_id);
     }
     skip_pos += prefix_db->values_per_mb;
     __syncthreads();
@@ -2407,8 +2524,14 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
-      CalculateStringValues(
-        prefix_db, suffix_db, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      CalculateStringValues(prefix_db,
+                            suffix_db,
+                            suffix_data,
+                            strings_data,
+                            last_string,
+                            skip_pos,
+                            target_pos,
+                            lane_id);
       skip_pos += batch_size;
 
       // process the mini-block in batches of 32
