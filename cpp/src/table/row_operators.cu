@@ -450,7 +450,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     flattened_t_aux_data
       ? decompose_structs(
           flattened_t, flattened_t_aux_data->orders(), flattened_t_aux_data->null_orders())
-      : decompose_structs(flattened_t, {}, {});
+      : decompose_structs(flattened_t, column_order, null_precedence);
 
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
