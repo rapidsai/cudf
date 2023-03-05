@@ -383,7 +383,7 @@ std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_
                                                rank_method::DENSE,
                                                order::ASCENDING,
                                                null_policy::EXCLUDE,
-                                               null_order::AFTER,
+                                               null_order::BEFORE,
                                                false,
                                                cudf::get_default_stream(),
                                                rmm::mr::get_current_device_resource()));
