@@ -735,14 +735,16 @@ struct preprocessed_table {
     rmm::device_uvector<size_type>&& depths,
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data);
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
+    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
 
   preprocessed_table(
     table_device_view_owner&& table,
     rmm::device_uvector<order>&& column_order,
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data);
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
+    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -813,6 +815,8 @@ struct preprocessed_table {
   // Auxiliary data generated from `cudf::structs::detail::flatten_nested_columns`
   // that needs to be kept alive.
   std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
+
+  std::vector<std::unique_ptr<column>> _transformed_structs_aux_data;
 };
 
 /**

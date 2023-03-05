@@ -285,13 +285,13 @@ void check_lex_compatibility(table_view const& input)
   column_checker_fn_t check_column = [&](column_view const& c) {
     if (c.type().id() == type_id::LIST) {
       auto const& list_col = lists_column_view(c);
-      //      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
-      //                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
+                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
-        //        CUDF_EXPECTS(child->type().id() != type_id::LIST,
-        //                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }
@@ -351,6 +351,51 @@ namespace {
  * @param input
  * @return
  */
+bool has_nested_lists_of_structs(column_view const& input)
+{
+  if (input.type().id() == type_id::LIST) {
+    auto const child = input.child(lists_column_view::child_column_index);
+    return child.type().id() == type_id::STRUCT || has_nested_lists_of_structs(child);
+  } else if (input.type().id() == type_id::STRUCT) {
+    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
+      return has_nested_lists_of_structs(child);
+    });
+  }
+
+  return false;
+}
+
+std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
+  column_view const& input)
+{
+  return {column_view{}, std::vector<std::unique_ptr<column>>{}};
+}
+
+std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
+  table_view const& input)
+{
+  std::vector<column_view> transformed_columns;
+  std::vector<std::unique_ptr<column>> aux_data;
+  std::for_each(input.begin(), input.end(), [&](auto const& col) {
+    if (!has_nested_lists_of_structs(col)) {
+      transformed_columns.push_back(col);
+    } else {
+      auto [transformed_col, col_aux_data] = transform_lists_of_structs(col);
+      transformed_columns.push_back(transformed_col);
+      aux_data.insert(aux_data.end(),
+                      std::make_move_iterator(col_aux_data.begin()),
+                      std::make_move_iterator(col_aux_data.end()));
+    }
+  });
+
+  return {table_view{transformed_columns}, std::move(aux_data)};
+}
+
+/**
+ * @brief has_structs_of_lists
+ * @param input
+ * @return
+ */
 bool has_nested_structs_of_lists(column_view const& input)
 {
   if (input.type().id() == type_id::STRUCT) {
@@ -394,8 +439,11 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
+  auto [transformed_t, transformed_aux_data] = transform_lists_of_structs(t);
+
   auto [flattened_t, flattened_t_aux_data] =
-    flatten_nested_structs_of_lists(t, column_order, null_precedence);
+    flatten_nested_structs_of_lists(transformed_t, column_order, null_precedence);
+
   check_lex_compatibility(flattened_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
@@ -418,14 +466,16 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_depths),
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
-                             std::move(flattened_t_aux_data)));
+                             std::move(flattened_t_aux_data),
+                             std::move(transformed_aux_data)));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
-                             std::move(flattened_t_aux_data)));
+                             std::move(flattened_t_aux_data),
+                             std::move(transformed_aux_data)));
   }
 }
 
@@ -436,14 +486,16 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<size_type>&& depths,
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data)
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
+  std::vector<std::unique_ptr<column>>&& transformed_structs_columns)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
     _depths(std::move(depths)),
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
-    _flattened_input_aux_data(std::move(flattened_input_aux_data))
+    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
+    _transformed_structs_aux_data(std::move(transformed_structs_columns))
 {
 }
 
@@ -452,14 +504,16 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<order>&& column_order,
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
-  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data)
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
+  std::vector<std::unique_ptr<column>>&& transformed_structs_columns)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
     _depths(std::move(depths)),
     _dremel_data{},
     _dremel_device_views{},
-    _flattened_input_aux_data(std::move(flattened_input_aux_data))
+    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
+    _transformed_structs_aux_data(std::move(transformed_structs_columns))
 {
 }
 
