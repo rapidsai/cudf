@@ -61,3 +61,32 @@ TEST_F(structs_test, StructsHaveLists)
     cudf::test::print(sorted->get_column(0).view());
   }
 }
+
+TEST_F(structs_test, ListsHaveStructs)
+{
+  auto const input = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{1, 2, 3, 0, 1, 2, 4, 5, 0, 1};
+      //      auto child2 = int32s_col{11, 12, 13, 10, 11, 12, 14, 15, 10, 11};
+      return structs_col{{child1 /*, child2*/}};
+    };
+
+    return cudf::make_lists_column(
+      4, int32s_col{0, 3, 6, 8, 10}.release(), get_structs().release(), 0, {});
+  }();
+
+  printf("line %d\n", __LINE__);
+  cudf::test::print(*input);
+
+  if (1) {
+    auto const order = cudf::sorted_order(cudf::table_view{{*input}});
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(*order);
+
+    auto const sorted = cudf::sort(cudf::table_view{{*input}});
+
+    printf("line %d\n", __LINE__);
+    cudf::test::print(sorted->get_column(0).view());
+  }
+}

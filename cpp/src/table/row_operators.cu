@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -368,7 +369,39 @@ bool has_nested_lists_of_structs(column_view const& input)
 std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
   column_view const& input)
 {
-  return {column_view{}, std::vector<std::unique_ptr<column>>{}};
+  if (!has_nested_lists_of_structs(input)) {
+    return {input, std::vector<std::unique_ptr<column>>{}};
+  }
+
+  std::vector<std::unique_ptr<column>> aux_data;
+  if (input.type().id() == type_id::LIST) {
+    auto const child = input.child(lists_column_view::child_column_index);
+    // TODO: This doesn't work with list of struct of list.
+    // This also doesn't work with nested list of struct of struct.
+    if (child.type().id() == type_id::STRUCT) {
+      aux_data.emplace_back(cudf::detail::rank(child,
+                                               rank_method::DENSE,
+                                               order::ASCENDING,
+                                               null_policy::EXCLUDE,
+                                               null_order::AFTER,
+                                               false,
+                                               cudf::get_default_stream(),
+                                               rmm::mr::get_current_device_resource()));
+      auto new_column = column_view{
+        data_type{type_id::LIST},
+        input.size(),
+        nullptr,
+        input.null_mask(),
+        input.null_count(),
+        input.offset(),
+        {input.child(lists_column_view::offsets_column_index), aux_data.back()->view()}};
+
+      return {std::move(new_column), std::move(aux_data)};
+    }
+  }
+
+  // TODO
+  return {input, std::vector<std::unique_ptr<column>>{}};
 }
 
 std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
@@ -377,15 +410,11 @@ std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_s
   std::vector<column_view> transformed_columns;
   std::vector<std::unique_ptr<column>> aux_data;
   std::for_each(input.begin(), input.end(), [&](auto const& col) {
-    if (!has_nested_lists_of_structs(col)) {
-      transformed_columns.push_back(col);
-    } else {
-      auto [transformed_col, col_aux_data] = transform_lists_of_structs(col);
-      transformed_columns.push_back(transformed_col);
-      aux_data.insert(aux_data.end(),
-                      std::make_move_iterator(col_aux_data.begin()),
-                      std::make_move_iterator(col_aux_data.end()));
-    }
+    auto [transformed_col, col_aux_data] = transform_lists_of_structs(col);
+    transformed_columns.push_back(transformed_col);
+    aux_data.insert(aux_data.end(),
+                    std::make_move_iterator(col_aux_data.begin()),
+                    std::make_move_iterator(col_aux_data.end()));
   });
 
   return {table_view{transformed_columns}, std::move(aux_data)};
