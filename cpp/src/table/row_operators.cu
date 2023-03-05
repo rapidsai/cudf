@@ -351,60 +351,17 @@ namespace {
  * @param input
  * @return
  */
-bool has_structs_of_lists(column_view const& input)
+bool has_nested_structs_of_lists(column_view const& input)
 {
   if (input.type().id() == type_id::STRUCT) {
     return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
-      return child.type().id() == type_id::LIST || has_structs_of_lists(child);
+      return child.type().id() == type_id::LIST || has_nested_structs_of_lists(child);
     });
   } else if (input.type().id() == type_id::LIST) {
-    return has_structs_of_lists(input.child(lists_column_view::child_column_index));
+    return has_nested_structs_of_lists(input.child(lists_column_view::child_column_index));
   }
 
   return false;
-}
-
-/**
- * @brief flatten_lists
- * @param input
- * @return
- */
-std::vector<column_view> flatten_lists_column(column_view const& input)
-{
-  if (input.type().id() != type_id::LIST ||
-      input.child(lists_column_view::child_column_index).type().id() != type_id::STRUCT) {
-    return {input};
-  }
-
-  auto const offsets  = input.child(lists_column_view::offsets_column_index);
-  auto const children = input.child(lists_column_view::child_column_index);
-  std::vector<column_view> output;
-
-  for (auto it = children.child_begin(); it != children.child_end(); ++it) {
-    auto const new_column = column_view{data_type{type_id::LIST},
-                                        input.size(),
-                                        nullptr,
-                                        input.null_mask(),
-                                        input.null_count(),
-                                        input.offset(),
-                                        {offsets, *it}};
-    // The new column may still be lists of structs, thus we recursively call this:
-    auto const flattened_new_column = flatten_lists_column(new_column);
-    output.insert(output.end(), flattened_new_column.begin(), flattened_new_column.end());
-  }
-
-  return output;
-}
-
-table_view flatten_lists(table_view const& input)
-{
-  std::vector<column_view> out_cols;
-  for (auto it = input.begin(); it != input.end(); ++it) {
-    auto const flattened = flatten_lists_column(*it);
-    out_cols.insert(out_cols.end(), flattened.begin(), flattened.end());
-  }
-
-  return table_view{out_cols};
 }
 
 /**
@@ -412,26 +369,21 @@ table_view flatten_lists(table_view const& input)
  * @param t
  */
 std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
-flatten_nested_lists_or_structs(table_view const& input,
+flatten_nested_structs_of_lists(table_view const& input,
                                 host_span<order const> column_order,
                                 host_span<null_order const> null_precedence)
 {
-  if (std::any_of(input.begin(), input.end(), has_structs_of_lists)) {
+  if (std::any_of(input.begin(), input.end(), has_nested_structs_of_lists)) {
     auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
       input,
       std::vector<order>{column_order.begin(), column_order.end()},
       std::vector<null_order>{null_precedence.begin(), null_precedence.end()},
       cudf::structs::detail::column_nullability::FORCE);
-
-    // TODO: pass in column order/null preced
-    // Extract lists of structs (if any) into multiple lists of primitive types.
-    auto output_table = flatten_lists(structs_flattened->flattened_columns());
-
+    auto output_table = structs_flattened->flattened_columns();
     return {std::move(output_table), std::move(structs_flattened)};
   }
 
-  // TODO: pass in column order/null preced
-  return {flatten_lists(input), nullptr};
+  return {input, nullptr};
 }
 
 }  // namespace
@@ -443,7 +395,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   rmm::cuda_stream_view stream)
 {
   auto [flattened_t, flattened_t_aux_data] =
-    flatten_nested_lists_or_structs(t, column_order, null_precedence);
+    flatten_nested_structs_of_lists(t, column_order, null_precedence);
   check_lex_compatibility(flattened_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
