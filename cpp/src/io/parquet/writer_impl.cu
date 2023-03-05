@@ -87,7 +87,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
-size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
+size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.size() == 0) { return 0; }
 
@@ -99,7 +99,7 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
            cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
   } else if (column.type().id() == type_id::STRUCT) {
     auto const scol = structs_column_view(column);
-    size_type ret   = 0;
+    size_t ret      = 0;
     for (int i = 0; i < scol.num_children(); i++) {
       ret += column_size(scol.get_sliced_child(i), stream);
     }
