@@ -2459,7 +2459,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       CalculateStringValues(
         dba, suffix_data, strings_data, last_string, skip_pos, prefix_db->value_count, lane_id);
     }
-    skip_pos += prefix_db->values_per_mb;
+    skip_pos += batch_size;
     __syncthreads();
   }
 
@@ -2500,8 +2500,10 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int const leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t const dtype_len   = s->dtype_len;
 
+      int const skip_target = std::min(skip_pos + batch_size, suffix_db->value_count);
+
       CalculateStringValues(
-        dba, suffix_data, strings_data, last_string, skip_pos, target_pos, lane_id);
+        dba, suffix_data, strings_data, last_string, skip_pos, skip_target, lane_id);
       skip_pos += batch_size;
 
       // process the mini-block in batches of 32
