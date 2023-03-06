@@ -22,11 +22,7 @@ from numba import cuda
 from packaging import version
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_134,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils

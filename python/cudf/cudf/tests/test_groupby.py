@@ -15,11 +15,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import (
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.testing._utils import (
     DATETIME_TYPES,
