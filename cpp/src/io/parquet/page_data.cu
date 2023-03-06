@@ -1963,10 +1963,10 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 {
   if (db->current_value_idx >= db->value_count) { return; }
 
-  int const mb_bits = db->cur_bitwidths[db->cur_mb];
+  uint32_t const mb_bits = db->cur_bitwidths[db->cur_mb];
 
   // need to do in multiple passes if values_per_mb != 32
-  int const num_pass = db->values_per_mb / 32;
+  uint32_t const num_pass = db->values_per_mb / 32;
 
   // position at end of the current mini-block since the following calculates
   // negative indexes
@@ -2060,8 +2060,8 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 __device__ void StringScan(delta_byte_array_state_s* dba,
                            uint8_t* strings_out,
                            uint8_t const* last_string,
-                           int start_idx,
-                           int lane_id)
+                           uint32_t start_idx,
+                           uint32_t lane_id)
 {
   // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
   // a warp will take 32 iterations.
@@ -2085,9 +2085,9 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   __shared__ __align__(8) int64_t prefix_lens[32];
   __shared__ __align__(8) uint8_t const* offsets[32];
 
-  int value_count         = dba->prefixes.value_count;
-  int const ln_idx        = start_idx + lane_id;
-  int const src_idx       = rolling_index(ln_idx);
+  uint32_t value_count    = dba->prefixes.value_count;
+  uint32_t const ln_idx   = start_idx + lane_id;
+  uint32_t const src_idx  = rolling_index(ln_idx);
   uint64_t prefix_len     = ln_idx < value_count ? dba->prefixes.value[src_idx] : 0;
   uint8_t* const lane_out = ln_idx < value_count ? strings_out + dba->offset[src_idx] : nullptr;
   prefix_lens[lane_id]    = prefix_len;
@@ -2097,11 +2097,11 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
 
   // initialize mask so thread 0 doesn't vote. will remove thread "i+1" at the end of each iteration
-  int mask = 0xffff'fffe;
+  uint32_t mask = 0xffff'fffe;
   if (lane_id == 0) { last_ptr = last_string; }
   __syncwarp();
 
-  for (int i = 0; i < 32 && i + start_idx < value_count; i++) {
+  for (uint32_t i = 0; i < 32 && i + start_idx < value_count; i++) {
     // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
     // bytes from last_string and return.
     if (__all_sync(mask, prefix_len <= prefix_lens[lane_id - 1])) {
@@ -2152,8 +2152,8 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
                                       uint8_t const*& suffix_data,
                                       uint8_t* strings_out,
                                       uint8_t*& last_string,
-                                      int start_idx,
-                                      int lane_id)
+                                      uint32_t start_idx,
+                                      uint32_t lane_id)
 {
   __shared__ __align__(8) uint64_t strings_offset;
 
@@ -2163,10 +2163,10 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
   if (start_idx >= suffix_db->value_count) { return; }
 
   for (int idx = start_idx; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
-    int const ln_idx = idx + lane_id;
+    uint32_t const ln_idx = idx + lane_id;
 
     // calculate offsets into suffix data
-    int const src_idx         = rolling_index(ln_idx);
+    uint32_t const src_idx    = rolling_index(ln_idx);
     uint64_t const suffix_len = ln_idx < suffix_db->value_count ? suffix_db->value[src_idx] : 0;
     uint64_t suffix_off       = 0;
     __shared__ cub::WarpScan<uint64_t>::TempStorage temp_storage;
@@ -2220,12 +2220,12 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   __shared__ __align__(16) delta_byte_array_state_s db_state;
   __shared__ __align__(8) u64 total_bytes;
 
-  int const t           = threadIdx.x;
-  int const lane_id     = t & 0x1f;
-  auto* const prefix_db = &db_state.prefixes;
-  auto* const suffix_db = &db_state.suffixes;
-  auto* const page      = &pages[blockIdx.x];
-  auto* const col       = &chunks[page->chunk_idx];
+  uint32_t const t       = threadIdx.x;
+  uint32_t const lane_id = t & 0x1f;
+  auto* const prefix_db  = &db_state.prefixes;
+  auto* const suffix_db  = &db_state.suffixes;
+  auto* const page       = &pages[blockIdx.x];
+  auto* const col        = &chunks[page->chunk_idx];
 
   // initialize strings info
   if (t == 0) {
@@ -2273,11 +2273,11 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   while (prefix_db->current_value_idx < prefix_db->value_count) {
     auto* const db = t < 32 ? prefix_db : suffix_db;
 
-    for (int i = 0; i < db->values_per_mb; i += 32) {
+    for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
       CalcMiniBlockValues(db, lane_id);
 
-      int const idx    = db->current_value_idx + i + lane_id;
-      u64 const my_len = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
+      uint32_t const idx = db->current_value_idx + i + lane_id;
+      u64 const my_len   = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
 
       // get sum for warp
       using WarpReduce = cub::WarpReduce<u64>;
@@ -2303,9 +2303,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s db_state;
 
-  int const t       = threadIdx.x;
-  int const lane_id = t & 0x1f;
-  auto* const db    = &db_state;
+  uint32_t const t       = threadIdx.x;
+  uint32_t const lane_id = t & 0x1f;
+  auto* const db         = &db_state;
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -2332,8 +2332,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
-    int target_pos;
-    int const src_pos = s->src_pos;
+    uint32_t target_pos;
+    uint32_t const src_pos = s->src_pos;
 
     if (t < 64) {  // warp0..1
       target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
@@ -2366,9 +2366,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       int const leaf_level_index = s->col.max_nesting_depth - 1;
 
       // process the mini-block in batches of 32
-      for (int sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
+      for (uint32_t sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
-        int dst_pos = s->nz_idx[rolling_index(sp)];
+        int32_t dst_pos = s->nz_idx[rolling_index(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
@@ -2404,11 +2404,11 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   __shared__ __align__(8) uint8_t* strings_data;
   __shared__ __align__(8) uint8_t* last_string;
 
-  int const t           = threadIdx.x;
-  int const lane_id     = t & 0x1f;
-  auto* const prefix_db = &db_state.prefixes;
-  auto* const suffix_db = &db_state.suffixes;
-  auto* const dba       = &db_state;
+  uint32_t const t       = threadIdx.x;
+  uint32_t const lane_id = t & 0x1f;
+  auto* const prefix_db  = &db_state.prefixes;
+  auto* const suffix_db  = &db_state.suffixes;
+  auto* const dba        = &db_state;
 
   // TODO assert string_data != nullptr
 
@@ -2446,7 +2446,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need. prefixes and suffixes should be the same length, so only
   // testing prefix_db.
-  int skip_pos = 0;
+  uint32_t skip_pos = 0;
   while (prefix_db->current_value_idx < skipped_leaf_values &&
          prefix_db->current_value_idx < prefix_db->value_count) {
     // warp 0 gets prefixes and warp 1 gets suffixes
@@ -2464,8 +2464,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
-    int target_pos;
-    int const src_pos = s->src_pos;
+    uint32_t target_pos;
+    uint32_t const src_pos = s->src_pos;
 
     if (t < 96) {  // warp 0..2
       target_pos = min(src_pos + 2 * (batch_size), s->nz_count + batch_size);
@@ -2504,7 +2504,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       skip_pos += batch_size;
 
       // process the mini-block in batches of 32
-      for (int sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
+      for (uint32_t sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
         int dst_pos = s->nz_idx[rolling_index(sp)];
 
