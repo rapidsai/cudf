@@ -678,7 +678,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpThrows)
   auto const col           = fp_wrapper<RepType>{{100, 300, 500, 700}, scale_type{-2}};
   auto const non_bool_type = cudf::data_type{cudf::type_to_id<decimalXX>(), -2};
   EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpModSimple)
