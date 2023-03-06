@@ -816,6 +816,8 @@ struct preprocessed_table {
   // that needs to be kept alive.
   std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
 
+  // Auxiliary data generated from transforming lists-of-structs into lists-of-integer
+  // that needs to be kept alive.
   std::vector<std::unique_ptr<column>> _transformed_structs_aux_data;
 };
 

@@ -468,8 +468,11 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
+  // Firstly, transform any (nested) lists-of-structs column into lists-of-ranks where ranks are
+  // integer numbers computed from the struct child of the input lists column.
   auto [transformed_t, transformed_aux_data] = transform_lists_of_structs(t);
 
+  // Next, flatten any structs-of-lists column.
   auto [flattened_t, flattened_t_aux_data] =
     flatten_nested_structs_of_lists(transformed_t, column_order, null_precedence);
 
