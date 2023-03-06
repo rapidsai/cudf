@@ -240,6 +240,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(column_names.type().id() == type_id::STRING, "Column names must be of type string");
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns == column_names.size(),
@@ -481,6 +482,7 @@ struct column_to_strings_fn {
                                      column_iterator column_end,
                                      host_span<column_name_info const> children_names) const
   {
+    CUDF_FUNC_RANGE();
     auto const num_columns = std::distance(column_begin, column_end);
     auto column_names      = make_column_names_column(children_names, num_columns, stream_);
     auto column_names_view = column_names->view();
@@ -590,6 +592,7 @@ void write_chunked(data_sink* out_sink,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
@@ -620,6 +623,7 @@ void write_json(data_sink* out_sink,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   std::vector<column_name_info> user_column_names = [&]() {
     auto const& metadata = options.get_metadata();
     if (metadata.has_value() and not metadata->schema_info.empty()) {

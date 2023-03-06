@@ -9,7 +9,7 @@ files:
       - build
       - cudatoolkit
       - develop
-      - doc
+      - docs
       - notebooks
       - py_version
       - run
@@ -42,6 +42,12 @@ files:
     output: none
     includes:
       - develop
+      - py_version
+  docs:
+    output: none
+    includes:
+      - cudatoolkit
+      - docs
       - py_version
 channels:
   - rapidsai
@@ -123,10 +129,11 @@ dependencies:
       - output_types: conda
         packages:
           - doxygen=1.8.20 # pre-commit hook needs a specific version.
-  doc:
+  docs:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda]
         packages:
+          - doxygen=1.8.20
           - myst-nb
           - nbsphinx
           - numpydoc

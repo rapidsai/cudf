@@ -307,6 +307,18 @@ template <typename T = uint8_t>
   return total_pages;
 }
 
+// see setupLocalPageInfo() in page_data.cu for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY: return true;
+    default: return false;
+  }
+}
+
 /**
  * @brief Decode the page information from the given column chunks.
  *
@@ -329,6 +341,12 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   chunks.host_to_device(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
   pages.device_to_host(stream, true);
+
+  // validate page encodings
+  CUDF_EXPECTS(std::all_of(pages.begin(),
+                           pages.end(),
+                           [](auto const& page) { return is_supported_encoding(page.encoding); }),
+               "Unsupported page encoding detected");
 }
 
 /**
@@ -651,16 +669,11 @@ void reader::impl::allocate_nesting_info()
   page_nesting_decode_info.host_to_device(_stream);
 }
 
-void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
-                                            size_type num_rows)
+std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_column_chunks(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
 {
-  // This function should never be called if `num_rows == 0`.
-  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
-
-  auto& raw_page_data    = _file_itm_data.raw_page_data;
-  auto& decomp_page_data = _file_itm_data.decomp_page_data;
-  auto& chunks           = _file_itm_data.chunks;
-  auto& pages_info       = _file_itm_data.pages_info;
+  auto& raw_page_data = _file_itm_data.raw_page_data;
+  auto& chunks        = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
   const auto num_input_columns = _input_columns.size();
@@ -732,7 +745,7 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
     }
-    remaining_rows -= row_group.num_rows;
+    remaining_rows -= row_group_rows;
   }
 
   // Read compressed chunk data to device memory
@@ -745,11 +758,28 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
                                                          chunk_source_map,
                                                          _stream));
 
+  CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
+
+  return {total_decompressed_size > 0, std::move(read_rowgroup_tasks)};
+}
+
+void reader::impl::load_and_decompress_data(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
+{
+  // This function should never be called if `num_rows == 0`.
+  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
+
+  auto& raw_page_data    = _file_itm_data.raw_page_data;
+  auto& decomp_page_data = _file_itm_data.decomp_page_data;
+  auto& chunks           = _file_itm_data.chunks;
+  auto& pages_info       = _file_itm_data.pages_info;
+
+  auto const [has_compressed_data, read_rowgroup_tasks] =
+    create_and_read_column_chunks(row_groups_info, num_rows);
+
   for (auto& task : read_rowgroup_tasks) {
     task.wait();
   }
-
-  CUDF_EXPECTS(remaining_rows <= 0, "All rows data must be read.");
 
   // Process dataset chunk pages into output columns
   auto const total_pages = count_page_headers(chunks, _stream);
@@ -758,14 +788,11 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   if (total_pages > 0) {
     // decoding of column/page information
     decode_page_headers(chunks, pages_info, _stream);
-    if (total_decompressed_size > 0) {
+    if (has_compressed_data) {
       decomp_page_data = decompress_page_data(chunks, pages_info, _stream);
       // Free compressed data
       for (size_t c = 0; c < chunks.size(); c++) {
-        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
-          raw_page_data[c].reset();
-          // TODO: Check if this is called
-        }
+        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { raw_page_data[c].reset(); }
       }
     }
 

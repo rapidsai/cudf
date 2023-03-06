@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -315,7 +315,7 @@ cdef columns_from_table_view(
     object owners,
 ):
     """
-    Given a ``cudf::table_view``, construsts a list of columns from it,
+    Given a ``cudf::table_view``, constructs a list of columns from it,
     along with referencing an owner Python object that owns the memory
     lifetime. owner must be either None or a list of column. If owner
     is a list of columns, the owner of the `i`th ``cudf::column_view``
