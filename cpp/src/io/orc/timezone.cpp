@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/timezone.hpp>
+#include <cudf/timezone.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
