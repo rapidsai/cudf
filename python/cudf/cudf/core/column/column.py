@@ -1340,7 +1340,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         from cudf._lib.join import join as cpp_join
 
-        if na_sentinel is None:
+        if na_sentinel is None or na_sentinel.value is cudf.NA:
             na_sentinel = cudf.Scalar(-1)
 
         def _return_sentinel_column():
@@ -1349,13 +1349,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(
-                max(
-                    len(cats),
-                    -1 if na_sentinel.value is cudf.NA else na_sentinel,
-                ),
-                8,
-            )
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
