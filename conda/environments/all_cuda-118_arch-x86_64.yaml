@@ -33,6 +33,7 @@ dependencies:
 - ipython
 - libarrow=10
 - librdkafka=1.7.0
+- librmm=23.04.*
 - mimesis>=4.1.0
 - moto>=4.0.8
 - myst-nb
