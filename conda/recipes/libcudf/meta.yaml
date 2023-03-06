@@ -47,6 +47,8 @@ requirements:
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
+    - fmt {{ fmt_version }}
+    - spdlog {{ spdlog_version }}
 
 outputs:
   - name: libcudf

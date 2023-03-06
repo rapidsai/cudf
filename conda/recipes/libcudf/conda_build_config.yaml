@@ -24,3 +24,9 @@ dlpack_version:
 
 librdkafka_version:
   - ">=1.7.0,<1.8.0a0"
+
+fmt_version:
+  - ">=9.1.0,<10"
+
+spdlog_version:
+  - ">=1.11.0,<1.12"
