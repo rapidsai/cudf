@@ -2052,8 +2052,6 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   }
 }
 
-#define STRING_SCAN 1
-#if STRING_SCAN
 __device__ void StringScan(delta_binary_state_s* prefix_db,
                            delta_binary_state_s* suffix_db,
                            uint8_t* strings_out,
@@ -2149,7 +2147,6 @@ __device__ void StringScan(delta_binary_state_s* prefix_db,
     mask &= ~(1 << (i + 1));
   }
 }
-#endif
 
 // given prefix and suffix state, plus pointers to the page suffix data
 // and page output data, calculate a batch of output strings.  called
@@ -2203,24 +2200,7 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
     __syncwarp();
 
     // copy prefixes into string data. this has to be done serially.
-#if STRING_SCAN
     StringScan(prefix_db, suffix_db, strings_out, last_string, idx, target_pos, lane_id);
-#else
-    if (lane_id == 0) {
-      if (last_string != nullptr && ln_idx < suffix_db->value_count) {
-        memcpy(so_ptr, last_string, prefix_len);
-      }
-      for (int i = 1; i < 32; i++) {
-        int l_idx = rolling_index(ln_idx + i);
-        if (ln_idx + i < suffix_db->value_count) {
-          memcpy(strings_out + suffix_db->offset[l_idx],
-                 strings_out + suffix_db->offset[rolling_index(ln_idx + i - 1)],
-                 prefix_db->value[l_idx]);
-        }
-      }
-    }
-    __syncwarp();
-#endif
 
     if (lane_id == 31) {
       last_string = strings_out + string_off;
@@ -2234,7 +2214,8 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
 /**
  * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
  */
-__global__ void __launch_bounds__(64) gpuComputePageStringSizes(PageInfo* pages)
+__global__ void __launch_bounds__(64) gpuComputePageStringSizes(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t num_rows, size_t min_row)
 {
   // using this to get atomicAdd happy
   using u64 = unsigned long long int;
@@ -2246,6 +2227,7 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(PageInfo* pages)
   auto* prefix_db = &db_state[0];
   auto* suffix_db = &db_state[1];
   PageInfo* page  = &pages[blockIdx.x];
+  auto* const col = &chunks[page->chunk_idx];
 
   // initialize strings info
   if (t == 0) {
@@ -2255,7 +2237,12 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(PageInfo* pages)
 
   if (page->encoding != Encoding::DELTA_BYTE_ARRAY || page->num_input_values == 0) { return; }
 
-  // page_data should be at the start of the rep/def level data (if present).
+  // check page bounds to see if we need sizes for this page
+  size_t page_start = col->start_row + page->chunk_row;
+  size_t page_end   = page_start + page->num_rows;
+  if (page_start >= min_row + num_rows or page_end < min_row) { return; }
+
+  // page_data should be at the start of the rep/def level data (if present)
   uint8_t* cur = page->page_data;
   uint8_t* end = cur + page->uncompressed_page_size;
 
@@ -2770,10 +2757,15 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view stream)
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
+                            hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            size_t num_rows,
+                            size_t min_row,
+                            rmm::cuda_stream_view stream)
 {
   // need 2 warps, one for prefixes and one for suffixes
-  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(pages.device_ptr());
+  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(
+    pages.device_ptr(), chunks, num_rows, min_row);
 }
 
 /**

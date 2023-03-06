@@ -126,7 +126,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (std::any_of(pages.begin(), pages.end(), [](auto& page) {
         return page.encoding == Encoding::DELTA_BYTE_ARRAY;
       })) {
-    ComputePageStringSizes(pages, _stream);
+    ComputePageStringSizes(pages, chunks, num_rows, skip_rows, _stream);
     pages.device_to_host(_stream, true);
 
     if (std::any_of(

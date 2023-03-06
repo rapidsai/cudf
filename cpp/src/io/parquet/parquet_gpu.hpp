@@ -437,9 +437,16 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @brief Compute the amount of string data in DELTA_BYTE_ARRAY encoded pages.
  *
  * @param[in,out] pages All pages to compute lengths for
+ * @param[in] chunks Chunks that contain the pages
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row crop all rows below min_row
  * @param[in] stream CUDA stream to use, default 0
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view stream);
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
+                            hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            size_t num_rows,
+                            size_t min_row,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
