@@ -6,7 +6,6 @@ import functools
 import inspect
 import pickle
 import textwrap
-import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
@@ -3108,17 +3107,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         percentiles=None,
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
     ):
         """{docstring}"""
 
-        if not datetime_is_numeric:
-            warnings.warn(
-                "`datetime_is_numeric` is deprecated and will be removed in "
-                "a future release. Specify `datetime_is_numeric=True` to "
-                "silence this warning and adopt the future behavior now.",
-                FutureWarning,
-            )
         if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
                 raise ValueError(

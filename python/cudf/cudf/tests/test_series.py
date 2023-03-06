@@ -465,8 +465,7 @@ def test_series_describe_other_types(ps):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    with pytest.warns(FutureWarning):
-        actual = gs.describe()
+    actual = gs.describe()
 
     if len(ps) == 0:
         assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))
