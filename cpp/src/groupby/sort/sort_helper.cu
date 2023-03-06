@@ -26,7 +26,6 @@
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
