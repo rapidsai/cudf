@@ -2,11 +2,12 @@
 
 import itertools
 import pickle
+import random
 import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 import cupy as cp
 import numpy as np
@@ -698,6 +699,72 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         group_ids._index = index
         return self._broadcast(group_ids)
+
+    def sample(
+        self,
+        n: Optional[int] = None,
+        frac: Optional[float] = None,
+        replace: bool = False,
+        weights: Union[abc.Sequence, "cudf.Series", None] = None,
+        random_state: Union[np.random.RandomState, int, None] = None,
+    ):
+        """Return a random sample of items in each group.
+
+        Parameters
+        ----------
+        n
+            Number of items to return for each group, if sampling
+            without replacement must be at most the size of the
+            smallest group. Cannot be used with frac.
+        frac
+            Fraction of items to return. Cannot be used with n. Not
+            currently supported.
+        replace
+            Should sampling occur with or without replacement?
+        weights
+            Sampling probability for each element. Must be the same
+            length as the grouped frame. Not currently supported.
+        random_state
+            Seed for random number generation.
+        """
+        if frac is not None:
+            raise NotImplementedError(
+                "Sorry, sampling with fraction is not supported"
+            )
+        if weights is not None:
+            raise NotImplementedError(
+                "Sorry, sampling with weights is not supported"
+            )
+        if random_state is not None and not isinstance(random_state, int):
+            raise NotImplementedError(
+                "Sorry, only integer seeds are supported for random_state"
+            )
+        if n is None:
+            raise ValueError("Please supply a sample size")
+        # Although the check n is None projects the type of n from
+        # Optional[int] to int, because of the type-annotation, and
+        # name-binding in closures, we can't use n in the sample
+        # lambdas since the value of n might still legitimately be
+        # None by the type the lambda is called.
+        nsample = n
+        rng = random.Random(x=random_state)
+        if replace:
+            sample = lambda s, e: [  # noqa: E731
+                rng.randrange(s, e) for _ in range(nsample)
+            ]
+        else:
+            sample = lambda s, e: rng.sample(  # noqa: E731
+                range(s, e), nsample
+            )
+        _, offsets, _, values = self._grouped()
+        sizes = np.diff(offsets)
+        indices = list(
+            itertools.chain.from_iterable(
+                sample(offset, offset + size)
+                for size, offset in zip(sizes, offsets)
+            )
+        )
+        return self.obj.iloc[values.index[indices]]
 
     def serialize(self):
         header = {}
