@@ -192,6 +192,10 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
+# find fmt
+include(cmake/thirdparty/get_fmt.cmake)
+# find spdlog
+include(cmake/thirdparty/get_spdlog.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
