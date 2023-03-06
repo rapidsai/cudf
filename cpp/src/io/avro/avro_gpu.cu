@@ -75,7 +75,6 @@ avro_decode_row(schemadesc_s const* schema,
                 uint8_t const* end,
                 device_span<string_index_pair const> global_dictionary)
 {
-  using namespace cudf::io::avro;
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
   for (uint32_t i = 0; i < schema_len;) {
@@ -223,7 +222,7 @@ avro_decode_row(schemadesc_s const* schema,
         //      way of the zig-zag varint encoding, so we can safely treat them
         //      both as int64_t.  Everything else is 64-bit in both avro and
         //      cudf.
-        CUDF_UNREACHABLE("avro type yet implemented");
+        CUDF_UNREACHABLE("avro time/timestamp types not yet implemented");
         int64_t v = avro_decode_zigzag_varint(cur, end);
         if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
       } break;
