@@ -336,11 +336,29 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             Names for each of the index levels.
         dtype : object, optional (default None)
             MultiIndex dtype, only supports None or object type
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         levels : sequence of arrays, optional (default None)
             The unique labels for each level. Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `levels` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         codes : sequence of arrays, optional (default None)
             Integers for each level designating which label at each location.
             Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `codes` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
@@ -398,6 +416,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             warnings.warn(
                 "parameter codes is deprecated and will be removed in a "
                 "future version.",
+                FutureWarning,
+            )
+
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
                 FutureWarning,
             )
 

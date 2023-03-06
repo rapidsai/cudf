@@ -28,7 +28,7 @@ dependencies:
 - doxygen=1.8.20
 - fastavro>=0.22.9
 - fsspec>=0.6.0
-- gcc_linux-64=9.*
+- gcc_linux-64=11.*
 - hypothesis
 - ipython
 - libarrow=10
