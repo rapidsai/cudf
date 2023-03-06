@@ -11,7 +11,7 @@ install_requires = [
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=1.0,<1.6.0dev0",
+    "pandas>=1.3,<1.6.0dev0",
     "protobuf==4.21",
     "typing_extensions",
     # Allow floating minor versions for Arrow.

@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -451,10 +450,7 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+    kwargs = {"check_freq": False}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -1012,10 +1008,6 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="Pandas will coerce to object datatype here",
-)
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)

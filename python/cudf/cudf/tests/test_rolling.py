@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import math
 from contextlib import contextmanager
@@ -9,7 +9,6 @@ import pytest
 
 import cudf
 from cudf.core._compat import (
-    PANDAS_GE_110,
     PANDAS_GE_130,
     PANDAS_GE_150,
     PANDAS_LT_140,
@@ -48,10 +47,8 @@ def _hide_pandas_rolling_min_periods_warning(agg):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
     rng = np.random.default_rng(1)
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+    kwargs = {"check_freq": False}
+
     if len(data) > 0:
         if nulls == "one":
             p = rng.integers(0, len(data))
@@ -159,10 +156,7 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+    kwargs = {"check_freq": False}
 
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
@@ -310,10 +304,8 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+    kwargs = {"check_freq": False}
+
     index = pd.DatetimeIndex(
         pd.date_range("2000-01-01", "2000-01-02", freq="1h")
     )

@@ -16,7 +16,6 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import (
-    PANDAS_GE_110,
     PANDAS_GE_130,
     PANDAS_GE_150,
     PANDAS_LT_140,
@@ -1507,9 +1506,6 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
-)
 def test_groupby_nunique(agg, by):
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}

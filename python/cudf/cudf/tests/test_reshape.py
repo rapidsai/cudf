@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import re
 
@@ -8,7 +8,6 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -89,12 +88,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     "dtype",
     list(NUMERIC_TYPES + DATETIME_TYPES)
     + [
-        pytest.param(
-            "str",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        )
+        "str",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
