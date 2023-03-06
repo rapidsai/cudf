@@ -2061,7 +2061,6 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
                            uint8_t* strings_out,
                            uint8_t const* last_string,
                            int start_idx,
-                           int target_pos,
                            int lane_id)
 {
   // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
@@ -2086,10 +2085,11 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   __shared__ __align__(8) int64_t prefix_lens[32];
   __shared__ __align__(8) uint8_t const* offsets[32];
 
+  int value_count         = dba->prefixes.value_count;
   int const ln_idx        = start_idx + lane_id;
   int const src_idx       = rolling_index(ln_idx);
-  uint64_t prefix_len     = ln_idx < target_pos ? dba->prefixes.value[src_idx] : 0;
-  uint8_t* const lane_out = strings_out + dba->offset[src_idx];
+  uint64_t prefix_len     = ln_idx < value_count ? dba->prefixes.value[src_idx] : 0;
+  uint8_t* const lane_out = ln_idx < value_count ? strings_out + dba->offset[src_idx] : nullptr;
   prefix_lens[lane_id]    = prefix_len;
   offsets[lane_id]        = lane_out;
 
@@ -2101,11 +2101,11 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   if (lane_id == 0) { last_ptr = last_string; }
   __syncwarp();
 
-  for (int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32 && i + start_idx < value_count; i++) {
     // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
     // bytes from last_string and return.
     if (__all_sync(mask, prefix_len <= prefix_lens[lane_id - 1])) {
-      if (lane_id >= i && ln_idx < target_pos) { memcpy(lane_out, last_ptr, prefix_len); }
+      if (lane_id >= i && lane_out != nullptr) { memcpy(lane_out, last_ptr, prefix_len); }
       return;
     }
 
@@ -2125,7 +2125,7 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
           l--;
         }
 
-        if (prefix_lens[l] == 0) {
+        if (prefix_lens[l] == 0 && lane_out != nullptr) {
           memcpy(lane_out, offsets[l], prefix_len);
           prefix_lens[lane_id] = prefix_len = 0;
         }
@@ -2153,7 +2153,6 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
                                       uint8_t* strings_out,
                                       uint8_t*& last_string,
                                       int start_idx,
-                                      int target_pos,
                                       int lane_id)
 {
   __shared__ __align__(8) uint64_t strings_offset;
@@ -2194,11 +2193,13 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
 
     // copy suffixes into string data
     uint8_t* so_ptr = strings_out + string_off;
-    if (ln_idx < target_pos) { memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len); }
+    if (ln_idx < suffix_db->value_count) {
+      memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len);
+    }
     __syncwarp();
 
     // copy prefixes into string data. this has to be done serially.
-    StringScan(dba, strings_out, last_string, idx, target_pos, lane_id);
+    StringScan(dba, strings_out, last_string, idx, lane_id);
 
     if (lane_id == 31) {
       last_string = strings_out + string_off;
@@ -2456,8 +2457,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     }
     __syncthreads();
     if (t < 32) {
-      CalculateStringValues(
-        dba, suffix_data, strings_data, last_string, skip_pos, prefix_db->value_count, lane_id);
+      CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
     }
     skip_pos += batch_size;
     __syncthreads();
@@ -2500,10 +2500,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       int const leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t const dtype_len   = s->dtype_len;
 
-      int const skip_target = std::min(skip_pos + batch_size, suffix_db->value_count);
-
-      CalculateStringValues(
-        dba, suffix_data, strings_data, last_string, skip_pos, skip_target, lane_id);
+      CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
       skip_pos += batch_size;
 
       // process the mini-block in batches of 32
