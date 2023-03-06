@@ -3647,7 +3647,8 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=["float"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3662,7 +3663,8 @@ def test_dataframe_describe_include():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=["int"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3676,7 +3678,8 @@ def test_dataframe_describe_default():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe()
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe()
     pdf_results = pdf.describe()
 
     assert_eq(pdf_results, gdf_results)
@@ -3693,7 +3696,8 @@ def test_series_describe_include_all():
     df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
 
     pdf = df.to_pandas()
-    gdf_results = df.describe(include="all")
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include="all")
     pdf_results = pdf.describe(include="all")
 
     assert_eq(gdf_results[["x", "y"]], pdf_results[["x", "y"]])
@@ -3714,7 +3718,8 @@ def test_dataframe_describe_percentiles():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(percentiles=sample_percentiles)
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(percentiles=sample_percentiles)
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
     assert_eq(pdf_results, gdf_results)
@@ -4041,7 +4046,8 @@ def test_empty_dataframe_describe():
     gdf = cudf.from_pandas(pdf)
 
     expected = pdf.describe()
-    actual = gdf.describe()
+    with pytest.warns(FutureWarning):
+        actual = gdf.describe()
 
     assert_eq(expected, actual)
 
