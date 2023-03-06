@@ -348,29 +348,22 @@ namespace lexicographic {
 namespace {
 
 /**
- * @brief has_structs_of_lists
- * @param input
- * @return
+ * @brief Transform a lists-of-structs column into lists-of-integers column.
+ *
+ * For lists-of-structs column at any nested level, the child structs column will be replaced by an
+ * integer column of its ranks generated using `cudf::rank()`.
+ *
+ * If the input column is not lists-of-structs, or does not contain lists-of-structs at any nested
+ * level, the input will be passed through.
+ *
+ * @param input The input column to transform
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of new column_view representing the transformed input and the generated rank
+ *         (integer) column which needs to be kept alive.
  */
-// bool has_nested_lists_of_structs(column_view const& input)
-//{
-//  if (input.type().id() == type_id::LIST) {
-//    auto const child = input.child(lists_column_view::child_column_index);
-//    return child.type().id() == type_id::STRUCT || has_nested_lists_of_structs(child);
-//  } else if (input.type().id() == type_id::STRUCT) {
-//    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
-//      return has_nested_lists_of_structs(child);
-//    });
-//  }
-
-//  return false;
-//}
-
 std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
   column_view const& input, rmm::cuda_stream_view stream)
 {
-  //  if (!has_nested_lists_of_structs(input)) { return {input, nullptr}; }
-
   auto const make_transformed_input = [&](auto const& new_child) {
     return column_view{data_type{type_id::LIST},
                        input.size(),
@@ -410,6 +403,14 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
   return {input, nullptr};
 }
 
+/**
+ * @brief Transform any lists-of-structs column in a given table into lists-of-integers column.
+ *
+ * @param input The input table to transform
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of new table_view representing the transformed input and the generated rank
+ *         (integer) column which needs to be kept alive.
+ */
 std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
   table_view const& input, rmm::cuda_stream_view stream)
 {
@@ -425,9 +426,9 @@ std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_s
 }
 
 /**
- * @brief has_structs_of_lists
- * @param input
- * @return
+ * @brief Check if the input column has structs-of-lists column at any nested level.
+ * @param input The input column to check
+ * @return Boolean value indicating if there is structs-of-lists column
  */
 bool has_nested_structs_of_lists(column_view const& input)
 {
@@ -443,8 +444,11 @@ bool has_nested_structs_of_lists(column_view const& input)
 }
 
 /**
- * @brief flatten
- * @param t
+ * @brief Flatten any structs column in the given table.
+ *
+ * @param input The input table
+ * @return A pair of table_view representing the flattened input and an auxiliary data structure
+ *         that needs to be kept alive.
  */
 std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
 flatten_nested_structs_of_lists(table_view const& input,
