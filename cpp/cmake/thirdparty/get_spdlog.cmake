@@ -24,7 +24,8 @@ function(find_and_configure_spdlog)
       BUILD spdlog
       EXPORT_SET spdlog
       GLOBAL_TARGETS spdlog spdlog_header_only
-      NAMESPACE spdlog::)
+      NAMESPACE spdlog::
+    )
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(BUILD spdlog [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
   endif()
