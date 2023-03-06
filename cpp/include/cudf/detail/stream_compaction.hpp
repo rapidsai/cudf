@@ -150,8 +150,8 @@ cudf::size_type unique_count(column_view const& input,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal    = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = cudf::get_default_stream());
+                             null_equality nulls_equal,
+                             rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::distinct_count(column_view const&, null_policy, nan_policy)
@@ -169,8 +169,8 @@ cudf::size_type distinct_count(column_view const& input,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal    = null_equality::EQUAL,
-                               rmm::cuda_stream_view stream = cudf::get_default_stream());
+                               null_equality nulls_equal,
+                               rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf
