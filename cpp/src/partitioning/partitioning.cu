@@ -399,7 +399,7 @@ struct copy_block_partitions_dispatcher {
     return is_fixed_width<DataType>() && (sizeof(DataType) <= sizeof(int64_t));
   }
 
-  template <typename DataType, std::enable_if_t<is_copy_block_supported<DataType>()>* = nullptr>
+  template <typename DataType, CUDF_ENABLE_IF(is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
@@ -426,7 +426,7 @@ struct copy_block_partitions_dispatcher {
     return std::make_unique<column>(input.type(), input.size(), std::move(output));
   }
 
-  template <typename DataType, std::enable_if_t<not is_copy_block_supported<DataType>()>* = nullptr>
+  template <typename DataType, CUDF_ENABLE_IF(not is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
