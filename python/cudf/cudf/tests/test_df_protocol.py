@@ -39,15 +39,12 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
         cudfcol.apply_boolean_mask(non_null_idxs),
     )
 
-    if dtype[0] != _DtypeKind.BOOL:
-        array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
-        col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
-        assert_eq(
-            array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
-            col_array[non_null_idxs.to_numpy()].flatten(),
-        )
-    else:
-        pytest.raises(TypeError, buf.__dlpack__)
+    array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
+    col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
+    assert_eq(
+        array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
+        col_array[non_null_idxs.to_numpy()].flatten(),
+    )
 
 
 def assert_column_equal(col: _CuDFColumn, cudfcol):
