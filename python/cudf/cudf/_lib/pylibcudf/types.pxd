@@ -1,8 +1,9 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
+from libcpp cimport bool as cbool
 
-from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.cpp.types cimport data_type, null_policy, type_id
 
 ctypedef int32_t underlying_type_t_type_id
 cpdef enum TypeId:
@@ -56,3 +57,9 @@ cdef class DataType:
     cdef data_type c_obj
     cpdef TypeId id(self)
     cpdef int32_t scale(self)
+
+
+ctypedef bool underlying_type_t_null_policy
+cpdef enum NullPolicy:
+    EXCLUDE = <underlying_type_t_null_policy> null_policy.EXCLUDE
+    INCLUDE = <underlying_type_t_null_policy> null_policy.INCLUDE
