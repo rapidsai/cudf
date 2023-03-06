@@ -14,7 +14,7 @@
 
 import datetime
 import io
-from typing import Optional, Union
+from typing import Optional
 
 import fastavro
 import pytest
@@ -292,7 +292,7 @@ def test_can_detect_dtypes_from_avro_logical_type(
     assert_eq(expected, actual)
 
 
-def get_days_from_epoch(date: Optional[datetime.date]) -> Union[int, None]:
+def get_days_from_epoch(date: Optional[datetime.date]) -> Optional[int]:
     if date is None:
         return None
     return (date - datetime.date(1970, 1, 1)).days
@@ -301,15 +301,14 @@ def get_days_from_epoch(date: Optional[datetime.date]) -> Union[int, None]:
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
 @pytest.mark.parametrize("nullable", [True, False])
 @pytest.mark.parametrize("prepend_null", [True, False])
-def test_can_parse_avro_date_logical_type2(namespace, nullable, prepend_null):
+def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
 
     avro_type = {"logicalType": "date", "type": "int"}
     if nullable:
-        avro_type = [avro_type]
         if prepend_null:
-            avro_type.insert(0, "null")
+            avro_type = ["null", avro_type]
         else:
-            avro_type.append("null")
+            avro_type = [avro_type, "null"]
 
     schema_dict = {
         "type": "record",
@@ -325,12 +324,14 @@ def test_can_parse_avro_date_logical_type2(namespace, nullable, prepend_null):
     schema = fastavro.parse_schema(schema_dict)
 
     if nullable:
+        # Insert some None values in no particular order.  These will get
+        # converted into avro "nulls" by the fastavro writer.
         dates = [
+            None,
             datetime.date(1970, 1, 1),
-            None,
             datetime.date(1970, 1, 2),
-            None,
             datetime.date(1981, 10, 25),
+            None,
             None,
             datetime.date(2012, 5, 18),
             None,
