@@ -929,7 +929,7 @@ std::unique_ptr<table> reader::impl::compute_timezone_table(
     });
   if (not has_timestamp_column) return std::make_unique<cudf::table>();
 
-  return cudf::detail::make_timezone_transition_table(
+  return make_timezone_transition_table(
     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 

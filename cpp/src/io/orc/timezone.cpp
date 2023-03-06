@@ -23,7 +23,9 @@
 #include <filesystem>
 #include <fstream>
 
-namespace cudf::detail {
+namespace cudf {
+
+namespace {
 
 constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
 std::string const tzif_system_directory = "/usr/share/zoneinfo/";
@@ -373,6 +375,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
+}  // namespace
+
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream)
@@ -489,4 +493,4 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
 }
 
-}  // namespace cudf::detail
+}  // namespace cudf

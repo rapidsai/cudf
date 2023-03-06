@@ -23,7 +23,7 @@
 #include <optional>
 #include <string>
 
-namespace cudf::detail {
+namespace cudf {
 
 // Cycle in which the time offsets repeat
 static constexpr int32_t cycle_years = 400;
@@ -46,4 +46,4 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream);
 
-}  // namespace cudf::detail
+}  // namespace cudf
