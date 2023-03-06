@@ -16,6 +16,66 @@ requires = [
     "rmm==23.4.*",
 ]
 
+[project]
+name = "cudf"
+version = "23.04.00"
+description = "cuDF - GPU Dataframe"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+    { name = "NVIDIA Corporation" },
+]
+license = { text = "Apache 2.0" }
+requires-python = ">=3.8"
+dependencies = [
+    "cachetools",
+    "cuda-python>=11.7.1,<12.0",
+    "fsspec>=0.6.0",
+    "numba>=0.56.2",
+    "numpy",
+    "nvtx>=0.2.1",
+    "packaging",
+    "pandas>=1.0,<1.6.0dev0",
+    "protobuf==4.21",
+    "typing_extensions",
+    # Allow floating minor versions for Arrow.
+    "pyarrow==10",
+    "rmm==23.4.*",
+    "ptxcompiler",
+    "cubinlinker",
+    "cupy-cuda11x",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.10",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-benchmark",
+    "pytest-xdist",
+    "hypothesis",
+    "mimesis>=4.1.0",
+    "fastavro>=0.22.9",
+    "python-snappy>=0.6.0",
+    "pyorc",
+    "msgpack",
+    "transformers==4.24.0",
+    "tzdata",
+]
+
+[project.urls]
+Homepage = "https://github.com/rapidsai/cudf"
+Documentation = "https://docs.rapids.ai/api/cudf/stable/"
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
 [tool.isort]
 line_length = 79
 multi_line_output = 3
