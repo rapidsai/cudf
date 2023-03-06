@@ -115,7 +115,7 @@ dependencies:
           - scikit-build>=0.13.1
       - output_types: conda
         packages:
-          - protobuf=4.21
+          - protobuf>=4.21.6,<4.22
   cudatoolkit:
     specific:
       - output_types: conda

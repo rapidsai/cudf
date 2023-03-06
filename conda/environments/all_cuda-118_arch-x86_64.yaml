@@ -50,7 +50,7 @@ dependencies:
 - pandoc<=2.0.0
 - pip
 - pre-commit
-- protobuf=4.21
+- protobuf>=4.21.6,<4.22
 - ptxcompiler
 - pyarrow=10
 - pydata-sphinx-theme
