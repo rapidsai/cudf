@@ -45,8 +45,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
-#include <cub/warp/warp_reduce.cuh>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -253,7 +251,7 @@ struct replace_multi_parallel_fn {
  * @brief Used by the copy-if function to produce target_pair objects
  *
  * Using an inplace lambda caused a runtime crash in thrust::copy_if
- * (this happens sometimes with passing device lambdas to thrust algorithms)
+ * (this happens sometimes when passing device lambdas to thrust algorithms)
  */
 struct pair_generator {
   __device__ target_pair operator()(int idx) const
@@ -272,7 +270,8 @@ struct copy_if_fn {
 /**
  * @brief Function logic for the replace_multi API.
  *
- * This will perform the multi-replace operation on each string.
+ * Performs the multi-replace operation with a thread per string.
+ * This performs best on smaller strings. @see AVG_CHAR_BYTES_THRESHOLD
  */
 struct replace_multi_fn {
   column_device_view const d_strings;
@@ -380,7 +379,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
   auto targets_positions = rmm::device_uvector<target_pair>(target_count, stream);
   auto d_positions       = targets_positions.data();
 
-  auto copy_itr =
+  auto const copy_itr =
     cudf::detail::make_counting_transform_iterator(0, pair_generator{fn, chars_bytes});
   auto const copy_end = thrust::copy_if(
     rmm::exec_policy(stream), copy_itr, copy_itr + chars_bytes, d_positions, copy_if_fn{});
@@ -389,7 +388,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
   auto const targets_offsets = [&] {
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
 
-    auto pos_itr = cudf::detail::make_counting_transform_iterator(
+    auto const pos_itr = cudf::detail::make_counting_transform_iterator(
       0, [d_positions] __device__(auto idx) -> size_type { return d_positions[idx].first; });
     auto pos_count = std::distance(d_positions, copy_end);
 

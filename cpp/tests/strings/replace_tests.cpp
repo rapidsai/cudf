@@ -173,22 +173,6 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlap)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTest, ReplaceTargetOverlap2)
-{
-  auto input        = cudf::test::strings_column_wrapper({"banana", "nanananananana"});
-  auto strings_view = cudf::strings_column_view(input);
-
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
-
-  auto results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("nana"), cudf::string_scalar(""), -1, stream, mr);
-  cudf::test::print(results->view());
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("nana"), cudf::string_scalar(""), -1, stream, mr);
-  cudf::test::print(results->view());
-}
-
 TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
 {
   auto input        = build_corpus();
@@ -373,19 +357,19 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     {1, 1, 1, 1, 0, 1});
   auto strings_view = cudf::strings_column_view(input);
 
-  cudf::test::strings_column_wrapper targets({"901", "bananá", "ápple"});
+  cudf::test::strings_column_wrapper targets({"78901", "bananá", "ápple", "78"});
   auto targets_view = cudf::strings_column_view(targets);
 
   {
-    cudf::test::strings_column_wrapper repls({"x", "PEAR", "avocado"});
+    cudf::test::strings_column_wrapper repls({"x", "PEAR", "avocado", "$$"});
     auto repls_view = cudf::strings_column_view(repls);
 
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
       {"This string needs to be very long to trigger the long-replace internal functions.",
-       "012345678x2345678x2345678x2345678x2345678x2345678x2345678x23456789",
-       "012345678x2345678x2345678x2345678x2345678x2345678x2345678x23456789",
+       "0123456x23456x23456x23456x23456x23456x23456x23456$$9",
+       "0123456x23456x23456x23456x23456x23456x23456x23456$$9",
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR",
        "",
        ""},
@@ -401,8 +385,8 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
 
     cudf::test::strings_column_wrapper expected(
       {"This string needs to be very long to trigger the long-replace internal functions.",
-       "012345678*2345678*2345678*2345678*2345678*2345678*2345678*23456789",
-       "012345678*2345678*2345678*2345678*2345678*2345678*2345678*23456789",
+       "0123456*23456*23456*23456*23456*23456*23456*23456*9",
+       "0123456*23456*23456*23456*23456*23456*23456*23456*9",
        "Test string for overlap check: banana* * ** ban* * *",
        "",
        ""},
