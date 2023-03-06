@@ -1,11 +1,57 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 [build-system]
-
+build-backend = "setuptools.build_meta"
 requires = [
     "wheel",
     "setuptools",
 ]
+
+[project]
+name = "dask_cudf"
+version = "23.04.00"
+description = "Utilities for Dask and cuDF interactions"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+    { name = "NVIDIA Corporation" },
+]
+license = { text = "Apache 2.0" }
+requires-python = ">=3.8"
+dependencies = [
+    "dask>=2023.1.1",
+    "distributed>=2023.1.1",
+    "fsspec>=0.6.0",
+    "numpy",
+    "pandas>=1.0,<1.6.0dev0",
+    "cudf==23.4.*",
+    "cupy-cuda11x",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dynamic = ["entry-points"]
+
+[project.optional-dependencies]
+test = [
+    "numpy",
+    "pandas>=1.0,<1.6.0dev0",
+    "pytest",
+    "pytest-xdist",
+    "numba>=0.56.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/rapidsai/cudf"
+
+[tool.setuptools]
+license-files = ["LICENSE"]
 
 [tool.isort]
 line_length = 79
