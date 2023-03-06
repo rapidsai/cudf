@@ -323,29 +323,26 @@ def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
 
     schema = fastavro.parse_schema(schema_dict)
 
-    if nullable:
-        # Insert some None values in no particular order.  These will get
-        # converted into avro "nulls" by the fastavro writer.
-        dates = [
-            None,
-            datetime.date(1970, 1, 1),
-            datetime.date(1970, 1, 2),
-            datetime.date(1981, 10, 25),
-            None,
-            None,
-            datetime.date(2012, 5, 18),
-            None,
-            datetime.date(2019, 9, 3),
-            None,
-        ]
-    else:
-        dates = [
-            datetime.date(1970, 1, 1),
-            datetime.date(1970, 1, 2),
-            datetime.date(1981, 10, 25),
-            datetime.date(2012, 5, 18),
-            datetime.date(2019, 9, 3),
-        ]
+    # Insert some None values in no particular order.  These will get converted
+    # into avro "nulls" by the fastavro writer (or filtered out if we're not
+    # nullable).  The first and last dates are epoch min/max values, the rest
+    # are arbitrarily chosen.
+    dates = [
+        None,
+        datetime.date(1970, 1, 1),
+        datetime.date(1970, 1, 2),
+        datetime.date(1981, 10, 25),
+        None,
+        None,
+        datetime.date(2012, 5, 18),
+        None,
+        datetime.date(2019, 9, 3),
+        None,
+        datetime.date(9999, 12, 31),
+    ]
+
+    if not nullable:
+        dates = [date for date in dates if date is not None]
 
     days_from_epoch = [get_days_from_epoch(date) for date in dates]
 
