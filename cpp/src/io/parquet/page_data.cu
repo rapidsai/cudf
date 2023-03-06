@@ -1944,7 +1944,11 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   else {
     db->block_start = db->cur_mb_start + db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
     // only do init if there's another mini-block available
-    if (db->current_value_idx < db->value_count) { InitDeltaMiniBlock(db); }
+    if (db->current_value_idx < db->value_count) {
+      InitDeltaMiniBlock(db);
+    } else {
+      db->cur_mb = 0;
+    }
   }
 }
 
@@ -2048,7 +2052,7 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   }
 }
 
-#define STRING_SCAN 0
+#define STRING_SCAN 1
 #if STRING_SCAN
 __device__ void StringScan(delta_binary_state_s* prefix_db,
                            delta_binary_state_s* suffix_db,
@@ -2088,10 +2092,7 @@ __device__ void StringScan(delta_binary_state_s* prefix_db,
   offsets[lane_id]        = lane_out;
 
   // if all prefix_len's are zero, then there's nothing to do
-  if (__all_sync(0xffff'ffff, prefix_len == 0)) {
-    printf("%d: all zero\n", lane_id);
-    return;
-  }
+  if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
 
   // initialize mask so thread 0 doesn't vote. will remove thread "i+1" at the end of each iteration
   int mask = 0xffff'fffe;
@@ -2229,6 +2230,7 @@ __device__ void CalculateStringValues(delta_binary_state_s* prefix_db,
   }
 }
 
+// TODO(ets): add skip_rows/num_rows so we don't bother counting pages we won't read anyway.
 /**
  * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
  */
