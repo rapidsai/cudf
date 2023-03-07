@@ -26,6 +26,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -125,9 +126,8 @@ cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
                                rmm::cuda_stream_view stream)
 {
-  auto table_ptr      = cudf::table_device_view::create(keys, stream);
-  auto const num_rows = table_ptr->num_rows();
-  auto const has_null = nullate::DYNAMIC{cudf::has_nulls(keys)};
+  auto const num_rows  = keys.num_rows();
+  auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
                         cuco::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
@@ -135,23 +135,39 @@ cudf::size_type distinct_count(table_view const& keys,
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
-  compaction_hash hash_key{has_null, *table_ptr};
-  row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
+  auto const preprocessed_input =
+    cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
+
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const hash_key   = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
-  // when nulls are equal, insert non-null rows only to improve efficiency
-  if (nulls_equal == null_equality::EQUAL and has_null) {
-    thrust::counting_iterator<size_type> stencil(0);
-    auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
-    row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+  auto const comparator_helper = [&](auto const row_equal) {
+    // when nulls are equal, insert non-null rows only to improve efficiency
+    if (nulls_equal == null_equality::EQUAL and has_nulls) {
+      thrust::counting_iterator<size_type> stencil(0);
+      auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
+      row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-    key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-    return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
+      key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
+      return key_map.get_size() + static_cast<std::size_t>(null_count > 0);
+    }
+    // otherwise, insert all
+    key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+    return key_map.get_size();
+  };
+
+  if (cudf::detail::has_nested_columns(keys)) {
+    auto const row_equal = row_comp.equal_to<true>(has_nulls, nulls_equal);
+    return comparator_helper(row_equal);
+  } else {
+    auto const row_equal = row_comp.equal_to<false>(has_nulls, nulls_equal);
+    return comparator_helper(row_equal);
   }
-  // otherwise, insert all
-  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
-  return key_map.get_size();
 }
 
 cudf::size_type distinct_count(column_view const& input,
