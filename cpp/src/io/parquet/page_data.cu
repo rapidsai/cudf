@@ -101,8 +101,6 @@ struct page_state_s {
   PageNestingDecodeInfo* nesting_info;
 };
 
-// TODO refactor so offset is not in this struct. maybe have a delta_byte_array_state_s
-// that has two delta_binary_state_s's and the offset array.
 struct delta_binary_state_s {
   uint8_t const* block_start;  // start of data, but updated as data is read
   uint8_t const* block_end;    // end of data
