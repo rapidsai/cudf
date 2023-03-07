@@ -20,6 +20,7 @@
 
 #include <cuda/std/tuple>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -1898,9 +1899,12 @@ __global__ void __launch_bounds__(block_size)
 //
 // | min delta (int) | bit-width array (1 byte * mini_block_count) |
 //
+// on exit db->cur_mb is 0 and db->cur_mb_start points to the first mini-block of data, or nullptr
+// if out of data.
 __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
 {
-  db->cur_mb = 0;
+  db->cur_mb       = 0;
+  db->cur_mb_start = nullptr;
 
   if (db->current_value_idx < db->value_count) {
     auto d_start      = db->block_start;
@@ -1916,6 +1920,7 @@ __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
 //
 // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
 //
+// also initializes the first mini-block before exit
 __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
                                      uint8_t const* d_start,
                                      uint8_t const* d_end)
@@ -1935,6 +1940,7 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
 }
 
 // skip to the start of the next mini-block. should only be called on thread 0.
+// calls InitDeltaMiniBlock if currently on the last mini-block in a block.
 __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 {
   if (db->current_value_idx >= db->value_count) { return; }
@@ -1977,19 +1983,20 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
 // called by all threads in a warp, currently only one warp supported.
 __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 {
+  using cudf::detail::warp_size;
   if (db->current_value_idx >= db->value_count) { return; }
 
   uint32_t const mb_bits = db->cur_bitwidths[db->cur_mb];
 
   // need to do in multiple passes if values_per_mb != 32
-  uint32_t const num_pass = db->values_per_mb / 32;
+  uint32_t const num_pass = db->values_per_mb / warp_size;
 
   // position at end of the current mini-block since the following calculates
   // negative indexes
   auto d_start = db->cur_mb_start;
 
   for (int i = 0; i < num_pass; i++) {
-    d_start += (32 * mb_bits) / 8;
+    d_start += (warp_size * mb_bits) / 8;
 
     // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
     // that one only unpacks up to bitwidths of 24. simplified some since this
@@ -1998,7 +2005,7 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
     // TODO(ets): faster as loop or the unrolled version???
     int64_t delta = 0;
     if (lane_id + db->current_value_idx < db->value_count) {
-      int32_t ofs      = (lane_id - 32) * mb_bits;
+      int32_t ofs      = (lane_id - warp_size) * mb_bits;
       const uint8_t* p = d_start + (ofs >> 3);
       ofs &= 7;
       if (p < db->block_end) {
@@ -2066,19 +2073,22 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
     }
     __syncwarp();
 
-    db->value[rolling_index(db->current_value_idx + 32 * i + lane_id)] = delta;
+    db->value[rolling_index(db->current_value_idx + warp_size * i + lane_id)] = delta;
 
     // save delta from last lane in warp
     if (lane_id == 31) { db->last_value = delta; }
   }
 }
 
+// kind of like an inclusive scan for strings. takes prefix_len bytes from preceding
+// string and prepends to the suffix we've already copied into place.
 __device__ void StringScan(delta_byte_array_state_s* dba,
                            uint8_t* strings_out,
                            uint8_t const* last_string,
                            uint32_t start_idx,
                            uint32_t lane_id)
 {
+  using cudf::detail::warp_size;
   // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
   // a warp will take 32 iterations.
   // exceptions:
@@ -2098,8 +2108,8 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   // worst case for above is O(n) iterations, but hopefully will average out to O(log(n))
   //
   __shared__ __align__(8) uint8_t const* last_ptr;
-  __shared__ __align__(8) int64_t prefix_lens[32];
-  __shared__ __align__(8) uint8_t const* offsets[32];
+  __shared__ __align__(8) int64_t prefix_lens[warp_size];
+  __shared__ __align__(8) uint8_t const* offsets[warp_size];
 
   uint32_t value_count    = dba->prefixes.value_count;
   uint32_t const ln_idx   = start_idx + lane_id;
@@ -2112,12 +2122,12 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   // if all prefix_len's are zero, then there's nothing to do
   if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
 
-  // initialize mask so thread 0 doesn't vote. will remove thread "i+1" at the end of each iteration
+  // initialize mask so lane 0 doesn't vote. will remove lane "i+1" at the end of each iteration
   uint32_t mask = 0xffff'fffe;
   if (lane_id == 0) { last_ptr = last_string; }
   __syncwarp();
 
-  for (uint32_t i = 0; i < 32 && i + start_idx < value_count; i++) {
+  for (uint32_t i = 0; i < warp_size && i + start_idx < value_count; i++) {
     // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
     // bytes from last_string and return.
     if (__all_sync(mask, prefix_len <= prefix_lens[lane_id - 1])) {
@@ -2135,9 +2145,9 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
 
       if (lane_id > i) {
         // copy data from the nearest prefix_len==0 neighbor to the left (if any),
-        // but stop if we hit a neighbor with a prefix_len < ours.
+        // but do nothing if we hit a neighbor with a prefix_len < ours.
         int l = lane_id - 1;
-        while (l > i and prefix_lens[l] != 0 and prefix_len <= prefix_lens[l]) {
+        while (l > i && prefix_lens[l] != 0 && prefix_len <= prefix_lens[l]) {
           l--;
         }
 
@@ -2152,10 +2162,11 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
       if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
     }
 
+    // current lane is done, make it last_ptr
     if (lane_id == i) { last_ptr = lane_out; }
     __syncwarp();
 
-    // turn off next thread
+    // remove next lane from mask
     mask &= ~(1 << (i + 1));
   }
 }
@@ -2177,8 +2188,9 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
   auto* const suffix_db = &dba->suffixes;
 
   if (start_idx >= suffix_db->value_count) { return; }
+  uint32_t const end_idx = start_idx + suffix_db->values_per_mb;
 
-  for (int idx = start_idx; idx < start_idx + suffix_db->values_per_mb; idx += 32) {
+  for (int idx = start_idx; idx < end_idx; idx += cudf::detail::warp_size) {
     uint32_t const ln_idx = idx + lane_id;
 
     // calculate offsets into suffix data
@@ -2214,7 +2226,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
     }
     __syncwarp();
 
-    // copy prefixes into string data. this has to be done serially.
+    // copy prefixes into string data.
     StringScan(dba, strings_out, last_string, idx, lane_id);
 
     if (lane_id == 31) {
