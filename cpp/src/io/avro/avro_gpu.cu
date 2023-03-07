@@ -223,8 +223,12 @@ avro_decode_row(schemadesc_s const* schema,
         //      both as int64_t.  Everything else is 64-bit in both avro and
         //      cudf.
         CUDF_UNREACHABLE("avro time/timestamp types not yet implemented");
-        int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
+        //
+        // When we do implement these, the following decoding logic should
+        // be correct:
+        //
+        // int64_t v = avro_decode_zigzag_varint(cur, end);
+        // if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
       } break;
 
       case type_date: {
