@@ -334,7 +334,7 @@ def test_character_tokenize_series():
             ),
         ]
     )
-    expected = cudf.Series(
+    expected_values = cudf.Series(
         [
             "h",
             "e",
@@ -422,6 +422,8 @@ def test_character_tokenize_series():
             "Ǆ",
         ]
     )
+    expected_index = sr.index.repeat(sr.str.len().fillna(0))
+    expected = cudf.Series(expected_values, index=expected_index)
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)

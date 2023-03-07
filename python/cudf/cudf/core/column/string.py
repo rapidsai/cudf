@@ -4675,7 +4675,9 @@ class StringMethods(ColumnMethods):
         """
         result_col = libstrings.character_tokenize(self._column)
         if isinstance(self._parent, cudf.Series):
-            return cudf.Series(result_col, name=self._parent.name)
+            lengths = self.len().fillna(0)
+            index = self._parent.index.repeat(lengths)
+            return cudf.Series(result_col, name=self._parent.name, index=index)
         elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(result_col, name=self._parent.name)
         else:
