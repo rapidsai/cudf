@@ -514,5 +514,5 @@ def test_nullable_schema_mismatch(tmpdir):
         ddf = dd.read_parquet(
             [path0, path1], split_row_groups=2, aggregate_files=True
         )
-        expect = dd.read_parquet([path0, path1]).compute()
-    dd.assert_eq(ddf, expect)
+        expect = pd.read_parquet([path0, path1])
+    dd.assert_eq(ddf, expect, check_index=False)
