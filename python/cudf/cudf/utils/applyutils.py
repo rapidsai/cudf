@@ -105,6 +105,7 @@ def apply_chunks(
     return applychunks.run(df, chunks=chunks, tpb=tpb)
 
 
+@acquire_spill_lock()
 def make_aggregate_nullmask(df, columns=None, op="__and__"):
 
     out_mask = None
@@ -112,17 +113,16 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         col = cudf.core.dataframe.extract_col(df, k)
         if not col.nullable:
             continue
-        nullmask = df[k].nullmask
+        nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
             out_mask = column.as_column(
                 nullmask.copy(), dtype=utils.mask_dtype
             )
-            continue
-
-        out_mask = libcudf.binaryop.binaryop(
-            column.as_column(nullmask), out_mask, op, out_mask.dtype
-        )
+        else:
+            out_mask = libcudf.binaryop.binaryop(
+                nullmask, out_mask, op, out_mask.dtype
+            )
 
     return out_mask
 

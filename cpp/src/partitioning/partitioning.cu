@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
@@ -24,7 +23,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/partitioning.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -35,6 +34,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <cub/block/block_scan.cuh>
+#include <cub/device/device_histogram.cuh>
 
 namespace cudf {
 namespace {
@@ -389,7 +391,15 @@ rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
 }
 
 struct copy_block_partitions_dispatcher {
-  template <typename DataType, std::enable_if_t<is_fixed_width<DataType>()>* = nullptr>
+  template <typename DataType>
+  constexpr static bool is_copy_block_supported()
+  {
+    // The shared-memory used for fixed-width types in the copy_block_partitions_impl function
+    // will be too large for any DataType greater than int64_t.
+    return is_fixed_width<DataType>() && (sizeof(DataType) <= sizeof(int64_t));
+  }
+
+  template <typename DataType, CUDF_ENABLE_IF(is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
@@ -416,7 +426,7 @@ struct copy_block_partitions_dispatcher {
     return std::make_unique<column>(input.type(), input.size(), std::move(output));
   }
 
-  template <typename DataType, std::enable_if_t<not is_fixed_width<DataType>()>* = nullptr>
+  template <typename DataType, CUDF_ENABLE_IF(not is_copy_block_supported<DataType>())>
   std::unique_ptr<column> operator()(column_view const& input,
                                      const size_type num_partitions,
                                      size_type const* row_partition_numbers,
@@ -489,9 +499,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows, stream);
 
-  auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, nullate::DYNAMIC>(
-    nullate::DYNAMIC{hash_has_nulls}, *device_input, seed);
+  auto const row_hasher = experimental::row::hash::row_hasher(table_to_hash, stream);
+  auto const hasher =
+    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -578,7 +588,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                                           mr);
     });
 
-    if (has_nulls(input)) {
+    if (has_nested_nulls(input)) {
       // Use copy_block_partitions to compute a gather map
       auto gather_map = compute_gather_map(num_rows,
                                            num_partitions,
@@ -713,7 +723,7 @@ struct dispatch_map_type {
 }  // namespace
 
 namespace detail {
-namespace local {
+namespace {
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -730,7 +740,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
-  if (has_nulls(table_to_hash)) {
+  if (has_nested_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
@@ -738,7 +748,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
       input, table_to_hash, num_partitions, seed, stream, mr);
   }
 }
-}  // namespace local
+}  // namespace
 
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
@@ -779,10 +789,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      return detail::local::hash_partition<detail::IdentityHash>(
+      return detail::hash_partition<detail::IdentityHash>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      return detail::local::hash_partition<detail::MurmurHash3_32>(
+      return detail::hash_partition<detail::MurmurHash3_32>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }

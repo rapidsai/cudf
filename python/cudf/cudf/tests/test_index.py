@@ -392,6 +392,7 @@ def test_index_copy_category(name, dtype, deep=True):
     with pytest.warns(FutureWarning):
         cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
+    assert_column_memory_ne(cidx._values, cidx_copy._values)
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -407,13 +408,27 @@ def test_index_copy_category(name, dtype, deep=True):
         cudf.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-def test_index_copy_deep(idx, deep):
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_index_copy_deep(idx, deep, copy_on_write):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    if not deep:
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", copy_on_write)
+    if (
+        isinstance(idx, cudf.StringIndex)
+        or not deep
+        or (cudf.get_option("copy_on_write") and not deep)
+    ):
+        # StringColumn is immutable hence, deep copies of a
+        # StringIndex will share the same StringColumn.
+
+        # When `copy_on_write` is turned on, Index objects will
+        # have unique column object but they all point to same
+        # data pointers.
         assert_column_memory_eq(idx._values, idx_copy._values)
     else:
         assert_column_memory_ne(idx._values, idx_copy._values)
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *input_table)
       .max_page_size_bytes(max_page_size_bytes)
       .max_page_size_rows(max_page_size_rows)
+      .max_page_fragment_size(cudf::io::default_max_page_fragment_size)
       .build();
   cudf::io::write_parquet(write_opts);
 

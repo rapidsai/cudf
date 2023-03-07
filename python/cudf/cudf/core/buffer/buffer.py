@@ -194,6 +194,28 @@ class Buffer(Serializable):
             raise ValueError("slice must be C-contiguous")
         return self._getitem(offset=start, size=stop - start)
 
+    def copy(self, deep: bool = True):
+        """
+        Return a copy of Buffer.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, returns a deep copy of the underlying Buffer data.
+            If False, returns a shallow copy of the Buffer pointing to
+            the same underlying data.
+
+        Returns
+        -------
+        Buffer
+        """
+        if deep:
+            return self._from_device_memory(
+                rmm.DeviceBuffer(ptr=self.get_ptr(mode="read"), size=self.size)
+            )
+        else:
+            return self[:]
+
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
@@ -240,20 +262,6 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    @property
-    def _readonly_proxy_cai_obj(self):
-        """
-        Returns a proxy object with a read-only CUDA Array Interface.
-        """
-        return cuda_array_interface_wrapper(
-            ptr=self.get_ptr(mode="read"),
-            size=self.size,
-            owner=self,
-            readonly=True,
-            typestr="|u1",
-            version=0,
-        )
-
     def get_ptr(self, *, mode) -> int:
         """Device pointer to the start of the buffer.
 
@@ -271,6 +279,7 @@ class Buffer(Serializable):
         See Also
         --------
         SpillableBuffer.get_ptr
+        CopyOnWriteBuffer.get_ptr
         """
         return self._ptr
 

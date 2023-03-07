@@ -229,7 +229,7 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
   auto const repeat_times =
     int32s_col{half_max, half_max, half_max, half_max, half_max, half_max, half_max};
 
-  EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times), std::overflow_error);
 }
 
 TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithScalarRepeatTimes)

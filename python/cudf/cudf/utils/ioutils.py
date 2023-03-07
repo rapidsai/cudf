@@ -1245,7 +1245,10 @@ None or str
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
-- If `to_csv` leads to memory errors consider setting the `chunksize` argument.
+- The default behaviour is to write all rows of the dataframe at once.
+  This can lead to memory or overflow errors for large tables. If this
+  happens, consider setting the ``chunksize`` argument to some
+  reasonable fraction of the total rows in the dataframe.
 
 Examples
 --------

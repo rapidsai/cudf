@@ -244,7 +244,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTableCreationIncreasesRefCount() {
+  void testTableCreationIncreasesRefCountWithDoubleFree() {
     //tests the Table increases the refcount on column vectors
     assertThrows(IllegalStateException.class, () -> {
       try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
