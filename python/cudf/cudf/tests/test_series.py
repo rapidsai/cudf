@@ -490,10 +490,55 @@ def test_series_factorize(data, na_sentinel):
 
     with pytest.warns(FutureWarning):
         expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
+    with pytest.warns(FutureWarning):
+        actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
     assert_eq(expected_cats.values, actual_cats.to_pandas().values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("use_na_sentinel", [True, False])
+def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    actual_labels, actual_cats = gsr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_series_factorize_sort(data, sort):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(sort=sort)
+    actual_labels, actual_cats = gsr.factorize(sort=sort)
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize(
