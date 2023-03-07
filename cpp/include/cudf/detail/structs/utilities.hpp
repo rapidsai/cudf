@@ -173,9 +173,9 @@ class flattened_table {
   table_view const& input,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  column_nullability nullability = column_nullability::MATCH_INCOMING,
+  column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.
