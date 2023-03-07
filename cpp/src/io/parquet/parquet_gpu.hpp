@@ -445,8 +445,8 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param num_rows Maximum number of rows to read
  * @param min_rows crop all rows below min_row
+ * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
  * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
@@ -455,8 +455,8 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  */
 void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       hostdevice_vector<ColumnChunkDesc> const& chunks,
-                      size_t num_rows,
                       size_t min_row,
+                      size_t num_rows,
                       bool compute_num_rows,
                       bool compute_string_sizes,
                       rmm::cuda_stream_view stream);
@@ -480,8 +480,9 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for initializing encoder page fragments
+ * @brief Launches kernel for initializing encoder row group fragments
  *
+ * These fragments are used to calculate row group boundaries.
  * Based on the number of rows in each fragment, populates the value count, the size of data in the
  * fragment, the number of unique values, and the data size of unique values.
  *
@@ -492,24 +493,38 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
  * @param[in] fragment_size Number of rows per fragment
  * @param[in] stream CUDA stream to use
  */
-void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> first_frag_in_part,
-                       uint32_t fragment_size,
-                       rmm::cuda_stream_view stream);
+void InitRowGroupFragments(cudf::detail::device_2dspan<PageFragment> frag,
+                           device_span<parquet_column_device_view const> col_desc,
+                           device_span<partition_info const> partitions,
+                           device_span<int const> first_frag_in_part,
+                           uint32_t fragment_size,
+                           rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for initializing fragment statistics groups
+ * @brief Launches kernel for calculating encoder page fragments with variable fragment sizes
  *
- * @param[out] groups Statistics groups [num_columns x num_fragments]
- * @param[in] fragments Page fragments [num_columns x num_fragments]
- * @param[in] col_desc Column description [num_columns]
+ * Based on the number of rows in each fragment, populates the value count, the size of data in the
+ * fragment, the number of unique values, and the data size of unique values.
+ *
+ * This assumes an initial call to InitRowGroupFragments has been made.
+ *
+ * @param[out] frag Fragment array [fragment_id]
+ * @param[in] column_frag_sizes Number of rows per fragment per column [column_id]
  * @param[in] stream CUDA stream to use
  */
-void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups,
-                            cudf::detail::device_2dspan<PageFragment const> fragments,
-                            device_span<gpu::parquet_column_device_view const> col_desc,
+void CalculatePageFragments(device_span<PageFragment> frag,
+                            device_span<size_type const> column_frag_sizes,
+                            rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for initializing fragment statistics groups with variable fragment sizes
+ *
+ * @param[out] groups Statistics groups [total_fragments]
+ * @param[in] fragments Page fragments [total_fragments]
+ * @param[in] stream CUDA stream to use
+ */
+void InitFragmentStatistics(device_span<statistics_group> groups,
+                            device_span<PageFragment const> fragments,
                             rmm::cuda_stream_view stream);
 
 /**

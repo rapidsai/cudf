@@ -33,6 +33,7 @@ from . import (
     stream_compaction,
     string_casting,
     strings,
+    strings_udf,
     text,
     timezone,
     transpose,

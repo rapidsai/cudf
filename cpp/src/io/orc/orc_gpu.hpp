@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "timezone.cuh"
+#include <cudf/detail/timezone.cuh>
 
 #include "orc.hpp"
 

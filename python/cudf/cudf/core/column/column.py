@@ -2587,19 +2587,10 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
         )
     elif newsize == 0:
-        col = column_empty(0, head.dtype, masked=True)
-    else:
-        # Filter out inputs that have 0 length, then concatenate.
-        objs = [o for o in objs if len(o)]
-        try:
-            col = libcudf.concat.concat_columns(objs)
-        except RuntimeError as e:
-            if "exceeds size_type range" in str(e):
-                raise OverflowError(
-                    "total size of output is too large for a cudf column"
-                ) from e
-            raise
-    return col
+        return column_empty(0, head.dtype, masked=True)
+
+    # Filter out inputs that have 0 length, then concatenate.
+    return libcudf.concat.concat_columns([o for o in objs if len(o)])
 
 
 def _proxy_cai_obj(cai, owner):

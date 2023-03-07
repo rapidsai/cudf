@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "timezone.cuh"
+#include <cudf/timezone.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -21,10 +21,12 @@
 #include <cudf/table/table.hpp>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 
 namespace cudf {
-namespace io {
+
+namespace {
 
 constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
 std::string const tzif_system_directory = "/usr/share/zoneinfo/";
@@ -127,12 +129,13 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::optional<std::string> const& tzif_dir, std::string const& timezone_name)
+  timezone_file(std::optional<std::string_view> tzif_dir, std::string_view timezone_name)
   {
     using std::ios_base;
 
     // Open the input file
-    auto const tz_filename = tzif_dir.value_or(tzif_system_directory) + timezone_name;
+    auto const tz_filename =
+      std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
     CUDF_EXPECTS(fin, "Failed to open the timezone file.");
@@ -373,9 +376,11 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string> const& tzif_dir,
-                                                       std::string const& timezone_name,
-                                                       rmm::cuda_stream_view stream)
+}  // namespace
+
+std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
+                                                      std::string_view timezone_name,
+                                                      rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -463,7 +468,7 @@ std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string
   }
 
   CUDF_EXPECTS(ttimes.size() == offsets.size(),
-               "Error reading TZif file for timezone " + timezone_name);
+               "Error reading TZif file for timezone " + std::string{timezone_name});
 
   std::vector<timestamp_s> ttimes_typed;
   ttimes_typed.reserve(ttimes.size());
@@ -489,11 +494,4 @@ std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
 }
 
-std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string> const& tzif_dir,
-                                                       std::string const& timezone_name)
-{
-  return build_timezone_transition_table(tzif_dir, timezone_name, cudf::get_default_stream());
-}
-
-}  // namespace io
 }  // namespace cudf

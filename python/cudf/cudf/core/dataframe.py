@@ -4192,11 +4192,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -4940,6 +4937,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             default_include = [np.number]
             if datetime_is_numeric:
                 default_include.append("datetime")
+            else:
+                warnings.warn(
+                    "`datetime_is_numeric` is deprecated. Specify "
+                    "`datetime_is_numeric=True` to silence this "
+                    "warning and adopt the future behavior now.",
+                    FutureWarning,
+                )
             data_to_describe = self.select_dtypes(include=default_include)
             if data_to_describe._num_columns == 0:
                 data_to_describe = self
@@ -4958,7 +4962,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("No data of included types.")
 
         describe_series_list = [
-            data_to_describe[col].describe(percentiles=percentiles)
+            data_to_describe[col].describe(
+                percentiles=percentiles,
+                datetime_is_numeric=datetime_is_numeric,
+            )
             for col in data_to_describe._column_names
         ]
         if len(describe_series_list) == 1:

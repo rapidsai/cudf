@@ -82,6 +82,7 @@ outputs:
         - test -f $PREFIX/include/cudf/concatenate.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
+        - test -f $PREFIX/include/cudf/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
@@ -120,6 +121,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
         - test -f $PREFIX/include/cudf/detail/transform.hpp
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
+        - test -f $PREFIX/include/cudf/detail/timezone.cuh
         - test -f $PREFIX/include/cudf/detail/unary.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/default_stream.hpp
