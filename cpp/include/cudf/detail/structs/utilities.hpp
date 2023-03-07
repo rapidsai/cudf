@@ -162,10 +162,10 @@ class flattened_table {
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
- * @param nullability force output to have nullability columns even if input columns
- * are all valid
- * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
- * alongside the supporting columns and device_buffers for the flattened table.
+ * @param nullability force output to have nullability columns even if input columns are all valid
+ * @return A pointer of type `flattened_table` containing flattened columns, flattened column
+ *         orders, flattened null precedence, alongside the supporting columns and device_buffers
+ *         for the flattened table.
  */
 [[nodiscard]] std::unique_ptr<flattened_table> flatten_nested_columns(
   table_view const& input,
