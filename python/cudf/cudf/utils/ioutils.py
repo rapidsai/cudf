@@ -1226,7 +1226,15 @@ encoding : str, default 'utf-8'
 compression : str, None
     A string representing the compression scheme to use in the the output file
     Compression while writing csv is not supported currently
-line_terminator : char, default '\\n'
+line_terminator : str, optional
+
+    .. deprecated:: 23.04
+
+        Replaced with lineterminator for consistency with read_csv and pandas.
+
+lineterminator : str, optional
+    The newline character or character sequence to use in the output file.
+    Defaults to :attr:`os.linesep`.
 chunksize : int or None, default None
     Rows to write at a time
 storage_options : dict, optional, default None
@@ -1651,7 +1659,6 @@ def get_reader_filepath_or_buffer(
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
-
         # Get a filesystem object if one isn't already available
         paths = [path_or_data]
         if fs is None:
