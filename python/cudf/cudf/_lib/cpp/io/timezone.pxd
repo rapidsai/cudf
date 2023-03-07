@@ -41,8 +41,8 @@ cdef extern from "<optional>" namespace "std" nogil:
     optional[T] make_optional[T](...) except +
 
 
-cdef extern from "cudf/io/timezone.hpp" namespace "cudf::io" nogil:
-    unique_ptr[table] build_timezone_transition_table(
+cdef extern from "cudf/timezone.hpp" namespace "cudf" nogil:
+    unique_ptr[table] make_timezone_transition_table(
         optional[string] tzif_dir,
         string timezone_name
     ) except +
