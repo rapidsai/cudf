@@ -19,7 +19,7 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
@@ -875,16 +875,10 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        if PANDAS_GE_130:
-            return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
-        else:
-            return cls(subtype=pd_dtype.subtype)
+        return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
 
     def to_pandas(self) -> pd.IntervalDtype:
-        if PANDAS_GE_130:
-            return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
-        else:
-            return pd.IntervalDtype(subtype=self.subtype)
+        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other):
         if isinstance(other, str):
