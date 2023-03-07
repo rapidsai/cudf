@@ -731,6 +731,10 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
+    # This library must also be compiled as a dynamic library to support
+    # LD_PRELOAD injection of symbols. We currently leverage this for
+    # stream-related library validation and may make use of it for other
+    # similar features in the future.
     cudftestutil SHARED
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
