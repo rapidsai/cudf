@@ -700,15 +700,8 @@ def test_multiindex_equals():
         }
     ],
 )
-@pytest.mark.parametrize(
-    "levels",
-    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
-)
-@pytest.mark.parametrize(
-    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
-)
 @pytest.mark.parametrize("names", [["X", "Y"]])
-def test_multiindex_copy_sem(data, levels, codes, names):
+def test_multiindex_copy_sem(data, names):
     """Test semantic equality for MultiIndex.copy"""
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -717,12 +710,10 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    gmi_copy = gmi.copy(names=names)
 
     pmi = pdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    pmi_copy = pmi.copy(names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
