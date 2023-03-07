@@ -75,6 +75,16 @@ std::unique_ptr<cudf::column> unary_operation(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc cudf::is_valid
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<cudf::column> is_valid(
+  cudf::column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @copydoc cudf::cast
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
