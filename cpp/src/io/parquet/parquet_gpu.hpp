@@ -445,8 +445,8 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param num_rows Maximum number of rows to read
  * @param min_rows crop all rows below min_row
+ * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
  * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
@@ -455,8 +455,8 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  */
 void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       hostdevice_vector<ColumnChunkDesc> const& chunks,
-                      size_t num_rows,
                       size_t min_row,
+                      size_t num_rows,
                       bool compute_num_rows,
                       bool compute_string_sizes,
                       rmm::cuda_stream_view stream);
