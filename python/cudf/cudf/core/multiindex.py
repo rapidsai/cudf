@@ -739,7 +739,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         codes = {}
         for name, col in self._data.items():
-            code, cats = cudf.Series._from_data({None: col}).factorize()
+            with warnings.catch_warnings():
+                # TODO: Remove this filter when
+                # `na_sentinel` is removed from `factorize`.
+                # This is a filter to not let the warnings from
+                # `factorize` show up in other parts of public APIs.
+                warnings.simplefilter("ignore")
+                code, cats = cudf.Series._from_data({None: col}).factorize()
             codes[name] = code.astype(np.int64)
             levels.append(cudf.Series(cats, name=None))
 
