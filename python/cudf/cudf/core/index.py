@@ -369,8 +369,19 @@ class RangeIndex(BaseIndex, BinaryOperand):
             Ignored for RangeIndex
         dtype : numpy dtype optional (default: None)
             Target dtype for underlying range data
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         names : list-like optional (default: False)
             Kept compatibility with MultiIndex. Should not be used.
+
+            .. deprecated:: 23.04
+
+               The parameter `names` is deprecated and will be removed in
+               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
@@ -380,6 +391,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
+                FutureWarning,
+            )
+
+        if names is not None:
+            warnings.warn(
+                "parameter names is deprecated and will be removed in a "
+                "future version. Use the name parameter instead.",
                 FutureWarning,
             )
 
@@ -1191,8 +1209,19 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             With ``deep=False`` the original data is used
         dtype : numpy dtype, default None
             Target datatype to cast into, use original dtype when None
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         names : list-like, default False
             Kept compatibility with MultiIndex. Should not be used.
+
+            .. deprecated:: 23.04
+
+               The parameter `names` is deprecated and will be removed in
+               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
@@ -1202,6 +1231,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             warnings.warn(
                 "parameter dtype is deprecated and will be removed in a "
                 "future version. Use the astype method instead.",
+                FutureWarning,
+            )
+
+        if names is not None:
+            warnings.warn(
+                "parameter names is deprecated and will be removed in a "
+                "future version. Use the name parameter instead.",
                 FutureWarning,
             )
 

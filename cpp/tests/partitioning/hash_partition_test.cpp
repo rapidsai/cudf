@@ -349,21 +349,21 @@ TEST_F(HashPartition, FixedPointColumnsToHash)
 {
   fixed_width_column_wrapper<int32_t> to_hash({1});
   cudf::test::fixed_point_column_wrapper<int64_t> first_col({7}, numeric::scale_type{-1});
+  cudf::test::fixed_point_column_wrapper<__int128_t> second_col({77}, numeric::scale_type{0});
 
-  auto first_input = cudf::table_view({to_hash, first_col});
+  auto input = cudf::table_view({to_hash, first_col, second_col});
 
   auto columns_to_hash = std::vector<cudf::size_type>({0});
 
   cudf::size_type const num_partitions = 1;
-  auto [first_result, first_offsets] =
-    cudf::hash_partition(first_input, columns_to_hash, num_partitions);
+  auto [result, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect offsets to be equal and num_partitions in length
-  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets.size());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(), first_input.column(0));
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(1).view(), first_input.column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0).view(), input.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(1).view(), input.column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(2).view(), input.column(2));
 }
 
 TEST_F(HashPartition, ListWithNulls)
