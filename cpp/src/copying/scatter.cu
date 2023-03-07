@@ -253,7 +253,8 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
-      auto row_slr = get_element(typed_s->view().column(i), 0, stream, mr);
+      auto row_slr =
+        get_element(typed_s->view().column(i), 0, stream, rmm::mr::get_current_device_resource());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -392,8 +393,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map =
-    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream, mr);
+  auto scatter_map = detail::apply_boolean_mask(
+    table_view{{indices->view()}}, boolean_mask, stream, rmm::mr::get_current_device_resource());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 

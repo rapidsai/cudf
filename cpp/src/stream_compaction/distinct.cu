@@ -25,6 +25,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -145,8 +146,12 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map =
-    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream, mr);
+  auto const gather_map = get_distinct_indices(input.select(keys),
+                                               keep,
+                                               nulls_equal,
+                                               nans_equal,
+                                               stream,
+                                               rmm::mr::get_current_device_resource());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,

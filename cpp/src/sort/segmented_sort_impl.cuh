@@ -24,6 +24,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace detail {
@@ -73,8 +74,11 @@ struct column_fast_sort_fn {
   {
     // CUB's segmented sort functions cannot accept iterators.
     // We create a temporary column here for it to use.
-    auto temp_col =
-      cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
+    auto temp_col                   = cudf::detail::allocate_like(input,
+                                                input.size(),
+                                                mask_allocation_policy::NEVER,
+                                                stream,
+                                                rmm::mr::get_current_device_resource());
     mutable_column_view output_view = temp_col->mutable_view();
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
