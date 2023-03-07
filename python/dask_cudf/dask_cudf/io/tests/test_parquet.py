@@ -511,6 +511,8 @@ def test_nullable_schema_mismatch(tmpdir):
     cudf.DataFrame.from_dict({"a": [1, 2, 3]}).to_parquet(path0)
     cudf.DataFrame.from_dict({"a": [4, 5, None]}).to_parquet(path1)
     with dask.config.set({"dataframe.backend": "cudf"}):
-        dd.read_parquet(
+        ddf = dd.read_parquet(
             [path0, path1], split_row_groups=2, aggregate_files=True
-        ).compute()
+        )
+        expect = dd.read_parquet([path0, path1]).compute()
+    dd.assert_eq(ddf, expect)
