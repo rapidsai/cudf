@@ -1900,13 +1900,16 @@ __global__ void __launch_bounds__(block_size)
 //
 __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
 {
-  auto d_start      = db->block_start;
-  db->cur_min_delta = get_i64(d_start, db->block_end);
-  db->cur_bitwidths = d_start;
-  db->cur_mb        = 0;
-  d_start += db->mini_block_count;
-  db->cur_mb_start = d_start;
-  db->block_start  = d_start;
+  db->cur_mb = 0;
+
+  if (db->current_value_idx < db->value_count) {
+    auto d_start      = db->block_start;
+    db->cur_min_delta = get_i64(d_start, db->block_end);
+    db->cur_bitwidths = d_start;
+
+    d_start += db->mini_block_count;
+    db->cur_mb_start = d_start;
+  }
 }
 
 // read delta binary header into state object. should be called on thread 0. header format is:
@@ -1946,13 +1949,28 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   // out of mini-blocks, start a new block
   else {
     db->block_start = db->cur_mb_start + db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
-    // only do init if there's another mini-block available
-    if (db->current_value_idx < db->value_count) {
-      InitDeltaMiniBlock(db);
-    } else {
-      db->cur_mb = 0;
-    }
+    InitDeltaMiniBlock(db);
   }
+}
+
+// given a pointer to a binary state and start/end pointers in the data, find the
+// end of the binary encoded block. when done, `db` will be initialized with the
+// correct start and end positions. returns the end, which is start of data/next block.
+__device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
+                                         uint8_t const* start,
+                                         uint8_t const* end)
+{
+  // read block header
+  InitDeltaBinaryBlock(db, start, end);
+  // read mini-block headers and skip over data
+  while (db->current_value_idx < db->value_count) {
+    SetupNextMiniBlock(db);
+  }
+  // calculate the correct end of the block
+  auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
+  // re-init block with correct end
+  InitDeltaBinaryBlock(db, start, new_end);
+  return new_end;
 }
 
 // decode the current mini-batch of deltas, and convert to values.
@@ -2247,20 +2265,9 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   cur += page->def_lvl_bytes + page->rep_lvl_bytes;
 
   if (t == 0) {
-    auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
-      InitDeltaBinaryBlock(db, start, end);
-      while (db->current_value_idx < db->value_count) {
-        SetupNextMiniBlock(db);
-      }
-      auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
-      // re-init block with correct end
-      InitDeltaBinaryBlock(db, start, new_end);
-      return new_end;
-    };
-
     // initialize the prefixes and suffixes blocks
-    auto const* suffix_start = find_end(prefix_db, cur, end);
-    find_end(suffix_db, suffix_start, end);
+    auto const* suffix_start = FindEndOfBlock(prefix_db, cur, end);
+    FindEndOfBlock(suffix_db, suffix_start, end);
 
     // initialize total_bytes
     total_bytes = prefix_db->last_value + suffix_db->last_value;
@@ -2419,20 +2426,9 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
   if (t == 0) {
-    auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
-      InitDeltaBinaryBlock(db, start, end);
-      while (db->current_value_idx < db->value_count) {
-        SetupNextMiniBlock(db);
-      }
-      auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
-      // re-init block with correct end
-      InitDeltaBinaryBlock(db, start, new_end);
-      return new_end;
-    };
-
     // initialize the prefixes and suffixes blocks
-    auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
-    suffix_data              = find_end(suffix_db, suffix_start, s->data_end);
+    auto const* suffix_start = FindEndOfBlock(prefix_db, s->data_start, s->data_end);
+    suffix_data              = FindEndOfBlock(suffix_db, suffix_start, s->data_end);
     strings_data             = s->page.page_string_data;
     last_string              = nullptr;
   }
