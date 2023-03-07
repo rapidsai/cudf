@@ -33,11 +33,7 @@ using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, flo
 
 TYPED_TEST_SUITE(groupby_var_test, supported_types);
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, basic)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_basic)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -57,11 +53,7 @@ TYPED_TEST(groupby_var_test, DISABLED_basic)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, empty_cols)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_empty_cols)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -77,11 +69,7 @@ TYPED_TEST(groupby_var_test, DISABLED_empty_cols)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, zero_valid_keys)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_zero_valid_keys)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -97,11 +85,7 @@ TYPED_TEST(groupby_var_test, DISABLED_zero_valid_keys)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, zero_valid_values)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_zero_valid_values)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -117,11 +101,7 @@ TYPED_TEST(groupby_var_test, DISABLED_zero_valid_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, null_keys_and_values)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_null_keys_and_values)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -143,11 +123,7 @@ TYPED_TEST(groupby_var_test, DISABLED_null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, ddof_non_default)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_ddof_non_default)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;
@@ -170,11 +146,7 @@ TYPED_TEST(groupby_var_test, DISABLED_ddof_non_default)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-#ifdef NDEBUG
 TYPED_TEST(groupby_var_test, dictionary)
-#else
-TYPED_TEST(groupby_var_test, DISABLED_dictionary)
-#endif
 {
   using K = int32_t;
   using V = TypeParam;

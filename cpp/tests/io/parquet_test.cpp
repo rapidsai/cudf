@@ -3705,6 +3705,42 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
 
+TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
+{
+  // enough for a few pages with the default 20'000 rows/page
+  constexpr auto rows_per_page = 20'000;
+  constexpr auto num_rows      = 3 * rows_per_page;
+  const std::string s1(32, 'a');
+  auto col0_elements =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s1; });
+  auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + num_rows);
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("CheckPageRowsAdjusted.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .max_page_size_rows(rows_per_page);
+  cudf::io::write_parquet(out_opts);
+
+  // check first page header and make sure it has only page_rows values
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
+  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
+  auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
+
+  // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
+  // version should be smaller than size of the struct.
+  auto const ph = read_page_header(
+    source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
+
+  EXPECT_LE(ph.data_page_header.num_values, rows_per_page);
+}
+
 TEST_F(ParquetWriterTest, Decimal128Stats)
 {
   // check that decimal128 min and max statistics are written in network byte order
@@ -4046,14 +4082,14 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
 TEST_F(ParquetWriterTest, LargeColumnIndex)
 {
   // create a file large enough to be written in 2 batches (currently 1GB per batch)
+  // pick fragment size that num_rows is divisible by, so we'll get equal sized row groups
   const std::string s1(1000, 'a');
   const std::string s2(1000, 'b');
-  constexpr auto num_rows = 512 * 1024;
+  constexpr auto num_rows  = 512 * 1024;
+  constexpr auto frag_size = num_rows / 128;
 
-  // TODO(ets) need dictionary_policy set to NEVER from #12211. Then
-  // we don't need to append a number to make the strings unique.
   auto col0_elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return ((i < num_rows) ? s1 : s2) + std::to_string(i); });
+    0, [&](auto i) { return (i < num_rows) ? s1 : s2; });
   auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + 2 * num_rows);
 
   auto const expected = table_view{{col0, col0}};
@@ -4063,6 +4099,8 @@ TEST_F(ParquetWriterTest, LargeColumnIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_fragment_size(frag_size)
       .row_group_size_bytes(1024 * 1024 * 1024)
       .row_group_size_rows(num_rows);
   cudf::io::write_parquet(out_opts);
