@@ -444,7 +444,10 @@ bool has_nested_structs_of_lists(column_view const& input)
 }
 
 /**
- * @brief Flatten any structs column in the given table.
+ * @brief Flatten the given table if it contains any structs-of-lists column.
+ *
+ * If the input table contains any structs-of-lists column, the entire table will be flattened to
+ * a table of non-struct columns. Otherwise, the input table is passed through.
  *
  * @param input The input table
  * @return A pair of table_view representing the flattened input and an auxiliary data structure
@@ -476,7 +479,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  // Firstly, flatten any structs-of-lists column.
+  // Firstly, flatten the input table if it contains any structs-of-lists column.
   auto [flattened_t, flattened_t_aux_data] =
     flatten_nested_structs_of_lists(t, column_order, null_precedence);
 
