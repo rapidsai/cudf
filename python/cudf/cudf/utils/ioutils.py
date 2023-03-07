@@ -1230,11 +1230,12 @@ line_terminator : str, optional
 
     .. deprecated:: 23.04
 
-        Replaced with lineterminator for consistency with read_csv and pandas.
+        Replaced with ``lineterminator`` for consistency with
+        :meth:`cudf.read_csv` and :meth:`pandas.DataFrame.to_csv`
 
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
-    Defaults to :attr:`os.linesep`.
+    Defaults to :data:`os.linesep`.
 chunksize : int or None, default None
     Rows to write at a time
 storage_options : dict, optional, default None
