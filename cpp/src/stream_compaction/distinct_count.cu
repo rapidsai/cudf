@@ -154,7 +154,7 @@ cudf::size_type distinct_count(table_view const& keys,
       row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
       key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-      return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
+      return key_map.get_size() + static_cast<std::size_t>(null_count > 0);
     }
     // otherwise, insert all
     key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
