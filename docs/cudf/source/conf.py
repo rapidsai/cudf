@@ -201,6 +201,7 @@ intersphinx_mapping = {
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
 }
 
 # Config numpydoc
