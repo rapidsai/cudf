@@ -67,6 +67,14 @@ Deprecations should be signaled using a `FutureWarning` **not a `DeprecationWarn
 `DeprecationWarning` is hidden by default except in code run in the `__main__` module.
 ```
 
+Deprecations should also be specified in the respective public API docstring using a
+`deprecated` admonition:
+
+```
+.. deprecated:: 23.08
+    `foo` is deprecated and will be removed in a future version of cudf.
+```
+
 ## `pandas` compatibility
 
 Maintaining compatibility with the [pandas API](https://pandas.pydata.org/docs/reference/index.html) is a primary goal of cuDF.
