@@ -4564,11 +4564,11 @@ class StringMethods(ColumnMethods):
         >>> ser = cudf.Series(data)
         >>> ser.str.tokenize()
         0      hello
+        0      world
+        1    goodbye
         1      world
+        2      hello
         2    goodbye
-        3      world
-        4      hello
-        5    goodbye
         dtype: object
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
@@ -4646,36 +4646,36 @@ class StringMethods(ColumnMethods):
         >>> data = ["hello world", None, "goodbye, thank you."]
         >>> ser = cudf.Series(data)
         >>> ser.str.character_tokenize()
-        0     h
-        1     e
-        2     l
-        3     l
-        4     o
-        5
-        6     w
-        7     o
-        8     r
-        9     l
-        10    d
-        11    g
-        12    o
-        13    o
-        14    d
-        15    b
-        16    y
-        17    e
-        18    ,
-        19
-        20    t
-        21    h
-        22    a
-        23    n
-        24    k
-        25
-        26    y
-        27    o
-        28    u
-        29    .
+        0    h
+        0    e
+        0    l
+        0    l
+        0    o
+        0
+        0    w
+        0    o
+        0    r
+        0    l
+        0    d
+        2    g
+        2    o
+        2    o
+        2    d
+        2    b
+        2    y
+        2    e
+        2    ,
+        2
+        2    t
+        2    h
+        2    a
+        2    n
+        2    k
+        2
+        2    y
+        2    o
+        2    u
+        2    .
         dtype: object
         """
         result_col = libstrings.character_tokenize(self._column)
@@ -4787,20 +4787,20 @@ class StringMethods(ColumnMethods):
         >>> str_series = cudf.Series(['abcd','efgh','xyz'])
         >>> str_series.str.character_ngrams(2)
         0    ab
-        1    bc
-        2    cd
-        3    ef
-        4    fg
-        5    gh
-        6    xy
-        7    yz
+        0    bc
+        0    cd
+        1    ef
+        1    fg
+        1    gh
+        2    xy
+        2    yz
         dtype: object
         >>> str_series.str.character_ngrams(3)
         0    abc
-        1    bcd
-        2    efg
-        3    fgh
-        4    xyz
+        0    bcd
+        1    efg
+        1    fgh
+        2    xyz
         dtype: object
         >>> str_series.str.character_ngrams(3,True)
         0    [abc, bcd]
