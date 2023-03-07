@@ -45,7 +45,7 @@ extensions = [
     "myst_nb",
 ]
 
-execution_excludepatterns = ['performance-comparisons.ipynb']
+nb_execution_excludepatterns = ['performance-comparisons.ipynb']
 
 nb_execution_mode = "force"
 nb_execution_timeout = 300
