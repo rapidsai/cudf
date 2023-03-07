@@ -24,7 +24,7 @@ def test_tokenize():
         ]
     )
 
-    expected = cudf.Series(
+    expected_values = cudf.Series(
         [
             "the",
             "quick",
@@ -43,6 +43,8 @@ def test_tokenize():
             "sofa",
         ]
     )
+    expected_index = strings.index.repeat(strings.str.token_count())
+    expected = cudf.Series(expected_values, index=expected_index)
 
     actual = strings.str.tokenize()
 

@@ -4574,12 +4574,12 @@ class StringMethods(ColumnMethods):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
 
         if isinstance(delimiter, Column):
-            return self._return_or_inplace(
+            result = self._return_or_inplace(
                 libstrings._tokenize_column(self._column, delimiter),
                 retain_index=False,
             )
         elif isinstance(delimiter, cudf.Scalar):
-            return self._return_or_inplace(
+            result = self._return_or_inplace(
                 libstrings._tokenize_scalar(self._column, delimiter),
                 retain_index=False,
             )
@@ -4588,6 +4588,11 @@ class StringMethods(ColumnMethods):
                 f"Expected a Scalar or Column\
                 for delimiters, but got {type(delimiter)}"
             )
+        if isinstance(self._parent, cudf.Series):
+            result.index = self._parent.index.repeat(  # type: ignore
+                self.token_count()
+            )
+        return result
 
     def detokenize(
         self, indices: "cudf.Series", separator: str = " "
