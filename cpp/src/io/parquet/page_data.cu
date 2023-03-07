@@ -1247,9 +1247,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::RLE: s->dict_run = 0; break;
         case Encoding::DELTA_BINARY_PACKED:
         case Encoding::DELTA_BYTE_ARRAY:
-          // FIXME
-          // not sure if we should do the header here.  would need uint64_t first_value.
-          // need to ensure num_values from header matches page num_values - num_nulls?
+          // nothing to do, just don't error
           break;
         default:
           s->error = 1;  // Unsupported encoding
