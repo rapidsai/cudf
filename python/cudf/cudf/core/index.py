@@ -1901,24 +1901,8 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
-    def is_integer(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_integer is deprecated. "
-            "Use cudf.api.types.is_integer_dtype instead",
-            FutureWarning,
-        )
-        return self._is_integer()
-
     def _is_integer(self):
         return False
-
-    def is_floating(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_floating is deprecated. "
-            "Use cudf.api.types.is_float_dtype instead",
-            FutureWarning,
-        )
-        return self._is_floating()
 
     def _is_floating(self):
         return True
@@ -1948,24 +1932,8 @@ class Float64Index(NumericIndex):
 
     _dtype = np.float64
 
-    def is_integer(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_integer is deprecated. "
-            "Use cudf.api.types.is_integer_dtype instead",
-            FutureWarning,
-        )
-        return self._is_integer()
-
     def _is_integer(self):
         return False
-
-    def is_floating(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_floating is deprecated. "
-            "Use cudf.api.types.is_float_dtype instead",
-            FutureWarning,
-        )
-        return self._is_floating()
 
     def _is_floating(self):
         return True
@@ -2413,14 +2381,6 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
-
     def _is_boolean(self):
         return False
 
@@ -2669,14 +2629,6 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
-
     def _is_boolean(self):
         return False
 
@@ -2795,24 +2747,8 @@ class CategoricalIndex(GenericIndex):
         """
         return as_index(self._values.categories)
 
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
-
     def _is_boolean(self):
         return False
-
-    def is_categorical(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_categorical is deprecated. "
-            "Use cudf.api.types.is_categorical_dtype instead",
-            FutureWarning,
-        )
-        return self._is_categorical()
 
     def _is_categorical(self):
         return True
@@ -3065,24 +3001,8 @@ class IntervalIndex(GenericIndex):
             "Getting a scalar from an IntervalIndex is not yet supported"
         )
 
-    def is_interval(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_interval is deprecated. "
-            "Use cudf.api.types.is_interval_dtype instead",
-            FutureWarning,
-        )
-        return self._is_interval()
-
     def _is_interval(self):
         return True
-
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
 
     def _is_boolean(self):
         return False
@@ -3146,24 +3066,8 @@ class StringIndex(GenericIndex):
         else:
             return self
 
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
-
     def _is_boolean(self):
         return False
-
-    def is_object(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_object is deprecated. "
-            "Use cudf.api.types.is_object_dtype instead",
-            FutureWarning,
-        )
-        return self._is_object()
 
     def _is_object(self):
         return True
