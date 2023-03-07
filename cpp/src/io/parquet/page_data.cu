@@ -214,7 +214,7 @@ inline __device__ uint64_t get_u64(const uint8_t*& cur, const uint8_t* end)
 inline __device__ int64_t get_i64(const uint8_t*& cur, const uint8_t* end)
 {
   uint64_t u = get_u64(cur, end);
-  return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
+  return static_cast<int64_t>((u >> 1u) ^ -static_cast<int64_t>(u & 1));
 }
 
 /**
