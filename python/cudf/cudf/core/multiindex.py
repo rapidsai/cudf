@@ -1045,79 +1045,23 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
-    def is_numeric(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_numeric is deprecated. "
-            "Use cudf.api.types.is_any_real_numeric_dtype instead",
-            FutureWarning,
-        )
-        return self._is_numeric()
-
     def _is_numeric(self):
         return False
-
-    def is_boolean(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_boolean is deprecated. "
-            "Use cudf.api.types.is_bool_dtype instead",
-            FutureWarning,
-        )
-        return self._is_boolean()
 
     def _is_boolean(self):
         return False
 
-    def is_integer(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_integer is deprecated. "
-            "Use cudf.api.types.is_integer_dtype instead",
-            FutureWarning,
-        )
-        return self._is_integer()
-
     def _is_integer(self):
         return False
-
-    def is_floating(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_floating is deprecated. "
-            "Use cudf.api.types.is_float_dtype instead",
-            FutureWarning,
-        )
-        return self._is_floating()
 
     def _is_floating(self):
         return False
 
-    def is_object(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_object is deprecated. "
-            "Use cudf.api.types.is_object_dtype instead",
-            FutureWarning,
-        )
-        return self._is_object()
-
     def _is_object(self):
         return False
 
-    def is_categorical(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_categorical is deprecated. "
-            "Use cudf.api.types.is_categorical_dtype instead",
-            FutureWarning,
-        )
-        return self._is_categorical()
-
     def _is_categorical(self):
         return False
-
-    def is_interval(self):
-        warnings.warn(
-            f"{type(self).__name__}.is_interval is deprecated. "
-            "Use cudf.api.types.is_interval_dtype instead",
-            FutureWarning,
-        )
-        return self._is_interval()
 
     def _is_interval(self):
         return False
