@@ -57,7 +57,8 @@ namespace {
  * the character-parallel function is used.
  * Otherwise, a regular string-parallel function is used.
  *
- * This value was found using the replace-multi benchmark results.
+ * This value was found using the replace-multi benchmark results using an
+ * RTX A6000.
  */
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 256;
 
@@ -115,7 +116,7 @@ struct replace_multi_parallel_fn {
             thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_strings.size(), idx);
           str_idx = thrust::distance(d_offsets, idx_itr) - 1;
         }
-        auto d_str = get_string(str_idx - d_offsets[0]);
+        auto const d_str = get_string(str_idx - d_offsets[0]);
         if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return t; }
       }
     }
@@ -200,7 +201,7 @@ struct replace_multi_parallel_fn {
     }
 
     auto const d_str_end         = d_str.data() + d_str.size_bytes();
-    auto const base_ptr          = get_base_ptr();  //+ delim_size - 1;
+    auto const base_ptr          = get_base_ptr();
     auto const targets_positions = cudf::device_span<target_pair const>(
       d_positions + d_targets_offsets[idx], d_targets_offsets[idx + 1] - d_targets_offsets[idx]);
 
@@ -283,7 +284,7 @@ struct replace_multi_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_offsets[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
@@ -330,7 +331,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
                "Parameters targets must not be empty and must not have nulls");
   CUDF_EXPECTS(((repls.size() > 0) && (repls.null_count() == 0)),
@@ -404,8 +405,8 @@ std::unique_ptr<column> replace(strings_column_view const& input,
     auto d_targets_offsets = targets_offsets.data();
 
     // memset to zero-out the target counts for any null-entries or strings with no targets
-    CUDF_CUDA_TRY(cudaMemsetAsync(
-      d_targets_offsets, 0, targets_offsets.size() * sizeof(size_type), stream.value()));
+    thrust::uninitialized_fill(
+      rmm::exec_policy(stream), targets_offsets.begin(), targets_offsets.end(), 0);
 
     // next, count the number of targets per string
     auto d_string_indices = string_indices.data();
