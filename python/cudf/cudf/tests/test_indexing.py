@@ -450,7 +450,6 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
-    kwargs = {"check_freq": False}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -471,11 +470,11 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc["2001-01-02":"2001-01-05"],
         gs.loc["2001-01-02":"2001-01-05"],
-        **kwargs,
+        check_freq=False,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
-    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], check_freq=False)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], check_freq=False)
+    assert_eq(ps.loc[::2], gs.loc[::2], check_freq=False)
 
     assert_eq(
         ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
@@ -501,13 +500,15 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
-        **kwargs,
+        check_freq=False,
     )
 
     just_less_than_max = ps.index.max() - pd.Timedelta("5m")
 
     assert_eq(
-        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
+        ps.loc[:just_less_than_max],
+        gs.loc[:just_less_than_max],
+        check_freq=False,
     )
 
 

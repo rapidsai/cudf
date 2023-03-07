@@ -3221,7 +3221,6 @@ def test_dataframe_reindex_fill_value(
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    kwargs = {"check_freq": False}
     index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = cudf.datasets.randomdata(
@@ -3233,7 +3232,7 @@ def test_dataframe_reindex_change_dtype(copy):
     assert_eq(
         pdf.reindex(index=index, columns=columns, copy=True),
         gdf.reindex(index=index, columns=columns, copy=copy),
-        **kwargs,
+        check_freq=False,
     )
 
 
