@@ -459,6 +459,8 @@ flatten_nested_structs_of_lists(table_view const& input,
                                 host_span<null_order const> null_precedence)
 {
   if (std::any_of(input.begin(), input.end(), has_nested_structs_of_lists)) {
+    // TODO: Pass in stream parameter.
+    // Issue: https://github.com/rapidsai/cudf/issues/12349
     auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
       input,
       std::vector<order>{column_order.begin(), column_order.end()},
