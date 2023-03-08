@@ -379,8 +379,13 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
     auto const child = input.child(lists_column_view::child_column_index);
 
     if (child.type().id() == type_id::STRUCT) {
+      // Dense ranks can accurately reflect the order of structs: structs compared equal will have
+      // the same rank values.
+      // However, first ranks are computed faster and are good enough for ordering them. Structs
+      // compared equal always have consecutive rank values (in stable order) thus they are still
+      // sorted correctly by their ranks.
       auto ranks             = cudf::detail::rank(child,
-                                      rank_method::DENSE,
+                                      rank_method::FIRST,
                                       order::ASCENDING,
                                       null_policy::EXCLUDE,
                                       null_order::BEFORE,
