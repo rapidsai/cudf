@@ -132,6 +132,9 @@ struct delta_byte_array_state_s {
 /**
  * @brief Returns pointers to start and end of page data (after header and definition/repetition
  * level info)
+ *
+ * @param page The page to get bounds for
+ * @return Pair of pointers pointing to start and end of page data
  */
 constexpr std::pair<uint8_t const* const, uint8_t const* const> page_data_bounds(PageInfo* page)
 {
@@ -218,25 +221,37 @@ inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
   return v;
 }
 
-inline __device__ unsigned int getb(const uint8_t*& cur, const uint8_t* end)
-{
-  return (cur < end) ? *cur++ : 0;
-}
-
-inline __device__ uint64_t get_u64(const uint8_t*& cur, const uint8_t* end)
+/**
+ * @brief Read a 64-bit varint integer
+ *
+ * @param[in,out] cur The current data position, updated after the read
+ * @param[in] end The end data position
+ *
+ * @return The 64-bit value read
+ */
+inline __device__ uint64_t get_vlq64(const uint8_t*& cur, const uint8_t* end)
 {
   uint64_t v = 0, l = 0, c;
-  do {
-    c = getb(cur, end);
+  while (cur < end) {
+    c = *cur++;
     v |= (c & 0x7f) << l;
     l += 7;
-  } while (c & 0x80);
+    if ((c & 0x80) == 0) { return v; }
+  }
   return v;
 }
 
+/**
+ * @brief Read a 64-bit zig-zag encoded varint integer
+ *
+ * @param[in,out] cur The current data position, updated after the read
+ * @param[in] end The end data position
+ *
+ * @return The 64-bit value read
+ */
 inline __device__ int64_t get_i64(const uint8_t*& cur, const uint8_t* end)
 {
-  uint64_t u = get_u64(cur, end);
+  uint64_t u = get_vlq64(cur, end);
   return static_cast<int64_t>((u >> 1u) ^ -static_cast<int64_t>(u & 1));
 }
 
