@@ -21,7 +21,10 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+// This error appears in GCC 11.3 and may be a compiler bug or nvbench bug.
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #include <nvbench/nvbench.cuh>
+#pragma GCC diagnostic pop
 
 #include <random>
 

@@ -45,7 +45,7 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf =4.21
+    - protobuf >=4.21.6,<4.22
     - python
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1
@@ -57,7 +57,7 @@ requirements:
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
   run:
-    - protobuf =4.21
+    - protobuf >=4.21.6,<4.22
     - python
     - typing_extensions
     - pandas >=1.0,<1.6.0dev0
