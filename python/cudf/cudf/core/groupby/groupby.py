@@ -715,10 +715,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         n
             Number of items to return for each group, if sampling
             without replacement must be at most the size of the
-            smallest group. Cannot be used with frac.
+            smallest group. Cannot be used with frac. Default is
+            ``n=1`` if frac is None.
         frac
-            Fraction of items to return. Cannot be used with n. Not
-            currently supported.
+            Fraction of items to return. Cannot be used with n.
         replace
             Should sampling occur with or without replacement?
         weights
@@ -727,57 +727,64 @@ class GroupBy(Serializable, Reducible, Scannable):
         random_state
             Seed for random number generation.
         """
+        if frac is not None and n is not None:
+            raise ValueError("Cannot supply both of frac and n")
+        elif n is None and frac is None:
+            n = 1
         if (
             n is not None
             and frac is None
             and not replace
             and weights is None
             and isinstance(self._by, str)
+            # Need to think harder about seriesgroupby for this case
+            and isinstance(self.obj, cudf.DataFrame)
         ):
             # Fast path since groupby commutes with whole-frame
             # sampling in this case
-            df = self.obj.sample(frac=1, random_state=random_state)
+            df = self.obj.sample(
+                frac=1, random_state=random_state
+            ).reset_index(drop=True)
+            # Cantor name
             tempname = f"_{''.join(df.columns)}"
-            df[tempname] = self.obj[self._by].astype("category").codes.cat
+            newcol = self.obj[self._by]
+            df[tempname] = newcol.astype("category").codes.cat
             df = df.loc[df.groupby(tempname)[tempname].rank("first") <= n, :]
             del df[tempname]
             return df
 
-        if frac is not None:
-            raise NotImplementedError(
-                "Sorry, sampling with fraction is not supported"
-            )
         if weights is not None:
             raise NotImplementedError(
                 "Sorry, sampling with weights is not supported"
             )
         if random_state is not None and not isinstance(random_state, int):
             raise NotImplementedError(
-                "Sorry, only integer seeds are supported for random_state"
+                "Sorry, only integer seeds are supported for random_state "
+                "in this case"
             )
-        if n is None:
-            raise ValueError("Please supply a sample size")
-        # Although the check n is None projects the type of n from
-        # Optional[int] to int, because of the type-annotation, and
-        # name-binding in closures, we can't use n in the sample
-        # lambdas since the value of n might still legitimately be
-        # None by the type the lambda is called.
-        nsample = n
-        rng = random.Random(x=random_state)
-        if replace:
-            sample = lambda s, e: [  # noqa: E731
-                rng.randrange(s, e) for _ in range(nsample)
-            ]
-        else:
-            sample = lambda s, e: rng.sample(  # noqa: E731
-                range(s, e), nsample
-            )
+        # Get the groups
         _, offsets, _, values = self._grouped()
         sizes = np.diff(offsets)
+        if n is not None:
+            nsamples: abc.Iterable[int] = itertools.repeat(n)
+        else:
+            # Pandas uses Python-based round-to-nearest, ties to even to
+            # pick sample sizes for the fractional case (unlike IEEE
+            # which is round-to-nearest, ties to sgn(x) * inf).
+            nsamples = (
+                np.round(sizes * frac, decimals=0).astype(np.int32).tolist()
+            )
+        rng = random.Random(x=random_state)
+        if replace:
+            sample = lambda s, e, n: [  # noqa: E731
+                rng.randrange(s, e) for _ in range(n)
+            ]
+        else:
+            sample = lambda s, e, n: rng.sample(range(s, e), n)  # noqa: E731
         indices = list(
             itertools.chain.from_iterable(
-                sample(offset, offset + size)
-                for size, offset in zip(sizes, offsets)
+                sample(offset, offset + size, nsample)
+                for size, offset, nsample in zip(sizes, offsets, nsamples)
             )
         )
         return self.obj.iloc[values.index[indices]]
