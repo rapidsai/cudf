@@ -726,7 +726,12 @@ struct preprocessed_table {
    * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
    * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
    * of list columns).
-   * @param TODO
+   * @param flattened_input_aux_data The data structure generated from
+   * `cudf::structs::detail::flatten_nested_columns` that contains additional information used for
+   * row comparisons.
+   * @param transformed_structs_columns The intermediate columns resulted from transforming child
+   * of lists-of-structs columns into lists-of-integers columns and will be used for row
+   * comparation.
    */
   preprocessed_table(
     table_device_view_owner&& table,
