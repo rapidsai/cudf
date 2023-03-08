@@ -2379,29 +2379,18 @@ class StringMethods(ColumnMethods):
             dtype: object
         """
 
-        try:
-            options = libstrings.GetJsonObjectOptions(
-                allow_single_quotes=allow_single_quotes,
-                strip_quotes_from_single_strings=(
-                    strip_quotes_from_single_strings
-                ),
-                missing_fields_as_nulls=missing_fields_as_nulls,
+        options = libstrings.GetJsonObjectOptions(
+            allow_single_quotes=allow_single_quotes,
+            strip_quotes_from_single_strings=(
+                strip_quotes_from_single_strings
+            ),
+            missing_fields_as_nulls=missing_fields_as_nulls,
+        )
+        return self._return_or_inplace(
+            libstrings.get_json_object(
+                self._column, cudf.Scalar(json_path, "str"), options
             )
-            res = self._return_or_inplace(
-                libstrings.get_json_object(
-                    self._column, cudf.Scalar(json_path, "str"), options
-                )
-            )
-        except RuntimeError as e:
-            matches = (
-                "Unrecognized JSONPath operator",
-                "Invalid empty name in JSONPath query string",
-            )
-            if any(match in str(e) for match in matches):
-                raise ValueError("JSONPath value not found") from e
-            raise
-        else:
-            return res
+        )
 
     def split(
         self,

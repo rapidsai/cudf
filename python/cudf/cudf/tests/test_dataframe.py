@@ -39,6 +39,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,
@@ -1320,9 +1321,10 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_values(nrows, method):
+@pytest.mark.parametrize("seed", [None, 42])
+def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
+    data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
@@ -1331,12 +1333,41 @@ def test_dataframe_hash_values(nrows, method):
     assert len(out) == nrows
     assert out.dtype == np.uint32
 
+    warning_expected = (
+        True if seed is not None and method not in {"murmur3"} else False
+    )
     # Check single column
-    out_one = gdf[["a"]].hash_values(method=method)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
+    else:
+        out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+    else:
+        assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+
+
+@pytest.mark.parametrize("method", ["murmur3"])
+def test_dataframe_hash_values_seed(method):
+    gdf = cudf.DataFrame()
+    data = np.arange(10)
+    data[0] = data[-1]  # make first and last the same
+    gdf["a"] = data
+    gdf["b"] = gdf.a + 100
+    out_one = gdf.hash_values(method=method, seed=0)
+    out_two = gdf.hash_values(method=method, seed=1)
+    assert out_one.iloc[0] == out_one.iloc[-1]
+    assert out_two.iloc[0] == out_two.iloc[-1]
+    assert_neq(out_one, out_two)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
@@ -2485,8 +2516,6 @@ def test_unary_operators(func, pdf, gdf):
 def test_is_monotonic(gdf):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 1, 2])
     gdf = cudf.DataFrame.from_pandas(pdf)
-    with pytest.warns(FutureWarning):
-        assert not gdf.index.is_monotonic
     assert not gdf.index.is_monotonic_increasing
     assert not gdf.index.is_monotonic_decreasing
 
@@ -3623,7 +3652,8 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=["float"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3638,7 +3668,8 @@ def test_dataframe_describe_include():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=["int"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3652,7 +3683,8 @@ def test_dataframe_describe_default():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe()
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe()
     pdf_results = pdf.describe()
 
     assert_eq(pdf_results, gdf_results)
@@ -3669,7 +3701,8 @@ def test_series_describe_include_all():
     df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
 
     pdf = df.to_pandas()
-    gdf_results = df.describe(include="all")
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include="all")
     pdf_results = pdf.describe(include="all")
 
     assert_eq(gdf_results[["x", "y"]], pdf_results[["x", "y"]])
@@ -3690,7 +3723,8 @@ def test_dataframe_describe_percentiles():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(percentiles=sample_percentiles)
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(percentiles=sample_percentiles)
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
     assert_eq(pdf_results, gdf_results)
@@ -4017,7 +4051,8 @@ def test_empty_dataframe_describe():
     gdf = cudf.from_pandas(pdf)
 
     expected = pdf.describe()
-    actual = gdf.describe()
+    with pytest.warns(FutureWarning):
+        actual = gdf.describe()
 
     assert_eq(expected, actual)
 
