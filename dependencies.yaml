@@ -22,16 +22,19 @@ files:
     includes:
       - cudatoolkit
       - test_cpp
+      - libarrow_run
   test_python:
     output: none
     includes:
       - cudatoolkit
       - py_version
       - test_python
+      - pyarrow_run
   test_java:
     output: none
     includes:
       - build_all
+      - libarrow_run
       - cudatoolkit
       - test_java
   test_notebooks:
@@ -67,7 +70,6 @@ dependencies:
           - ninja
       - output_types: conda
         packages:
-          - libarrow=10
           - c-compiler
           - cxx-compiler
     specific:
@@ -103,18 +105,33 @@ dependencies:
       - output_types: conda
         packages:
           - librdkafka=1.7.0
+          # Hard pin the patch version used during the build, must match the CMake version.
+          - libarrow=10.0.1
   build_python:
     common:
       - output_types: [conda, requirements]
         packages:
           - cuda-python>=11.7.1,<12.0
           - cython>=0.29,<0.30
-          - pyarrow=10
           - rmm=23.04.*
           - scikit-build>=0.13.1
+          # Hard pin the patch version used during the build, must match the CMake version.
+          - pyarrow==10.0.1
       - output_types: conda
         packages:
           - protobuf>=4.21.6,<4.22
+  libarrow_run:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          # Allow runtime version to float up to minor version
+          - libarrow=10
+  pyarrow_run:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          # Allow runtime version to float up to minor version
+          - pyarrow==10
   cudatoolkit:
     specific:
       - output_types: conda
