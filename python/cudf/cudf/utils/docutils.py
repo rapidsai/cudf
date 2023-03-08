@@ -126,15 +126,6 @@ doc_describe = docfmt_partial(
               exclude pandas categorical columns, use ``'category'``
             - None (default) : The result will exclude nothing.
 
-        datetime_is_numeric : bool, default False
-            For DataFrame input, this also controls whether datetime columns
-            are included by default.
-
-            .. deprecated:: 23.04
-
-               `datetime_is_numeric` is deprecated and will be removed in
-               a future version of cudf.
-
         Returns
         -------
         output_frame : Series or DataFrame
