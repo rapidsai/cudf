@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
  *                  The default of empty string will separate tokens using whitespace.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column of token counts.
+ * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::string_scalar const& delimiter,
@@ -79,7 +79,7 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
  * @param delimiters Strings used to separate each string into tokens.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column of token counts.
+ * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::strings_column_view const& delimiters,

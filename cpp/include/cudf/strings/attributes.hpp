@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ namespace strings {
  */
 
 /**
- * @brief Returns an integer numeric column containing the length of each string in
- * characters.
+ * @brief Returns a column containing cudf::size_type of character lengths
+ * of each string in the given column
  *
  * The output column will have the same number of rows as the
  * specified strings column. Each row value will be the number of
@@ -41,17 +41,17 @@ namespace strings {
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column with lengths for each string.
+ * @param input Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with lengths for each string
  */
 std::unique_ptr<column> count_characters(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a numeric column containing the length of each string in
- * bytes.
+ * @brief Returns a column containing cudf::size_type of byte lengths
+ * of each string in the given column
  *
  * The output column will have the same number of rows as the
  * specified strings column. Each row value will be the number of
@@ -59,12 +59,12 @@ std::unique_ptr<column> count_characters(
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column with the number of bytes for each string.
+ * @param input Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with the number of bytes for each string
  */
 std::unique_ptr<column> count_bytes(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -79,12 +79,12 @@ std::unique_ptr<column> count_bytes(
  *
  * Any null string is ignored. No null entries will appear in the output column.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with code point integer values for each character.
  */
 std::unique_ptr<column> code_points(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of strings_apis group

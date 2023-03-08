@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,7 +116,7 @@ std::unique_ptr<cudf::column> tokenize(
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column of token counts.
+ * @return New column of cudf::size_type of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,

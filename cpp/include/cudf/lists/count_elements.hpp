@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ namespace lists {
  *
  * @param input Input lists column.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column with the number of elements for each row.
+ * @return New column with the number of elements for each row.
  */
 std::unique_ptr<column> count_elements(
   lists_column_view const& input,
