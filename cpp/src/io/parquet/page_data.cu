@@ -1994,7 +1994,7 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
     SetupNextMiniBlock(db);
   }
   // calculate the correct end of the block
-  auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
+  auto const* const new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
   // re-init block with correct end
   InitDeltaBinaryBlock(db, start, new_end);
   return new_end;
@@ -2199,7 +2199,7 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
 __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
                                       uint8_t const*& suffix_data,
                                       uint8_t* strings_out,
-                                      uint8_t*& last_string,
+                                      uint8_t const*& last_string,
                                       uint32_t start_idx,
                                       uint32_t lane_id)
 {
@@ -2434,8 +2434,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
   __shared__ __align__(16) delta_byte_array_state_s db_state;
   __shared__ __align__(8) uint8_t const* suffix_data;
-  __shared__ __align__(8) uint8_t* strings_data;
-  __shared__ __align__(8) uint8_t* last_string;
+  __shared__ __align__(8) uint8_t const* last_string;
 
   uint32_t const t       = threadIdx.x;
   uint32_t const lane_id = t & 0x1f;
@@ -2443,7 +2442,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   auto* const suffix_db  = &db_state.suffixes;
   auto* const dba        = &db_state;
 
-  // TODO assert string_data != nullptr
+  // TODO(ets) assert string_data != nullptr
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -2457,12 +2456,14 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     // initialize the prefixes and suffixes blocks
     auto const* suffix_start = FindEndOfBlock(prefix_db, s->data_start, s->data_end);
     suffix_data              = FindEndOfBlock(suffix_db, suffix_start, s->data_end);
-    strings_data             = s->page.page_string_data;
     last_string              = nullptr;
   }
   __syncthreads();
 
-  // TODO assert that prefix and suffix have same mini-block size
+  // pointer to location to output final strings
+  auto const strings_data = s->page.page_string_data;
+
+  // TODO(ets) assert that prefix and suffix have same mini-block size
   auto const batch_size = prefix_db->values_per_mb;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
