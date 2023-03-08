@@ -17,7 +17,7 @@ from cudf.core.index import (
     RangeIndex,
     StringIndex,
 )
-from cudf.testing._utils import assert_eq, expect_warning_if
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
@@ -222,15 +222,12 @@ def test_multiindex_tuples(testarr):
     ],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["loc", "getitem", None])
-def test_get_slice_bound(testlist, side, kind):
+def test_get_slice_bound(testlist, side):
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
-        with pytest.warns(FutureWarning):
-            expect = index_pd.get_slice_bound(label, side, kind)
-        with expect_warning_if(kind is not None, FutureWarning):
-            got = index.get_slice_bound(label, side, kind)
+        expect = index_pd.get_slice_bound(label, side)
+        got = index.get_slice_bound(label, side)
         assert got == expect
 
 
@@ -240,16 +237,13 @@ def test_get_slice_bound(testlist, side, kind):
     [[-1, 0, 5, 10, 11], [-1, 0, 1, 2], [2, 3, 4, 5], [-1, 0, 1], [2, 3, 4]],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["getitem", "loc"])
-def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
+def test_rangeindex_get_slice_bound_basic(bounds, indices, side):
     start, stop = bounds
     pd_index = pd.RangeIndex(start, stop)
     cudf_index = RangeIndex(start, stop)
     for idx in indices:
-        with pytest.warns(FutureWarning):
-            expect = pd_index.get_slice_bound(idx, side, kind)
-        with expect_warning_if(kind is not None, FutureWarning):
-            got = cudf_index.get_slice_bound(idx, side, kind)
+        expect = pd_index.get_slice_bound(idx, side)
+        got = cudf_index.get_slice_bound(idx, side)
         assert expect == got
 
 
@@ -262,31 +256,25 @@ def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
     [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["getitem", "loc"])
-def test_rangeindex_get_slice_bound_step(bounds, label, side, kind):
+def test_rangeindex_get_slice_bound_step(bounds, label, side):
     start, stop, step = bounds
     pd_index = pd.RangeIndex(start, stop, step)
     cudf_index = RangeIndex(start, stop, step)
 
-    with pytest.warns(FutureWarning):
-        expect = pd_index.get_slice_bound(label, side, kind)
-    with expect_warning_if(kind is not None, FutureWarning):
-        got = cudf_index.get_slice_bound(label, side, kind)
+    expect = pd_index.get_slice_bound(label, side)
+    got = cudf_index.get_slice_bound(label, side)
     assert expect == got
 
 
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["loc", "getitem", None])
-def test_get_slice_bound_missing(label, side, kind):
+def test_get_slice_bound_missing(label, side):
     mylist = [2, 4, 6, 8, 10]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
 
-    with pytest.warns(FutureWarning):
-        expect = index_pd.get_slice_bound(label, side, kind)
-    with expect_warning_if(kind is not None, FutureWarning):
-        got = index.get_slice_bound(label, side, kind)
+    expect = index_pd.get_slice_bound(label, side)
+    got = index.get_slice_bound(label, side)
     assert got == expect
 
 
@@ -299,10 +287,8 @@ def test_get_slice_bound_missing_str(label, side):
     mylist = ["b", "d", "f"]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    with pytest.warns(FutureWarning):
-        got = index.get_slice_bound(label, side, "getitem")
-    with pytest.warns(FutureWarning):
-        expect = index_pd.get_slice_bound(label, side, "getitem")
+    got = index.get_slice_bound(label, side)
+    expect = index_pd.get_slice_bound(label, side)
     assert got == expect
 
 
