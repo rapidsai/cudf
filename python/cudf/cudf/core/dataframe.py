@@ -6372,7 +6372,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             if lineterminator is not None:
                 warnings.warn(
-                    f"Ignoring {line_terminator=} in favour "
+                    f"Ignoring {line_terminator=} in favor "
                     f"of {lineterminator=}"
                 )
             else:
