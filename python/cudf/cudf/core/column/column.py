@@ -883,7 +883,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             ascending=[False], null_position=None
         )
 
-    def get_slice_bound(self, label: ScalarLike, side: str, kind: str) -> int:
+    def get_slice_bound(self, label: ScalarLike, side: str) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -893,22 +893,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ----------
         label : Scalar
         side : {'left', 'right'}
-        kind : {'ix', 'loc', 'getitem'}
         """
-        if kind not in {"ix", "loc", "getitem", None}:
-            raise ValueError(
-                f"Invalid value for ``kind`` parameter,"
-                f" must be either one of the following: "
-                f"{'ix', 'loc', 'getitem', None}, but found: {kind}"
-            )
+
         if side not in {"left", "right"}:
             raise ValueError(
                 "Invalid value for side kwarg,"
                 " must be either 'left' or 'right': %s" % (side,)
             )
 
-        # TODO: Handle errors/missing keys correctly
-        #       Not currently using `kind` argument.
         if side == "left":
             return self.find_first_value(label, closest=True)
         elif side == "right":

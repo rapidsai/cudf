@@ -1412,7 +1412,7 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def get_slice_bound(self, label, side, kind=None):
+    def get_slice_bound(self, label, side):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1422,7 +1422,6 @@ class BaseIndex(Serializable):
         ----------
         label : object
         side : {'left', 'right'}
-        kind : {'ix', 'loc', 'getitem'}
 
         Returns
         -------
