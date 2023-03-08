@@ -87,19 +87,17 @@ bool is_or_has_nested_lists(cudf::column_view const& col)
  */
 struct table_flattener {
   table_view input;
-  // reference variables
   std::vector<order> const& column_order;
   std::vector<null_order> const& null_precedence;
-  // output
-  std::vector<std::unique_ptr<column>> validity_as_column;
+  column_nullability nullability;
+  rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
+
   temporary_nullable_data nullable_data;
+  std::vector<std::unique_ptr<column>> validity_as_column;
   std::vector<column_view> flat_columns;
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
-  column_nullability nullability;
-
-  rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
 
   table_flattener(table_view const& input,
                   std::vector<order> const& column_order,
