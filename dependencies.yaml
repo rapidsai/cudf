@@ -21,7 +21,6 @@ files:
     output: none
     includes:
       - cudatoolkit
-      - libidentify_stream_usage_build
       - test_cpp
   test_python:
     output: none
@@ -77,13 +76,13 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - &gcc_amd64 gcc_linux-64=11.*
-              - &sysroot_amd64 sysroot_linux-64==2.17
+              - gcc_linux-64=11.*
+              - sysroot_linux-64==2.17
           - matrix:
               arch: aarch64
             packages:
-              - &gcc_aarch64 gcc_linux-aarch64=11.*
-              - &sysroot_aarch64 sysroot_linux-aarch64==2.17
+              - gcc_linux-aarch64=11.*
+              - sysroot_linux-aarch64==2.17
       - output_types: conda
         matrices:
           - matrix:
@@ -159,66 +158,6 @@ dependencies:
           - sphinx-copybutton
           - sphinx-markdown-tables
           - sphinxcontrib-websupport
-  libidentify_stream_usage_build:
-    common:
-      - output_types: conda
-        packages:
-          - *cmake_ver
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              arch: x86_64
-            packages:
-              - *gcc_amd64
-              - *sysroot_amd64
-          - matrix:
-              arch: aarch64
-            packages:
-              - *gcc_aarch64
-              - *sysroot_aarch64
-      - output_types: conda
-        matrices:
-          - matrix:
-              arch: x86_64
-              cuda: "11.2"
-            packages:
-              - nvcc_linux-64=11.2
-          - matrix:
-              arch: aarch64
-              cuda: "11.2"
-            packages:
-              - nvcc_linux-aarch64=11.2
-          - matrix:
-              arch: x86_64
-              cuda: "11.4"
-            packages:
-              - nvcc_linux-64=11.4
-          - matrix:
-              arch: aarch64
-              cuda: "11.4"
-            packages:
-              - nvcc_linux-aarch64=11.4
-          - matrix:
-              arch: x86_64
-              cuda: "11.5"
-            packages:
-              - nvcc_linux-64=11.5
-          - matrix:
-              arch: aarch64
-              cuda: "11.5"
-            packages:
-              - nvcc_linux-aarch64=11.5
-          - matrix:
-              arch: x86_64
-              cuda: "11.8"
-            packages:
-              - nvcc_linux-64=11.8
-          - matrix:
-              arch: aarch64
-              cuda: "11.8"
-            packages:
-              - nvcc_linux-aarch64=11.8
   notebooks:
     common:
       - output_types: [conda, requirements]
