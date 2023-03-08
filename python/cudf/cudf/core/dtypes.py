@@ -960,10 +960,11 @@ def is_categorical_dtype(obj):
         return False
     if isinstance(obj, str) and obj == "category":
         return True
+    if isinstance(obj, cudf.core.index.BaseIndex):
+        return obj._is_categorical()
     if isinstance(
         obj,
         (
-            cudf.Index,
             cudf.Series,
             cudf.core.column.ColumnBase,
             pd.Index,
@@ -1072,6 +1073,7 @@ def is_interval_dtype(obj):
             ),
         )
         or obj is cudf.core.dtypes.IntervalDtype
+        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
