@@ -107,11 +107,11 @@ struct table_flattener {
                   column_nullability nullability,
                   rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr)
-    : column_order(column_order),
-      null_precedence(null_precedence),
-      nullability(nullability),
-      stream(stream),
-      mr(mr)
+    : column_order{column_order},
+      null_precedence{null_precedence},
+      nullability{nullability},
+      stream{stream},
+      mr{mr}
   {
     superimpose_nulls(input);
     fail_if_unsupported_types(input);
