@@ -727,6 +727,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         random_state
             Seed for random number generation.
         """
+        if (
+            n is not None
+            and frac is None
+            and not replace
+            and weights is None
+            and isinstance(self._by, str)
+        ):
+            # Fast path since groupby commutes with whole-frame
+            # sampling in this case
+            df = self.obj.sample(frac=1, random_state=random_state)
+            tempname = f"_{''.join(df.columns)}"
+            df[tempname] = self.obj[self._by].astype("category").codes.cat
+            df = df.loc[df.groupby(tempname)[tempname].rank("first") <= n, :]
+            del df[tempname]
+            return df
+
         if frac is not None:
             raise NotImplementedError(
                 "Sorry, sampling with fraction is not supported"
