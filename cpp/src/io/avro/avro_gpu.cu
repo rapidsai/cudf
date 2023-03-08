@@ -109,40 +109,36 @@ avro_decode_row(schemadesc_s const* schema,
         }
         break;
 
-      case type_int: [[fallthrough]];
-      case type_long: [[fallthrough]];
+      case type_int: {
+        int64_t v                           = avro_decode_zigzag_varint(cur, end);
+        static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+      } break;
+
+      case type_long: {
+        int64_t v                           = avro_decode_zigzag_varint(cur, end);
+        static_cast<int64_t*>(dataptr)[row] = v;
+      } break;
+
       case type_bytes: [[fallthrough]];
-      case type_fixed: [[fallthrough]];
       case type_string: [[fallthrough]];
-      case type_uuid: [[fallthrough]];
       case type_enum: {
-        int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (kind == type_int) {
-          if (dataptr != nullptr && row < max_rows) {
-            static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        int64_t v       = avro_decode_zigzag_varint(cur, end);
+        size_t count    = 0;
+        const char* ptr = nullptr;
+        if (kind == type_enum) {  // dictionary
+          size_t idx = schema[i].count + v;
+          if (idx < global_dictionary.size()) {
+            ptr   = global_dictionary[idx].first;
+            count = global_dictionary[idx].second;
           }
-        } else if (kind == type_long) {
-          if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
-        } else if (kind == type_fixed) {
-          CUDF_UNREACHABLE("avro type 'fixed' type not yet implemented");
-        } else {  // string, uuid, or enum
-          size_t count    = 0;
-          const char* ptr = nullptr;
-          if (kind == type_enum) {  // dictionary
-            size_t idx = schema[i].count + v;
-            if (idx < global_dictionary.size()) {
-              ptr   = global_dictionary[idx].first;
-              count = global_dictionary[idx].second;
-            }
-          } else if (v >= 0 && cur + v <= end) {  // string or uuid
-            ptr   = reinterpret_cast<const char*>(cur);
-            count = (size_t)v;
-            cur += count;
-          }
-          if (dataptr != nullptr && row < max_rows) {
-            static_cast<string_index_pair*>(dataptr)[row].first  = ptr;
-            static_cast<string_index_pair*>(dataptr)[row].second = count;
-          }
+        } else if (v >= 0 && cur + v <= end) {  // string or bytes
+          ptr   = reinterpret_cast<const char*>(cur);
+          count = (size_t)v;
+          cur += count;
+        }
+        if (dataptr != nullptr && row < max_rows) {
+          static_cast<string_index_pair*>(dataptr)[row].first  = ptr;
+          static_cast<string_index_pair*>(dataptr)[row].second = count;
         }
       } break;
 
