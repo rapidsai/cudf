@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -318,9 +317,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def copy(
         self,
         names=None,
-        dtype=None,
-        levels=None,
-        codes=None,
         deep=False,
         name=None,
     ):
@@ -334,36 +330,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         names : sequence of objects, optional (default None)
             Names for each of the index levels.
-        dtype : object, optional (default None)
-            MultiIndex dtype, only supports None or object type
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        levels : sequence of arrays, optional (default None)
-            The unique labels for each level. Original values used if None.
-
-            .. deprecated:: 23.02
-
-               The `levels` parameter is deprecated and will be removed in
-               a future version of cudf.
-
-        codes : sequence of arrays, optional (default None)
-            Integers for each level designating which label at each location.
-            Original values used if None.
-
-            .. deprecated:: 23.02
-
-               The `codes` parameter is deprecated and will be removed in
-               a future version of cudf.
-
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
         name : object, optional (default None)
-            To keep consistent with `Index.copy`, should not be used.
+            Kept for compatibility with 1-dimensional Index. Should not
+            be used.
 
         Returns
         -------
@@ -400,46 +372,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
              com2   228.91
 
         """
-
-        # TODO: Update message when set_levels is implemented.
-        # https://github.com/rapidsai/cudf/issues/12307
-        if levels is not None:
-            warnings.warn(
-                "parameter levels is deprecated and will be removed in a "
-                "future version.",
-                FutureWarning,
-            )
-
-        # TODO: Update message when set_codes is implemented.
-        # https://github.com/rapidsai/cudf/issues/12308
-        if codes is not None:
-            warnings.warn(
-                "parameter codes is deprecated and will be removed in a "
-                "future version.",
-                FutureWarning,
-            )
-
-        if dtype is not None:
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
-
-        dtype = object if dtype is None else dtype
-        if not pd.core.dtypes.common.is_object_dtype(dtype):
-            raise TypeError("Dtype for MultiIndex only supports object type.")
-
-        # ._data needs to be rebuilt
-        if levels is not None or codes is not None:
-            if self._levels is None or self._codes is None:
-                self._compute_levels_and_codes()
-            levels = self._levels if levels is None else levels
-            codes = self._codes if codes is None else codes
-            names = self.names if names is None else names
-
-            mi = MultiIndex(levels=levels, codes=codes, names=names, copy=deep)
-            return mi
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:

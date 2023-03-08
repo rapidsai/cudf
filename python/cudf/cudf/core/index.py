@@ -302,7 +302,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return item in range(self._start, self._stop, self._step)
 
     @_cudf_nvtx_annotate
-    def copy(self, name=None, deep=False, dtype=None, names=None):
+    def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
 
@@ -311,44 +311,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
         name : object optional (default: None), name of index
         deep : Bool (default: False)
             Ignored for RangeIndex
-        dtype : numpy dtype optional (default: None)
-            Target dtype for underlying range data
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        names : list-like optional (default: False)
-            Kept compatibility with MultiIndex. Should not be used.
-
-            .. deprecated:: 23.04
-
-               The parameter `names` is deprecated and will be removed in
-               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
-        New RangeIndex instance with same range, casted to new dtype
+        New RangeIndex instance with same range
         """
-        if dtype is not None:
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
-
-        if names is not None:
-            warnings.warn(
-                "parameter names is deprecated and will be removed in a "
-                "future version. Use the name parameter instead.",
-                FutureWarning,
-            )
-
-        dtype = self.dtype if dtype is None else dtype
-
-        if not np.issubdtype(dtype, np.signedinteger):
-            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
 
         name = self.name if name is None else name
 
@@ -1140,7 +1107,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return False
 
     @_cudf_nvtx_annotate
-    def copy(self, name=None, deep=False, dtype=None, names=None):
+    def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
 
@@ -1151,45 +1118,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         deep : bool, default True
             Make a deep copy of the data.
             With ``deep=False`` the original data is used
-        dtype : numpy dtype, default None
-            Target datatype to cast into, use original dtype when None
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        names : list-like, default False
-            Kept compatibility with MultiIndex. Should not be used.
-
-            .. deprecated:: 23.04
-
-               The parameter `names` is deprecated and will be removed in
-               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
-        New index instance, casted to new dtype
+        New index instance.
         """
-        if dtype is not None:
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
 
-        if names is not None:
-            warnings.warn(
-                "parameter names is deprecated and will be removed in a "
-                "future version. Use the name parameter instead.",
-                FutureWarning,
-            )
-
-        dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
 
-        col = self._values.astype(dtype)
-        return _index_from_data({name: col.copy(True) if deep else col})
+        return _index_from_data(
+            {name: self._values.copy(True) if deep else self._values}
+        )
 
     @_cudf_nvtx_annotate
     @doc_apply(_index_astype_docstring)
