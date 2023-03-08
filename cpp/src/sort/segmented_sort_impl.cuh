@@ -175,8 +175,7 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                segment_offsets,
                                                indices_view,
                                                column_order == order::ASCENDING,
-                                               stream,
-                                               mr);
+                                               stream);
   return sorted_indices;
 }
 
