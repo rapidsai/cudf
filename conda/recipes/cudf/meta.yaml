@@ -31,6 +31,7 @@ build:
     - SCCACHE_REGION
     - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
+    - SCCACHE_S3_USE_SSL
   ignore_run_exports:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
