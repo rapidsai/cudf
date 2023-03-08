@@ -130,6 +130,29 @@ struct delta_byte_array_state_s {
 };
 
 /**
+ * @brief Returns pointers to start and end of page data (after header and definition/repetition
+ * level info)
+ */
+constexpr std::pair<uint8_t const* const, uint8_t const* const> page_data_bounds(PageInfo* page)
+{
+  // page_data should be at the start of the rep/def level data (if present)
+  uint8_t const* cur       = page->page_data;
+  uint8_t const* const end = cur + page->uncompressed_page_size;
+
+  if (page->flags & gpu::PAGEINFO_FLAGS_V2) {
+    cur += page->def_lvl_bytes + page->rep_lvl_bytes;
+  } else {
+    // have 4 bytes len, len bytes, 4 bytes len, len bytes
+    int len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+    cur += len;
+    len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+    cur += len;
+  }
+
+  return {cur, end};
+}
+
+/**
  * @brief Returns whether or not a page spans either the beginning or the end of the
  * specified row bounds
  *
@@ -2251,7 +2274,7 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   auto* const prefix_db  = &db_state.prefixes;
   auto* const suffix_db  = &db_state.suffixes;
   auto* const page       = &pages[blockIdx.x];
-  auto* const col        = &chunks[page->chunk_idx];
+  auto const* const col  = &chunks[page->chunk_idx];
 
   // initialize strings info
   if (t == 0) {
@@ -2266,17 +2289,12 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   size_t page_end   = page_start + page->num_rows;
   if (page_start >= min_row + num_rows or page_end < min_row) { return; }
 
-  // page_data should be at the start of the rep/def level data (if present)
-  uint8_t* cur       = page->page_data;
-  uint8_t* const end = cur + page->uncompressed_page_size;
-
-  // TODO(ets): assert this?
-  // DELTA_BYTE_ARRAY should only be used with V2 headers
-  cur += page->def_lvl_bytes + page->rep_lvl_bytes;
+  // get pointers to start and end of encoded page data
+  auto [cur, end] = page_data_bounds(page);
 
   if (t == 0) {
     // initialize the prefixes and suffixes blocks
-    auto const* suffix_start = FindEndOfBlock(prefix_db, cur, end);
+    auto const* const suffix_start = FindEndOfBlock(prefix_db, cur, end);
     FindEndOfBlock(suffix_db, suffix_start, end);
 
     // initialize total_bytes
