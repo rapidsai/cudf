@@ -533,8 +533,14 @@ def write_csv(
         .build()
     )
 
-    with nogil:
-        cpp_write_csv(options)
+    try:
+        with nogil:
+            cpp_write_csv(options)
+    except OverflowError:
+        raise OverflowError(
+            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
+            "Consider providing a smaller chunksize argument."
+        )
 
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:

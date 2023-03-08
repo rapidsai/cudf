@@ -72,8 +72,6 @@ cudf::size_type unique_count(table_view const& keys,
                              rmm::cuda_stream_view stream)
 {
   auto const row_comp = cudf::experimental::row::equality::self_comparator(keys, stream);
-  // row_equality_comparator comp(
-  //   nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
   if (cudf::detail::has_nested_columns(keys)) {
     auto const comp =
       row_comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);

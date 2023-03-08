@@ -275,6 +275,37 @@ class GroupBy(Serializable, Reducible, Scannable):
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
+    @property
+    def dtypes(self):
+        """
+        Return the dtypes in this group.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The data type of each column of the group.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
+        ...                      'c':[10, 11, 12, 12]})
+        >>> df.groupby("a").dtypes
+                b      c
+        a
+        1  object  int64
+        2  object  int64
+        3  object  int64
+        """
+        index = self.grouping.keys.unique().to_pandas()
+        return pd.DataFrame(
+            {
+                name: [self.obj._dtypes[name]] * len(index)
+                for name in self.grouping.values._column_names
+            },
+            index=index,
+        )
+
     @cached_property
     def groups(self):
         """

@@ -17,7 +17,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz strings_udf -v -g -n -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
 HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
@@ -315,9 +315,11 @@ if buildAll || hasArg libcudf; then
            LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
            MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
         fi
-        echo "$MSG"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
-        cp ${LIB_BUILD_DIR}/.ninja_log ${LIB_BUILD_DIR}/ninja.log
+        BMR_DIR=${RAPIDS_ARTIFACTS_DIR:-"${LIB_BUILD_DIR}"}
+        echo "Metrics output dir: [$BMR_DIR]"
+        mkdir -p ${BMR_DIR}
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${BMR_DIR}/ninja_log.html
+        cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
@@ -335,14 +337,6 @@ if buildAll || hasArg cudf; then
     fi
 fi
 
-if buildAll || hasArg strings_udf; then
-
-    cd ${REPODIR}/python/strings_udf
-    python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    fi
-fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then

@@ -135,8 +135,6 @@ cudf::size_type distinct_count(table_view const& keys,
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
-  // compaction_hash hash_key{has_null, *table_ptr};
-  // row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
 
@@ -156,7 +154,7 @@ cudf::size_type distinct_count(table_view const& keys,
       row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
       key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-      return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
+      return key_map.get_size() + static_cast<std::size_t>(null_count > 0);
     }
     // otherwise, insert all
     key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());

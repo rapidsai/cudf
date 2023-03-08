@@ -18,11 +18,6 @@ function(find_and_configure_nvbench)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   include(${rapids-cmake-dir}/cpm/package_override.cmake)
 
-  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
-  # do not support the latest version of fmt, which is automatically pulled into our conda
-  # environments by mamba.
-  set(CPM_DOWNLOAD_fmt TRUE)
-
   set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
   rapids_cpm_package_override("${cudf_patch_dir}/nvbench_override.json")
 
