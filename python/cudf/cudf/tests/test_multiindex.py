@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130
+from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -700,15 +700,8 @@ def test_multiindex_equals():
         }
     ],
 )
-@pytest.mark.parametrize(
-    "levels",
-    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
-)
-@pytest.mark.parametrize(
-    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
-)
 @pytest.mark.parametrize("names", [["X", "Y"]])
-def test_multiindex_copy_sem(data, levels, codes, names):
+def test_multiindex_copy_sem(data, names):
     """Test semantic equality for MultiIndex.copy"""
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -717,12 +710,10 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    gmi_copy = gmi.copy(names=names)
 
     pmi = pdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    pmi_copy = pmi.copy(names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
@@ -1819,8 +1810,14 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if func == "is_object":
         assert_eq(False, actual)

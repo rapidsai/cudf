@@ -4929,14 +4929,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         percentiles=None,
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
     ):
         """{docstring}"""
 
         if not include and not exclude:
-            default_include = [np.number]
-            if datetime_is_numeric:
-                default_include.append("datetime")
+            default_include = [np.number, "datetime"]
             data_to_describe = self.select_dtypes(include=default_include)
             if data_to_describe._num_columns == 0:
                 data_to_describe = self
@@ -4955,7 +4952,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("No data of included types.")
 
         describe_series_list = [
-            data_to_describe[col].describe(percentiles=percentiles)
+            data_to_describe[col].describe(
+                percentiles=percentiles,
+            )
             for col in data_to_describe._column_names
         ]
         if len(describe_series_list) == 1:

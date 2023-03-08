@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -224,25 +223,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic(self):
-        """Return boolean if values in the object are monotonically increasing.
-
-        This property is an alias for :attr:`is_monotonic_increasing`.
-
-        Returns
-        -------
-        bool
-        """
-        warnings.warn(
-            "is_monotonic is deprecated and will be removed in a future "
-            "version. Use is_monotonic_increasing instead.",
-            FutureWarning,
-        )
-
-        return self.is_monotonic_increasing
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -269,13 +249,26 @@ class SingleColumnFrame(Frame, NotIterable):
         return self._column.__cuda_array_interface__
 
     @_cudf_nvtx_annotate
-    def factorize(self, na_sentinel=-1):
+    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
         """Encode the input values as integer labels.
 
         Parameters
         ----------
-        na_sentinel : number
+        sort : bool, default True
+            Sort uniques and shuffle codes to maintain the relationship.
+        na_sentinel : number, default -1
             Value to indicate missing category.
+
+            .. deprecated:: 23.04
+
+               The na_sentinel argument is deprecated and will be removed in
+               a future version of cudf. Specify use_na_sentinel as
+               either True or False.
+        use_na_sentinel : bool, default True
+            If True, the sentinel -1 will be used for NA values.
+            If False, NA values will be encoded as non-negative
+            integers and will not drop the NA from the uniques
+            of the values.
 
         Returns
         -------
@@ -294,7 +287,12 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         StringIndex(['a' 'c'], dtype='object')
         """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
+        return cudf.core.algorithms.factorize(
+            self,
+            sort=sort,
+            na_sentinel=na_sentinel,
+            use_na_sentinel=use_na_sentinel,
+        )
 
     @_cudf_nvtx_annotate
     def _make_operands_for_binop(

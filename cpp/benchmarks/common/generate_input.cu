@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -501,7 +501,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
   thrust::exclusive_scan(
     thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
-  // offfsets are ready.
+  // offsets are ready.
   auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,

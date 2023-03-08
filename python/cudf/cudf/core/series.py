@@ -3107,7 +3107,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         percentiles=None,
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
     ):
         """{docstring}"""
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
 
-using namespace cudf::test::iterators;
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
 
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -346,4 +347,63 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
   auto const expected = bools_col{0, 1, 1, 0, 0};
   auto const result   = cudf::contains(*haystack, *needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
+}
+
+struct ListLowerBound : public cudf::test::BaseFixture {
+};
+
+TEST_F(ListLowerBound, ListWithNulls)
+{
+  {
+    using lcw           = cudf::test::lists_column_wrapper<double>;
+    auto const haystack = lcw{
+      lcw{-3.45967821e+12},  // 0
+      lcw{-3.6912186e-32},   // 1
+      lcw{9.721175},         // 2
+    };
+
+    auto const needles = lcw{
+      lcw{{0, 4.22671e+32}, null_at(0)},
+    };
+
+    auto const expect = int32s_col{0};
+    auto const result = cudf::lower_bound(cudf::table_view{{haystack}},
+                                          cudf::table_view{{needles}},
+                                          {cudf::order::ASCENDING},
+                                          {cudf::null_order::BEFORE});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+  }
+
+  {
+    using lcw       = cudf::test::lists_column_wrapper<int32_t, int32_t>;
+    auto const col1 = lcw{
+      lcw{{0}, null_at(0)},  // 0
+      lcw{-80},              // 1
+      lcw{-17},              // 2
+    };
+
+    auto const col2 = lcw{
+      lcw{27},               // 0
+      lcw{{0}, null_at(0)},  // 1
+      lcw{},                 // 2
+    };
+
+    auto const val1 = lcw{
+      lcw{87},
+    };
+
+    auto const val2 = lcw{
+      lcw{},
+    };
+
+    cudf::table_view input{{col1, col2}};
+    cudf::table_view values{{val1, val2}};
+    std::vector<cudf::order> column_order{cudf::order::ASCENDING, cudf::order::DESCENDING};
+    std::vector<cudf::null_order> null_order_flags{cudf::null_order::BEFORE,
+                                                   cudf::null_order::BEFORE};
+
+    auto const expect = int32s_col{3};
+    auto const result = cudf::lower_bound(input, values, column_order, null_order_flags);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+  }
 }

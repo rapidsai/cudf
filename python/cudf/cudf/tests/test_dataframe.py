@@ -2518,8 +2518,6 @@ def test_unary_operators(func, pdf, gdf):
 def test_is_monotonic(gdf):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 1, 2])
     gdf = cudf.DataFrame.from_pandas(pdf)
-    with pytest.warns(FutureWarning):
-        assert not gdf.index.is_monotonic
     assert not gdf.index.is_monotonic_increasing
     assert not gdf.index.is_monotonic_decreasing
 
@@ -3656,6 +3654,7 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
+
     gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
