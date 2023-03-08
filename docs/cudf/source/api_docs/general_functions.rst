@@ -10,12 +10,14 @@ Data manipulations
    :toctree: api/
 
    cudf.concat
+   cudf.crosstab
    cudf.cut
+   cudf.factorize
    cudf.get_dummies
    cudf.melt
+   cudf.merge
    cudf.pivot
    cudf.pivot_table
-   cudf.crosstab
    cudf.unstack
 
 Top-level conversions

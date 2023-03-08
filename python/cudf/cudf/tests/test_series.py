@@ -408,7 +408,8 @@ def test_series_size(data):
 def test_series_describe_numeric(dtype):
     ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     gs = cudf.from_pandas(ps)
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
     expected = ps.describe()
 
     assert_eq(expected, actual, check_dtype=True)
@@ -426,7 +427,8 @@ def test_series_describe_datetime(dtype):
     # Treating datetimes as categoricals is deprecated in pandas and will
     # be removed in future. Future behavior is treating datetime as numeric.
     expected = ps.describe(datetime_is_numeric=True)
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     assert_eq(expected.astype("str"), actual)
 
@@ -437,7 +439,8 @@ def test_series_describe_timedelta(dtype):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     assert_eq(actual, expected.astype("str"))
 
@@ -462,7 +465,8 @@ def test_series_describe_other_types(ps):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    actual = gs.describe()
+    with pytest.warns(FutureWarning):
+        actual = gs.describe()
 
     if len(ps) == 0:
         assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))
@@ -486,10 +490,55 @@ def test_series_factorize(data, na_sentinel):
 
     with pytest.warns(FutureWarning):
         expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
+    with pytest.warns(FutureWarning):
+        actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
     assert_eq(expected_cats.values, actual_cats.to_pandas().values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("use_na_sentinel", [True, False])
+def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    actual_labels, actual_cats = gsr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_series_factorize_sort(data, sort):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(sort=sort)
+    actual_labels, actual_cats = gsr.factorize(sort=sort)
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize(
