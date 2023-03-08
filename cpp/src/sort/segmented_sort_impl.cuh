@@ -69,8 +69,7 @@ struct column_fast_sort_fn {
                  column_view const& segment_offsets,
                  mutable_column_view& indices,
                  bool ascending,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr)
+                 rmm::cuda_stream_view stream)
   {
     // CUB's segmented sort functions cannot accept iterators.
     // We create a temporary column here for it to use.
@@ -133,19 +132,14 @@ struct column_fast_sort_fn {
                   column_view const& segment_offsets,
                   mutable_column_view& indices,
                   bool ascending,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr)
+                  rmm::cuda_stream_view stream)
   {
-    fast_sort<T>(input, segment_offsets, indices, ascending, stream, mr);
+    fast_sort<T>(input, segment_offsets, indices, ascending, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(!is_fast_sort_supported<T>())>
-  void operator()(column_view const&,
-                  column_view const&,
-                  mutable_column_view&,
-                  bool,
-                  rmm::cuda_stream_view,
-                  rmm::mr::device_memory_resource*)
+  void operator()(
+    column_view const&, column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Column type cannot be used with fast-sort function");
   }
