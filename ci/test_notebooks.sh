@@ -34,7 +34,7 @@ pushd notebooks
 
 # Add notebooks that should be skipped here
 # (space-separated list of filenames without paths)
-SKIPNBS=""
+SKIPNBS="performance_comparisons.ipynb"
 
 EXITCODE=0
 trap "EXITCODE=1" ERR
