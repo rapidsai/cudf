@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -2382,8 +2382,13 @@ def test_index_type_methods(data, func):
     pidx = pd.Index(data)
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if gidx.dtype == np.dtype("bool") and func == "is_object":
         assert_eq(False, actual)

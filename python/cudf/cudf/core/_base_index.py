@@ -488,8 +488,8 @@ class BaseIndex(Serializable):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self.is_boolean() and other.is_numeric()) or (
-            self.is_numeric() and other.is_boolean()
+        if (self._is_boolean() and other._is_numeric()) or (
+            self._is_numeric() and other._is_boolean()
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -822,6 +822,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index only consists of numeric data.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_any_real_numeric_dtype` instead.
+
         Returns
         -------
         bool
@@ -855,11 +858,22 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         raise NotImplementedError
 
     def is_boolean(self):
         """
         Check if the Index only consists of booleans.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_bool_dtype` instead.
 
         Returns
         -------
@@ -888,11 +902,22 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         raise NotImplementedError
 
     def is_integer(self):
         """
         Check if the Index only consists of integers.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_integer_dtype` instead.
 
         Returns
         -------
@@ -921,6 +946,14 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         raise NotImplementedError
 
     def is_floating(self):
@@ -929,6 +962,9 @@ class BaseIndex(Serializable):
 
         The Index may consist of only floats, NaNs, or a mix of floats,
         integers, or NaNs.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_float_dtype` instead.
 
         Returns
         -------
@@ -961,11 +997,22 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         raise NotImplementedError
 
     def is_object(self):
         """
         Check if the Index is of the object dtype.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_object_dtype` instead.
 
         Returns
         -------
@@ -995,11 +1042,22 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         raise NotImplementedError
 
     def is_categorical(self):
         """
         Check if the Index holds categorical data.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_categorical_dtype` instead.
 
         Returns
         -------
@@ -1036,11 +1094,22 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         raise NotImplementedError
 
     def is_interval(self):
         """
         Check if the Index holds Interval objects.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_interval_dtype` instead.
 
         Returns
         -------
@@ -1071,6 +1140,14 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         raise NotImplementedError
 
     def _union(self, other, sort=None):
