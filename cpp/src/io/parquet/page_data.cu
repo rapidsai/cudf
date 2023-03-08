@@ -2036,9 +2036,7 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 
     // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
     // that one only unpacks up to bitwidths of 24. simplified some since this
-    // will always do batches of 32.
-    //
-    // TODO(ets): faster as loop or the unrolled version???
+    // will always do batches of 32. also replaced branching with a loop.
     int64_t delta = 0;
     if (lane_id + db->current_value_idx < db->value_count) {
       int32_t ofs      = (lane_id - warp_size) * mb_bits;
@@ -2047,44 +2045,11 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
       if (p < db->block_end) {
         uint32_t c = 8 - ofs;  // 0 - 7 bits
         delta      = (*p++) >> ofs;
-#if 0
+
         while (c < mb_bits && p < db->block_end) {
           delta |= (*p++) << c;
           c += 8;
         }
-#else
-        if (c < mb_bits && p < db->block_end) {  // up to 8 bits
-          delta |= (*p++) << c;
-          c += 8;
-          if (c < mb_bits && p < db->block_end) {  // 16 bits
-            delta |= (*p++) << c;
-            c += 8;
-            if (c < mb_bits && p < db->block_end) {  // 24 bits
-              delta |= (*p++) << c;
-              c += 8;
-              if (c < mb_bits && p < db->block_end) {  // 32 bits
-                delta |= (*p++) << c;
-                c += 8;
-                if (c < mb_bits && p < db->block_end) {  // 40 bits
-                  delta |= (*p++) << c;
-                  c += 8;
-                  if (c < mb_bits && p < db->block_end) {  // 48 bits
-                    delta |= (*p++) << c;
-                    c += 8;
-                    if (c < mb_bits && p < db->block_end) {  // 56 bits
-                      delta |= (*p++) << c;
-                      c += 8;
-                      if (c < mb_bits && p < db->block_end) {  // 64 bits
-                        delta |= (*p++) << c;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-#endif
         delta &= (1 << mb_bits) - 1;
       }
     }
