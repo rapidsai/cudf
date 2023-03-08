@@ -754,7 +754,7 @@ The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalat
 used for index types (integers) without requiring a type-specific instance. It can be used for any
 iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`,
 `int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always return a
-`cudf::size_type` integer.
+[`cudf::size_type`](#cudfsize_type) integer.
 
 Use the `indexalator_factory` to create an appropriate input iterator from a column_view. Example
 input iterator usage:
