@@ -102,7 +102,6 @@ Function application, GroupBy & window
    :toctree: api/
 
    Series.apply
-   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
