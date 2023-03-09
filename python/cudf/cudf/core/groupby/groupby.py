@@ -735,7 +735,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         -----
         Sampling with fractional group sizes is currently much slower
         than sampling with a constant number of items per group.
-        Please fill an enhancement request if you need this code path
+        Please file an enhancement request if you need this code path
         to run fast.
         """
         if weights is not None:
@@ -768,12 +768,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         ):
             # Fast path since groupby commutes with whole-frame
             # sampling in this case
+            minsize = self.size().min()
+            if minsize < n:
+                raise ValueError(
+                    f"Cannot sample {n=} without replacement "
+                    f"smallest group is {minsize}."
+                )
             df = self.obj.sample(
                 frac=1, random_state=random_state
             ).reset_index(drop=True)
             # Cantor name
             tempname = f"_{''.join(df.columns)}"
-            newcol = self.obj[self._by]
+            newcol = df[self._by]
             df[tempname] = newcol.astype("category").cat.codes
             df = df.loc[df.groupby(tempname)[tempname].rank("first") <= n, :]
             del df[tempname]
