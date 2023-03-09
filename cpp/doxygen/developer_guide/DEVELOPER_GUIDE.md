@@ -272,7 +272,7 @@ A *mutable*, non-owning view of a table.
 ## cudf::size_type
 
 The `cudf::size_type` is the type used for the number of elements in a column, offsets to elements within a column, indices to address specific elements, segments for subsets of column elements, etc.
-It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647. 
+It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647.
 Some APIs also accept negative index values and those functions support a minimum value of -2147483648.
 This fundamental type also influences output values not just for column size limits but for counting elements as well.
 
