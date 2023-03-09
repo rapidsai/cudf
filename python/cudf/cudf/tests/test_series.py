@@ -397,8 +397,7 @@ def test_series_size(data):
 def test_series_describe_numeric(dtype):
     ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     gs = cudf.from_pandas(ps)
-    with pytest.warns(FutureWarning):
-        actual = gs.describe()
+    actual = gs.describe()
     expected = ps.describe()
 
     assert_eq(expected, actual, check_dtype=True)
@@ -415,9 +414,8 @@ def test_series_describe_datetime(dtype):
 
     # Treating datetimes as categoricals is deprecated in pandas and will
     # be removed in future. Future behavior is treating datetime as numeric.
-    expected = ps.describe(datetime_is_numeric=True)
-    with pytest.warns(FutureWarning):
-        actual = gs.describe()
+    expected = ps.describe()
+    actual = gs.describe()
 
     assert_eq(expected.astype("str"), actual)
 
@@ -428,8 +426,7 @@ def test_series_describe_timedelta(dtype):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    with pytest.warns(FutureWarning):
-        actual = gs.describe()
+    actual = gs.describe()
 
     assert_eq(actual, expected.astype("str"))
 
@@ -454,8 +451,7 @@ def test_series_describe_other_types(ps):
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
-    with pytest.warns(FutureWarning):
-        actual = gs.describe()
+    actual = gs.describe()
 
     if len(ps) == 0:
         assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))

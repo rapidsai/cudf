@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -25,7 +25,6 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     OTHER_TYPES,
     SIGNED_INTEGER_TYPES,
-    SIGNED_TYPES,
     UNSIGNED_TYPES,
     _create_pandas_series,
     assert_column_memory_eq,
@@ -307,90 +306,69 @@ def test_set_index_as_property():
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
-def test_index_copy_range(name, dtype, deep=True):
+def test_index_copy_range(name, deep=True):
     cidx = cudf.RangeIndex(1, 5)
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize("dtype,", ["datetime64[ns]", "int64"])
-def test_index_copy_datetime(name, dtype, deep=True):
+def test_index_copy_datetime(name, deep=True):
     cidx = cudf.DatetimeIndex(["2001", "2002", "2003"])
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize("dtype", ["category", "object"])
-def test_index_copy_string(name, dtype, deep=True):
+def test_index_copy_string(name, deep=True):
     cidx = cudf.StringIndex(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype",
-    NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
-)
-def test_index_copy_integer(name, dtype, deep=True):
+def test_index_copy_integer(name, deep=True):
     """Test for NumericIndex Copy Casts"""
     cidx = cudf.Index([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize("dtype", SIGNED_TYPES)
-def test_index_copy_float(name, dtype, deep=True):
+def test_index_copy_float(name, deep=True):
     """Test for NumericIndex Copy Casts"""
     cidx = cudf.Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["category"])
-def test_index_copy_category(name, dtype, deep=True):
+def test_index_copy_category(name, deep=True):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    with pytest.warns(FutureWarning):
-        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    pidx_copy = pidx.copy(name=name, deep=deep)
+    cidx_copy = cidx.copy(name=name, deep=deep)
 
     assert_column_memory_ne(cidx._values, cidx_copy._values)
     assert_eq(pidx_copy, cidx_copy)
@@ -2404,8 +2382,13 @@ def test_index_type_methods(data, func):
     pidx = pd.Index(data)
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if gidx.dtype == np.dtype("bool") and func == "is_object":
         assert_eq(False, actual)

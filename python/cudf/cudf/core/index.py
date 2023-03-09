@@ -258,25 +258,25 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _clean_nulls_from_index(self):
         return self
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return True
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
     @property  # type: ignore
@@ -302,7 +302,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return item in range(self._start, self._stop, self._step)
 
     @_cudf_nvtx_annotate
-    def copy(self, name=None, deep=False, dtype=None, names=None):
+    def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
 
@@ -311,44 +311,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
         name : object optional (default: None), name of index
         deep : Bool (default: False)
             Ignored for RangeIndex
-        dtype : numpy dtype optional (default: None)
-            Target dtype for underlying range data
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        names : list-like optional (default: False)
-            Kept compatibility with MultiIndex. Should not be used.
-
-            .. deprecated:: 23.04
-
-               The parameter `names` is deprecated and will be removed in
-               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
-        New RangeIndex instance with same range, casted to new dtype
+        New RangeIndex instance with same range
         """
-        if dtype is not None:
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
-
-        if names is not None:
-            warnings.warn(
-                "parameter names is deprecated and will be removed in a "
-                "future version. Use the name parameter instead.",
-                FutureWarning,
-            )
-
-        dtype = self.dtype if dtype is None else dtype
-
-        if not np.issubdtype(dtype, np.signedinteger):
-            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
 
         name = self.name if name is None else name
 
@@ -528,7 +495,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._step < 0 or len(self) <= 1
 
     @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
+    def get_slice_bound(self, label, side):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -539,20 +506,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         label : int
             A valid value in the ``RangeIndex``
         side : {'left', 'right'}
-        kind : Unused
-            To keep consistency with other index types.
 
         Returns
         -------
         int
             Index of label.
         """
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
@@ -1140,7 +1099,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return False
 
     @_cudf_nvtx_annotate
-    def copy(self, name=None, deep=False, dtype=None, names=None):
+    def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
 
@@ -1151,45 +1110,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         deep : bool, default True
             Make a deep copy of the data.
             With ``deep=False`` the original data is used
-        dtype : numpy dtype, default None
-            Target datatype to cast into, use original dtype when None
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        names : list-like, default False
-            Kept compatibility with MultiIndex. Should not be used.
-
-            .. deprecated:: 23.04
-
-               The parameter `names` is deprecated and will be removed in
-               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
-        New index instance, casted to new dtype
+        New index instance.
         """
-        if dtype is not None:
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
 
-        if names is not None:
-            warnings.warn(
-                "parameter names is deprecated and will be removed in a "
-                "future version. Use the name parameter instead.",
-                FutureWarning,
-            )
-
-        dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
 
-        col = self._values.astype(dtype)
-        return _index_from_data({name: col.copy(True) if deep else col})
+        return _index_from_data(
+            {name: self._values.copy(True) if deep else self._values}
+        )
 
     @_cudf_nvtx_annotate
     @doc_apply(_index_astype_docstring)
@@ -1449,34 +1380,28 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     notnull = notna
 
     @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
-        return self._values.get_slice_bound(label, side, kind)
+    def get_slice_bound(self, label, side):
+        return self._values.get_slice_bound(label, side)
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return False
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return True
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
     @property  # type: ignore
@@ -1655,25 +1580,25 @@ class NumericIndex(GenericIndex):
 
         super().__init__(data, **kwargs)
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return True
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
 
@@ -1901,10 +1826,10 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return True
 
 
@@ -1932,10 +1857,10 @@ class Float64Index(NumericIndex):
 
     _dtype = np.float64
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return True
 
 
@@ -2381,7 +2306,7 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
     @_cudf_nvtx_annotate
@@ -2629,7 +2554,7 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
 
@@ -2747,10 +2672,10 @@ class CategoricalIndex(GenericIndex):
         """
         return as_index(self._values.categories)
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return True
 
 
@@ -3001,10 +2926,10 @@ class IntervalIndex(GenericIndex):
             "Getting a scalar from an IntervalIndex is not yet supported"
         )
 
-    def is_interval(self):
+    def _is_interval(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
 
@@ -3066,10 +2991,10 @@ class StringIndex(GenericIndex):
         else:
             return self
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return True
 
 
