@@ -26,7 +26,6 @@
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -61,8 +60,6 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
     _include_null_keys(include_null_keys),
     _null_precedence(null_precedence)
 {
-  using namespace cudf::structs::detail;
-
   // Cannot depend on caller's sorting if the column contains nulls,
   // and null values are to be excluded.
   // Re-sort the data, to filter out nulls more easily.
