@@ -20,7 +20,6 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
