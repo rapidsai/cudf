@@ -432,6 +432,7 @@ std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_s
 
 /**
  * @brief Check if the input column has structs-of-lists column at any nested level.
+ *
  * @param input The input column to check
  * @return Boolean value indicating if there is structs-of-lists column
  */

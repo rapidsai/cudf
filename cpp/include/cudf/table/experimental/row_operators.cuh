@@ -731,7 +731,7 @@ struct preprocessed_table {
    * row comparisons.
    * @param transformed_structs_columns The intermediate columns resulted from transforming child
    * of lists-of-structs columns into lists-of-integers columns and will be used for row
-   * comparation.
+   * comparison.
    */
   preprocessed_table(
     table_device_view_owner&& table,
