@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "counts.hpp"
 #include "update_validity.hpp"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -36,6 +37,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/reduce.h>
 
 #include <optional>
 #include <type_traits>
@@ -188,7 +190,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 }
 
 /**
- * @brief Fixed point segmented reduction for 'min', 'max'.
+ * @brief Specialization for fixed-point segmented reduction
  *
  * @tparam InputType    the input column data-type
  * @tparam Op           the operator of cudf::reduction::op::
@@ -200,11 +202,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
-
-template <typename InputType,
-          typename Op,
-          CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
-                         std::is_same_v<Op, cudf::reduction::op::max>)>
+template <typename InputType, typename Op>
 std::unique_ptr<column> fixed_point_segmented_reduction(
   column_view const& col,
   device_span<size_type const> offsets,
@@ -214,23 +212,55 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   rmm::mr::device_memory_resource* mr)
 {
   using RepType = device_storage_type_t<InputType>;
-  return simple_segmented_reduction<RepType, RepType, Op>(
-    col, offsets, null_handling, init, stream, mr);
-}
+  auto result =
+    simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
+  auto const scale = [&] {
+    if constexpr (std::is_same_v<Op, cudf::reduction::op::product>) {
+      // The product aggregation requires updating the scale of the fixed-point output column.
+      // The output scale needs to be the maximum count of all segments multiplied by
+      // the input scale value.
+      rmm::device_uvector<size_type> const counts =
+        cudf::reduction::detail::segmented_counts(col.null_mask(),
+                                                  col.has_nulls(),
+                                                  offsets,
+                                                  null_policy::EXCLUDE,  // do not count nulls
+                                                  stream,
+                                                  rmm::mr::get_current_device_resource());
 
-template <typename InputType,
-          typename Op,
-          CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
-                         !std::is_same_v<Op, cudf::reduction::op::max>())>
-std::unique_ptr<column> fixed_point_segmented_reduction(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>>,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("Segmented reduction on fixed point column only supports min and max reduction.");
+      auto const max_count = thrust::reduce(rmm::exec_policy(stream),
+                                            counts.begin(),
+                                            counts.end(),
+                                            size_type{0},
+                                            thrust::maximum<size_type>{});
+
+      auto const new_scale = numeric::scale_type{col.type().scale() * max_count};
+
+      // adjust values in each segment to match the new scale
+      auto const d_col = column_device_view::create(col, stream);
+      thrust::transform(rmm::exec_policy(stream),
+                        d_col->begin<InputType>(),
+                        d_col->end<InputType>(),
+                        d_col->begin<InputType>(),
+                        [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); });
+      return new_scale;
+    }
+
+    if constexpr (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
+      return numeric::scale_type{col.type().scale() * 2};
+    }
+
+    return numeric::scale_type{col.type().scale()};
+  }();
+
+  auto const size       = result->size();        // get these before
+  auto const null_count = result->null_count();  // release() is called
+  auto contents         = result->release();
+
+  return std::make_unique<column>(data_type{type_to_id<InputType>(), scale},
+                                  size,
+                                  std::move(*(contents.data.release())),
+                                  std::move(*(contents.null_mask.release())),
+                                  null_count);
 }
 
 /**
@@ -431,8 +461,23 @@ struct column_type_dispatcher {
     return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 
+  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     device_span<size_type const> offsets,
+                                     data_type const output_type,
+                                     null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
+    return fixed_point_segmented_reduction<ElementType, Op>(
+      col, offsets, null_handling, init, stream, mr);
+  }
+
   template <typename ElementType,
-            typename std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
+            std::enable_if_t<not cudf::is_numeric<ElementType>() and
+                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      data_type const,

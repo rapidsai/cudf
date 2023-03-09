@@ -34,6 +34,7 @@
 
 #include <limits>
 #include <optional>
+#include <stdexcept>
 
 namespace cudf::lists {
 namespace detail {
@@ -169,7 +170,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const n_elements = cudf::detail::sizes_to_offsets(
     sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
   CUDF_EXPECTS(n_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
+               "Size of output exceeds column size limit",
+               std::overflow_error);
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},

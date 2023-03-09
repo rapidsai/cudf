@@ -362,4 +362,36 @@ TEST_F(JsonWriterTest, SpecialChars)
   EXPECT_EQ(expected, output_string);
 }
 
+TEST_F(JsonWriterTest, NullList)
+{
+  std::string const data = R"(
+{"a": [null], "b": [[1, 2, 3], [null], [null, null, null], [4, null, 5]]}
+{"a": [2, null, null, 3] , "b": null}
+{"a": [null, null, 4], "b": [[2, null], null]}
+{"a": [5, null, null], "b": [null, [3, 4, 5]]} )";
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::table_view tbl_view            = result.tbl->view();
+  cudf::io::table_metadata mt{result.metadata};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected = R"({"a":[null],"b":[[1,2,3],[null],[null,null,null],[4,null,5]]}
+{"a":[2,null,null,3],"b":null}
+{"a":[null,null,4],"b":[[2,null],null]}
+{"a":[5,null,null],"b":[null,[3,4,5]]}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
 CUDF_TEST_PROGRAM_MAIN()

@@ -264,7 +264,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   std::vector<detail::dremel_device_view> dremel_device_views;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      dremel_data.push_back(detail::get_dremel_data(col, {}, false, stream));
+      dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
       dremel_device_views.push_back(dremel_data.back());
     }
   }

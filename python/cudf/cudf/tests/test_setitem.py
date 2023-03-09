@@ -347,3 +347,13 @@ def test_series_setitem_upcasting_string_value():
     assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
     with pytest.raises(ValueError):
         sr[0] = "non-integer"
+
+
+def test_scatter_by_slice_with_start_and_step():
+    source = pd.Series([1, 2, 3, 4, 5])
+    csource = cudf.from_pandas(source)
+    target = pd.Series([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    ctarget = cudf.from_pandas(target)
+    target[1::2] = source
+    ctarget[1::2] = csource
+    assert_eq(target, ctarget)
