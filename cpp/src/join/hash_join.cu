@@ -299,7 +299,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   // need to store off the owning structures for some of the views in _build
   _flattened_build_table = structs::detail::flatten_nested_columns(
-    build, {}, {}, structs::detail::column_nullability::FORCE);
+    build, {}, {}, structs::detail::column_nullability::FORCE, stream);
   _build = _flattened_build_table;
 
   if (_is_empty) { return; }
@@ -357,7 +357,7 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   if (_is_empty) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
+    probe, {}, {}, structs::detail::column_nullability::FORCE, stream);
   auto const flattened_probe_table = flattened_probe.flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
@@ -382,7 +382,7 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
+    probe, {}, {}, structs::detail::column_nullability::FORCE, stream);
   auto const flattened_probe_table = flattened_probe.flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
@@ -408,7 +408,7 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
+    probe, {}, {}, structs::detail::column_nullability::FORCE, stream);
   auto const flattened_probe_table = flattened_probe.flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
@@ -475,7 +475,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                "Probe column size is too big for hash join");
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
+    probe, {}, {}, structs::detail::column_nullability::FORCE, stream);
   auto const flattened_probe_table = flattened_probe.flattened_columns();
 
   CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),

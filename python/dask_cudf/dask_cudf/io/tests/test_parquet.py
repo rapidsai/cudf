@@ -502,3 +502,17 @@ def test_check_file_size(tmpdir):
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
         dask_cudf.read_parquet(fn, check_file_size=1).compute()
+
+
+def test_nullable_schema_mismatch(tmpdir):
+    # See: https://github.com/rapidsai/cudf/issues/12702
+    path0 = str(tmpdir.join("test.0.parquet"))
+    path1 = str(tmpdir.join("test.1.parquet"))
+    cudf.DataFrame.from_dict({"a": [1, 2, 3]}).to_parquet(path0)
+    cudf.DataFrame.from_dict({"a": [4, 5, None]}).to_parquet(path1)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.read_parquet(
+            [path0, path1], split_row_groups=2, aggregate_files=True
+        )
+        expect = pd.read_parquet([path0, path1])
+    dd.assert_eq(ddf, expect, check_index=False)
