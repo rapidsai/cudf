@@ -7339,8 +7339,9 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
     actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
 
-    # In some cases, Pandas creates an empty Index([], dtype="object") for
-    # columns whereas cudf creates a RangeIndex(0, 0).
+    # In empty dataframe cases, Pandas & cudf differ in columns
+    # creation, pandas creates RangeIndex(0, 0)
+    # whereas cudf creates an empty Index([], dtype="object").
     check_column_type = (
         False if len(expected.columns) == len(df.columns) == 0 else True
     )
