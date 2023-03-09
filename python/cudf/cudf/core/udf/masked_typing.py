@@ -441,7 +441,8 @@ for unary_op in unary_ops:
 # Strings functions and utilities
 def _is_valid_string_arg(ty):
     return (
-        isinstance(ty, MaskedType) and isinstance(ty.value_type, StringView)
+        isinstance(ty, MaskedType)
+        and isinstance(ty.value_type, (StringView, UDFString))
     ) or isinstance(ty, types.StringLiteral)
 
 
@@ -465,9 +466,9 @@ def register_masked_string_function(func):
 @register_masked_string_function(len)
 def len_typing(self, args, kws):
     if isinstance(args[0], MaskedType) and isinstance(
-        args[0].value_type, StringView
+        args[0].value_type, (StringView, UDFString)
     ):
-        return nb_signature(MaskedType(size_type), args[0])
+        return nb_signature(MaskedType(size_type), MaskedType(string_view))
     elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
         return nb_signature(size_type, args[0])
 
@@ -635,4 +636,13 @@ for func in string_unary_funcs:
         create_masked_unary_attr(f"MaskedType.{func}", udf_string),
     )
 
+
+class MaskedUDFStringAttrs(MaskedStringViewAttrs):
+    key = MaskedType(udf_string)
+
+    def resolve_value(self, mod):
+        return udf_string
+
+
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
+cuda_decl_registry.register_attr(MaskedUDFStringAttrs)
