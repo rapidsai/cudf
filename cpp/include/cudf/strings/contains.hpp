@@ -165,7 +165,7 @@ std::unique_ptr<column> matches_re(
  * @param strings Strings instance for this operation
  * @param prog Regex program instance
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New column of type cudf::size_type with counts for each string
+ * @return New column of match counts for each string
  */
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
