@@ -101,7 +101,7 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm=23.04.*
+          - librmm==23.4.*
       - output_types: conda
         packages:
           - librdkafka=1.7.0
@@ -112,11 +112,11 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - cython>=0.29,<0.30
-          - rmm=23.04.*
           - scikit-build>=0.13.1
           # Hard pin the patch version used during the build, must match the CMake version.
           - pyarrow==10.0.1.*
           - numpy
+          - rmm==23.4.*
       - output_types: conda
         packages:
           - protobuf>=4.21.6,<4.22
@@ -217,6 +217,7 @@ dependencies:
           - python-confluent-kafka=1.7.0
           - streamz
           - typing_extensions
+          - rmm==23.4.*
       - output_types: conda
         packages:
           - cubinlinker
@@ -225,7 +226,6 @@ dependencies:
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
           - ptxcompiler
-          - rmm=23.04.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -234,7 +234,6 @@ dependencies:
           - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
           - ptxcompiler-cu11
-          - rmm-cu11=23.04.*
     specific:
       - output_types: requirements
         matrices:
