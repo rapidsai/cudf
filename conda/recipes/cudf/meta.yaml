@@ -18,18 +18,20 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - PARALLEL_LEVEL
-    - CMAKE_GENERATOR
-    - CMAKE_C_COMPILER_LAUNCHER
-    - CMAKE_CXX_COMPILER_LAUNCHER
-    - CMAKE_CUDA_COMPILER_LAUNCHER
-    - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
-    - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
-    - SCCACHE_BUCKET
-    - SCCACHE_REGION
-    - SCCACHE_IDLE_TIMEOUT
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
+    - AWS_SESSION_TOKEN
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_GENERATOR
+    - PARALLEL_LEVEL
+    - SCCACHE_BUCKET
+    - SCCACHE_IDLE_TIMEOUT
+    - SCCACHE_REGION
+    - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
+    - SCCACHE_S3_USE_SSL
   ignore_run_exports:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
@@ -45,7 +47,7 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf =4.21
+    - protobuf >=4.21.6,<4.22
     - python
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1
@@ -57,7 +59,7 @@ requirements:
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
   run:
-    - protobuf =4.21
+    - protobuf >=4.21.6,<4.22
     - python
     - typing_extensions
     - pandas >=1.0,<1.6.0dev0
