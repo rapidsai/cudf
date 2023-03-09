@@ -1817,7 +1817,8 @@ __global__ void __launch_bounds__(block_size)
   // containing lists anywhere within).
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
   compute_string_sizes =
-    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);
+    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4 &&
+                             s->page.encoding != Encoding::DELTA_BYTE_ARRAY);
 
   // early out optimizations:
 
