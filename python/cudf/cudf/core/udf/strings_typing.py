@@ -123,7 +123,7 @@ class StringLength(AbstractTemplate):
             # string_view -> int32
             # udf_string -> int32
             # literal -> int32
-            return nb_signature(size_type, args[0])
+            return nb_signature(size_type, string_view)
 
 
 def register_stringview_binaryop(op, retty):
@@ -257,7 +257,14 @@ for func in string_unary_funcs:
         create_identifier_attr(func, udf_string),
     )
 
+
+@cuda_decl_registry.register_attr
+class UDFStringAttrs(StringViewAttrs):
+    key = udf_string
+
+
 cuda_decl_registry.register_attr(StringViewAttrs)
+cuda_decl_registry.register_attr(UDFStringAttrs)
 
 register_stringview_binaryop(operator.eq, types.boolean)
 register_stringview_binaryop(operator.ne, types.boolean)

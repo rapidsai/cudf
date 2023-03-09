@@ -45,6 +45,8 @@ extensions = [
     "myst_nb",
 ]
 
+nb_execution_excludepatterns = ['performance-comparisons.ipynb']
+
 nb_execution_mode = "force"
 nb_execution_timeout = 300
 
@@ -201,6 +203,7 @@ intersphinx_mapping = {
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
 }
 
 # Config numpydoc
