@@ -20,7 +20,7 @@ files:
       - run_cudf
       - run_dask_cudf
       - run_cudf_kafka
-      - run_streamz
+      - run_custreamz
       - test_cpp
       - test_python_common
       - test_python_cudf
@@ -134,6 +134,28 @@ files:
   py_test_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+  py_build_custreamz:
+    output: pyproject
+    pyproject_dir: python/custreamz
+    extras:
+      table: build-system
+    includes:
+      - build_wheels
+  py_run_custreamz:
+    output: pyproject
+    pyproject_dir: python/custreamz
+    extras:
+      table: project
+    includes:
+      - run_custreamz
+  py_test_custreamz:
+    output: pyproject
+    pyproject_dir: python/custreamz
     extras:
       table: project.optional-dependencies
       key: test
@@ -370,11 +392,15 @@ dependencies:
         packages:
           - *cudf
           - confluent-kafka==1.7.0
-  run_streamz:
+  run_custreamz:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
+      - output_types: [requirements, pyproject]
+        packages:
+          - *cudf
+          - cudf_kafka==23.4.*
   test_cpp:
     specific:
       - output_types: conda
