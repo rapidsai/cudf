@@ -442,7 +442,6 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
-          - msgpack
           - pyorc
           - pytest-benchmark
           - pytest-cases
@@ -453,10 +452,12 @@ dependencies:
           - aiobotocore>=2.2.0
           - boto3>=1.21.21
           - botocore>=1.24.21
+          - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
       - output_types: pyproject
         packages:
+          - msgpack
           - &tokenizers tokenizers==0.13.1
           - &transformers transformers==4.24.0
           - tzdata

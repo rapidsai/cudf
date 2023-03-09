@@ -36,7 +36,7 @@ dependencies:
 - librmm==23.4.*
 - mimesis>=4.1.0
 - moto>=4.0.8
-- msgpack
+- msgpack-python
 - myst-nb
 - nbsphinx
 - ninja
