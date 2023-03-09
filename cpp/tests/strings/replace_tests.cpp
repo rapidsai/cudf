@@ -350,16 +350,31 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
   // The length of the strings are to trigger the code path governed by the AVG_CHAR_BYTES_THRESHOLD
   // setting in the multi.cu.
   auto input = cudf::test::strings_column_wrapper(
-    {"This string needs to be very long to trigger the long-replace internal functions.",
-     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
-     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
+    {"This string needs to be very long to trigger the long-replace internal functions. "
+     "This string needs to be very long to trigger the long-replace internal functions. "
+     "This string needs to be very long to trigger the long-replace internal functions. "
+     "This string needs to be very long to trigger the long-replace internal functions.",
+     "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
+     "345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
+     "678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+     "901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+     "2345678901234567890123456789",
+     "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
+     "345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
+     "678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+     "901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+     "2345678901234567890123456789",
+     "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+     "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+     "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+     "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
      "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
      "",
      ""},
     {1, 1, 1, 1, 0, 1});
   auto strings_view = cudf::strings_column_view(input);
 
-  cudf::test::strings_column_wrapper targets({"78901", "bananá", "ápple", "78"});
+  auto targets      = cudf::test::strings_column_wrapper({"78901", "bananá", "ápple", "78"});
   auto targets_view = cudf::strings_column_view(targets);
 
   {
@@ -369,9 +384,20 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
-      {"This string needs to be very long to trigger the long-replace internal functions.",
-       "0123456x23456x23456x23456x23456x23456x23456x23456$$9",
-       "0123456x23456x23456x23456x23456x23456x23456x23456$$9",
+      {"This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions.",
+       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456"
+       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x"
+       "23456x23456x23456x23456x23456x23456x23456x23456x23456x23456$$9",
+       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456"
+       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x"
+       "23456x23456x23456x23456x23456x23456x23456x23456x23456x23456$$9",
+       "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
+       "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
+       "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
+       "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR",
        "",
        ""},
@@ -386,10 +412,55 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
-      {"This string needs to be very long to trigger the long-replace internal functions.",
-       "0123456*23456*23456*23456*23456*23456*23456*23456*9",
-       "0123456*23456*23456*23456*23456*23456*23456*23456*9",
-       "Test string for overlap check: banana* * ** ban* * *",
+      {"This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions.",
+       "0123456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*"
+       "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*"
+       "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*9",
+       "0123456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*"
+       "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*"
+       "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*9",
+       "Test string for overlap check: banana* * ** ban* * * Test string for overlap check: "
+       "banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * * Test string for "
+       "overlap check: banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * *",
+       "",
+       ""},
+      {1, 1, 1, 1, 0, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  {
+    targets =
+      cudf::test::strings_column_wrapper({"01234567890123456789012345678901234567890123456789012345"
+                                          "6789012345678901234567890123456789012"
+                                          "34567890123456789012345678901234567890123456789012345678"
+                                          "9012345678901234567890123456789012345"
+                                          "67890123456789012345678901234567890123456789012345678901"
+                                          "2345678901234567890123456789012345678"
+                                          "90123456789012345678901234567890123456789012345678901234"
+                                          "5678901234567890123456789012345678901"
+                                          "2345678901234567890123456789",
+                                          "78"});
+    targets_view    = cudf::strings_column_view(targets);
+    auto repls      = cudf::test::strings_column_wrapper({""});
+    auto repls_view = cudf::strings_column_view(repls);
+
+    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+
+    cudf::test::strings_column_wrapper expected(
+      {"This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions. "
+       "This string needs to be very long to trigger the long-replace internal functions.",
+       "",
+       "",
+       "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+       "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+       "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+       "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
+       "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
        "",
        ""},
       {1, 1, 1, 1, 0, 1});

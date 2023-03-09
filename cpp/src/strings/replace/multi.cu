@@ -191,17 +191,11 @@ struct replace_multi_parallel_fn {
   {
     if (!is_valid(idx)) { return 0; }
 
-    auto const d_output       = d_all_strings + d_offsets[idx];
-    auto const d_output_count = d_offsets[idx + 1] - d_offsets[idx];
+    auto const d_output  = d_all_strings + d_offsets[idx];
+    auto const d_str     = get_string(idx);
+    auto const d_str_end = d_str.data() + d_str.size_bytes();
+    auto const base_ptr  = get_base_ptr();
 
-    auto const d_str = get_string(idx);
-    if (d_output_count == 1) {
-      d_output[0] = string_index_pair{d_str.data(), d_str.size_bytes()};
-      return d_str.size_bytes();
-    }
-
-    auto const d_str_end         = d_str.data() + d_str.size_bytes();
-    auto const base_ptr          = get_base_ptr();
     auto const targets_positions = cudf::device_span<target_pair const>(
       d_positions + d_targets_offsets[idx], d_targets_offsets[idx + 1] - d_targets_offsets[idx]);
 
