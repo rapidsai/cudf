@@ -19,7 +19,9 @@ files:
       - run_kafka
       - run_streamz
       - test_cpp
-      - test_python
+      - test_python_cudf
+      - test_python_cov
+      - test_python_dask
   test_cpp:
     output: none
     includes:
@@ -31,7 +33,9 @@ files:
     includes:
       - cudatoolkit
       - py_version
-      - test_python
+      - test_python_cudf
+      - test_python_cov
+      - test_python_dask
       - pyarrow_run
   test_java:
     output: none
@@ -72,6 +76,14 @@ files:
     includes:
       - run
       - pyarrow_run
+  py_test_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_cudf
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -230,7 +242,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &cuda_python cuda-python>=11.7.1,<12.0
+          - cuda-python>=11.7.1,<12.0
           - fsspec>=0.6.0
           - numba>=0.56.2
           - numpy>=1.21
@@ -316,28 +328,33 @@ dependencies:
               cuda: "11.8"
             packages:
               - cuda-nvtx=11.8
-  test_python:
+  test_python_cudf:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
-          - aiobotocore>=2.2.0
-          - boto3>=1.21.21
-          - botocore>=1.24.21
-          - *cuda_python
-          - dask-cuda=23.04.*
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
-          - moto>=4.0.8
+          - msgpack
           - pyorc
           - pytest
           - pytest-benchmark
           - pytest-cases
-          - pytest-cov
           - pytest-xdist
           - python-snappy>=0.6.0
-          - s3fs>=2022.3.0
           - scipy
+      - output_types: conda
+        packages:
+          - aiobotocore>=2.2.0
+          - boto3>=1.21.21
+          - botocore>=1.24.21
+          - moto>=4.0.8
+          - s3fs>=2022.3.0
+      - output_types: pyproject
+        packages:
+          - &tokenizers tokenizers==0.13.1
+          - &transformers transformers==4.24.0
+          - tzdata
     specific:
       - output_types: conda
         matrices:
@@ -349,7 +366,17 @@ dependencies:
               - pytorch<1.12.0
               # We only install these on x86_64 to avoid pulling pytorch as a
               # dependency of transformers.
-              - tokenizers==0.13.1
-              - transformers==4.24.0
+              - *tokenizers
+              - *transformers
           - matrix:
             packages:
+  test_python_cov:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - pytest-cov
+  test_python_dask:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - dask-cuda=23.04.*
