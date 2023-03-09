@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,11 @@ class comparison_binop_generator {
 
   comparison_binop_generator(column_view const& input, rmm::cuda_stream_view stream, bool is_min_op)
     : flattened_input{cudf::structs::detail::flatten_nested_columns(
-        table_view{{input}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER})},
+        table_view{{input}},
+        {},
+        std::vector<null_order>{DEFAULT_NULL_ORDER},
+        cudf::structs::detail::column_nullability::MATCH_INCOMING,
+        stream)},
       d_flattened_input_ptr{table_device_view::create(flattened_input, stream)},
       is_min_op(is_min_op),
       has_nulls{has_nested_nulls(table_view{{input}})},
