@@ -15,7 +15,6 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
