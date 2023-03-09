@@ -1934,7 +1934,6 @@ class Frame(BinaryOperand, Scannable):
         self,
         axis=0,
         skipna=True,
-        level=None,
         numeric_only=None,
         **kwargs,
     ):
@@ -1947,9 +1946,6 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        level: int or level name, default None
-            If the axis is a MultiIndex (hierarchical), count along a
-            particular level, collapsing into a Series.
         numeric_only: bool, default None
             If True, includes only float, int, boolean columns.
             If False, will raise error in-case there are
@@ -1976,7 +1972,6 @@ class Frame(BinaryOperand, Scannable):
             "max",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )

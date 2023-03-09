@@ -8338,8 +8338,8 @@ def test_describe_misc_include(df, include):
 def test_describe_misc_exclude(df, exclude):
     pdf = df.to_pandas()
 
-    expected = pdf.describe(exclude=exclude, datetime_is_numeric=True)
-    actual = df.describe(exclude=exclude, datetime_is_numeric=True)
+    expected = pdf.describe(exclude=exclude)
+    actual = df.describe(exclude=exclude)
 
     for col in expected.columns:
         if expected[col].dtype == np.dtype("object"):
