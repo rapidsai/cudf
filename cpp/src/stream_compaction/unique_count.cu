@@ -37,6 +37,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/transform.h>
 
 #include <cmath>
 #include <cstddef>
@@ -75,11 +76,16 @@ cudf::size_type unique_count(table_view const& keys,
   if (cudf::detail::has_nested_columns(keys)) {
     auto const comp =
       row_comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
-    return thrust::count_if(
-      rmm::exec_policy(stream),
-      thrust::counting_iterator<cudf::size_type>(0),
-      thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
-      [comp] __device__(cudf::size_type i) { return (i == 0 or not comp(i, i - 1)); });
+
+    auto d_results = rmm::device_uvector<bool>(keys.num_rows(), stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(keys.num_rows()),
+                      d_results.begin(),
+                      [comp] __device__(auto i) { return (i == 0 or not comp(i, i - 1)); });
+
+    return static_cast<size_type>(
+      thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), true));
   } else {
     auto const comp =
       row_comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);

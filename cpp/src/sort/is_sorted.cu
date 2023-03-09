@@ -52,8 +52,7 @@ bool is_sorted(cudf::table_view const& in,
                       thrust::make_counting_iterator<size_type>(in.num_rows()),
                       d_results.begin(),
                       [device_comparator] __device__(auto idx) -> bool {
-                        if (idx == 0) { return true; }
-                        return device_comparator(idx - 1, idx);
+                        return (idx == 0) || device_comparator(idx - 1, idx);
                       });
 
     return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), false) == 0;
