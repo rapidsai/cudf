@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,40 +33,6 @@ struct regex_program;
  */
 
 /**
- * @brief Returns a lists column of strings for each matching occurrence of the
- * regex pattern within each string.
- *
- * Each output row includes all the substrings within the corresponding input row
- * that match the given pattern. If no matches are found, the output row is empty.
- *
- * @code{.pseudo}
- * Example:
- * s = ["bunny", "rabbit", "hare", "dog"]
- * r = findall(s, "[ab]")
- * r is now a lists column like:
- *  [ ["b"]
- *    ["a","b","b"]
- *    ["a"]
- *    [] ]
- * @endcode
- *
- * A null output row occurs if the corresponding input row is null.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param input Strings instance for this operation.
- * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New lists column of strings.
- */
-std::unique_ptr<column> findall(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags             = regex_flags::DEFAULT,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Returns a lists column of strings for each matching occurrence using
  * the regex_program pattern within each string
  *
@@ -97,6 +63,43 @@ std::unique_ptr<column> findall(
 std::unique_ptr<column> findall(
   strings_column_view const& input,
   regex_program const& prog,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a lists column of strings for each matching occurrence of the
+ * regex pattern within each string.
+ *
+ * Each output row includes all the substrings within the corresponding input row
+ * that match the given pattern. If no matches are found, the output row is empty.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny", "rabbit", "hare", "dog"]
+ * r = findall(s, "[ab]")
+ * r is now a lists column like:
+ *  [ ["b"]
+ *    ["a","b","b"]
+ *    ["a"]
+ *    [] ]
+ * @endcode
+ *
+ * A null output row occurs if the corresponding input row is null.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @deprecated Use @link findall findall(strings_column_view const&,
+ * regex_program const&, rmm::mr::device_memory_resource*) @endlink
+ *
+ * @param input Strings instance for this operation.
+ * @param pattern Regex pattern to match within each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New lists column of strings.
+ */
+[[deprecated]] std::unique_ptr<column> findall(
+  strings_column_view const& input,
+  std::string_view pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
