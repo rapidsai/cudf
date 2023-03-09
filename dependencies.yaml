@@ -8,20 +8,23 @@ files:
     includes:
       - build_all
       - build_cpp
+      - build_wheels
       - build_python
       - cudatoolkit
       - develop
       - docs
       - notebooks
       - py_version
-      - run
-      - run_dask
+      - run_common
+      - run_cudf
+      - run_dask_cudf
       - run_kafka
       - run_streamz
       - test_cpp
+      - test_python_common
       - test_python_cudf
       - test_python_cov
-      - test_python_dask
+      - test_python_dask_cudf
   test_cpp:
     output: none
     includes:
@@ -35,7 +38,7 @@ files:
       - py_version
       - test_python_cudf
       - test_python_cov
-      - test_python_dask
+      - test_python_dask_cudf
       - pyarrow_run
   test_java:
     output: none
@@ -68,13 +71,15 @@ files:
     includes:
       - build_all
       - build_python
+      - build_wheels
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
       table: project
     includes:
-      - run
+      - run_common
+      - run_cudf
       - pyarrow_run
   py_test_cudf:
     output: pyproject
@@ -83,7 +88,32 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - test_python_common
       - test_python_cudf
+  py_build_dask_cudf:
+    output: pyproject
+    pyproject_dir: python/dask_cudf
+    extras:
+      table: build-system
+    includes:
+      - build_wheels
+  py_run_dask_cudf:
+    output: pyproject
+    pyproject_dir: python/dask_cudf
+    extras:
+      table: project
+    includes:
+      - run_common
+      - run_dask_cudf
+  py_test_dask_cudf:
+    output: pyproject
+    pyproject_dir: python/dask_cudf
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - test_python_dask_cudf
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -138,6 +168,12 @@ dependencies:
           - librdkafka=1.7.0
           # Hard pin the patch version used during the build, must match the CMake version.
           - libarrow==10.0.1.*
+  build_wheels:
+    common:
+      - output_types: pyproject
+        packages:
+          - wheel
+          - setuptools
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -146,15 +182,13 @@ dependencies:
           - scikit-build>=0.13.1
           # Hard pin the patch version used during the build, must match the CMake version.
           - pyarrow==10.0.1.*
-          - numpy
+          - numpy>=1.21
           - rmm==23.4.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21.6,<4.22
       - output_types: pyproject
         packages:
-          - wheel
-          - setuptools
           - protoc-wheel
   libarrow_run:
     common:
@@ -237,18 +271,22 @@ dependencies:
           - matrix:
             packages:
               - python>=3.8,<3.11
-  run:
+  run_common:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - fsspec>=0.6.0
+          - numpy>=1.21
+          - pandas>=1.3,<1.6.0dev0
+  run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
           - cuda-python>=11.7.1,<12.0
-          - fsspec>=0.6.0
           - numba>=0.56.2
-          - numpy>=1.21
           - nvtx>=0.2.1
           - packaging
-          - pandas>=1.3,<1.6.0dev0
           - rmm==23.4.*
           - typing_extensions
           - *protobuf
@@ -271,7 +309,7 @@ dependencies:
       - output_types: pyproject
         packages:
           - cubinlinker
-          - cupy-cuda11x>=9.5.0,<12.0.0a0
+          - &cupy_pip cupy-cuda11x>=9.5.0,<12.0.0a0
           - ptxcompiler
     specific:
       - output_types: requirements
@@ -284,12 +322,16 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
-  run_dask:
+  run_dask_cudf:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - dask>=2023.1.1
           - distributed>=2023.1.1
+      - output_types: pyproject
+        packages:
+          - cudf==23.4.*
+          - *cupy_pip
   run_kafka:
     common:
       - output_types: [conda, requirements]
@@ -328,6 +370,12 @@ dependencies:
               cuda: "11.8"
             packages:
               - cuda-nvtx=11.8
+  test_python_common:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - pytest
+          - pytest-xdist
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -337,10 +385,8 @@ dependencies:
           - mimesis>=4.1.0
           - msgpack
           - pyorc
-          - pytest
           - pytest-benchmark
           - pytest-cases
-          - pytest-xdist
           - python-snappy>=0.6.0
           - scipy
       - output_types: conda
@@ -368,15 +414,14 @@ dependencies:
               # dependency of transformers.
               - *tokenizers
               - *transformers
-          - matrix:
-            packages:
   test_python_cov:
     common:
       - output_types: [conda, requirements]
         packages:
           - pytest-cov
-  test_python_dask:
+  test_python_dask_cudf:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda=23.04.*
+          - dask-cuda==23.4.*
+          - numba>=0.56.2
