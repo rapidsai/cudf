@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -36,6 +35,10 @@
 // Forward declaration
 template <typename T>
 class default_allocator;
+
+namespace cudf::structs::detail {
+class flattened_table;
+}
 
 namespace cudf {
 namespace detail {
@@ -74,7 +77,7 @@ struct hash_join {
   rmm::device_buffer const _composite_bitmask;  ///< Bitmask to denote whether a row is valid
   cudf::null_equality const _nulls_equal;       ///< whether to consider nulls as equal
   cudf::table_view _build;                      ///< input table to build the hash map
-  cudf::structs::detail::flattened_table
+  std::unique_ptr<cudf::structs::detail::flattened_table>
     _flattened_build_table;  ///< flattened data structures for `_build`
   map_type _hash_table;      ///< hash table built on `_build`
 

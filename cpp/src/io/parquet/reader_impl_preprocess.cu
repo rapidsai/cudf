@@ -834,13 +834,15 @@ void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view 
     // skip dictionary pages
     if (p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     printf(
-      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d)\n",
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
+      "str_bytes(%d)\n",
       idx,
       p.src_col_schema,
       p.chunk_row,
       p.num_rows,
       p.skipped_values,
-      p.skipped_leaf_values);
+      p.skipped_leaf_values,
+      p.str_bytes);
   }
 }
 
