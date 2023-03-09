@@ -364,6 +364,53 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   }
 }
 
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
+{
+  auto constexpr num_rows = 60'000;
+
+  auto const generate_input = [num_rows](bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+
+    // strings                                                 Page    total bytes   cumulative
+    // 20000 rows alternating 1-4 chars each (50000 + 80004)   A0      130004        130004
+    // 20000 rows alternating 1-4 chars each (50000 + 80004)   A1      130004        260008
+    // ...
+    auto const strings = std::vector<std::string>{"a", "bbbb"};
+    auto const str_iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return strings[i % 2]; });
+    input_columns.emplace_back(strings_col(str_iter, str_iter + num_rows).release());
+
+    // Cumulative sizes:
+    // A0 :  130004
+    // A1 :  260008
+    // A2 :  390012
+    return write_file(input_columns,
+                      "chunked_read_with_strings_precise",
+                      nullable,
+                      512 * 1024,  // 512KB per page
+                      20000        // 20k rows per page
+    );
+  };
+
+  auto const [expected_no_null, filepath_no_null] = generate_input(false);
+
+  // a chunk limit of 1 byte less than 2 pages should force it to produce 3 chunks:
+  // each 1 page in size
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 260'007);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+
+  // a chunk limit of exactly equal to 2 pages should force it to produce 2 chunks
+  // pages 0-1 and page 2
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 260'008);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+}
+
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
 {
   auto constexpr num_rows = 100'000;
