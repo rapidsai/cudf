@@ -15,6 +15,9 @@ files:
       - notebooks
       - py_version
       - run
+      - run_dask
+      - run_kafka
+      - run_streamz
       - test_cpp
       - test_python
   test_cpp:
@@ -53,7 +56,7 @@ files:
       - cudatoolkit
       - docs
       - py_version
-  py_build:
+  py_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
@@ -61,6 +64,14 @@ files:
     includes:
       - build_all
       - build_python
+  py_run_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: project
+    includes:
+      - run
+      - pyarrow_run
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -127,7 +138,7 @@ dependencies:
           - rmm==23.4.*
       - output_types: conda
         packages:
-          - protobuf>=4.21.6,<4.22
+          - &protobuf protobuf>=4.21.6,<4.22
       - output_types: pyproject
         packages:
           - wheel
@@ -141,7 +152,7 @@ dependencies:
           - libarrow==10.*
   pyarrow_run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
           - pyarrow==10.*
@@ -216,21 +227,19 @@ dependencies:
               - python>=3.8,<3.11
   run:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - dask>=2023.1.1
-          - distributed>=2023.1.1
+          - &cuda_python cuda-python>=11.7.1,<12.0
           - fsspec>=0.6.0
           - numba>=0.56.2
           - numpy>=1.21
           - nvtx>=0.2.1
           - packaging
           - pandas>=1.3,<1.6.0dev0
-          - python-confluent-kafka=1.7.0
-          - streamz
-          - typing_extensions
           - rmm==23.4.*
+          - typing_extensions
+          - *protobuf
       - output_types: conda
         packages:
           - cubinlinker
@@ -247,6 +256,11 @@ dependencies:
           - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
           - ptxcompiler-cu11
+      - output_types: pyproject
+        packages:
+          - cubinlinker
+          - cupy-cuda11x>=9.5.0,<12.0.0a0
+          - ptxcompiler
     specific:
       - output_types: requirements
         matrices:
@@ -258,6 +272,22 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
+  run_dask:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - dask>=2023.1.1
+          - distributed>=2023.1.1
+  run_kafka:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - python-confluent-kafka=1.7.0
+  run_streamz:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - streamz
   test_cpp:
     specific:
       - output_types: conda
@@ -293,7 +323,7 @@ dependencies:
           - aiobotocore>=2.2.0
           - boto3>=1.21.21
           - botocore>=1.24.21
-          - cuda-python>=11.7.1,<12.0
+          - *cuda_python
           - dask-cuda=23.04.*
           - fastavro>=0.22.9
           - hypothesis
