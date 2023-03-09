@@ -53,12 +53,11 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
   auto lists_col = lists{{0, 1}, {22, 33}, {44, 55, 66}};
   auto nums_col  = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
 
-  auto table = cudf::table_view{{lists_col, nums_col}};
+  auto table           = cudf::table_view{{lists_col, nums_col}};
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    table,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
@@ -91,12 +90,11 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
     {"", "1", "22", "333", "4444", "55555", "666666"}, cudf::test::iterators::null_at(1)};
   auto nuther_nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, cudf::test::iterators::null_at(6)};
 
-  auto table = cudf::table_view{{nums_col, strings_col, nuther_nums_col}};
+  auto table           = cudf::table_view{{nums_col, strings_col, nuther_nums_col}};
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    table,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
@@ -120,10 +118,9 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
   auto expected = cudf::table_view{
     {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
@@ -149,10 +146,9 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   auto expected = cudf::table_view{
     {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
@@ -189,10 +185,9 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
@@ -230,10 +225,9 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
@@ -272,10 +266,9 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
@@ -314,10 +307,9 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(
-    expected,
-    cudf::structs::detail::flatten_nested_columns(
-      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
+  auto flattened_table = cudf::structs::detail::flatten_nested_columns(
+    table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)

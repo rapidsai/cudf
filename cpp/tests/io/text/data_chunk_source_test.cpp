@@ -25,12 +25,10 @@
 #include <fstream>
 #include <random>
 
-using namespace cudf::test;
+auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
+  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-auto const temp_env = static_cast<TempDirTestEnvironment*>(
-  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-
-struct DataChunkSourceTest : public BaseFixture {
+struct DataChunkSourceTest : public cudf::test::BaseFixture {
 };
 
 std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
