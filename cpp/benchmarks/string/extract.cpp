@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/strings/extract.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <random>
@@ -59,10 +60,11 @@ static void BM_extract(benchmark::State& state, int groups)
   auto input = cudf::gather(
     cudf::table_view{{samples_column}}, map->view(), cudf::out_of_bounds_policy::DONT_CHECK);
   cudf::strings_column_view strings_view(input->get_column(0).view());
+  auto prog = cudf::strings::regex_program::create(pattern);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto results = cudf::strings::extract(strings_view, pattern);
+    auto results = cudf::strings::extract(strings_view, *prog);
   }
 
   state.SetBytesProcessed(state.iterations() * strings_view.chars_size());
