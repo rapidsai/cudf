@@ -1045,25 +1045,25 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return False
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
     @classmethod
