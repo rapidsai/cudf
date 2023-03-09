@@ -238,6 +238,20 @@ class writer::impl {
 
  private:
   /**
+   * @brief write_to_buffer
+   * @param input
+   * @return
+   */
+  static std::vector<uint8_t> write_to_buffer(table_view const& input);
+
+  /**
+   * @brief xxx
+   * @param input
+   * @return
+   */
+  static std::vector<uint8_t> finalize_write_to_buffer();
+
+  /**
    * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param orc_table Non-owning view of a cuDF table w/ ORC-related info

@@ -2372,6 +2372,12 @@ void writer::impl::write(table_view const& table)
   ff.numberOfRows += num_rows;
 }
 
+std::vector<uint8_t> writer::impl::write_to_buffer(const table_view& input)
+{
+  //
+  return {};
+}
+
 void writer::impl::close()
 {
   if (closed) { return; }
@@ -2449,6 +2455,12 @@ void writer::impl::close()
   buff = pbw.release();
   out_sink_->host_write(buff->data(), buff->size());
   out_sink_->flush();
+}
+
+std::vector<uint8_t> writer::impl::finalize_write_to_buffer()
+{
+  //
+  return {};
 }
 
 // Forward to implementation
