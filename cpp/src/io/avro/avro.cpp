@@ -96,19 +96,21 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->sync_marker[1] = get_raw<uint64_t>();
 
   md->metadata_size  = m_cur - m_base;
-  md->skip_rows      = 0;
+  md->skip_rows      = first_row;
+  md->total_num_rows = 0;
   max_block_size     = 0;
   total_object_count = 0;
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
     auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
     if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
+    md->total_num_rows += object_count;
     if (object_count > first_row) {
       auto block_row = static_cast<uint32_t>(total_object_count);
       max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
-        md->skip_rows = static_cast<uint32_t>(first_row);
+        md->skip_rows = first_row;
         total_object_count -= first_row;
         first_row = 0;
       }
@@ -119,8 +121,12 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     m_cur += block_size;
     m_cur += 16;  // TODO: Validate sync marker
   }
-  md->max_block_size  = max_block_size;
-  md->num_rows        = total_object_count;
+  md->max_block_size = max_block_size;
+  if ((max_num_rows <= 0) || (max_num_rows > total_object_count)) {
+    md->num_rows = total_object_count;
+  } else {
+    md->num_rows = max_num_rows;
+  }
   md->total_data_size = m_cur - (m_base + md->metadata_size);
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {

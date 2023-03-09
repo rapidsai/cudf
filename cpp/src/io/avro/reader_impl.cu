@@ -122,7 +122,7 @@ class metadata : public file_metadata {
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    */
-  void init_and_select_rows(int& row_start, int& row_count)
+  void init_and_select_rows(size_type& row_start, size_type& row_count)
   {
     auto const buffer = source->host_read(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
@@ -487,7 +487,6 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
-  num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
 
@@ -510,7 +509,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       column_types.emplace_back(col_type);
     }
 
-    if (meta.total_data_size > 0) {
+    if (meta.num_rows > 0) {
       rmm::device_buffer block_data;
       if (source->is_device_read_preferred(meta.total_data_size)) {
         block_data      = rmm::device_buffer{meta.total_data_size, stream};

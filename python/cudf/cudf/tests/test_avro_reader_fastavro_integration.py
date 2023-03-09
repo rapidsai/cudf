@@ -25,12 +25,17 @@ from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
-def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
+def cudf_from_avro_util(
+    schema: dict,
+    records: list,
+    num_rows: Optional[int] = None,
+    skip_rows: Optional[int] = None,
+) -> cudf.DataFrame:
     schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)
     buffer.seek(0)
-    return cudf.read_avro(buffer)
+    return cudf.read_avro(buffer, skiprows=skip_rows, num_rows=num_rows)
 
 
 avro_type_params = [
@@ -447,3 +452,105 @@ def test_alltypes_plain_avro():
     expected["int_col"] = expected["int_col"].astype("int32")
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "total_rows_and_num_rows",
+    [
+        (1, 1),
+        (10, 5),
+        (100, 10),
+        (10, 10),
+        (10, 0),
+        (10, 9),
+        (10, 1)
+    ],
+)
+def test_avro_reader_num_rows(total_rows_and_num_rows):
+    (total_rows, num_rows) = total_rows_and_num_rows
+    assert total_rows >= num_rows
+
+    schema = {
+        "name": "root",
+        "type": "record",
+        "fields": [
+            {"name": "0", "type": "int"},
+            {"name": "1", "type": "string"},
+        ],
+    }
+
+    df = rand_dataframe(
+        [
+            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
+            {
+                "dtype": "str",
+                "null_frequency": 0,
+                "cardinality": 100,
+                "max_string_length": 10,
+            },
+        ],
+        total_rows,
+    )
+    source_df = cudf.DataFrame.from_arrow(df)
+    expected_df = source_df.head(num_rows)
+
+    records = df.to_pandas().to_dict(orient="records")
+
+    buffer = io.BytesIO()
+    fastavro.writer(buffer, schema, records)
+    buffer.seek(0)
+
+    actual_df = cudf.read_avro(buffer, num_rows=num_rows)
+    assert_eq(expected_df, actual_df)
+
+
+@pytest.mark.parametrize(
+    "total_rows_and_skip_rows",
+    [
+        (10, 1),
+        (10, 2),
+        (10, 5),
+        (10, 8),
+        (10, 9),
+        (10, 10),
+        (100, 10),
+        (100, 99),
+        (1, 1),
+        (1, 2),
+    ],
+)
+def test_avro_reader_skip_rows(total_rows_and_skip_rows):
+    (total_rows, skip_rows) = total_rows_and_skip_rows
+
+    schema = {
+        "name": "root",
+        "type": "record",
+        "fields": [
+            {"name": "0", "type": "int"},
+            {"name": "1", "type": "string"},
+        ],
+    }
+
+    df = rand_dataframe(
+        [
+            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
+            {
+                "dtype": "str",
+                "null_frequency": 0,
+                "cardinality": 100,
+                "max_string_length": 10,
+            },
+        ],
+        total_rows,
+    )
+    source_df = cudf.DataFrame.from_arrow(df)
+    expected_df = source_df[skip_rows:].reset_index(drop=True)
+
+    records = df.to_pandas().to_dict(orient="records")
+
+    buffer = io.BytesIO()
+    fastavro.writer(buffer, schema, records)
+    buffer.seek(0)
+
+    actual_df = cudf.read_avro(buffer, skiprows=skip_rows)
+    assert_eq(expected_df, actual_df)
