@@ -61,7 +61,7 @@ dependencies:
 - pytest-cases
 - pytest-cov
 - pytest-xdist
-- python-confluent-kafka=1.7.0
+- python-confluent-kafka==1.7.0
 - python-snappy>=0.6.0
 - python>=3.8,<3.11
 - pytorch<1.12.0
