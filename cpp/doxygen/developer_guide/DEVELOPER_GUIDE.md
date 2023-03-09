@@ -272,8 +272,8 @@ A *mutable*, non-owning view of a table.
 ## cudf::size_type
 
 The `cudf::size_type` is the type used for the number of elements in a column, offsets to elements within a column, indices to address specific elements, segments for subsets of column elements, etc.
-It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647. Some APIs also accept negative index values and those will
-functions would support a minimum value of -2147483648.
+It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647. 
+Some APIs also accept negative index values and those functions support a minimum value of -2147483648.
 This fundamental type also influences output values not just for column size limits but for counting elements as well.
 
 ## Spans
@@ -753,7 +753,7 @@ where compile time was a problem is in types used to store indices, which can be
 The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
 used for index types (integers) without requiring a type-specific instance. It can be used for any
 iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`,
-`int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always return a
+`int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always returns a
 [`cudf::size_type`](#cudfsize_type) integer.
 
 Use the `indexalator_factory` to create an appropriate input iterator from a column_view. Example

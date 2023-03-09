@@ -116,7 +116,7 @@ std::unique_ptr<cudf::column> tokenize(
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of cudf::size_type of token counts
+ * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
@@ -146,7 +146,7 @@ std::unique_ptr<cudf::column> count_tokens(
  * @param strings Strings column to use for this operation.
  * @param delimiters Strings used to separate each string into tokens.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column of token counts.
+ * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
