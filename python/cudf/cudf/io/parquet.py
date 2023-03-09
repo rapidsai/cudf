@@ -45,9 +45,6 @@ BYTE_SIZES = {
 }
 
 
-HIVE_DEFAULT_PARTITION = "__HIVE_DEFAULT_PARTITION__"
-
-
 @_cudf_nvtx_annotate
 def _write_parquet(
     df,
@@ -1288,5 +1285,5 @@ def _default_open_file_options(
 def _hive_dirname(name, val):
     # Simple utility to produce hive directory name
     if pd.isna(val):
-        return f"{name}={HIVE_DEFAULT_PARTITION}"
+        val = "__HIVE_DEFAULT_PARTITION__"
     return f"{name}={val}"
