@@ -18,11 +18,11 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -87,22 +87,29 @@ bool is_or_has_nested_lists(cudf::column_view const& col)
  */
 struct table_flattener {
   table_view input;
-  // reference variables
   std::vector<order> const& column_order;
   std::vector<null_order> const& null_precedence;
-  // output
-  std::vector<std::unique_ptr<column>> validity_as_column;
+  column_nullability nullability;
+  rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
+
   temporary_nullable_data nullable_data;
+  std::vector<std::unique_ptr<column>> validity_as_column;
   std::vector<column_view> flat_columns;
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
-  column_nullability nullability;
 
   table_flattener(table_view const& input,
                   std::vector<order> const& column_order,
                   std::vector<null_order> const& null_precedence,
-                  column_nullability nullability)
-    : column_order(column_order), null_precedence(null_precedence), nullability(nullability)
+                  column_nullability nullability,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr)
+    : column_order{column_order},
+      null_precedence{null_precedence},
+      nullability{nullability},
+      stream{stream},
+      mr{mr}
   {
     superimpose_nulls(input);
     fail_if_unsupported_types(input);
@@ -114,7 +121,7 @@ struct table_flattener {
    */
   void superimpose_nulls(table_view const& input_table)
   {
-    auto [table, tmp_nullable_data] = push_down_nulls(input_table, cudf::get_default_stream());
+    auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
   }
@@ -143,10 +150,10 @@ struct table_flattener {
     // sure the flattening results are tables having the same number of columns.
 
     if (nullability == column_nullability::FORCE || col.has_nulls()) {
-      validity_as_column.push_back(cudf::is_valid(col));
+      validity_as_column.push_back(cudf::detail::is_valid(col, stream, mr));
       if (col.has_nulls()) {
         // copy bitmask is needed only if the column has null
-        validity_as_column.back()->set_null_mask(copy_bitmask(col));
+        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, mr));
       }
       flat_columns.push_back(validity_as_column.back()->view());
       if (not column_order.empty()) { flat_column_order.push_back(col_order); }  // doesn't matter.
@@ -197,12 +204,14 @@ struct table_flattener {
 flattened_table flatten_nested_columns(table_view const& input,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
-                                       column_nullability nullability)
+                                       column_nullability nullability,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
 
-  return table_flattener{input, column_order, null_precedence, nullability}();
+  return table_flattener{input, column_order, null_precedence, nullability, stream, mr}();
 }
 
 namespace {

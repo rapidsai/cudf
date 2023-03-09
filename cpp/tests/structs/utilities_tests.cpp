@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 template <typename T>
 using nums = cudf::test::fixed_width_column_wrapper<T, int32_t>;
@@ -54,9 +55,10 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
 
   auto table = cudf::table_view{{lists_col, nums_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    table,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
@@ -74,7 +76,8 @@ TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
                  cudf::table_view{{nums_col, structs_col}},
                  {},
                  {},
-                 cudf::structs::detail::column_nullability::FORCE),
+                 cudf::structs::detail::column_nullability::FORCE,
+                 cudf::get_default_stream()),
                cudf::logic_error);
 }
 
@@ -90,9 +93,10 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
 
   auto table = cudf::table_view{{nums_col, strings_col, nuther_nums_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    table,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
@@ -116,9 +120,10 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
   auto expected = cudf::table_view{
     {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
@@ -144,9 +149,10 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   auto expected = cudf::table_view{
     {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
@@ -183,9 +189,10 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
@@ -223,9 +230,10 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
@@ -264,9 +272,10 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
@@ -305,9 +314,10 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    expected,
+    cudf::structs::detail::flatten_nested_columns(
+      table, {}, {}, cudf::structs::detail::column_nullability::FORCE, cudf::get_default_stream()));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
@@ -327,7 +337,8 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
                  cudf::table_view{{structs_with_lists_col}},
                  {},
                  {},
-                 cudf::structs::detail::column_nullability::FORCE),
+                 cudf::structs::detail::column_nullability::FORCE,
+                 cudf::get_default_stream()),
                cudf::logic_error);
 }
 

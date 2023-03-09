@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -40,18 +41,20 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   cudf::strings_column_view input(column->view());
   cudf::test::strings_column_wrapper repls({"#", ""});
+  auto prog         = cudf::strings::regex_program::create("\\d+");
+  auto prog_backref = cudf::strings::regex_program::create("(\\d+)");
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case replace_type::replace_re:  // contains_re and matches_re use the same main logic
-        cudf::strings::replace_re(input, "\\d+");
+        cudf::strings::replace_re(input, *prog);
         break;
       case replace_type::replace_re_multi:  // counts occurrences of pattern
         cudf::strings::replace_re(input, {"\\d+", "\\s+"}, cudf::strings_column_view(repls));
         break;
       case replace_type::replace_backref:  // returns occurrences of matches
-        cudf::strings::replace_with_backrefs(input, "(\\d+)", "#\\1X");
+        cudf::strings::replace_with_backrefs(input, *prog_backref, "#\\1X");
         break;
     }
   }
