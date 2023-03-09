@@ -116,7 +116,7 @@ dependencies:
           - rmm=23.04.*
           - scikit-build>=0.13.1
           # Hard pin the patch version used during the build, must match the CMake version.
-          - pyarrow==10.0.1
+          - pyarrow=10.0.1
       - output_types: conda
         packages:
           - protobuf>=4.21.6,<4.22
@@ -131,7 +131,7 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==10
+          - pyarrow=10
   cudatoolkit:
     specific:
       - output_types: conda
