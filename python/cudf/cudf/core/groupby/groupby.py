@@ -2,7 +2,6 @@
 
 import itertools
 import pickle
-import random
 import textwrap
 import warnings
 from collections import abc
@@ -726,16 +725,43 @@ class GroupBy(Serializable, Reducible, Scannable):
             length as the grouped frame. Not currently supported.
         random_state
             Seed for random number generation.
+
+        Returns
+        -------
+        New dataframe or series with samples of appropriate size drawn
+        from each group
+
+        Notes
+        -----
+        Sampling with fractional group sizes is currently much slower
+        than sampling with a constant number of items per group.
+        Please fill an enhancement request if you need this code path
+        to run fast.
         """
+        if weights is not None:
+            raise NotImplementedError(
+                "Sorry, sampling with weights is not supported"
+            )
         if frac is not None and n is not None:
             raise ValueError("Cannot supply both of frac and n")
         elif n is None and frac is None:
             n = 1
+        # Supported cases
+        #
+        # n    frac  replace | Method                   | Speed
+        # ------------------------------------------------------------------
+        # int  None  False   | whole-frame sample       | fast
+        # int  None  True    | groupby, all-at-once     | fast
+        #                    | random sample generation |
+        # None float False   | groupby, per-group       | slow (many groups)
+        #                    | random sample generation |
+        # None float True    | groupby, per-group       | slow (many groups)
+        #                    | random sample generation |
         if (
             n is not None
-            and frac is None
             and not replace
             and weights is None
+            # Can't create a categorical from more than a single column
             and isinstance(self._by, str)
             # Need to think harder about seriesgroupby for this case
             and isinstance(self.obj, cudf.DataFrame)
@@ -748,45 +774,52 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Cantor name
             tempname = f"_{''.join(df.columns)}"
             newcol = self.obj[self._by]
-            df[tempname] = newcol.astype("category").codes.cat
+            df[tempname] = newcol.astype("category").cat.codes
             df = df.loc[df.groupby(tempname)[tempname].rank("first") <= n, :]
             del df[tempname]
             return df
 
-        if weights is not None:
-            raise NotImplementedError(
-                "Sorry, sampling with weights is not supported"
-            )
+        # Get the groups
+        _, offsets, _, values = self._grouped()
+        offsets = np.asarray(offsets).astype(np.int32)
+        sizes = np.diff(offsets)
         if random_state is not None and not isinstance(random_state, int):
             raise NotImplementedError(
                 "Sorry, only integer seeds are supported for random_state "
                 "in this case"
             )
-        # Get the groups
-        _, offsets, _, values = self._grouped()
-        sizes = np.diff(offsets)
-        if n is not None:
-            nsamples: abc.Iterable[int] = itertools.repeat(n)
+        # TODO: handle random states properly.
+        rng = np.random.default_rng(seed=random_state)
+        if n is not None and replace:
+            # We can use numpy in this case, which is fast for lots of
+            # groups and large samples
+            lo = offsets[:-1].reshape(-1, 1)
+            hi = lo + sizes.reshape(-1, 1)
+            indices = rng.integers(lo, hi, size=(*lo.shape, n)).reshape(-1)
         else:
-            # Pandas uses Python-based round-to-nearest, ties to even to
-            # pick sample sizes for the fractional case (unlike IEEE
-            # which is round-to-nearest, ties to sgn(x) * inf).
-            nsamples = (
-                np.round(sizes * frac, decimals=0).astype(np.int32).tolist()
+            if n is not None:
+                nsamples = np.broadcast_to(np.int32(n), sizes.shape)
+            else:
+                # Pandas uses round-to-nearest, ties to even to pick
+                # sample sizes for the fractional case (unlike IEEE
+                # which is round-to-nearest, ties to sgn(x) * inf).
+                nsamples = np.round(sizes * frac, decimals=0).astype(np.int32)
+            if len(sizes) >= 100_000:
+                # Arbitrary "large" case
+                warnings.warn(
+                    "Sampling a large number of groups with these "
+                    "parameters is slow. If you need this to be faster, "
+                    "please open an RFE with your use case."
+                )
+            indices = np.concatenate(
+                [
+                    rng.choice(size, size=nsample, replace=replace).astype(
+                        np.int32
+                    )
+                    + offset
+                    for size, offset, nsample in zip(sizes, offsets, nsamples)
+                ]
             )
-        rng = random.Random(x=random_state)
-        if replace:
-            sample = lambda s, e, n: [  # noqa: E731
-                rng.randrange(s, e) for _ in range(n)
-            ]
-        else:
-            sample = lambda s, e, n: rng.sample(range(s, e), n)  # noqa: E731
-        indices = list(
-            itertools.chain.from_iterable(
-                sample(offset, offset + size, nsample)
-                for size, offset, nsample in zip(sizes, offsets, nsamples)
-            )
-        )
         return self.obj.iloc[values.index[indices]]
 
     def serialize(self):
