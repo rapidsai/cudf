@@ -135,14 +135,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       std::transform_exclusive_scan(pages.begin(),
                                     pages.end() + 1,
                                     std::back_inserter(page_string_offsets),
-                                    0,
-                                    std::plus<size_type>{},
+                                    0L,
+                                    std::plus<int64_t>{},
                                     [](auto& page) { return page.page_strings_size; });
 
-      auto total_size = page_string_offsets.back();
-      // check that the string data doesn't exceed 2GB
-      CUDF_EXPECTS(total_size <= std::numeric_limits<int32_t>::max(), "string data is too large");
-
+      auto total_size        = page_string_offsets.back();
       delta_binary_page_data = rmm::device_buffer(total_size, _stream);
 
       std::transform(pages.begin(),
