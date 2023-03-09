@@ -812,6 +812,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 nsamples = np.round(sizes * frac, decimals=0).astype(np.int32)
             if len(sizes) >= 100_000:
                 # Arbitrary "large" case
+                # TODO: Check this is a reasonable size
                 warnings.warn(
                     "Sampling a large number of groups with these "
                     "parameters is slow. If you need this to be faster, "
