@@ -57,7 +57,7 @@ bool is_sorted(cudf::table_view const& in,
                         return device_comparator(idx - 1, idx);
                       });
 
-    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), false) > 0;
+    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), false) == 0;
   } else {
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
