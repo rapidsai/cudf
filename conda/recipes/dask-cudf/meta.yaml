@@ -31,6 +31,7 @@ build:
     - SCCACHE_REGION
     - SCCACHE_S3_KEY_PREFIX=dask-cudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=dask-cudf-linux64 # [linux64]
+    - SCCACHE_S3_USE_SSL
 
 requirements:
   host:
