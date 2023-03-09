@@ -252,7 +252,7 @@ ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chun
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_WRITER_BENCH io/csv/csv_writer.cpp)
+ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
