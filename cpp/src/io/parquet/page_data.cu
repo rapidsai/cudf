@@ -1942,7 +1942,8 @@ __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
   db->cur_mb       = 0;
   db->cur_mb_start = nullptr;
 
-  if (db->current_value_idx < db->value_count) {
+  // need to account for first value in header
+  if (db->current_value_idx < db->value_count - 1) {
     auto d_start      = db->block_start;
     db->cur_min_delta = get_i64(d_start, db->block_end);
     db->cur_bitwidths = d_start;
@@ -1979,7 +1980,8 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
 // calls InitDeltaMiniBlock if currently on the last mini-block in a block.
 __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 {
-  if (db->current_value_idx >= db->value_count) { return; }
+  // account for first value in header
+  if (db->current_value_idx >= db->value_count - 1) { return; }
 
   db->current_value_idx += db->values_per_mb;
 
@@ -2004,8 +2006,8 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
 {
   // read block header
   InitDeltaBinaryBlock(db, start, end);
-  // read mini-block headers and skip over data
-  while (db->current_value_idx < db->value_count) {
+  // read mini-block headers and skip over data. account for first value in header.
+  while (db->current_value_idx < db->value_count - 1) {
     SetupNextMiniBlock(db);
   }
   // calculate the correct end of the block
@@ -2020,7 +2022,8 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
 __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 {
   using cudf::detail::warp_size;
-  if (db->current_value_idx >= db->value_count) { return; }
+  // account for first value in header
+  if (db->current_value_idx >= db->value_count - 1) { return; }
 
   uint32_t const mb_bits = db->cur_bitwidths[db->cur_mb];
 
@@ -2282,8 +2285,8 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   }
   __syncthreads();
 
-  // step through prefixes and suffixes to get total length
-  while (prefix_db->current_value_idx < prefix_db->value_count) {
+  // step through prefixes and suffixes to get total length. account for first value in header.
+  while (prefix_db->current_value_idx < prefix_db->value_count - 1) {
     auto* const db = t < 32 ? prefix_db : suffix_db;
 
     for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
@@ -2335,8 +2338,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   auto const batch_size = db->values_per_mb;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
-  // that has a value we need
-  while (db->current_value_idx < skipped_leaf_values && db->current_value_idx < db->value_count) {
+  // that has a value we need. account for first value in header.
+  while (db->current_value_idx < skipped_leaf_values &&
+         db->current_value_idx < db->value_count - 1) {
     if (t < 32) {
       CalcMiniBlockValues(db, lane_id);
       if (lane_id == 0) { SetupNextMiniBlock(db); }
@@ -2448,10 +2452,10 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need. prefixes and suffixes should be the same length, so only
-  // testing prefix_db.
+  // testing prefix_db. account for first value in header.
   uint32_t skip_pos = 0;
   while (prefix_db->current_value_idx < skipped_leaf_values &&
-         prefix_db->current_value_idx < prefix_db->value_count) {
+         prefix_db->current_value_idx < prefix_db->value_count - 1) {
     // warp 0 gets prefixes and warp 1 gets suffixes
     auto* const db = t < 32 ? prefix_db : suffix_db;
     if (t < 64) {
