@@ -359,7 +359,7 @@ namespace {
  * @param input The input column to transform
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new column_view representing the transformed input and the generated rank
- *         (integer) column which needs to be kept alive.
+ *         (integer) column which needs to be kept alive
  */
 std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
   column_view const& input, rmm::cuda_stream_view stream)
@@ -414,7 +414,7 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
  * @param input The input table to transform
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new table_view representing the transformed input and the generated rank
- *         (integer) column which needs to be kept alive.
+ *         (integer) column which needs to be kept alive
  */
 std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
   table_view const& input, rmm::cuda_stream_view stream)
@@ -455,22 +455,23 @@ bool has_nested_structs_of_lists(column_view const& input)
  * a table of non-struct columns. Otherwise, the input table is passed through.
  *
  * @param input The input table
+ * @param stream The stream to launch kernels and h->d copies on while preprocessing
  * @return A pair of table_view representing the flattened input and an auxiliary data structure
- *         that needs to be kept alive.
+ *         that needs to be kept alive
  */
 std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
 flatten_nested_structs_of_lists(table_view const& input,
                                 host_span<order const> column_order,
-                                host_span<null_order const> null_precedence)
+                                host_span<null_order const> null_precedence,
+                                rmm::cuda_stream_view stream)
 {
   if (std::any_of(input.begin(), input.end(), has_nested_structs_of_lists)) {
-    // TODO: Pass in stream parameter.
-    // Issue: https://github.com/rapidsai/cudf/issues/12349
     auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
       input,
       std::vector<order>{column_order.begin(), column_order.end()},
       std::vector<null_order>{null_precedence.begin(), null_precedence.end()},
-      cudf::structs::detail::column_nullability::FORCE);
+      cudf::structs::detail::column_nullability::FORCE,
+      stream);
     auto output_table = structs_flattened->flattened_columns();
     return {std::move(output_table), std::move(structs_flattened)};
   }
@@ -488,7 +489,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 {
   // Firstly, flatten the input table if it contains any structs-of-lists column.
   auto [flattened_t, flattened_t_aux_data] =
-    flatten_nested_structs_of_lists(t, column_order, null_precedence);
+    flatten_nested_structs_of_lists(t, column_order, null_precedence, stream);
 
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
   auto [transformed_t, transformed_aux_data] = transform_lists_of_structs(flattened_t, stream);
