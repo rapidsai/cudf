@@ -22,9 +22,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace detail {

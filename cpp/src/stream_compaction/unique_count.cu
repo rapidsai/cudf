@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/default_stream.hpp"
 #include "stream_compaction_common.cuh"
 #include "stream_compaction_common.hpp"
 
@@ -29,6 +28,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
