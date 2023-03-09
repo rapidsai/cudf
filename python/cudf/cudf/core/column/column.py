@@ -1014,7 +1014,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         cats = self.unique().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=1
+            cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
         )
 
         # columns include null index in factorization; remove:
@@ -1304,7 +1304,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self
 
     def _label_encoding(
-        self, cats: ColumnBase, dtype: Dtype = None, na_sentinel=-1
+        self,
+        cats: ColumnBase,
+        dtype: Dtype = None,
+        na_sentinel: ScalarLike = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1337,6 +1340,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         from cudf._lib.join import join as cpp_join
 
+        if na_sentinel is None or na_sentinel.value is cudf.NA:
+            na_sentinel = cudf.Scalar(-1)
+
         def _return_sentinel_column():
             return cudf.core.column.full(
                 size=len(self), fill_value=na_sentinel, dtype=dtype
@@ -1363,7 +1369,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
         codes = codes.take(
             right_gather_map, nullify=True, check_bounds=False
-        ).fillna(na_sentinel)
+        ).fillna(na_sentinel.value)
 
         # reorder `codes` so that its values correspond to the
         # values of `self`:
