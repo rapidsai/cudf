@@ -6,6 +6,7 @@ import functools
 import inspect
 import itertools
 import numbers
+import os
 import pickle
 import re
 import sys
@@ -604,7 +605,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def __init__(
         self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
     ):
-
         super().__init__()
 
         if isinstance(columns, (Series, cudf.BaseIndex)):
@@ -918,7 +918,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if len(data):
             self._data.multiindex = True
-            for (i, col_name) in enumerate(data):
+            for i, col_name in enumerate(data):
                 self._data.multiindex = self._data.multiindex and isinstance(
                     col_name, tuple
                 )
@@ -1199,7 +1199,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if is_scalar(value):
                         self._data[col_name][scatter_map] = value
                     else:
-
                         self._data[col_name][scatter_map] = column.as_column(
                             value
                         )[scatter_map]
@@ -5434,7 +5433,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         downcast=None,
         **kwargs,
     ):
-
         if all(dt == np.dtype("object") for dt in self.dtypes):
             raise TypeError(
                 "Cannot interpolate with all object-dtype "
@@ -6347,13 +6345,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=True,
         encoding=None,
         compression=None,
-        line_terminator="\n",
+        lineterminator=None,
+        line_terminator=None,
         chunksize=None,
         storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
 
+        if line_terminator is not None:
+            warnings.warn(
+                "line_terminator is a deprecated keyword argument, "
+                "use lineterminator instead.",
+                FutureWarning,
+            )
+            if lineterminator is not None:
+                warnings.warn(
+                    f"Ignoring {line_terminator=} in favor "
+                    f"of {lineterminator=}"
+                )
+            else:
+                lineterminator = line_terminator
+        if lineterminator is None:
+            lineterminator = os.linesep
         return csv.to_csv(
             self,
             path_or_buf=path_or_buf,
@@ -6362,7 +6376,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns=columns,
             header=header,
             index=index,
-            line_terminator=line_terminator,
+            lineterminator=lineterminator,
             chunksize=chunksize,
             encoding=encoding,
             compression=compression,
@@ -6727,7 +6741,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             current_cols = self._data.to_pandas_index()
             combined_columns = other.index.to_pandas()
             if len(current_cols):
-
                 if cudf.utils.dtypes.is_mixed_with_object_dtype(
                     current_cols, combined_columns
                 ):
