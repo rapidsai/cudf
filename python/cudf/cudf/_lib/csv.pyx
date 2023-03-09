@@ -472,7 +472,7 @@ def write_csv(
     object sep=",",
     object na_rep="",
     bool header=True,
-    object line_terminator="\n",
+    object lineterminator="\n",
     int rows_per_chunk=8,
     bool index=True,
 ):
@@ -488,7 +488,7 @@ def write_csv(
     )
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
-    cdef string line_term_c = line_terminator.encode()
+    cdef string line_term_c = lineterminator.encode()
     cdef string na_c = na_rep.encode()
     cdef int rows_per_chunk_c = rows_per_chunk
     cdef vector[string] col_names

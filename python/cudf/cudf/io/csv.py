@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from collections import abc
 from io import BytesIO, StringIO
@@ -155,7 +155,7 @@ def to_csv(
     index=True,
     encoding=None,
     compression=None,
-    line_terminator="\n",
+    lineterminator="\n",
     chunksize=None,
     storage_options=None,
 ):
@@ -233,7 +233,7 @@ def to_csv(
                 sep=sep,
                 na_rep=na_rep,
                 header=header,
-                line_terminator=line_terminator,
+                lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
             )
@@ -244,7 +244,7 @@ def to_csv(
             sep=sep,
             na_rep=na_rep,
             header=header,
-            line_terminator=line_terminator,
+            lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
         )
