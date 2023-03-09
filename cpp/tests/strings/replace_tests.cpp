@@ -347,6 +347,8 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
 
 TEST_F(StringsReplaceTest, ReplaceMultiLong)
 {
+  // The length of the strings are to trigger the code path governed by the AVG_CHAR_BYTES_THRESHOLD
+  // setting in the multi.cu.
   auto input = cudf::test::strings_column_wrapper(
     {"This string needs to be very long to trigger the long-replace internal functions.",
      "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
