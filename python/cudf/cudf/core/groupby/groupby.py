@@ -810,17 +810,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                     values, keys, offsets_col, [], []
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
-            # For many groups this is the slowest part.
-            # Really I want a segmented_take that returns the first n
-            # values from each segment which would also be good for head/tail
-            to_take = np.fromiter(
-                itertools.chain.from_iterable(
-                    range(off, off + size)
-                    for off, size in zip(group_offsets, samples_per_group)
-                ),
-                dtype=np.int32,
-            )
-            indices = indices[to_take]
+            # Which indices are we going to want?
+            mask = np.zeros(len(index), dtype=bool)
+            for offset, sample_size in zip(group_offsets, samples_per_group):
+                mask[offset : offset + sample_size] = True
+            indices = indices[mask]
         # This is the index into the original dataframe ordered by the groups
         index = cp.asarray(index.data_array_view(mode="read"))
         return self.obj.iloc[index[indices]]
