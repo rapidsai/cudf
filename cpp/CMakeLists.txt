@@ -684,7 +684,7 @@ if(NOT USE_NVTX)
 endif()
 
 # Define RMM logging level
-target_compile_definitions(cudf PUBLIC "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
+target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
 
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
