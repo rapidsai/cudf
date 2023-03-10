@@ -103,7 +103,9 @@ dependencies:
           - librmm=23.04.*
       - output_types: conda
         packages:
+          - fmt>=9.1.0,<10
           - librdkafka=1.7.0
+          - spdlog>=1.11.0,<1.12
   build_python:
     common:
       - output_types: [conda, requirements]
