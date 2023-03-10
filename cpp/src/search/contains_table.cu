@@ -326,11 +326,11 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
   auto const haystack_flattened_tables =
-    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability);
+    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability, stream);
   auto const needles_flattened_tables =
-    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability);
-  auto const haystack_flattened = haystack_flattened_tables.flattened_columns();
-  auto const needles_flattened  = needles_flattened_tables.flattened_columns();
+    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability, stream);
+  auto const haystack_flattened = haystack_flattened_tables->flattened_columns();
+  auto const needles_flattened  = needles_flattened_tables->flattened_columns();
   auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
   auto const needles_tdv_ptr    = table_device_view::create(needles_flattened, stream);
 

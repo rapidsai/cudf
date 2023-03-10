@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,8 +116,6 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
   }
   return {out_tape, out_index_tape};
 }
-
-using namespace cudf::test::io::json;
 }  // namespace
 
 // Base test fixture for tests
