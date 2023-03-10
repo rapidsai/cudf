@@ -5879,7 +5879,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                                 for col in source._data.names
                             ]
                         except AttributeError:
-                            raise TypeError(
+                            raise NotImplementedError(
                                 f"Not all column dtypes support op {op}"
                             )
                     elif any(
