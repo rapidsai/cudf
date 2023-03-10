@@ -14,11 +14,13 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     _decimal_series,
     assert_eq,
     parametrize_numeric_dtypes_pairwise,
+    sv_to_udf_str,
 )
 
 
@@ -68,6 +70,37 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
     expect = pdf.apply(func, args=args, axis=1)
     obtain = gdf.apply(func, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+
+def run_masked_string_udf_test(func, data, args=(), **kwargs):
+
+    gdf = data
+    pdf = data.to_pandas(nullable=True)
+
+    def row_wrapper(row):
+        st = row["str_col"]
+        return func(st)
+
+    expect = pdf.apply(row_wrapper, args=args, axis=1)
+
+    func = cuda.jit(device=True)(func)
+    obtain = gdf.apply(row_wrapper, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+    # strings that come directly from input columns are backed by
+    # MaskedType(string_view) types. But new strings that are returned
+    # from functions or operators are backed by MaskedType(udf_string)
+    # types. We need to make sure all of our methods work on both kind
+    # of MaskedType. This function promotes the former to the latter
+    # prior to running the input function
+    def udf_string_wrapper(row):
+        masked_udf_str = Masked(
+            sv_to_udf_str(row["str_col"].value), row["str_col"].valid
+        )
+        return func(masked_udf_str)
+
+    obtain = gdf.apply(udf_string_wrapper, args=args, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 

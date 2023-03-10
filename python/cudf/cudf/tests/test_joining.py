@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -545,11 +544,6 @@ def test_empty_joins(how, left_empty, right_empty):
     assert len(expected) == len(result)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="left_on/right_on produces undefined results with 0"
-    "index and is disabled",
-)
 def test_merge_left_index_zero():
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
     right = pd.DataFrame(
