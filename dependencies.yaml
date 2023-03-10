@@ -475,6 +475,8 @@ dependencies:
               # dependency of transformers.
               - *tokenizers
               - *transformers
+          - matrix:
+            packages:
   test_python_cov:
     common:
       - output_types: [conda, requirements]
