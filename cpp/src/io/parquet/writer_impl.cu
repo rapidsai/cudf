@@ -1460,8 +1460,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    single_streams_table.end(),
                    std::back_inserter(column_sizes),
                    [this](auto const& column) { return column_size(column, stream); });
-    for (size_t i = 0; i < column_sizes.size(); i++)
-      printf("col %ld size %ld\n", i, column_sizes[i]);
 
     // adjust global fragment size if a single fragment will overrun a rowgroup
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
@@ -1818,6 +1816,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
   }
 
+  // need pages on host to create offset_indexes and chunk size metadata
+  thrust::host_vector<gpu::EncPage> host_pages;
+
   if (num_pages != 0) {
     init_encoder_pages(chunks,
                        col_desc,
@@ -1828,12 +1829,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                        num_columns,
                        num_pages,
                        num_stats_bfr);
+    host_pages = cudf::detail::make_host_vector_sync(pages, stream);
   }
 
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
-  size_type row_offset = 0;
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
     auto const rnext               = r + batch_list[b];
@@ -1854,6 +1855,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                                                : nullptr,
       (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr);
 
+    auto first_page_in_chunk = first_page_in_batch;
     std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++) {
       int p           = rg_to_part[r];
@@ -1870,15 +1872,44 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           dev_bfr = ck.uncompressed_bfr;
         }
 
-        // should slice once up front with all ranges
-        // get size of column data for this chunk
-        auto col_i = single_streams_table.column(i);
-        auto slice_i =
-          cudf::slice(col_i, {row_offset, row_offset + (size_type)row_group.num_rows})[0];
-        auto foo = column_size(slice_i, stream);
-        printf("rg %d col %d size %ld\n", r, i, foo);
-        column_chunk_meta.key_value_metadata.push_back(
-          std::move(KeyValue{"data_size", std::to_string(foo)}));
+        auto add_size_metadata = [](column_view const& col,
+                                    ColumnChunkMetaData& col_meta,
+                                    host_span<gpu::EncPage> col_pages,
+                                    rmm::cuda_stream_view stream) {
+          std::vector<size_type> slice_offsets;
+
+          for (auto& page : col_pages) {
+            if (page.page_type == PageType::DATA_PAGE) {
+              slice_offsets.push_back(page.start_row);
+              slice_offsets.push_back(page.start_row + page.num_rows);
+            }
+          }
+
+          auto slices = cudf::slice(col, slice_offsets);
+
+          std::vector<size_t> page_sizes;
+          std::transform(
+            slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
+              return column_size(slice, stream);
+            });
+          size_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
+          std::string page_sizes_str;
+
+          std::for_each(page_sizes.begin(), page_sizes.end(), [&page_sizes_str](auto size) {
+            page_sizes_str.append(std::to_string(size));
+            page_sizes_str.append(1, ',');
+          });
+
+          col_meta.key_value_metadata.push_back(
+            std::move(KeyValue{"data_size", std::to_string(chunk_size)}));
+          col_meta.key_value_metadata.push_back(std::move(KeyValue{"page_sizes", page_sizes_str}));
+        };
+
+        add_size_metadata(single_streams_table.column(i),
+                          column_chunk_meta,
+                          {host_pages.data() + first_page_in_chunk, ck.num_pages},
+                          stream);
+        first_page_in_chunk += ck.num_pages;
 
         if (out_sink_[p]->is_device_write_preferred(ck.compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
