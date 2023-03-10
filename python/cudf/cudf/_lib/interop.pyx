@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cpython cimport pycapsule
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -66,7 +66,7 @@ def to_dlpack(list source_columns):
     return pycapsule.PyCapsule_New(
         dlpack_tensor,
         'dltensor',
-        dlmanaged_tensor_pycapsule_deleter
+        <pycapsule.PyCapsule_Destructor>dlmanaged_tensor_pycapsule_deleter
     )
 
 
