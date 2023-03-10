@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,7 +259,7 @@ class column {
    * @brief Returns a reference to the specified child
    *
    * @param child_index Index of the desired child
-   * @return column& Reference to the desired child
+   * @return Reference to the desired child
    */
   column& child(size_type child_index) noexcept { return *_children[child_index]; };
 
@@ -267,7 +267,7 @@ class column {
    * @brief Returns a const reference to the specified child
    *
    * @param child_index Index of the desired child
-   * @return column const& Const reference to the desired child
+   * @return Const reference to the desired child
    */
   [[nodiscard]] column const& child(size_type child_index) const noexcept
   {
@@ -306,7 +306,7 @@ class column {
    * @brief Creates an immutable, non-owning view of the column's data and
    * children.
    *
-   * @return column_view The immutable, non-owning view
+   * @return The immutable, non-owning view
    */
   [[nodiscard]] column_view view() const;
 
@@ -316,7 +316,7 @@ class column {
    * This allows passing a `column` object directly into a function that
    * requires a `column_view`. The conversion is automatic.
    *
-   * @return column_view Immutable, non-owning `column_view`
+   * @return Immutable, non-owning `column_view`
    */
   operator column_view() const { return this->view(); };
 
@@ -330,7 +330,7 @@ class column {
    * if not, the null count will be recomputed on the next invocation of
    *`null_count()`.
    *
-   * @return mutable_column_view The mutable, non-owning view
+   * @return The mutable, non-owning view
    */
   mutable_column_view mutable_view();
 
@@ -346,7 +346,7 @@ class column {
    * Otherwise, the null count will be recomputed on the next invocation of
    * `null_count()`.
    *
-   * @return mutable_column_view Mutable, non-owning `mutable_column_view`
+   * @return Mutable, non-owning `mutable_column_view`
    */
   operator mutable_column_view() { return this->mutable_view(); };
 

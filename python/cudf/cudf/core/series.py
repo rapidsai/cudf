@@ -1774,20 +1774,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._from_data({self.name: lmask & rmask}, self._index)
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, level, **kwargs)
+        return super().all(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().any(axis, skipna, level, **kwargs)
+        return super().any(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
     def to_pandas(self, index=True, nullable=False, **kwargs):
@@ -2384,7 +2384,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def count(self, level=None, **kwargs):
+    def count(self):
         """
         Return number of non-NA/null observations in the Series
 
@@ -2393,10 +2393,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         int
             Number of non-null values in the Series.
 
-        Notes
-        -----
-        Parameters currently not supported is `level`.
-
         Examples
         --------
         >>> import cudf
@@ -2404,10 +2400,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser.count()
         5
         """
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         return self.valid_count
 
     @_cudf_nvtx_annotate

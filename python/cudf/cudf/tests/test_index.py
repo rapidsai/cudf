@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -789,17 +789,6 @@ def test_index_difference(data, other, sort):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if (
-        gd_data.dtype.kind == "f"
-        and gd_other.dtype.kind != "f"
-        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
-    ):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
-
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
@@ -858,15 +847,6 @@ def test_index_equals(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if (
-        gd_data.dtype.kind == "f" or gd_other.dtype.kind == "f"
-    ) and cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
-
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
     assert_eq(expected, actual)
@@ -912,17 +892,6 @@ def test_index_categories_equal(data, other):
 
     gd_data = cudf.core.index.as_index(data).astype("category")
     gd_other = cudf.core.index.as_index(other)
-
-    if (
-        gd_data.dtype.kind == "f"
-        and gd_other.dtype.kind != "f"
-        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
-    ):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
 
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)

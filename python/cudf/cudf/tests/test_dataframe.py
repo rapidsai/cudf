@@ -23,8 +23,6 @@ from packaging import version
 
 import cudf
 from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_120,
     PANDAS_GE_134,
     PANDAS_GE_150,
     PANDAS_GE_200,
@@ -3223,10 +3221,6 @@ def test_dataframe_reindex_fill_value(
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = cudf.datasets.randomdata(
@@ -3238,7 +3232,7 @@ def test_dataframe_reindex_change_dtype(copy):
     assert_eq(
         pdf.reindex(index=index, columns=columns, copy=True),
         gdf.reindex(index=index, columns=columns, copy=copy),
-        **kwargs,
+        check_freq=False,
     )
 
 
@@ -4623,10 +4617,6 @@ def test_isin_dataframe(data, values):
     else:
         try:
             expected = pdf.isin(values)
-        except ValueError as e:
-            if str(e) == "Lengths must match." and not PANDAS_GE_110:
-                # https://github.com/pandas-dev/pandas/issues/34256
-                return
         except TypeError as e:
             # Can't do isin with different categories
             if str(e) == (
@@ -5293,12 +5283,7 @@ def test_rowwise_ops_datetime_dtypes_pdbug(data):
     expected = pdf.max(axis=1, skipna=False)
     got = gdf.max(axis=1, skipna=False)
 
-    if PANDAS_GE_120:
-        assert_eq(got, expected)
-    else:
-        # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/36907
-        with pytest.raises(AssertionError, match="numpy array are different"):
-            assert_eq(got, expected)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -8358,8 +8343,8 @@ def test_describe_misc_include(df, include):
 def test_describe_misc_exclude(df, exclude):
     pdf = df.to_pandas()
 
-    expected = pdf.describe(exclude=exclude, datetime_is_numeric=True)
-    actual = df.describe(exclude=exclude, datetime_is_numeric=True)
+    expected = pdf.describe(exclude=exclude)
+    actual = df.describe(exclude=exclude)
 
     for col in expected.columns:
         if expected[col].dtype == np.dtype("object"):
@@ -9723,19 +9708,15 @@ def test_dataframe_pct_change(data, periods, fill_method):
     assert_eq(expected, actual)
 
 
-def test_mean_timeseries():
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_mean_timeseries(numeric_only):
     gdf = cudf.datasets.timeseries()
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
 
-    expected = pdf.mean(numeric_only=True)
-    actual = gdf.mean(numeric_only=True)
-
-    assert_eq(expected, actual)
-
-    with pytest.warns(FutureWarning):
-        expected = pdf.mean()
-    with pytest.warns(FutureWarning):
-        actual = gdf.mean()
+    expected = pdf.mean(numeric_only=numeric_only)
+    actual = gdf.mean(numeric_only=numeric_only)
 
     assert_eq(expected, actual)
 
@@ -9750,19 +9731,15 @@ def test_mean_timeseries():
         }
     ],
 )
-def test_std_different_dtypes(data):
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_std_different_dtypes(data, numeric_only):
     gdf = cudf.DataFrame(data)
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
     pdf = gdf.to_pandas()
 
-    expected = pdf.std(numeric_only=True)
-    actual = gdf.std(numeric_only=True)
-
-    assert_eq(expected, actual)
-
-    with pytest.warns(FutureWarning):
-        expected = pdf.std()
-    with pytest.warns(FutureWarning):
-        actual = gdf.std()
+    expected = pdf.std(numeric_only=numeric_only)
+    actual = gdf.std(numeric_only=numeric_only)
 
     assert_eq(expected, actual)
 

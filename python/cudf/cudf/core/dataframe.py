@@ -5780,7 +5780,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return coerced, mask, common_dtype
 
     @_cudf_nvtx_annotate
-    def count(self, axis=0, level=None, numeric_only=False, **kwargs):
+    def count(self, axis=0, numeric_only=False):
         """
         Count ``non-NA`` cells for each column or row.
 
@@ -5793,7 +5793,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are `axis`, `numeric_only`.
 
         Examples
         --------
@@ -5831,12 +5831,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self,
         op,
         axis=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
 
         source = self
         if numeric_only:
@@ -5872,33 +5869,28 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "skew",
                 )
 
-                if numeric_only is None and op in numeric_ops:
-                    warnings.warn(
-                        f"The default value of numeric_only in DataFrame.{op} "
-                        "is deprecated. In a future version, it will default "
-                        "to False. In addition, specifying "
-                        "'numeric_only=None' is deprecated. Select only valid "
-                        "columns or specify the value of numeric_only to "
-                        "silence this warning.",
-                        FutureWarning,
-                    )
-                    numeric_cols = (
-                        name
+                if op in numeric_ops:
+                    if numeric_only:
+                        try:
+                            result = [
+                                getattr(source._data[col], op)(**kwargs)
+                                for col in source._data.names
+                            ]
+                        except AttributeError:
+                            raise NotImplementedError(
+                                f"Not all column dtypes support op {op}"
+                            )
+                    elif any(
+                        not is_numeric_dtype(self._data[name])
                         for name in self._data.names
-                        if is_numeric_dtype(self._data[name])
-                    )
-                    source = self._get_columns_by_label(numeric_cols)
-                    if source.empty:
-                        return Series(index=cudf.StringIndex([]))
-                    try:
-                        result = [
-                            getattr(source._data[col], op)(**kwargs)
-                            for col in source._data.names
-                        ]
-                    except AttributeError:
+                    ):
                         raise TypeError(
-                            f"Not all column dtypes support op {op}"
+                            "Non numeric columns passed with "
+                            "`numeric_only=False`, pass `numeric_only=True` "
+                            f"to perform DataFrame.{op}"
                         )
+                    else:
+                        raise
                 else:
                     raise
 
@@ -6024,14 +6016,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return super(DataFrame, obj).all(axis, skipna, level, **kwargs)
+        return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
+        return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
     def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
