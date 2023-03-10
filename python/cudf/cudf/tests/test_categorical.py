@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_134
+from cudf.core._compat import PANDAS_GE_134
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
@@ -81,7 +81,6 @@ t a
     assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 
-@pytest.mark.skipif(not PANDAS_GE_110, reason="requires pandas>=1.1.0")
 def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
