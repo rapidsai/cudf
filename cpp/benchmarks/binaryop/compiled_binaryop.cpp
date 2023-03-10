@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,8 +66,14 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 #define BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
   BM_BINARYOP_BENCHMARK_DEFINE(build_name(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
 
-using namespace cudf;
-using namespace numeric;
+using cudf::duration_D;
+using cudf::duration_ms;
+using cudf::duration_ns;
+using cudf::duration_s;
+using cudf::timestamp_D;
+using cudf::timestamp_ms;
+using cudf::timestamp_s;
+using numeric::decimal32;
 
 // clang-format off
 BINARYOP_BENCHMARK_DEFINE(float,        int64_t,      ADD,                  int32_t);

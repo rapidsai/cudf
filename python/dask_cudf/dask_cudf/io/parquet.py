@@ -93,14 +93,36 @@ class CudfEngine(ArrowDatasetEngine):
                 )
 
             # Use cudf to read in data
-            df = cudf.read_parquet(
-                paths_or_fobs,
-                engine="cudf",
-                columns=columns,
-                row_groups=row_groups if row_groups else None,
-                strings_to_categorical=strings_to_categorical,
-                **kwargs,
-            )
+            try:
+                df = cudf.read_parquet(
+                    paths_or_fobs,
+                    engine="cudf",
+                    columns=columns,
+                    row_groups=row_groups if row_groups else None,
+                    strings_to_categorical=strings_to_categorical,
+                    **kwargs,
+                )
+            except RuntimeError as err:
+                # TODO: Remove try/except after null-schema issue is resolved
+                # (See: https://github.com/rapidsai/cudf/issues/12702)
+                if len(paths_or_fobs) > 1:
+                    df = cudf.concat(
+                        [
+                            cudf.read_parquet(
+                                pof,
+                                engine="cudf",
+                                columns=columns,
+                                row_groups=row_groups[i]
+                                if row_groups
+                                else None,
+                                strings_to_categorical=strings_to_categorical,
+                                **kwargs,
+                            )
+                            for i, pof in enumerate(paths_or_fobs)
+                        ]
+                    )
+                else:
+                    raise err
 
         if partitions and partition_keys is None:
 

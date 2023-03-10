@@ -487,7 +487,8 @@ class device_row_comparator {
           // element_index because either both rows have a deeply nested NULL at the
           // same position, and we'll "continue" in our iteration, or we will early
           // exit if only one of the rows has a deeply nested NULL
-          if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
+          if ((lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) or
+              (rcol.nullable() and r_def_levels[r_dremel_index] == r_max_def_level - 1)) {
             ++element_index;
           }
           if (l_def_level == r_def_level) { continue; }
@@ -755,9 +756,8 @@ struct preprocessed_table {
   /**
    * @brief Get a device array containing the desired order of each column in the preprocessed table
    *
-   * @return std::optional<device_span<order const>> Device array containing respective column
-   * orders. If no explicit column orders were specified during the creation of this object then
-   * this will be `nullopt`.
+   * @return Device array containing respective column orders. If no explicit column orders were
+   * specified during the creation of this object then this will be `nullopt`.
    */
   [[nodiscard]] std::optional<device_span<order const>> column_order() const
   {
@@ -769,9 +769,8 @@ struct preprocessed_table {
    * @brief Get a device array containing the desired null precedence of each column in the
    * preprocessed table
    *
-   * @return std::optional<device_span<null_order const>> Device array containing respective column
-   * null precedence. If no explicit column null precedences were specified during the creation of
-   * this object then this will be `nullopt`.
+   * @return Device array containing respective column null precedence. If no explicit column null
+   * precedences were specified during the creation of this object then this will be `nullopt`.
    */
   [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
   {
