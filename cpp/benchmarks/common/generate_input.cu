@@ -716,7 +716,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
-      profile.get_null_probability().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
   }
   return list_column;  // return the top-level column

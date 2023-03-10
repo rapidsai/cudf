@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,10 +190,9 @@ std::unique_ptr<table> stable_sort_by_key(
  * for column
  * @param percentage flag to convert ranks to percentage in range (0,1]
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> A column of containing the rank of the each
- * element of the column of `input`. The output column type will be `size_type`
- * column by default or else `double` when `method=rank_method::AVERAGE` or
- *`percentage=True`
+ * @return A column of containing the rank of the each element of the column of `input`. The output
+ * column type will be `size_type`column by default or else `double` when
+ * `method=rank_method::AVERAGE` or `percentage=True`
  */
 std::unique_ptr<column> rank(
   column_view const& input,
