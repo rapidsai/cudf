@@ -193,23 +193,30 @@ struct table_flattener {
       }
     }
 
-    return flattened_table{table_view{flat_columns},
-                           std::move(flat_column_order),
-                           std::move(flat_null_precedence),
-                           std::move(validity_as_column),
-                           std::move(nullable_data)};
+    return std::make_unique<flattened_table>(table_view{flat_columns},
+                                             std::move(flat_column_order),
+                                             std::move(flat_null_precedence),
+                                             std::move(validity_as_column),
+                                             std::move(nullable_data));
   }
 };
 
-flattened_table flatten_nested_columns(table_view const& input,
-                                       std::vector<order> const& column_order,
-                                       std::vector<null_order> const& null_precedence,
-                                       column_nullability nullability,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<flattened_table> flatten_nested_columns(
+  table_view const& input,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  column_nullability nullability,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
-  if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
+  if (not has_struct) {
+    return std::make_unique<flattened_table>(input,
+                                             column_order,
+                                             null_precedence,
+                                             std::vector<std::unique_ptr<column>>{},
+                                             temporary_nullable_data{});
+  }
 
   return table_flattener{input, column_order, null_precedence, nullability, stream, mr}();
 }
