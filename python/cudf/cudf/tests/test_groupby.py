@@ -3033,7 +3033,7 @@ class TestSample:
 
     def test_not_implemented_arguments(self, df):
         with pytest.raises(NotImplementedError):
-            # These are valid weights, but we don't implemented this yet.
+            # These are valid weights, but we don't implement this yet.
             df.groupby("a").sample(n=1, weights=[1 / len(df)] * len(df))
 
     @pytest.mark.parametrize("frac", [0, 1 / 3, 1 / 2, 2 / 3, 1])

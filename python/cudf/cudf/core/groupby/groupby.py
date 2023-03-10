@@ -734,9 +734,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         """
         if weights is not None:
-            raise NotImplementedError(
-                "Sorry, sampling with weights is not supported"
-            )
+            raise NotImplementedError("Sampling with weights is not supported")
         # Can't wait for match/case
         if frac is not None and n is not None:
             raise ValueError("Cannot supply both of frac and n")
@@ -750,7 +748,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # TODO: handle random states properly.
         if random_state is not None and not isinstance(random_state, int):
             raise NotImplementedError(
-                "Sorry, only integer seeds are supported for random_state "
+                "Only integer seeds are supported for random_state "
                 "in this case"
             )
         # Get the groups
@@ -760,9 +758,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         except ValueError:
             raise NotImplementedError(
-                "Sorry groupby.sample with multiindex not implemented"
+                "groupby.sample with multiindex not implemented"
             )
-        group_offsets = np.asarray(group_offsets).astype(np.int32)
+        group_offsets = np.asarray(group_offsets, dtype=np.int32)
         size_per_group = np.diff(group_offsets)
         if n is not None:
             samples_per_group = np.broadcast_to(
@@ -781,16 +779,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 size_per_group * frac, decimals=0
             ).astype(np.int32)
         if replace:
-            # Use numpy to do all-at-once generation of the
-            # We can use numpy in this case, which is fast for lots of
-            # groups and large samples
-            lo = 0
-            hi = np.repeat(size_per_group, samples_per_group)
+            # We would prefer to use cupy here, but their rng.integers
+            # interface doesn't take array-based low and high
+            # arguments.
+            low = 0
+            high = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
-            # Would be nice to use cupy here, but their rng.integers
-            # interface doesn't take array lo and hi arguments.
-            indices = rng.integers(lo, hi, dtype=np.int32).reshape(-1)
-            indices += np.repeat(group_offsets[:-1], samples_per_group)
+            indices = rng.integers(low, high, dtype=np.int32) + np.repeat(
+                group_offsets[:-1], samples_per_group
+            )
         else:
             # Approach: do a segmented argsort of the index array and take
             # the first samples_per_group entries from sorted array.
@@ -803,11 +800,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                     rs.shuffle(indices[off : off + size])
             else:
                 rng = cp.random.default_rng(seed=random_state)
-                offsets_col = as_column(group_offsets)
-                values = [index]
-                keys = [as_column(rng.random(size=len(index)))]
                 (indices,) = segmented_sort_by_key(
-                    values, keys, offsets_col, [], []
+                    [index],
+                    [as_column(rng.random(size=len(index)))],
+                    as_column(group_offsets),
+                    [],
+                    [],
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
