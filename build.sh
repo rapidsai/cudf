@@ -317,8 +317,9 @@ if buildAll || hasArg libcudf; then
         BMR_DIR=${RAPIDS_ARTIFACTS_DIR:-"${LIB_BUILD_DIR}"}
         echo "Metrics output dir: [$BMR_DIR]"
         mkdir -p ${BMR_DIR}
-        echo "$MSG" > ${BMR_DIR}/build_stats.txt
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "${BMR_DIR}/build_stats.txt" > ${BMR_DIR}/ninja_log.html
+        MSG_OUTFILE="$(mktemp)"
+        echo "$MSG" > "${MSG_OUTFILE}"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "${MSG_OUTFILE}" > ${BMR_DIR}/ninja_log.html
         cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
     fi
 
