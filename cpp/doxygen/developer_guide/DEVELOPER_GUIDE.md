@@ -923,13 +923,17 @@ include expensive computation in the trace/debug logs, as the overhead will not 
 public builds.
 The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
 
-* CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
+* CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum level of logging that
 will be compiled in the build.
 Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
-* Environment variable `LIBCUDF_LOGGING_LEVEL` - controls the runtime logging level. If this setting is higher than the compile-time CMake variable, any logging levels in between the two settings will be excluded from the written log. The available levels are the same as for the CMake variable.
-* Global logger object exposed via `cudf::logger()`. This API should not be used within libcudf to
-manipulate logging, its purpose is to allow upstream users to configure libcudf logging to fit their
-application.
+* Environment variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum logging level during
+initialization. If this setting is higher than the compile-time CMake variable, any logging levels
+in between the two settings will be excluded from the written log. The available levels are the same
+as for the CMake variable.
+* Global logger object exposed via `cudf::logger()` - sets the minimum logging level at runtime.
+For example, calling `cudf::logger().set_level(spdlog::level::err)`, will exclude any messages that
+are not errors or critical errors. This API should not be used within libcudf to manipulate logging,
+its purpose is to allow upstream users to configure libcudf logging to fit their application.
 
 By default, logging messages are output to stderr.
 Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
