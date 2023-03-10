@@ -336,11 +336,29 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             Names for each of the index levels.
         dtype : object, optional (default None)
             MultiIndex dtype, only supports None or object type
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         levels : sequence of arrays, optional (default None)
             The unique labels for each level. Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `levels` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         codes : sequence of arrays, optional (default None)
             Integers for each level designating which label at each location.
             Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `codes` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
@@ -398,6 +416,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             warnings.warn(
                 "parameter codes is deprecated and will be removed in a "
                 "future version.",
+                FutureWarning,
+            )
+
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
                 FutureWarning,
             )
 
@@ -714,7 +739,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         codes = {}
         for name, col in self._data.items():
-            code, cats = cudf.Series._from_data({None: col}).factorize()
+            with warnings.catch_warnings():
+                # TODO: Remove this filter when
+                # `na_sentinel` is removed from `factorize`.
+                # This is a filter to not let the warnings from
+                # `factorize` show up in other parts of public APIs.
+                warnings.simplefilter("ignore")
+                code, cats = cudf.Series._from_data({None: col}).factorize()
             codes[name] = code.astype(np.int64)
             levels.append(cudf.Series(cats, name=None))
 
@@ -1014,25 +1045,25 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return False
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
     @classmethod
