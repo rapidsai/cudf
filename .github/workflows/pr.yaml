@@ -133,5 +133,6 @@ jobs:
     with:
       build_type: pull-request
       package-name: dask_cudf
-      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl"
+      # Install the cudf we just built, and also test against latest dask/distributed/dask-cuda.
+      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl && pip install git+https://github.com/dask/dask.git@main git+https://github.com/dask/distributed.git@main git+https://github.com/rapidsai/dask-cuda.git@branch-23.04"
       test-unittest: "python -m pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
