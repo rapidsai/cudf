@@ -67,7 +67,7 @@ class metadata_builder {
    * @brief Destructor that will be implemented as default, required because metadata_builder_impl
    * is incomplete at this stage.
    */
-  ~metadata_builder() = default;
+  ~metadata_builder();
 
   /**
    * @brief Add a column to this metadata builder.
