@@ -5873,14 +5873,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 if op in numeric_ops:
                     if numeric_only:
-                        numeric_cols = (
-                            name
-                            for name in self._data.names
-                            if is_numeric_dtype(self._data[name])
-                        )
-                        source = self._get_columns_by_label(numeric_cols)
-                        if source.empty:
-                            return Series(index=cudf.StringIndex([]))
                         try:
                             result = [
                                 getattr(source._data[col], op)(**kwargs)
