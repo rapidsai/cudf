@@ -152,7 +152,7 @@ dependencies:
           - myst-nb
           - nbsphinx
           - numpydoc
-          - pandoc<=2.0.0 # We should check and fix all "<=" pinnings
+          - pandoc
           - pydata-sphinx-theme
           - sphinx
           - sphinx-autobuild
@@ -254,10 +254,10 @@ dependencies:
           - distributed>=2023.1.1
           - fsspec>=0.6.0
           - numba>=0.56.2
-          - numpy
+          - numpy>=1.21
           - nvtx>=0.2.1
           - packaging
-          - pandas>=1.0,<1.6.0dev0
+          - pandas>=1.3,<1.6.0dev0
           - python-confluent-kafka=1.7.0
           - streamz
           - typing_extensions
