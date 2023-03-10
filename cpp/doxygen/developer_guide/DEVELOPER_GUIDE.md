@@ -926,9 +926,7 @@ The minimum enabled logging level is `WARN`, and it can be modified in multiple 
 * CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
 will be compiled in the build.
 Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
-* Environment variable `LIBCUDF_LOGGING_LEVEL`, with the same values as the CMake variable.
-The difference is that disabled levels are present in the build, but the messages are excluded from
-the log.
+* Environment variable `LIBCUDF_LOGGING_LEVEL` - controls the runtime logging level. If this setting is higher than the compile-time CMake variable, any logging levels in between the two settings will be excluded from the written log. The available levels are the same as for the CMake variable.
 * Global logger object exposed via `cudf::logger()`. This API should not be used within libcudf to
 manipulate logging, its purpose is to allow upstream users to configure libcudf logging to fit their
 application.
