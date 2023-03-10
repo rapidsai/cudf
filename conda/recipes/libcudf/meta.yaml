@@ -43,6 +43,7 @@ requirements:
     - cuda-cudart ={{ cuda_version }}
     - cuda-cudart-dev ={{ cuda_version }}
     - cuda-cudart-static ={{ cuda_version }}
+    - cuda-cupti ={{ cuda_version }}
     {% endif %}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
@@ -416,6 +417,7 @@ outputs:
         - cuda-cudart {{ cuda_spec }}
         - cuda-cudart-dev {{ cuda_spec }}
         - cuda-cudart-static {{ cuda_spec }}
+        - cuda-cupti {{ cuda_spec }}
         {% endif %}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
