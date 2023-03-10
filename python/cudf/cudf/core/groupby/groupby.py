@@ -16,6 +16,7 @@ import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
+from cudf._lib.sort import segmented_sort_by_key
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -731,103 +732,98 @@ class GroupBy(Serializable, Reducible, Scannable):
         New dataframe or series with samples of appropriate size drawn
         from each group
 
-        Notes
-        -----
-        Sampling with fractional group sizes is currently much slower
-        than sampling with a constant number of items per group.
-        Please file an enhancement request if you need this code path
-        to run fast.
         """
         if weights is not None:
             raise NotImplementedError(
                 "Sorry, sampling with weights is not supported"
             )
+        # Can't wait for match/case
         if frac is not None and n is not None:
             raise ValueError("Cannot supply both of frac and n")
         elif n is None and frac is None:
             n = 1
-        # Supported cases
-        #
-        # n    frac  replace | Method                   | Speed
-        # ------------------------------------------------------------------
-        # int  None  False   | whole-frame sample       | fast
-        # int  None  True    | groupby, all-at-once     | fast
-        #                    | random sample generation |
-        # None float False   | groupby, per-group       | slow (many groups)
-        #                    | random sample generation |
-        # None float True    | groupby, per-group       | slow (many groups)
-        #                    | random sample generation |
-        if (
-            n is not None
-            and not replace
-            and weights is None
-            # Can't create a categorical from more than a single column
-            and isinstance(self._by, str)
-            # Need to think harder about seriesgroupby for this case
-            and isinstance(self.obj, cudf.DataFrame)
-        ):
-            # Fast path since groupby commutes with whole-frame
-            # sampling in this case
-            minsize = self.size().min()
-            if minsize < n:
-                raise ValueError(
-                    f"Cannot sample {n=} without replacement "
-                    f"smallest group is {minsize}."
-                )
-            df = self.obj.sample(
-                frac=1, random_state=random_state
-            ).reset_index(drop=True)
-            # Cantor name
-            tempname = f"_{''.join(df.columns)}"
-            newcol = df[self._by]
-            df[tempname] = newcol.astype("category").cat.codes
-            df = df.loc[df.groupby(tempname)[tempname].rank("first") <= n, :]
-            del df[tempname]
-            return df
-
-        # Get the groups
-        _, offsets, _, values = self._grouped()
-        offsets = np.asarray(offsets).astype(np.int32)
-        sizes = np.diff(offsets)
+        elif frac is not None and not (0 <= frac <= 1):
+            raise ValueError(
+                "Sampling with fraction must provide fraction in "
+                f"[0, 1], got {frac=}"
+            )
+        # TODO: handle random states properly.
         if random_state is not None and not isinstance(random_state, int):
             raise NotImplementedError(
                 "Sorry, only integer seeds are supported for random_state "
                 "in this case"
             )
-        # TODO: handle random states properly.
-        rng = np.random.default_rng(seed=random_state)
-        if n is not None and replace:
+        # Get the groups
+        try:
+            _, (index,), group_offsets = self._groupby.groups(
+                [*self.obj._index._columns]  # type: ignore
+            )
+        except ValueError:
+            raise NotImplementedError(
+                "Sorry groupby.sample with multiindex not implemented"
+            )
+        group_offsets = np.asarray(group_offsets).astype(np.int32)
+        size_per_group = np.diff(group_offsets)
+        if n is not None:
+            samples_per_group = np.broadcast_to(
+                np.int32(n), size_per_group.shape
+            )
+            if not replace and (minsize := size_per_group.min()) < n:
+                raise ValueError(
+                    f"Cannot sample {n=} without replacement, "
+                    f"smallest group is {minsize}"
+                )
+        else:
+            # Pandas uses round-to-nearest, ties to even to
+            # pick sample sizes for the fractional case (unlike IEEE
+            # which is round-to-nearest, ties to sgn(x) * inf).
+            samples_per_group = np.round(
+                size_per_group * frac, decimals=0
+            ).astype(np.int32)
+        if replace:
+            # Use numpy to do all-at-once generation of the
             # We can use numpy in this case, which is fast for lots of
             # groups and large samples
-            lo = offsets[:-1].reshape(-1, 1)
-            hi = lo + sizes.reshape(-1, 1)
-            indices = rng.integers(lo, hi, size=(*lo.shape, n)).reshape(-1)
+            lo = 0
+            hi = np.repeat(size_per_group, samples_per_group)
+            rng = np.random.default_rng(seed=random_state)
+            # Would be nice to use cupy here, but their rng.integers
+            # interface doesn't take array lo and hi arguments.
+            indices = rng.integers(lo, hi, dtype=np.int32).reshape(-1)
+            indices += np.repeat(group_offsets[:-1], samples_per_group)
         else:
-            if n is not None:
-                nsamples = np.broadcast_to(np.int32(n), sizes.shape)
+            # Approach: do a segmented argsort of the index array and take
+            # the first samples_per_group entries from sorted array.
+            if len(size_per_group) < 500:
+                # Empirically shuffling with cupy is faster at this scale
+                indices = cp.asarray(index.data_array_view(mode="read"))
+                rs = cp.random.get_random_state()
+                rs.seed(seed=random_state)
+                for off, size in zip(group_offsets, size_per_group):
+                    rs.shuffle(indices[off : off + size])
             else:
-                # Pandas uses round-to-nearest, ties to even to pick
-                # sample sizes for the fractional case (unlike IEEE
-                # which is round-to-nearest, ties to sgn(x) * inf).
-                nsamples = np.round(sizes * frac, decimals=0).astype(np.int32)
-            if len(sizes) >= 100_000:
-                # Arbitrary "large" case
-                # TODO: Check this is a reasonable size
-                warnings.warn(
-                    "Sampling a large number of groups with these "
-                    "parameters is slow. If you need this to be faster, "
-                    "please open an RFE with your use case."
+                rng = cp.random.default_rng(seed=random_state)
+                offsets_col = as_column(group_offsets)
+                values = [index]
+                keys = [as_column(rng.random(size=len(index)))]
+                (indices,) = segmented_sort_by_key(
+                    values, keys, offsets_col, [], []
                 )
-            indices = np.concatenate(
-                [
-                    rng.choice(size, size=nsample, replace=replace).astype(
-                        np.int32
-                    )
-                    + offset
-                    for size, offset, nsample in zip(sizes, offsets, nsamples)
-                ]
+                indices = cp.asarray(indices.data_array_view(mode="read"))
+            # For many groups this is the slowest part.
+            # Really I want a segmented_take that returns the first n
+            # values from each segment which would also be good for head/tail
+            to_take = np.fromiter(
+                itertools.chain.from_iterable(
+                    range(off, off + size)
+                    for off, size in zip(group_offsets, samples_per_group)
+                ),
+                dtype=np.int32,
             )
-        return self.obj.iloc[values.index[indices]]
+            indices = indices[to_take]
+        # This is the index into the original dataframe ordered by the groups
+        index = cp.asarray(index.data_array_view(mode="read"))
+        return self.obj.iloc[index[indices]]
 
     def serialize(self):
         header = {}
