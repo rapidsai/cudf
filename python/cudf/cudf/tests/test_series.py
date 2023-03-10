@@ -95,17 +95,16 @@ def test_series_init_dict_lists(data):
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_series_append_basic(data, others, ignore_index):
+def test_series_concat_basic(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    with pytest.warns(FutureWarning):
-        expected = psr.append(other_ps, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning):
-        actual = gsr.append(other_gs, ignore_index=ignore_index)
+    expected = pd.concat([psr, other_ps], ignore_index=ignore_index)
+    actual = cudf.concat([gsr, other_gs], ignore_index=ignore_index)
+
     assert_eq(expected, actual)
 
 
@@ -142,17 +141,15 @@ def test_series_append_basic(data, others, ignore_index):
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_series_append_basic_str(data, others, ignore_index):
+def test_series_concat_basic_str(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    with pytest.warns(FutureWarning):
-        expected = psr.append(other_ps, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning):
-        actual = gsr.append(other_gs, ignore_index=ignore_index)
+    expected = pd.concat([psr, other_ps], ignore_index=ignore_index)
+    actual = cudf.concat([gsr, other_gs], ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -195,21 +192,20 @@ def test_series_append_basic_str(data, others, ignore_index):
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_series_append_series_with_index(data, others, ignore_index):
+def test_series_concat_series_with_index(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = others
     other_gs = cudf.from_pandas(others)
 
-    with pytest.warns(FutureWarning):
-        expected = psr.append(other_ps, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning):
-        actual = gsr.append(other_gs, ignore_index=ignore_index)
+    expected = pd.concat([psr, other_ps], ignore_index=ignore_index)
+    actual = cudf.concat([gsr, other_gs], ignore_index=ignore_index)
+
     assert_eq(expected, actual)
 
 
-def test_series_append_error_mixed_types():
+def test_series_concat_error_mixed_types():
     gsr = cudf.Series([1, 2, 3, 4])
     other = cudf.Series(["a", "b", "c", "d"])
 
@@ -218,16 +214,14 @@ def test_series_append_error_mixed_types():
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        with pytest.warns(FutureWarning):
-            gsr.append(other)
+        cudf.concat([gsr, other])
 
     with pytest.raises(
         TypeError,
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        with pytest.warns(FutureWarning):
-            gsr.append([gsr, other, gsr, other])
+        cudf.concat([gsr, gsr, other, gsr, other])
 
 
 @pytest.mark.parametrize(
@@ -278,35 +272,32 @@ def test_series_append_error_mixed_types():
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_series_append_list_series_with_index(data, others, ignore_index):
+def test_series_concat_list_series_with_index(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = others
     other_gs = [cudf.from_pandas(obj) for obj in others]
 
-    with pytest.warns(FutureWarning):
-        expected = psr.append(other_ps, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning):
-        actual = gsr.append(other_gs, ignore_index=ignore_index)
+    expected = pd.concat([psr] + other_ps, ignore_index=ignore_index)
+    actual = cudf.concat([gsr] + other_gs, ignore_index=ignore_index)
+
     assert_eq(expected, actual)
 
 
-def test_series_append_existing_buffers():
+def test_series_concat_existing_buffers():
     a1 = np.arange(10, dtype=np.float64)
     gs = cudf.Series(a1)
 
     # Add new buffer
     a2 = cudf.Series(np.arange(5))
-    with pytest.warns(FutureWarning):
-        gs = gs.append(a2)
+    gs = cudf.concat([gs, a2])
     assert len(gs) == 15
     np.testing.assert_equal(gs.to_numpy(), np.hstack([a1, a2.to_numpy()]))
 
     # Ensure appending to previous buffer
     a3 = cudf.Series(np.arange(3))
-    with pytest.warns(FutureWarning):
-        gs = gs.append(a3)
+    gs = cudf.concat([gs, a3])
     assert len(gs) == 18
     a4 = np.hstack([a1, a2.to_numpy(), a3.to_numpy()])
     np.testing.assert_equal(gs.to_numpy(), a4)
@@ -314,13 +305,11 @@ def test_series_append_existing_buffers():
     # Appending different dtype
     a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
     a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
-    with pytest.warns(FutureWarning):
-        gs = a5.append(a6)
+    gs = cudf.concat([a5, a6])
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a5.to_numpy(), a6.to_numpy()])
     )
-    with pytest.warns(FutureWarning):
-        gs = cudf.Series(a6).append(a5)
+    gs = cudf.concat([cudf.Series(a6), a5])
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
