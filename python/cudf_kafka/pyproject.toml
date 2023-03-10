@@ -4,7 +4,7 @@
 
 requires = [
     "cython>=0.29,<0.30",
-    "numpy",
+    "numpy>=1.21",
     "pyarrow==10.0.1.*",
     "setuptools",
     "wheel",
