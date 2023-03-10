@@ -15,12 +15,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -573,7 +568,7 @@ def test_groupby_2keys_agg(nelem, func):
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_LT_140,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
@@ -1507,9 +1502,6 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
-)
 def test_groupby_nunique(agg, by):
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
@@ -1545,7 +1537,6 @@ def test_groupby_nth(n, by):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_raise_data_error():

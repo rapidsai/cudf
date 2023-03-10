@@ -21,7 +21,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -495,7 +495,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if PANDAS_GE_120 and not PANDAS_GE_150:
+            if not PANDAS_GE_150:
                 # Need this whole `if` block,
                 # this is a workaround for the following issue:
                 # https://github.com/pandas-dev/pandas/issues/39984
