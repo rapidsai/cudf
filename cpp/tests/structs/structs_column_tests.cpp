@@ -422,11 +422,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
     cudf::test::fixed_width_column_wrapper<size_type>{0, 2, 3, 5, 6}.release();
   auto num_list_rows = list_offsets_column->size() - 1;
 
-  auto list_col = cudf::make_lists_column(num_list_rows,
-                                          std::move(list_offsets_column),
-                                          std::move(struct_col),
-                                          cudf::UNKNOWN_NULL_COUNT,
-                                          {});
+  auto list_col = cudf::make_lists_column(
+    num_list_rows, std::move(list_offsets_column), std::move(struct_col), 0, {});
 
   // List of structs was constructed successfully. No exceptions.
   // Verify that child columns is as it was set.
@@ -552,12 +549,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
     EXPECT_TRUE(struct_column->size() == 0);
     EXPECT_TRUE(struct_column->null_count() == 0);
 
-    auto empty_list_of_structs =
-      cudf::make_lists_column(0,
-                              fixed_width_column_wrapper<size_type>{0}.release(),
-                              std::move(struct_column),
-                              cudf::UNKNOWN_NULL_COUNT,
-                              {});
+    auto empty_list_of_structs = cudf::make_lists_column(
+      0, fixed_width_column_wrapper<size_type>{0}.release(), std::move(struct_column), 0, {});
 
     EXPECT_TRUE(empty_list_of_structs->size() == 0);
     EXPECT_TRUE(empty_list_of_structs->null_count() == 0);
@@ -613,11 +606,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(clone_structs_column, structs_column);
 
   auto list_of_structs_column =
-    cudf::make_lists_column(3,
-                            fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(),
-                            structs_column.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            {})
+    cudf::make_lists_column(
+      3, fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(), structs_column.release(), 0, {})
       .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_of_structs_column->view(),
