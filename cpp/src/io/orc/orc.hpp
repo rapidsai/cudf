@@ -478,7 +478,6 @@ inline int64_t ProtobufReader::get<int64_t>()
 class ProtobufWriter {
  public:
   ProtobufWriter() : m_buf{std::make_unique<std::vector<uint8_t>>()} {}
-  ProtobufWriter(std::unique_ptr<std::vector<uint8_t>>&& buff) : m_buf{std::move(buff)} {}
 
   uint32_t put_byte(uint8_t v)
   {
@@ -534,6 +533,10 @@ class ProtobufWriter {
 
   void resize(std::size_t bytes) { m_buf->resize(bytes); }
 
+  std::size_t size() const { return m_buf->size(); }
+  uint8_t const* data() { return m_buf->data(); }
+
+  std::vector<uint8_t>& buffer() { return *m_buf; }
   std::unique_ptr<std::vector<uint8_t>> release() { return std::move(m_buf); }
 
  public:
