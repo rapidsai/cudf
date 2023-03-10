@@ -41,13 +41,13 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.56.2
-- numpy
+- numpy>=1.21
 - numpydoc
 - nvcc_linux-64=11.8
 - nvtx>=0.2.1
 - packaging
-- pandas>=1.0,<1.6.0dev0
-- pandoc<=2.0.0
+- pandas>=1.3,<1.6.0dev0
+- pandoc
 - pip
 - pre-commit
 - protobuf>=4.21.6,<4.22
