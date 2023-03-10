@@ -5,6 +5,9 @@ cxx_compiler_version:
   - 11
 
 cuda_compiler:
+  - cuda-nvcc
+
+cuda11_compiler:
   - nvcc
 
 sysroot_version:
