@@ -1053,9 +1053,9 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{}, int, int
   int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
-  auto null_mask = cudf::copy_bitmask(col_for_mask.release()->view());
-  auto struct_col =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask));
+  auto null_mask  = cudf::copy_bitmask(col_for_mask);
+  auto struct_col = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask).null_count(), std::move(null_mask));
 
   int_col col1{{1, 2, 3, 1, 2, 3}};
   int_col col2{{1, 1, 1, 2, 2, 2}};
@@ -1082,10 +1082,10 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{struct{}, struct{int}}
   int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
-  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2);
   std::vector<std::unique_ptr<cudf::column>> child_columns2;
-  auto child_col_1 =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  auto child_col_1 = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask2).null_count(), std::move(null_mask2));
   child_columns2.push_back(std::move(child_col_1));
   int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;

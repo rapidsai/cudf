@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ class alignas(16) column_device_view_base {
    * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -151,7 +151,7 @@ class alignas(16) column_device_view_base {
    * false.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] CUDF_HOST_DEVICE T const* data() const noexcept
@@ -990,7 +990,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -1009,7 +1009,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
-   * @return T* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   CUDF_HOST_DEVICE T* data() const noexcept
@@ -1078,7 +1078,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `mutable_column_device_view::has_element_accessor<T>()` is false.
    *
    * @tparam T The desired type
-   * @return T* Pointer to the first element after casting
+   * @return Pointer to the first element after casting
    */
   template <typename T, CUDF_ENABLE_IF(mutable_column_device_view::has_element_accessor<T>())>
   iterator<T> begin()
@@ -1094,7 +1094,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `mutable_column_device_view::has_element_accessor<T>()` is false.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to one past the last element after casting
+   * @return Pointer to one past the last element after casting
    */
   template <typename T, CUDF_ENABLE_IF(mutable_column_device_view::has_element_accessor<T>())>
   iterator<T> end()
@@ -1106,7 +1106,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
-   * @return column_view The requested child `column_view`
+   * @return The requested child `column_view`
    */
   [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
@@ -1173,7 +1173,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * device view of the specified column and it's children.
    *
    * @param source_view The `column_view` to use for this calculation.
-   * @return size_t The size in bytes of the amount of memory needed to hold a
+   * @return The size in bytes of the amount of memory needed to hold a
    * device view of the specified column and it's children
    */
   static std::size_t extent(mutable_column_view source_view);
