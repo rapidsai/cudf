@@ -22,13 +22,7 @@ from numba import cuda
 from packaging import version
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_120,
-    PANDAS_GE_134,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
@@ -3225,10 +3219,6 @@ def test_dataframe_reindex_fill_value(
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = cudf.datasets.randomdata(
@@ -3240,7 +3230,7 @@ def test_dataframe_reindex_change_dtype(copy):
     assert_eq(
         pdf.reindex(index=index, columns=columns, copy=True),
         gdf.reindex(index=index, columns=columns, copy=copy),
-        **kwargs,
+        check_freq=False,
     )
 
 
@@ -4625,10 +4615,6 @@ def test_isin_dataframe(data, values):
     else:
         try:
             expected = pdf.isin(values)
-        except ValueError as e:
-            if str(e) == "Lengths must match." and not PANDAS_GE_110:
-                # https://github.com/pandas-dev/pandas/issues/34256
-                return
         except TypeError as e:
             # Can't do isin with different categories
             if str(e) == (
@@ -5295,12 +5281,7 @@ def test_rowwise_ops_datetime_dtypes_pdbug(data):
     expected = pdf.max(axis=1, skipna=False)
     got = gdf.max(axis=1, skipna=False)
 
-    if PANDAS_GE_120:
-        assert_eq(got, expected)
-    else:
-        # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/36907
-        with pytest.raises(AssertionError, match="numpy array are different"):
-            assert_eq(got, expected)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
