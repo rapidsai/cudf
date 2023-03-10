@@ -1885,10 +1885,9 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def min(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         """
@@ -1900,35 +1899,32 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        level: int or level name, default None
-            If the axis is a MultiIndex (hierarchical), count along a
-            particular level, collapsing into a Series.
-        numeric_only: bool, default None
-            Include only float, int, boolean columns. If None, will attempt to
-            use everything, then use only numeric data.
+        numeric_only: bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.min()
+        >>> min_series = df.min()
+        >>> min_series
         a    1
         b    7
         dtype: int64
+
+        >>> min_series.min()
+        1
         """
         return self._reduce(
             "min",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )
@@ -1936,9 +1932,8 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def max(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
-        level=None,
         numeric_only=None,
         **kwargs,
     ):
@@ -1951,12 +1946,10 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        level: int or level name, default None
-            If the axis is a MultiIndex (hierarchical), count along a
-            particular level, collapsing into a Series.
         numeric_only: bool, default None
-            Include only float, int, boolean columns. If None, will attempt to
-            use everything, then use only numeric data.
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -1979,7 +1972,6 @@ class Frame(BinaryOperand, Scannable):
             "max",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )
@@ -1990,8 +1982,7 @@ class Frame(BinaryOperand, Scannable):
         axis=None,
         skipna=True,
         dtype=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         min_count=0,
         **kwargs,
     ):
@@ -2006,6 +1997,10 @@ class Frame(BinaryOperand, Scannable):
             Exclude NA/null values when computing the result.
         dtype: data type
             Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -2017,10 +2012,6 @@ class Frame(BinaryOperand, Scannable):
         Returns
         -------
         Series
-
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -2036,7 +2027,6 @@ class Frame(BinaryOperand, Scannable):
             axis=axis,
             skipna=skipna,
             dtype=dtype,
-            level=level,
             numeric_only=numeric_only,
             min_count=min_count,
             **kwargs,
@@ -2048,8 +2038,7 @@ class Frame(BinaryOperand, Scannable):
         axis=None,
         skipna=True,
         dtype=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         min_count=0,
         **kwargs,
     ):
@@ -2064,6 +2053,10 @@ class Frame(BinaryOperand, Scannable):
             Exclude NA/null values when computing the result.
         dtype: data type
             Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -2075,10 +2068,6 @@ class Frame(BinaryOperand, Scannable):
         Returns
         -------
         Series
-
-        Notes
-        -----
-        Parameters currently not supported are level`, `numeric_only`.
 
         Examples
         --------
@@ -2097,7 +2086,6 @@ class Frame(BinaryOperand, Scannable):
             axis=axis,
             skipna=skipna,
             dtype=dtype,
-            level=level,
             numeric_only=numeric_only,
             min_count=min_count,
             **kwargs,
@@ -2107,9 +2095,7 @@ class Frame(BinaryOperand, Scannable):
     prod = product
 
     @_cudf_nvtx_annotate
-    def mean(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def mean(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return the mean of the values for the requested axis.
 
@@ -2119,13 +2105,10 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
-        level : int or level name, default None
-            If the axis is a MultiIndex (hierarchical), count along a
-            particular level, collapsing into a Series.
-        numeric_only : bool, default None
-            Include only float, int, boolean columns. If None, will attempt to
-            use everything, then use only numeric data. Not implemented for
-            Series.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
         **kwargs
             Additional keyword arguments to be passed to the function.
 
@@ -2146,7 +2129,6 @@ class Frame(BinaryOperand, Scannable):
             "mean",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )
@@ -2156,9 +2138,8 @@ class Frame(BinaryOperand, Scannable):
         self,
         axis=None,
         skipna=True,
-        level=None,
         ddof=1,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         """
@@ -2177,15 +2158,14 @@ class Frame(BinaryOperand, Scannable):
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations
             is N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
         Series
-
-        Notes
-        -----
-        Parameters currently not supported are `level` and
-        `numeric_only`
 
         Examples
         --------
@@ -2201,7 +2181,6 @@ class Frame(BinaryOperand, Scannable):
             "std",
             axis=axis,
             skipna=skipna,
-            level=level,
             ddof=ddof,
             numeric_only=numeric_only,
             **kwargs,
@@ -2212,9 +2191,8 @@ class Frame(BinaryOperand, Scannable):
         self,
         axis=None,
         skipna=True,
-        level=None,
         ddof=1,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         """
@@ -2233,15 +2211,14 @@ class Frame(BinaryOperand, Scannable):
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations is
             N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
         scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `level` and
-        `numeric_only`
 
         Examples
         --------
@@ -2256,16 +2233,13 @@ class Frame(BinaryOperand, Scannable):
             "var",
             axis=axis,
             skipna=skipna,
-            level=level,
             ddof=ddof,
             numeric_only=numeric_only,
             **kwargs,
         )
 
     @_cudf_nvtx_annotate
-    def kurtosis(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
@@ -2278,14 +2252,14 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
         Series or scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `level` and `numeric_only`
 
         Examples
         --------
@@ -2312,7 +2286,6 @@ class Frame(BinaryOperand, Scannable):
             "kurtosis",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )
@@ -2321,9 +2294,7 @@ class Frame(BinaryOperand, Scannable):
     kurt = kurtosis
 
     @_cudf_nvtx_annotate
-    def skew(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return unbiased Fisher-Pearson skew of a sample.
 
@@ -2331,6 +2302,10 @@ class Frame(BinaryOperand, Scannable):
         ----------
         skipna: bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
@@ -2338,8 +2313,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
+        Parameter currently not supported is `axis`
 
         Examples
         --------
@@ -2373,13 +2347,12 @@ class Frame(BinaryOperand, Scannable):
             "skew",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, skipna=True, level=None, **kwargs):
+    def all(self, axis=0, skipna=True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -2398,7 +2371,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `axis`, `bool_only`.
 
         Examples
         --------
@@ -2413,12 +2386,11 @@ class Frame(BinaryOperand, Scannable):
             "all",
             axis=axis,
             skipna=skipna,
-            level=level,
             **kwargs,
         )
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, skipna=True, level=None, **kwargs):
+    def any(self, axis=0, skipna=True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 
@@ -2437,7 +2409,7 @@ class Frame(BinaryOperand, Scannable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
+        Parameters currently not supported are `axis`, `bool_only`.
 
         Examples
         --------
@@ -2452,7 +2424,6 @@ class Frame(BinaryOperand, Scannable):
             "any",
             axis=axis,
             skipna=skipna,
-            level=level,
             **kwargs,
         )
 
@@ -2486,24 +2457,25 @@ class Frame(BinaryOperand, Scannable):
         return self._reduce("sum_of_squares", dtype=dtype)
 
     @_cudf_nvtx_annotate
-    def median(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
+    def median(self, axis=0, skipna=True, numeric_only=False, **kwargs):
         """
         Return the median of the values for the requested axis.
 
         Parameters
         ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on. For Series this
+            parameter is unused and defaults to 0.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
 
         Returns
         -------
         scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `level` and `numeric_only`.
 
         Examples
         --------
@@ -2524,7 +2496,6 @@ class Frame(BinaryOperand, Scannable):
             "median",
             axis=axis,
             skipna=skipna,
-            level=level,
             numeric_only=numeric_only,
             **kwargs,
         )

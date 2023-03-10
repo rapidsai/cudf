@@ -593,30 +593,26 @@ def test_cov_corr_invalid_dtypes(gsr):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis_df(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_kurtosis_df(data, null_flag, numeric_only):
+    if not numeric_only:
+        data = data.select_dtypes(include="number")
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    with pytest.warns(FutureWarning):
-        got = data.kurtosis()
+    got = data.kurtosis(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    with pytest.warns(FutureWarning):
-        expected = pdata.kurtosis()
+
+    expected = pdata.kurtosis(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
-    with pytest.warns(FutureWarning):
-        got = data.kurt()
+    got = data.kurt(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    with pytest.warns(FutureWarning):
-        expected = pdata.kurt()
-    np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt(numeric_only=True)
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt(numeric_only=True)
+    expected = pdata.kurt(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
 
@@ -629,21 +625,17 @@ def test_kurtosis_df(data, null_flag):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew_df(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_skew_df(data, null_flag, numeric_only):
+    if not numeric_only:
+        data = data.select_dtypes(include="number")
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    with pytest.warns(FutureWarning):
-        got = data.skew()
-    with pytest.warns(FutureWarning):
-        expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
-
-    got = data.skew(numeric_only=True)
-    expected = pdata.skew(numeric_only=True)
+    got = data.skew(numeric_only=numeric_only)
+    expected = pdata.skew(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
