@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -219,6 +219,14 @@ struct Statistics {
 };
 
 /**
+ * @brief Thrift-derived struct describing a key-value pair, for user metadata
+ */
+struct KeyValue {
+  std::string key;
+  std::string value;
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
@@ -231,6 +239,7 @@ struct ColumnChunkMetaData {
     0;  // total byte size of all uncompressed pages in this column chunk (including the headers)
   int64_t total_compressed_size =
     0;  // total byte size of all compressed pages in this column chunk (including the headers)
+  std::vector<KeyValue> key_value_metadata;  // per chunk metadata
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
@@ -269,14 +278,6 @@ struct RowGroup {
   int64_t total_byte_size = 0;
   std::vector<ColumnChunk> columns;
   int64_t num_rows = 0;
-};
-
-/**
- * @brief Thrift-derived struct describing a key-value pair, for user metadata
- */
-struct KeyValue {
-  std::string key;
-  std::string value;
 };
 
 /**

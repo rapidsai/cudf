@@ -31,6 +31,7 @@
 #include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
@@ -1459,6 +1460,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    single_streams_table.end(),
                    std::back_inserter(column_sizes),
                    [this](auto const& column) { return column_size(column, stream); });
+    for (size_t i = 0; i < column_sizes.size(); i++)
+      printf("col %ld size %ld\n", i, column_sizes[i]);
 
     // adjust global fragment size if a single fragment will overrun a rowgroup
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
@@ -1830,6 +1833,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
+  size_type row_offset = 0;
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
     auto const rnext               = r + batch_list[b];
@@ -1865,6 +1869,16 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         } else {
           dev_bfr = ck.uncompressed_bfr;
         }
+
+        // should slice once up front with all ranges
+        // get size of column data for this chunk
+        auto col_i = single_streams_table.column(i);
+        auto slice_i =
+          cudf::slice(col_i, {row_offset, row_offset + (size_type)row_group.num_rows})[0];
+        auto foo = column_size(slice_i, stream);
+        printf("rg %d col %d size %ld\n", r, i, foo);
+        column_chunk_meta.key_value_metadata.push_back(
+          std::move(KeyValue{"data_size", std::to_string(foo)}));
 
         if (out_sink_[p]->is_device_write_preferred(ck.compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.

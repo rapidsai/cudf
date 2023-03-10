@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -242,6 +242,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(5, c->num_values),
                             ParquetFieldInt64(6, c->total_uncompressed_size),
                             ParquetFieldInt64(7, c->total_compressed_size),
+                            ParquetFieldStructList(8, c->key_value_metadata),
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
