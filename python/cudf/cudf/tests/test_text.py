@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from io import StringIO
 
@@ -24,7 +24,7 @@ def test_tokenize():
         ]
     )
 
-    expected = cudf.Series(
+    expected_values = cudf.Series(
         [
             "the",
             "quick",
@@ -43,6 +43,8 @@ def test_tokenize():
             "sofa",
         ]
     )
+    expected_index = strings.index.repeat(strings.str.token_count())
+    expected = cudf.Series(expected_values, index=expected_index)
 
     actual = strings.str.tokenize()
 
@@ -231,7 +233,7 @@ def test_ngrams(n, separator, expected_values):
 
 
 @pytest.mark.parametrize(
-    "n, expected_values, as_list",
+    "n, expected_values, expected_index, as_list",
     [
         (
             2,
@@ -247,21 +249,41 @@ def test_ngrams(n, separator, expected_values):
                 "he",
                 "er",
                 "re",
+                cudf.NA,
             ],
+            [1, 1, 1, 2, 3, 4, 4, 4, 5, 5, 5, 6],
             False,
         ),
-        (3, ["thi", "his", "boo", "ook", "her", "ere"], False),
+        (
+            3,
+            [
+                "thi",
+                "his",
+                cudf.NA,
+                cudf.NA,
+                "boo",
+                "ook",
+                "her",
+                "ere",
+                cudf.NA,
+            ],
+            [1, 1, 2, 3, 4, 4, 5, 5, 6],
+            False,
+        ),
         (
             3,
             [["thi", "his"], [], [], ["boo", "ook"], ["her", "ere"], []],
+            [1, 2, 3, 4, 5, 6],
             True,
         ),
     ],
 )
-def test_character_ngrams(n, expected_values, as_list):
-    strings = cudf.Series(["this", "is", "my", "book", "here", ""])
+def test_character_ngrams(n, expected_values, expected_index, as_list):
+    strings = cudf.Series(
+        ["this", "is", "my", "book", "here", ""], index=[1, 2, 3, 4, 5, 6]
+    )
 
-    expected = cudf.Series(expected_values)
+    expected = cudf.Series(expected_values, index=expected_index)
 
     actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
@@ -314,7 +336,7 @@ def test_character_tokenize_series():
             ),
         ]
     )
-    expected = cudf.Series(
+    expected_values = cudf.Series(
         [
             "h",
             "e",
@@ -402,6 +424,8 @@ def test_character_tokenize_series():
             "Ǆ",
         ]
     )
+    expected_index = sr.index.repeat(sr.str.len().fillna(0))
+    expected = cudf.Series(expected_values, index=expected_index)
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)

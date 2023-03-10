@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,32 +36,6 @@ struct regex_program;
  */
 
 /**
- * @brief For each string, replaces any character sequence matching the given pattern
- * with the provided replacement string.
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression pattern to search within each string.
- * @param replacement The string used to replace the matched sequence in each string.
- *        Default is an empty string.
- * @param max_replace_count The maximum number of times to replace the matched pattern
- *        within each string. Default replaces every substring that is matched.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
- */
-std::unique_ptr<column> replace_re(
-  strings_column_view const& strings,
-  std::string_view pattern,
-  string_scalar const& replacement           = string_scalar(""),
-  std::optional<size_type> max_replace_count = std::nullopt,
-  regex_flags const flags                    = regex_flags::DEFAULT,
-  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
-
-/**
  * @brief For each string, replaces any character sequence matching the given regex
  * with the provided replacement string.
  *
@@ -83,6 +57,35 @@ std::unique_ptr<column> replace_re(
   regex_program const& prog,
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
+  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief For each string, replaces any character sequence matching the given pattern
+ * with the provided replacement string.
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @deprecated Use @link replace_re replace_re(strings_column_view const&, regex_program const&,
+ * string_scalar const&, std::optional<size_type>, rmm::mr::device_memory_resource*) @endlink
+ *
+ * @param strings Strings instance for this operation.
+ * @param pattern The regular expression pattern to search within each string.
+ * @param replacement The string used to replace the matched sequence in each string.
+ *        Default is an empty string.
+ * @param max_replace_count The maximum number of times to replace the matched pattern
+ *        within each string. Default replaces every substring that is matched.
+ * @param flags Regex flags for interpreting special characters in the pattern.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column.
+ */
+[[deprecated]] std::unique_ptr<column> replace_re(
+  strings_column_view const& strings,
+  std::string_view pattern,
+  string_scalar const& replacement           = string_scalar(""),
+  std::optional<size_type> max_replace_count = std::nullopt,
+  regex_flags const flags                    = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
 
 /**
@@ -108,31 +111,6 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief For each string, replaces any character sequence matching the given pattern
- * using the replacement template for back-references.
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
- * if the index exceeds the group count specified in the pattern
- *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression patterns to search within each string.
- * @param replacement The replacement template for creating the output string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
- */
-std::unique_ptr<column> replace_with_backrefs(
-  strings_column_view const& strings,
-  std::string_view pattern,
-  std::string_view replacement,
-  regex_flags const flags             = regex_flags::DEFAULT,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief For each string, replaces any character sequence matching the given regex
  * using the replacement template for back-references.
  *
@@ -153,6 +131,34 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   regex_program const& prog,
   std::string_view replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief For each string, replaces any character sequence matching the given pattern
+ * using the replacement template for back-references.
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @deprecated Use @link replace_with_backrefs replace_with_backrefs(strings_column_view const&,
+ * regex_program const&, string_view, rmm::mr::device_memory_resource*) @endlink
+ *
+ * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
+ * if the index exceeds the group count specified in the pattern
+ *
+ * @param strings Strings instance for this operation.
+ * @param pattern The regular expression patterns to search within each string.
+ * @param replacement The replacement template for creating the output string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column.
+ */
+[[deprecated]] std::unique_ptr<column> replace_with_backrefs(
+  strings_column_view const& strings,
+  std::string_view pattern,
+  std::string_view replacement,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings
