@@ -2385,7 +2385,7 @@ void writer::impl::close()
     pbw.put_uint(persisted_stripe_statistics.num_rows);
     // First entry contains total number of rows
     ff.statistics.reserve(ff.types.size());
-    ff.statistics.emplace_back(std::move(*pbw.release()));
+    ff.statistics.emplace_back(pbw.release());
     // Add file stats, stored after stripe stats in `column_stats`
     ff.statistics.insert(ff.statistics.end(),
                          std::make_move_iterator(statistics.file_level.begin()),
@@ -2400,7 +2400,7 @@ void writer::impl::close()
       ProtobufWriter pbw;
       pbw.put_uint(encode_field_number<size_type>(1));
       pbw.put_uint(ff.stripes[stripe_id].numberOfRows);
-      md.stripeStats[stripe_id].colStats[0] = std::move(*pbw.release());
+      md.stripeStats[stripe_id].colStats[0] = pbw.release();
       for (size_t col_idx = 0; col_idx < ff.types.size() - 1; col_idx++) {
         size_t idx                                      = ff.stripes.size() * col_idx + stripe_id;
         md.stripeStats[stripe_id].colStats[1 + col_idx] = std::move(statistics.stripe_level[idx]);

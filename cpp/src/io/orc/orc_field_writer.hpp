@@ -54,7 +54,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   void field_packed_uint(int field, const std::vector<T>& value)
   {
     struct_size += p->put_uint(encode_field_number<std::vector<T>>(field));
-    auto lpos = p->m_buf->size();
+    auto lpos = p->m_buff.size();
     p->put_byte(0);
     auto sz = std::accumulate(value.begin(), value.end(), 0, [p = this->p](size_t sum, auto val) {
       return sum + p->put_uint(val);
@@ -62,8 +62,8 @@ struct ProtobufWriter::ProtobufFieldWriter {
 
     struct_size += sz + 1;
     for (; sz > 0x7f; sz >>= 7, struct_size++)
-      p->m_buf->insert(p->m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
-    (*(p->m_buf))[lpos] = static_cast<uint8_t>(sz);
+      p->m_buff.insert(p->m_buff.begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
+    (p->m_buff)[lpos] = static_cast<uint8_t>(sz);
   }
 
   /**
@@ -84,13 +84,13 @@ struct ProtobufWriter::ProtobufFieldWriter {
   void field_struct(int field, const T& value)
   {
     struct_size += p->put_uint(encode_field_number(field, ProtofType::FIXEDLEN));
-    auto lpos = p->m_buf->size();
+    auto lpos = p->m_buff.size();
     p->put_byte(0);
     auto sz = p->write(value);
     struct_size += sz + 1;
     for (; sz > 0x7f; sz >>= 7, struct_size++)
-      p->m_buf->insert(p->m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
-    (*(p->m_buf))[lpos] = static_cast<uint8_t>(sz);
+      p->m_buff.insert(p->m_buff.begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
+    (p->m_buff)[lpos] = static_cast<uint8_t>(sz);
   }
 
   /**

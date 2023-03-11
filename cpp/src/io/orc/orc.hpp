@@ -477,11 +477,11 @@ inline int64_t ProtobufReader::get<int64_t>()
  */
 class ProtobufWriter {
  public:
-  ProtobufWriter() : m_buf{std::make_unique<std::vector<uint8_t>>()} {}
+  ProtobufWriter() = default;
 
   uint32_t put_byte(uint8_t v)
   {
-    m_buf->push_back(v);
+    m_buff.push_back(v);
     return 1;
   }
 
@@ -489,8 +489,8 @@ class ProtobufWriter {
   uint32_t put_bytes(host_span<T const> values)
   {
     static_assert(sizeof(T) == 1);
-    m_buf->reserve(m_buf->size() + values.size());
-    m_buf->insert(m_buf->end(), values.begin(), values.end());
+    m_buff.reserve(m_buff.size() + values.size());
+    m_buff.insert(m_buff.end(), values.begin(), values.end());
     return values.size();
   }
 
@@ -531,13 +531,13 @@ class ProtobufWriter {
                            TypeKind kind,
                            ColStatsBlob const* stats);
 
-  void resize(std::size_t bytes) { m_buf->resize(bytes); }
+  void resize(std::size_t bytes) { m_buff.resize(bytes); }
 
-  std::size_t size() const { return m_buf->size(); }
-  uint8_t const* data() { return m_buf->data(); }
+  std::size_t size() const { return m_buff.size(); }
+  uint8_t const* data() { return m_buff.data(); }
 
-  std::vector<uint8_t>& buffer() { return *m_buf; }
-  std::unique_ptr<std::vector<uint8_t>> release() { return std::move(m_buf); }
+  std::vector<uint8_t>& buffer() { return m_buff; }
+  std::vector<uint8_t> release() { return std::move(m_buff); }
 
  public:
   size_t write(PostScript const&);
@@ -552,7 +552,7 @@ class ProtobufWriter {
   size_t write(Metadata const&);
 
  protected:
-  std::unique_ptr<std::vector<uint8_t>> m_buf;
+  std::vector<uint8_t> m_buff;
   struct ProtobufFieldWriter;
 };
 
