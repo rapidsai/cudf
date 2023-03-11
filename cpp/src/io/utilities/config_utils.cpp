@@ -23,12 +23,6 @@
 
 namespace cudf::io::detail {
 
-std::string getenv_or(std::string const& env_var_name, std::string_view default_val)
-{
-  auto const env_val = std::getenv(env_var_name.c_str());
-  return std::string{(env_val == nullptr) ? default_val : env_val};
-}
-
 namespace cufile_integration {
 
 namespace {
