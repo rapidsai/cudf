@@ -517,7 +517,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return single_write_mode || col->nullable();
+  return not single_write_mode or col->nullable();
 }
 
 /**
