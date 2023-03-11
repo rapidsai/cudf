@@ -25,50 +25,48 @@ parser.add_argument(
     default=None,
     help="optional text file to include at the top of the html output",
 )
+parser.add_argument(
+    "--cmp_log",
+    type=str,
+    default=None,
+    help="optional baseline ninja_log to compare results",
+)
 args = parser.parse_args()
 
 log_file = args.log_file
-log_path = os.path.dirname(os.path.abspath(log_file))
-
 output_fmt = args.fmt
+cmp_file = args.cmp_log
 
 # build a map of the log entries
-entries = {}
-with open(log_file) as log:
-    last = 0
-    files = {}
-    for line in log:
-        entry = line.split()
-        if len(entry) > 4:
-            obj_file = entry[3]
-            file_size = (
-                os.path.getsize(os.path.join(log_path, obj_file))
-                if os.path.exists(obj_file)
-                else 0
-            )
-            start = int(entry[0])
-            end = int(entry[1])
-            # logic based on ninjatracing
-            if end < last:
-                files = {}
-            last = end
-            files.setdefault(entry[4], (entry[3], start, end, file_size))
+def build_log_map(log_file):
+    entries = {}
+    log_path = os.path.dirname(os.path.abspath(log_file))
+    with open(log_file) as log:
+        last = 0
+        files = {}
+        for line in log:
+            entry = line.split()
+            if len(entry) > 4:
+                obj_file = entry[3]
+                file_size = (
+                    os.path.getsize(os.path.join(log_path, obj_file))
+                    if os.path.exists(obj_file)
+                    else 0
+                )
+                start = int(entry[0])
+                end = int(entry[1])
+                # logic based on ninjatracing
+                if end < last:
+                    files = {}
+                last = end
+                files.setdefault(entry[4], (entry[3], start, end, file_size))
 
-    # build entries from files dict
-    for entry in files.values():
-        entries[entry[0]] = (entry[1], entry[2], entry[3])
+        # build entries from files dict
+        for entry in files.values():
+            entries[entry[0]] = (entry[1], entry[2], entry[3])
 
-# check file could be loaded and we have entries to report
-if len(entries) == 0:
-    print("Could not parse", log_file)
-    exit()
+    return entries
 
-# sort the entries by build-time (descending order)
-sorted_list = sorted(
-    list(entries.keys()),
-    key=lambda k: entries[k][1] - entries[k][0],
-    reverse=True,
-)
 
 # output results in XML format
 def output_xml(entries, sorted_list, args):
@@ -148,12 +146,40 @@ def assign_entries_to_threads(entries):
     return (results, end_time)
 
 
-# output chart results in HTML format
-def output_html(entries, sorted_list, args):
+# format the build-time
+def format_build_time(input_time):
+    build_time = abs(input_time)
+    build_time_str = str(build_time) + " ms"
+    if build_time > 120000:  # 2 minutes
+        minutes = int(build_time / 60000)
+        seconds = int(((build_time / 60000) - minutes) * 60)
+        build_time_str = "{:d}:{:02d} min".format(minutes, seconds)
+    elif build_time > 1000:
+        build_time_str = "{:.3f} s".format(build_time / 1000)
+    if input_time < 0:
+        build_time_str = "-" + build_time_str
+    return build_time_str
+
+
+# format file size
+def format_file_size(input_size):
+    file_size = abs(input_size)
+    file_size_str = ""
+    if file_size > 1000000:
+        file_size_str = "{:.3f} MB".format(file_size / 1000000)
+    elif file_size > 1000:
+        file_size_str = "{:.3f} KB".format(file_size / 1000)
+    elif file_size > 0:
+        file_size_str = str(file_size) + " bytes"
+    if input_size < 0:
+        file_size_str = "-" + file_size_str
+    return file_size_str
+
+
+# Output chart results in HTML format
+# Builds a standalone html file with no javascript or styles
+def output_html(entries, sorted_list, cmp_entries, args):
     print("<html><head><title>Build Metrics Report</title>")
-    # This creates a standalone html file with no javascript and no styles.
-    # This was originally to support the Jenkins security policy described here:
-    # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
     if args.msg is not None:
         msg_file = Path(args.msg)
@@ -206,15 +232,8 @@ def output_html(entries, sorted_list, args):
             # adjust for the cellspacing
             prev_end = end + int(end_time / 500)
 
-            # format the build-time
             build_time = end - start
-            build_time_str = str(build_time) + " ms"
-            if build_time > 120000:  # 2 minutes
-                minutes = int(build_time / 60000)
-                seconds = int(((build_time / 60000) - minutes) * 60)
-                build_time_str = "{:d}:{:02d} min".format(minutes, seconds)
-            elif build_time > 1000:
-                build_time_str = "{:.3f} s".format(build_time / 1000)
+            build_time_str = format_build_time(build_time)
 
             # assign color and accumulate legend values
             color = white
@@ -253,7 +272,7 @@ def output_html(entries, sorted_list, args):
             # done with this entry
             print("</font></td>")
             # update the entry with just the computed output info
-            entries[name] = (build_time_str, color, entry[2])
+            entries[name] = (build_time, color, entry[2])
 
         # add a filler column at the end of each row
         print("<td width='*'></td></tr></table></td></tr>")
@@ -266,28 +285,43 @@ def output_html(entries, sorted_list, args):
     print(
         "<tr><th>File</th>",
         "<th>Compile time</th>",
-        "<th>Size</th><tr>",
+        "<th>Size</th>",
         sep="",
     )
+
+    if cmp_entries:
+        print(
+            "<th>Diff</th>",
+            "<th>Diff Size</th>",
+            sep="",
+        )
+    print("</tr>")
+
     for name in sorted_list:
         entry = entries[name]
-        build_time_str = entry[0]
+        build_time = entry[0]
         color = entry[1]
         file_size = entry[2]
 
-        # format file size
-        file_size_str = ""
-        if file_size > 1000000:
-            file_size_str = "{:.3f} MB".format(file_size / 1000000)
-        elif file_size > 1000:
-            file_size_str = "{:.3f} KB".format(file_size / 1000)
-        elif file_size > 0:
-            file_size_str = str(file_size) + " bytes"
+        build_time_str = format_build_time(build_time)
+        file_size_str = format_file_size(file_size)
 
         # output entry row
         print("<tr ", color, "><td>", name, "</td>", sep="", end="")
         print("<td align='right'>", build_time_str, "</td>", sep="", end="")
-        print("<td align='right'>", file_size_str, "</td></tr>", sep="")
+        print("<td align='right'>", file_size_str, "</td>", sep="")
+
+        cmp_entry = (
+            cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        )
+        if cmp_entry:
+            diff_time_str = format_build_time(
+                cmp_entry[1] - cmp_entry[0] - build_time
+            )
+            diff_size_str = format_file_size(cmp_entry[2] - file_size)
+            print("<td align='right'>", diff_time_str, "</td>", sep="")
+            print("<td align='right'>", diff_size_str, "</td>", sep="")
+        print("</tr>")
 
     print("</table><br/>")
 
@@ -305,18 +339,42 @@ def output_html(entries, sorted_list, args):
 
 
 # output results in CSV format
-def output_csv(entries, sorted_list, args):
+def output_csv(entries, sorted_list, cmp_entries, args):
     print("time,size,file")
     for name in sorted_list:
         entry = entries[name]
         build_time = entry[1] - entry[0]
         file_size = entry[2]
-        print(build_time, file_size, name, sep=",")
+        cmp_entry = (
+            cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        )
+        if cmp_entry:
+            diff_time = cmp_entry[1] - cmp_entry[0] - build_time
+            diff_size = cmp_entry[2] - file_size
+            print(build_time, file_size, name, diff_time, diff_size, sep=",")
+        else:
+            print(build_time, file_size, name, sep=",")
 
+
+# parse log file into map
+entries = build_log_map(log_file)
+if len(entries) == 0:
+    print("Could not parse", log_file)
+    exit()
+
+# sort the entries by build-time (descending order)
+sorted_list = sorted(
+    list(entries.keys()),
+    key=lambda k: entries[k][1] - entries[k][0],
+    reverse=True,
+)
+
+# load the comparison build log if available
+cmp_entries = build_log_map(cmp_file) if cmp_file else None
 
 if output_fmt == "xml":
     output_xml(entries, sorted_list, args)
 elif output_fmt == "html":
-    output_html(entries, sorted_list, args)
+    output_html(entries, sorted_list, cmp_entries, args)
 else:
-    output_csv(entries, sorted_list, args)
+    output_csv(entries, sorted_list, cmp_entries, args)
