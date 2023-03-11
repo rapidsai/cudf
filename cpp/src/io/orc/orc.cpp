@@ -246,21 +246,19 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
     }
   }
 
-  auto positions_data = position_writer.release();
-
   // size of the field 1
-  positions_data->at(positions_size_offset) = static_cast<uint8_t>(positions_size);
+  position_writer.buffer()[positions_size_offset] = static_cast<uint8_t>(positions_size);
 
   auto const stats_size = (stats == nullptr)
                             ? 0
                             : varint_size(encode_field_number<decltype(*stats)>(2)) +
                                 varint_size(stats->size()) + stats->size();
-  auto const entry_size = positions_data->size() + stats_size;
+  auto const entry_size = position_writer.size() + stats_size;
 
   // 1:RowIndex.entry
   put_uint(encode_field_number(1, ProtofType::FIXEDLEN));
   put_uint(entry_size);
-  put_bytes<uint8_t>(*positions_data);
+  put_bytes<uint8_t>(position_writer.buffer());
 
   if (stats != nullptr) {
     put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
