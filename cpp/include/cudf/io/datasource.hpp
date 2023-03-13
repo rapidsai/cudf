@@ -296,14 +296,14 @@ class datasource {
   /**
    * @brief Returns the size of the data in the source.
    *
-   * @return size_t The size of the source data in bytes
+   * @return The size of the source data in bytes
    */
   [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
-   * @return bool True if there is data, False otherwise
+   * @return True if there is data, False otherwise
    */
   [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 
