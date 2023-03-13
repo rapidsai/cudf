@@ -504,6 +504,28 @@ def test_check_file_size(tmpdir):
         dask_cudf.read_parquet(fn, check_file_size=1).compute()
 
 
+def test_null_partition(tmpdir):
+    import pyarrow as pa
+    from pyarrow.dataset import HivePartitioning
+
+    df = pd.DataFrame({"id": [0, 1, None], "x": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1).to_backend("cudf")
+    ddf.to_parquet(str(tmpdir), partition_on="id")
+    fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
+    assert len(fns) == 3
+
+    partitioning = HivePartitioning(pa.schema([("id", pa.float64())]))
+    ddf_read = dask_cudf.read_parquet(
+        str(tmpdir),
+        dataset={"partitioning": partitioning},
+    )
+    dd.assert_eq(
+        ddf[["x", "id"]],
+        ddf_read[["x", "id"]],
+        check_divisions=False,
+    )
+
+
 def test_nullable_schema_mismatch(tmpdir):
     # See: https://github.com/rapidsai/cudf/issues/12702
     path0 = str(tmpdir.join("test.0.parquet"))
