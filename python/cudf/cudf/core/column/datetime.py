@@ -25,6 +25,7 @@ from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
+from cudf.core._compat import PANDAS_GE_200
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -200,9 +201,16 @@ class DatetimeColumn(column.ColumnBase):
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `datetime64[ns]`, hence the cast.
+        if PANDAS_GE_200:
+            host_values = self.fillna("NaT").values_host
+        else:
+            # Pandas<2.0 supports only `datetime64[ns]`, hence the cast.
+            host_values = (
+                self.astype("datetime64[ns]").fillna("NaT").values_host
+            )
+
         return pd.Series(
-            self.astype("datetime64[ns]").fillna("NaT").values_host,
+            host_values,
             copy=False,
             index=index,
         )
