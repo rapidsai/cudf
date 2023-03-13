@@ -249,21 +249,13 @@ class SingleColumnFrame(Frame, NotIterable):
         return self._column.__cuda_array_interface__
 
     @_cudf_nvtx_annotate
-    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+    def factorize(self, sort=False, use_na_sentinel=True):
         """Encode the input values as integer labels.
 
         Parameters
         ----------
         sort : bool, default True
             Sort uniques and shuffle codes to maintain the relationship.
-        na_sentinel : number, default -1
-            Value to indicate missing category.
-
-            .. deprecated:: 23.04
-
-               The na_sentinel argument is deprecated and will be removed in
-               a future version of cudf. Specify use_na_sentinel as
-               either True or False.
         use_na_sentinel : bool, default True
             If True, the sentinel -1 will be used for NA values.
             If False, NA values will be encoded as non-negative
@@ -290,7 +282,6 @@ class SingleColumnFrame(Frame, NotIterable):
         return cudf.core.algorithms.factorize(
             self,
             sort=sort,
-            na_sentinel=na_sentinel,
             use_na_sentinel=use_na_sentinel,
         )
 

@@ -11,9 +11,7 @@ from cudf.core.scalar import Scalar
 from cudf.core.series import Series
 
 
-def factorize(
-    values, sort=False, na_sentinel=None, use_na_sentinel=None, size_hint=None
-):
+def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     """Encode the input values as integer labels
 
     Parameters
@@ -22,14 +20,6 @@ def factorize(
         The data to be factorized.
     sort : bool, default True
         Sort uniques and shuffle codes to maintain the relationship.
-    na_sentinel : number, default -1
-        Value to indicate missing category.
-
-        .. deprecated:: 23.04
-
-           The na_sentinel argument is deprecated and will be removed in
-           a future version of cudf. Specify use_na_sentinel as
-           either True or False.
     use_na_sentinel : bool, default True
         If True, the sentinel -1 will be used for NA values.
         If False, NA values will be encoded as non-negative
@@ -83,51 +73,19 @@ def factorize(
     >>> uniques
     Float64Index([<NA>, 1.0, 2.0], dtype='float64')
     """
-    # TODO: Drop `na_sentinel` in the next release immediately after
-    # pandas 2.0 upgrade.
-    if na_sentinel is not None and use_na_sentinel is not None:
-        raise ValueError(
-            "Cannot specify both `na_sentinel` and `use_na_sentile`; "
-            f"got `na_sentinel={na_sentinel}` and "
-            f"`use_na_sentinel={use_na_sentinel}`"
-        )
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
     values = Series(values)
 
-    if na_sentinel is None:
-        na_sentinel = (
-            -1
-            if use_na_sentinel is None or use_na_sentinel
-            else Scalar(None, dtype=values.dtype)
-        )
-    else:
-        if na_sentinel is None:
-            msg = (
-                "Specifying `na_sentinel=None` is deprecated, specify "
-                "`use_na_sentinel=False` instead."
-            )
-        elif na_sentinel == -1:
-            msg = (
-                "Specifying `na_sentinel=-1` is deprecated, specify "
-                "`use_na_sentinel=True` instead."
-            )
-        else:
-            msg = (
-                "Specifying the specific value to use for `na_sentinel` is "
-                "deprecated and will be removed in a future version of cudf. "
-                "Specify `use_na_sentinel=True` to use the sentinel value -1, "
-                "and `use_na_sentinel=False` to encode NA values.",
-            )
-        warnings.warn(msg, FutureWarning)
-
     if size_hint:
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
-    if use_na_sentinel is None or use_na_sentinel:
+    if use_na_sentinel:
+        na_sentinel = Scalar(-1)
         cats = values._column.dropna()
     else:
+        na_sentinel = Scalar(None, dtype=values.dtype)
         cats = values._column
 
     cats = cats.unique().astype(values.dtype)
@@ -136,7 +94,7 @@ def factorize(
         cats, _ = cats.sort_by_values()
 
     labels = values._column._label_encoding(
-        cats=cats, na_sentinel=Scalar(na_sentinel)
+        cats=cats, na_sentinel=na_sentinel
     ).values
 
     return labels, cats.values if return_cupy_array else Index(cats)
