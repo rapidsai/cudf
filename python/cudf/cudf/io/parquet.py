@@ -15,7 +15,7 @@ from pyarrow import dataset as ds, parquet as pq
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import build_categorical_column, column_empty, full
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -612,10 +612,10 @@ def _parquet_to_frame(
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                _value = partition_categories[name].index(value)
-                if pd.isna(value):
-                    _value, _len = [_value] * _len, None
-                codes = as_column(_value, length=_len, dtype="int64")
+                codes = full(
+                    size=_len,
+                    fill_value=partition_categories[name].index(value),
+                )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
                     codes=codes,
@@ -626,17 +626,23 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                _value = value
+                _dtype = (
+                    partition_meta[name].dtype
+                    if partition_meta is not None
+                    else None
+                )
                 if pd.isna(value):
-                    _value, _len = [value] * _len, None
-                if partition_meta is not None:
-                    dfs[-1][name] = as_column(
-                        _value,
-                        length=_len,
-                        dtype=partition_meta[name].dtype,
+                    dfs[-1][name] = column_empty(
+                        row_count=_len,
+                        dtype=_dtype,
+                        masked=True,
                     )
                 else:
-                    dfs[-1][name] = as_column(_value, length=_len)
+                    dfs[-1][name] = full(
+                        size=_len,
+                        fill_value=value,
+                        dtype=_dtype,
+                    )
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.
