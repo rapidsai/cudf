@@ -1444,7 +1444,7 @@ __global__ void __launch_bounds__(block_size)
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
     static constexpr duration_s d_orc_utc_epoch = duration_s{orc_utc_epoch};
-    s->top.data.tz_epoch = d_orc_utc_epoch - get_ut_offset(tz_table, timestamp_s{d_orc_ut_epoch});
+    s->top.data.tz_epoch = d_orc_utc_epoch - get_ut_offset(tz_table, timestamp_s{d_orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
