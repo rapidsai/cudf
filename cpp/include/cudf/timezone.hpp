@@ -28,7 +28,7 @@ namespace cudf {
 // Cycle in which the time offsets repeat
 static constexpr int32_t solar_cycle_years = 400;
 // Number of future entries in the timezone transition table:
-// Two entries per year, over the length of the Gragorian calendar's solar cycle
+// Two entries per year, over the length of the Gregorian calendar's solar cycle
 static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
 
 /**
