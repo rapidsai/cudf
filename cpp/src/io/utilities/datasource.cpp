@@ -56,7 +56,7 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (size < _gds_io_preferred_threshold) { return false; }
+    if (size < _gds_read_preferred_threshold) { return false; }
     return supports_device_read();
   }
 
@@ -99,7 +99,7 @@ class file_source : public datasource {
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
   // The read size above which GDS is faster then posix-read + h2d-copy
-  static constexpr size_t _gds_io_preferred_threshold = 128 << 10; // 128KB
+  static constexpr size_t _gds_read_preferred_threshold = 128 << 10; // 128KB
 };
 
 /**

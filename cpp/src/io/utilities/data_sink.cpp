@@ -63,7 +63,7 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (size < _gds_io_preferred_threshold) { return false; }
+    if (size < _gds_write_preferred_threshold) { return false; }
     return supports_device_write();
   }
 
@@ -97,7 +97,7 @@ class file_sink : public data_sink {
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
   // The write size above which GDS is faster then d2h-copy + posix-write
-  static constexpr size_t _gds_io_preferred_threshold = 128 << 10; // 128KB
+  static constexpr size_t _gds_write_preferred_threshold = 128 << 10; // 128KB
 };
 
 /**
