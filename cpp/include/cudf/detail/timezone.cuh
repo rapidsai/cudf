@@ -28,10 +28,10 @@ namespace cudf::detail {
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
- * @param ttimes Transition times; trailing `cycle_entry_cnt` entries are used for all times
+ * @param ttimes Transition times; trailing `solar_cycle_entry_count` entries are used for all times
  * beyond the one covered by the TZif file
- * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entries are used
- * for all times beyond the one covered by the TZif file
+ * @param offsets Time offsets in specific intervals; trailing `solar_cycle_entry_count` entries are
+ * used for all times beyond the one covered by the TZif file
  * @param ts ORC timestamp
  *
  * @return GMT offset
@@ -52,15 +52,15 @@ inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestam
       return first_larger - 1;
     };
 
-    auto const file_entry_end = ttimes.begin() + (ttimes.size() - cycle_entry_cnt);
+    auto const file_entry_end = ttimes.begin() + (ttimes.size() - solar_cycle_entry_count);
 
     if (ts <= *(file_entry_end - 1)) {
       // Search the file entries if the timestamp is in range
       return last_less_equal(ttimes.begin(), file_entry_end, ts);
     } else {
       auto project_to_cycle = [](timestamp_s ts) {
-        static constexpr duration_s cycle_s =
-          cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)});
+        static constexpr duration_s cycle_s = cuda::std::chrono::duration_cast<duration_s>(
+          duration_D{365 * solar_cycle_years + (100 - 3)});
         return timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s};
       };
       // Search the 400-year cycle if outside of the file entries range

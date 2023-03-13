@@ -391,8 +391,8 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   std::vector<timestamp_s::rep> ttimes(1);
   std::vector<duration_s::rep> offsets(1);
   // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
-  ttimes.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
-  offsets.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
+  ttimes.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
+  offsets.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
   size_t earliest_std_idx = 0;
   for (size_t t = 0; t < tzf.timecnt(); t++) {
     auto const ttime = tzf.transition_times[t];
@@ -445,7 +445,7 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
 
   // Add entries to fill the transition cycle
   int64_t year_timestamp = 0;
-  for (int32_t year = 1970; year < 1970 + cycle_years; ++year) {
+  for (int32_t year = 1970; year < 1970 + solar_cycle_years; ++year) {
     auto const dst_start_time = get_transition_time(dst_start, year);
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
