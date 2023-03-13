@@ -26,7 +26,7 @@
 namespace cudf::detail {
 
 /**
- * @brief Returns the GMT offset for a given date and given timezone table.
+ * @brief Returns the UT offset for a given date and given timezone table.
  *
  * @param ttimes Transition times; trailing `solar_cycle_entry_count` entries are used for all times
  * beyond the one covered by the TZif file
@@ -34,9 +34,9 @@ namespace cudf::detail {
  * used for all times beyond the one covered by the TZif file
  * @param ts ORC timestamp
  *
- * @return GMT offset
+ * @return offset from UT, in seconds
  */
-inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestamp_s ts)
+inline __device__ duration_s get_ut_offset(table_device_view tz_table, timestamp_s ts)
 {
   if (tz_table.num_rows() == 0) { return duration_s{0}; }
 
