@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ class data_sink {
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
-   * @return bool If this writer supports device_write() calls
+   * @return If this writer supports device_write() calls
    */
   [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
@@ -194,7 +194,7 @@ class data_sink {
   /**
    * @pure @brief Returns the total number of bytes written into this sink
    *
-   * @return size_t Total number of bytes written into this sink
+   * @return Total number of bytes written into this sink
    */
   virtual size_t bytes_written() = 0;
 };
