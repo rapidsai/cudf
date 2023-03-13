@@ -734,6 +734,20 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         """
         if weights is not None:
+            # To implement this case again needs different algorithms
+            # in both cases.
+            #
+            # Without replacement, use the weighted reservoir sampling
+            # approach of Efraimidas and Spirakis (2006)
+            # https://doi.org/10.1016/j.ipl.2005.11.003, essentially,
+            # do a segmented argsort sorting on weight-scaled
+            # logarithmic deviates. See
+            # https://timvieira.github.io/blog/post/
+            # 2019/09/16/algorithms-for-sampling-without-replacement/
+            #
+            # With replacement is trickier, one might be able to use
+            # the alias method, otherwise we're back to bucketed
+            # rejection sampling.
             raise NotImplementedError("Sampling with weights is not supported")
         # Can't wait for match/case
         if frac is not None and n is not None:
@@ -752,15 +766,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "in this case"
             )
         # Get the groups
-        try:
-            _, (index,), group_offsets = self._groupby.groups(
-                [*self.obj._index._columns]  # type: ignore
-            )
-        except ValueError:
-            raise NotImplementedError(
-                "groupby.sample with multiindex not implemented"
-            )
-        group_offsets = np.asarray(group_offsets, dtype=np.int32)
+        # TODO: convince Cython to convert the std::vector offsets
+        # into a numpy array directly, rather than a list.
+        # TODO: this uses the sort-based groupby, could one use hash-based?
+        _, offsets, _, group_values = self._grouped()
+        group_offsets = np.asarray(offsets, dtype=np.int32)
         size_per_group = np.diff(group_offsets)
         if n is not None:
             samples_per_group = np.broadcast_to(
@@ -785,15 +795,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             low = 0
             high = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
-            indices = rng.integers(low, high, dtype=np.int32) + np.repeat(
-                group_offsets[:-1], samples_per_group
-            )
+            indices = rng.integers(low, high, dtype=np.int32)
+            indices += np.repeat(group_offsets[:-1], samples_per_group)
         else:
             # Approach: do a segmented argsort of the index array and take
             # the first samples_per_group entries from sorted array.
+            # We will shuffle the group indices and then pick them out
+            # from the grouped dataframe index.
+            nrows = len(group_values)
+            indices = cp.arange(nrows, dtype=np.int32)
             if len(size_per_group) < 500:
                 # Empirically shuffling with cupy is faster at this scale
-                indices = cp.asarray(index.data_array_view(mode="read"))
                 rs = cp.random.get_random_state()
                 rs.seed(seed=random_state)
                 for off, size in zip(group_offsets, size_per_group):
@@ -801,21 +813,21 @@ class GroupBy(Serializable, Reducible, Scannable):
             else:
                 rng = cp.random.default_rng(seed=random_state)
                 (indices,) = segmented_sort_by_key(
-                    [index],
-                    [as_column(rng.random(size=len(index)))],
+                    [as_column(indices)],
+                    [as_column(rng.random(size=nrows))],
                     as_column(group_offsets),
                     [],
                     [],
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
-            mask = np.zeros(len(index), dtype=bool)
-            for offset, sample_size in zip(group_offsets, samples_per_group):
-                mask[offset : offset + sample_size] = True
-            indices = indices[mask]
-        # This is the index into the original dataframe ordered by the groups
-        index = cp.asarray(index.data_array_view(mode="read"))
-        return self.obj.iloc[index[indices]]
+            want = np.arange(samples_per_group.sum(), dtype=np.int32)
+            scan = np.empty_like(samples_per_group)
+            scan[0] = 0
+            np.cumsum(samples_per_group[:-1], out=scan[1:])
+            want += np.repeat(offsets[:-1] - scan, samples_per_group)
+            indices = indices[want]
+        return group_values.iloc[indices]
 
     def serialize(self):
         header = {}
