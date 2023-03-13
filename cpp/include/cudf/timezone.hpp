@@ -25,7 +25,7 @@
 
 namespace cudf {
 
-// Cycle in which the time offsets repeat
+// Cycle in which the time offsets repeat in Gregorian calendar
 static constexpr int32_t solar_cycle_years = 400;
 // Number of future entries in the timezone transition table:
 // Two entries per year, over the length of the Gregorian calendar's solar cycle
