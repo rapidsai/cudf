@@ -49,6 +49,8 @@ requirements:
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
+    - fmt {{ fmt_version }}
+    - spdlog {{ spdlog_version }}
 
 outputs:
   - name: libcudf
@@ -128,6 +130,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
         - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/logger.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/pinned_allocator.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
@@ -278,6 +281,7 @@ outputs:
         - test -f $PREFIX/include/cudf/utilities/bit.hpp
         - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
         - test -f $PREFIX/include/cudf/utilities/error.hpp
+        - test -f $PREFIX/include/cudf/utilities/logger.hpp
         - test -f $PREFIX/include/cudf/utilities/span.hpp
         - test -f $PREFIX/include/cudf/utilities/traits.hpp
         - test -f $PREFIX/include/cudf/utilities/type_checks.hpp
