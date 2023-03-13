@@ -609,12 +609,13 @@ def _parquet_to_frame(
         )
         # Add partition columns to the last DataFrame
         for (name, value) in part_key:
+            _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = as_column(
-                    partition_categories[name].index(value),
-                    length=len(dfs[-1]),
-                )
+                _value = partition_categories[name].index(value)
+                if pd.isna(value):
+                    _value, _len = [_value] * _len, None
+                codes = as_column(_value, length=_len, dtype="int64")
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
                     codes=codes,
@@ -625,14 +626,17 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
+                _value = value
+                if pd.isna(value):
+                    _value, _len = [value] * _len, None
                 if partition_meta is not None:
                     dfs[-1][name] = as_column(
-                        value,
-                        length=len(dfs[-1]),
+                        _value,
+                        length=_len,
                         dtype=partition_meta[name].dtype,
                     )
                 else:
-                    dfs[-1][name] = as_column(value, length=len(dfs[-1]))
+                    dfs[-1][name] = as_column(_value, length=_len)
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.
@@ -886,8 +890,9 @@ def _get_groups_and_offsets(
         grouped_df.reset_index(drop=True, inplace=True)
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_keys.to_pandas().unique().to_frame(index=False)
-
+    part_names = (
+        part_keys.to_pandas(nullable=True).unique().to_frame(index=False)
+    )
     return part_names, grouped_df, part_offsets
 
 
