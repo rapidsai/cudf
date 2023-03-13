@@ -4553,21 +4553,10 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  cudf::io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].set_name("col_list_int_0");
-  expected_metadata.column_metadata[1].set_name("col_list_list_int_1");
-  expected_metadata.column_metadata[2].set_name("col_list_list_int_nullable_2");
-  expected_metadata.column_metadata[3].set_name("col_list_list_nullable_double_nullable_3");
-  expected_metadata.column_metadata[0].set_name("col_list_list_uint16_4");
-  expected_metadata.column_metadata[4].set_name("col_list_nullable_list_nullable_int_nullable_5");
-  expected_metadata.column_metadata[5].set_name("col_list_list_string_6");
-  expected_metadata.column_metadata[6].set_name("col_list_list_list_7");
-
   int64_t const null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-                    .metadata(&expected_metadata)
                     .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
                     .compression(cudf::io::compression_type::NONE);
 
