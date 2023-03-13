@@ -4279,6 +4279,9 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       auto const ci    = read_column_index(source, chunk);
       auto const stats = parse_statistics(chunk);
 
+      // should be half nulls, except no nulls in column 0
+      EXPECT_EQ(stats.null_count, c > 0 ? num_rows / 2 : 0);
+
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;
@@ -4363,6 +4366,9 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       // and stats.max >= page.max for each non-empty page.
       auto const ci    = read_column_index(source, chunk);
       auto const stats = parse_statistics(chunk);
+
+      // there should be no nulls except column 1 which is all nulls
+      EXPECT_EQ(stats.null_count, c == 1 ? num_rows : 0);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
