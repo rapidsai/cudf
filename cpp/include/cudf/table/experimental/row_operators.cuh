@@ -1711,7 +1711,10 @@ class device_row_hasher {
   {
     auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(), element_hasher_adapter<hash_function>{_check_nulls}, column, row_index);
+        column.type(),
+        element_hasher_adapter<hash_function>{_check_nulls, _seed},
+        column,
+        row_index);
     });
 
     // Hash each element and combine all the hash values together
@@ -1734,8 +1737,8 @@ class device_row_hasher {
     static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:
-    __device__ element_hasher_adapter(Nullate check_nulls) noexcept
-      : _element_hasher(check_nulls), _check_nulls(check_nulls)
+    __device__ element_hasher_adapter(Nullate check_nulls, uint32_t seed) noexcept
+      : _element_hasher(check_nulls, seed), _check_nulls(check_nulls)
     {
     }
 
