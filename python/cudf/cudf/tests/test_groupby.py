@@ -2976,6 +2976,20 @@ def test_groupby_dtypes(groups):
 
 
 class TestSample:
+    @pytest.fixture(params=["default", "rangeindex", "intindex", "strindex"])
+    def index(self, request):
+        n = 12
+        if request.param == "rangeindex":
+            return cudf.RangeIndex(2, n + 2)
+        elif request.param == "intindex":
+            return cudf.Index(
+                [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
+            )
+        elif request.param == "strindex":
+            return cudf.StringIndex(list(chr(ord("a") + i) for i in range(n)))
+        elif request.param == "default":
+            return None
+
     @pytest.fixture(
         params=[
             ["a", "a", "b", "b", "c", "c", "c", "d", "d", "d", "d", "d"],
@@ -2983,9 +2997,10 @@ class TestSample:
         ],
         ids=["str-group", "int-group"],
     )
-    def df(self, request):
+    def df(self, index, request):
         return cudf.DataFrame(
-            {"a": request.param, "b": request.param, "v": request.param}
+            {"a": request.param, "b": request.param, "v": request.param},
+            index=index,
         )
 
     @pytest.fixture(params=["a", ["a", "b"]], ids=["single-col", "two-col"])
