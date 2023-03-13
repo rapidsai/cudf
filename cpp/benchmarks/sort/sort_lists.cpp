@@ -42,7 +42,7 @@ void sort_lists_of_structs(nvbench::state& state)
   auto const num_columns = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const lists_table = create_lists_data(state, num_columns, min_val, max_val);
 
-  // After having a table of (multile) lists columns, convert those lists columns into lists of
+  // After having a table of (multiple) lists columns, convert those lists columns into lists of
   // structs columns. The children of these structs columns are also children of the original lists
   // columns.
   // Such resulted lists-of-structs columns are very similar to the original lists-of-integers
