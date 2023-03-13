@@ -494,7 +494,7 @@ class parquet_writer_options {
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
-  size_type _max_page_fragment_size = default_max_page_fragment_size;
+  std::optional<size_type> _max_page_fragment_size;
 
   /**
    * @brief Constructor from sink and table.
@@ -1076,7 +1076,7 @@ class chunked_parquet_writer_options {
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
-  size_type _max_page_fragment_size = default_max_page_fragment_size;
+  std::optional<size_type> _max_page_fragment_size;
 
   /**
    * @brief Constructor from sink.

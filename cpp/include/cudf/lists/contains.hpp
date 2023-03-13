@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ namespace lists {
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return std::unique_ptr<column> BOOL8 column of `n` rows with the result of the lookup
+ * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
@@ -65,7 +65,7 @@ std::unique_ptr<column> contains(
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys Column of elements to be looked up in each list row
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return std::unique_ptr<column> BOOL8 column of `n` rows with the result of the lookup
+ * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
@@ -86,7 +86,7 @@ std::unique_ptr<column> contains(
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return std::unique_ptr<column> BOOL8 column of `n` rows with the result of the lookup
+ * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains_nulls(
   cudf::lists_column_view const& lists,
@@ -124,11 +124,9 @@ enum class duplicate_find_option : int32_t {
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
+ * @return INT32 column of `n` rows with the location of the `search_key`
  *
- * @throw cudf::logic_error If `search_key` type does not match the element type in `lists`
- * @throw cudf::logic_error If `search_key` is of a nested type, or `lists` contains nested
- * elements (LIST, STRUCT)
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
@@ -160,11 +158,10 @@ std::unique_ptr<column> index_of(
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
+ * @return INT32 column of `n` rows with the location of the `search_key`
  *
  * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
- * @throw cudf::logic_error If `search_keys` type does not match the element type in `lists`
- * @throw cudf::logic_error If `lists` or `search_keys` contains nested elements (LIST, STRUCT)
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,

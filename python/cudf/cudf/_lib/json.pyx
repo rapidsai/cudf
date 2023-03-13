@@ -201,8 +201,14 @@ def write_json(
         .build()
     )
 
-    with nogil:
-        libcudf_write_json(options)
+    try:
+        with nogil:
+            libcudf_write_json(options)
+    except OverflowError:
+        raise OverflowError(
+            f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
+            "Consider providing a smaller rows_per_chunk argument."
+        )
 
 
 cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:

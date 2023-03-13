@@ -2650,6 +2650,20 @@ def test_parquet_columns_and_index_param(index, columns):
     assert_eq(expected, got, check_index_type=True)
 
 
+@pytest.mark.parametrize("columns", [None, ["b", "a"]])
+def test_parquet_columns_and_range_index(columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=pd.RangeIndex(2, 5)
+    )
+    df.to_parquet(buffer)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)
+
+
 def test_parquet_nested_struct_list():
     buffer = BytesIO()
     data = {
@@ -2749,6 +2763,14 @@ def test_parquet_roundtrip_time_delta():
 
 def test_parquet_reader_malformed_file(datadir):
     fname = datadir / "nested-unsigned-malformed.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
+
+
+def test_parquet_reader_unsupported_page_encoding(datadir):
+    fname = datadir / "delta_encoding.parquet"
 
     # expect a failure when reading the whole file
     with pytest.raises(RuntimeError):
