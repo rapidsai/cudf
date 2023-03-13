@@ -43,9 +43,6 @@ inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode
 
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
-// Seconds from January 1st, 1970 to January 1st, 2015
-static __device__ __constant__ duration_s orc_utc_epoch = duration_s{1420070400};
-
 struct orc_bytestream_s {
   const uint8_t* base;
   uint32_t pos;
@@ -1446,7 +1443,8 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.tz_epoch = orc_utc_epoch - get_gmt_offset(tz_table, timestamp_s{orc_utc_epoch});
+    static constexpr duration_s d_orc_utc_epoch = duration_s{orc_utc_epoch};
+    s->top.data.tz_epoch = d_orc_utc_epoch - get_gmt_offset(tz_table, timestamp_s{d_orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
