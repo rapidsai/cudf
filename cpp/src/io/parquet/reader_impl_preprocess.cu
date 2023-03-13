@@ -1188,6 +1188,24 @@ struct input_col_info {
 };
 
 /**
+ * @brief Converts a 1-dimensional index into page, depth and column indices used in
+ * allocate_columns to compute columns sizes. The input index will through pages, nesting depth and
+ * columns in that order.
+ */
+struct get_indices {
+  size_t page_idx;
+  size_t depth_idx;
+  size_t col_idx;
+
+  __device__ get_indices(int index, size_t max_depth, size_t num_pages)
+    : page_idx(index % num_pages),
+      depth_idx((index / num_pages) % max_depth),
+      col_idx(index / (max_depth * num_pages))
+  {
+  }
+};
+
+/**
  * @brief Returns the size field of a PageInfo struct for a given depth, keyed by schema.
  */
 struct get_page_nesting_size {
@@ -1199,16 +1217,16 @@ struct get_page_nesting_size {
 
   __device__ size_type operator()(int index) const
   {
-    auto page_idx = index % num_pages;
-    auto depth_idx = (index / num_pages) % max_depth;
-    auto col_idx = index / (max_depth * num_pages);
+    auto indices = get_indices{index, max_depth, num_pages};
 
-    auto const& page = pages[page_indices[page_idx]];
-    if (page.src_col_schema != input_cols[col_idx].schema_idx || page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY || depth_idx >= input_cols[col_idx].nesting_depth) {
+    auto const& page = pages[page_indices[indices.page_idx]];
+    if (page.src_col_schema != input_cols[indices.col_idx].schema_idx ||
+        page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY ||
+        indices.depth_idx >= input_cols[indices.col_idx].nesting_depth) {
       return 0;
     }
 
-    return page.nesting[depth_idx].batch_size;
+    return page.nesting[indices.depth_idx].batch_size;
   }
 };
 
@@ -1258,12 +1276,12 @@ struct start_offset_output_iterator {
 
   constexpr void operator=(start_offset_output_iterator const& other)
   {
-    pages          = other.pages;
-    page_indices   = other.page_indices;
-    cur_index      = other.cur_index;
-    input_cols = other.input_cols;
-    max_depth = other.max_depth;
-    num_pages = other.num_pages;
+    pages        = other.pages;
+    page_indices = other.page_indices;
+    cur_index    = other.cur_index;
+    input_cols   = other.input_cols;
+    max_depth    = other.max_depth;
+    num_pages    = other.num_pages;
   }
 
   constexpr start_offset_output_iterator operator+(int i)
@@ -1280,15 +1298,15 @@ struct start_offset_output_iterator {
  private:
   __device__ reference dereference(int index)
   {
-    auto page_idx = index % num_pages;
-    auto depth_idx = (index / num_pages) % max_depth;
-    auto col_idx = index / (max_depth * num_pages);
+    auto indices = get_indices{index, max_depth, num_pages};
 
-    gpu::PageInfo const& p = pages[page_indices[page_idx]];
-    if (p.src_col_schema != input_cols[col_idx].schema_idx || p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY || depth_idx >= input_cols[col_idx].nesting_depth) {
+    gpu::PageInfo const& p = pages[page_indices[indices.page_idx]];
+    if (p.src_col_schema != input_cols[indices.col_idx].schema_idx ||
+        p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY ||
+        indices.depth_idx >= input_cols[indices.col_idx].nesting_depth) {
       return empty;
     }
-    return p.nesting_decode[depth_idx].page_start_value;
+    return p.nesting_decode[indices.depth_idx].page_start_value;
   }
 };
 
@@ -1611,53 +1629,52 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
   // compute output column sizes by examining the pages of the -input- columns
   if (has_lists) {
     auto& page_index = _chunk_itm_data.page_index;
-    
+
     hostdevice_vector<input_col_info> input_cols{_input_columns.size(), _stream};
-    for (size_t i = 0; i < _input_columns.size(); i++)
-    {
-      input_cols[i].schema_idx = _input_columns[i].schema_idx;
-      input_cols[i].nesting_depth = _input_columns[i].nesting_depth();
+    size_t max_depth = 0;
+    for (size_t i = 0; i < _input_columns.size(); i++) {
+      auto depth                  = _input_columns[i].nesting_depth();
+      max_depth                   = depth > max_depth ? depth : max_depth;
+      input_cols[i].nesting_depth = depth;
+      input_cols[i].schema_idx    = _input_columns[i].schema_idx;
     }
-    auto max_depth = std::max_element(input_cols.begin(), input_cols.end(), [](auto a, auto b){return a.nesting_depth < b.nesting_depth;})->nesting_depth;
     input_cols.host_to_device(_stream);
 
     // size iterator. indexes pages by sorted order
     auto size_input = cudf::detail::make_counting_transform_iterator(
       0,
-      get_page_nesting_size{input_cols.device_ptr(), max_depth, pages.size(), pages.device_ptr(), page_index.begin()});
+      get_page_nesting_size{
+        input_cols.device_ptr(), max_depth, pages.size(), pages.device_ptr(), page_index.begin()});
 
-    auto reduction_keys = cudf::detail::make_counting_transform_iterator(
-      0,
-      get_reduction_key{pages.size()});
+    auto reduction_keys =
+      cudf::detail::make_counting_transform_iterator(0, get_reduction_key{pages.size()});
     hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
+    auto num_keys = _input_columns.size() * max_depth * pages.size();
 
-    // find the size of each column 
-    thrust::reduce_by_key(
-      rmm::exec_policy(_stream),
-      reduction_keys,
-      reduction_keys + (_input_columns.size() * max_depth * pages.size()),
-      size_input,
-      thrust::make_discard_iterator(),
-      sizes.d_begin()
-    );
+    // find the size of each column
+    thrust::reduce_by_key(rmm::exec_policy(_stream),
+                          reduction_keys,
+                          reduction_keys + num_keys,
+                          size_input,
+                          thrust::make_discard_iterator(),
+                          sizes.d_begin());
 
     // for nested hierarchies, compute per-page start offset
-    thrust::exclusive_scan_by_key(
-      rmm::exec_policy(_stream),
-      reduction_keys,
-      reduction_keys + (_input_columns.size() * max_depth * pages.size()),
-      size_input,
-      start_offset_output_iterator{pages.device_ptr(),
-                                    page_index.begin(),
-                                    0,
-                                    input_cols.device_ptr(),
-                                    max_depth, 
-                                    pages.size()});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+                                  reduction_keys,
+                                  reduction_keys + num_keys,
+                                  size_input,
+                                  start_offset_output_iterator{pages.device_ptr(),
+                                                               page_index.begin(),
+                                                               0,
+                                                               input_cols.device_ptr(),
+                                                               max_depth,
+                                                               pages.size()});
 
     sizes.device_to_host(_stream, true);
     for (size_t idx = 0; idx < _input_columns.size(); idx++) {
       auto const& input_col = _input_columns[idx];
-      auto* cols = &_output_buffers;
+      auto* cols            = &_output_buffers;
       for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
         cols          = &out_buf.children;
@@ -1674,7 +1691,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
 
           // allocate
           out_buf.create(size, _stream, _mr);
-        } 
+        }
       }
     }
   }
