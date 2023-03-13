@@ -3438,28 +3438,6 @@ class IndexedFrame(Frame):
             self._index_names,
         )
 
-    def _append(
-        self, other, ignore_index=False, verify_integrity=False, sort=None
-    ):
-        # Note: Do not remove this function until pandas does. This warning is
-        # to clean up cudf but to match a deprecation in pandas
-        warnings.warn(
-            "The append method is deprecated and will be removed in a future "
-            "version. Use cudf.concat instead.",
-            FutureWarning,
-        )
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
-        if is_list_like(other):
-            to_concat = [self, *other]
-        else:
-            to_concat = [self, other]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
-
     def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """Cast the object to the given dtype.
 

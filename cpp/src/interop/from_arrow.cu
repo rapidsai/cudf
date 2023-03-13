@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,16 +104,22 @@ struct dispatch_to_cudf_column {
     if (array.null_bitmap_data() == nullptr) {
       return std::make_unique<rmm::device_buffer>(0, stream, mr);
     }
-    auto mask = std::make_unique<rmm::device_buffer>(
-      bitmask_allocation_size_bytes(static_cast<size_type>(array.null_bitmap()->size() * CHAR_BIT)),
-      stream,
-      mr);
+    auto const null_bitmap_size = array.null_bitmap()->size();
+    auto const allocation_size =
+      bitmask_allocation_size_bytes(static_cast<size_type>(null_bitmap_size * CHAR_BIT));
+    auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
     CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
                                   reinterpret_cast<const uint8_t*>(mask_buffer->address()),
-                                  array.null_bitmap()->size(),
+                                  null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
+    // Zero-initialize trailing padding bytes
+    auto const num_trailing_bytes = allocation_size - null_bitmap_size;
+    if (num_trailing_bytes > 0) {
+      auto trailing_bytes = static_cast<uint8_t*>(mask->data()) + null_bitmap_size;
+      CUDF_CUDA_TRY(cudaMemsetAsync(trailing_bytes, 0, num_trailing_bytes, stream.value()));
+    }
     return mask;
   }
 

@@ -22,7 +22,12 @@ from numba import cuda
 from packaging import version
 
 import cudf
-from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import (
+    PANDAS_GE_134,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_LT_140,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
@@ -239,7 +244,7 @@ def test_series_from_cupy_scalars():
 
 @pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
 @pytest.mark.parametrize("b", [[4, 5, 6], [-11, -100, 30]])
-def test_append_index(a, b):
+def test_concat_index(a, b):
 
     df = pd.DataFrame()
     df["a"] = a
@@ -249,19 +254,14 @@ def test_append_index(a, b):
     gdf["a"] = a
     gdf["b"] = b
 
-    # Check the default index after appending two columns(Series)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = df.a.append(df.b)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.a.append(gdf.b)
+    expected = pd.concat([df.a, df.b])
+    actual = cudf.concat([gdf.a, gdf.b])
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = df.a.append(df.b, ignore_index=True)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.a.append(gdf.b, ignore_index=True)
+    expected = pd.concat([df.a, df.b], ignore_index=True)
+    actual = cudf.concat([gdf.a, gdf.b], ignore_index=True)
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
@@ -281,7 +281,8 @@ def test_append_index(a, b):
         pytest.param(
             {},
             marks=pytest_xfail(
-                reason="https://github.com/rapidsai/cudf/issues/11080"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/rapidsai/cudf/issues/11080",
             ),
         ),
         pytest.param(
@@ -1539,7 +1540,8 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
 
-    # pandas warns when trying to concatenate any empty float columns (or float
+    # pandas(lower than pandas 2.0 only) warns when trying to
+    # concatenate any empty float columns (or float
     # columns with all None values) with any non-empty bool columns.
     def is_invalid_concat(left, right):
         return (
@@ -1548,7 +1550,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
             and right.count() == 0
         )
 
-    cond = any(
+    cond = (not PANDAS_GE_200) and any(
         is_invalid_concat(pdf1[colname], pdf2[colname])
         or is_invalid_concat(pdf2[colname], pdf1[colname])
         for colname in set(pdf1) & set(pdf2)
@@ -7312,22 +7314,37 @@ def test_series_keys(ps):
 )
 @pytest.mark.parametrize("sort", [False, True])
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_dataframe_append_dataframe(df, other, sort, ignore_index):
+def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     pdf = df
     other_pd = other
 
     gdf = cudf.from_pandas(df)
     other_gd = cudf.from_pandas(other)
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
+    actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
+
+    # In empty dataframe cases, Pandas & cudf differ in columns
+    # creation, pandas creates RangeIndex(0, 0)
+    # whereas cudf creates an empty Index([], dtype="object").
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
 
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
 
 
 @pytest_unmark_spilling
@@ -7372,20 +7389,18 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
     ],
 )
 @pytest.mark.parametrize("sort", [False, True])
-def test_dataframe_append_series_dict(df, other, sort):
+def test_dataframe_concat_series(df, other, sort):
     pdf = df
-    other_pd = other
-
     gdf = cudf.from_pandas(df)
-    if isinstance(other, pd.Series):
-        other_gd = cudf.from_pandas(other)
-    else:
-        other_gd = other
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = pdf.append(other_pd, ignore_index=True, sort=sort)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.append(other_gd, ignore_index=True, sort=sort)
+    if isinstance(other, dict):
+        other_pd = pd.Series(other)
+    else:
+        other_pd = other
+    other_gd = cudf.from_pandas(other_pd)
+
+    expected = pd.concat([pdf, other_pd], ignore_index=True, sort=sort)
+    actual = cudf.concat([gdf, other_gd], ignore_index=True, sort=sort)
 
     if expected.shape != df.shape:
         # Ignore the column type comparison because pandas incorrectly
@@ -7402,20 +7417,18 @@ def test_dataframe_append_series_dict(df, other, sort):
         assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
-def test_dataframe_append_series_mixed_index():
+def test_dataframe_concat_series_mixed_index():
     df = cudf.DataFrame({"first": [], "d": []})
-    sr = cudf.Series([1, 2, 3, 4])
+    pdf = df.to_pandas()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            "cudf does not support mixed types, please type-cast "
-            "the column index of dataframe and index of series "
-            "to same dtypes."
-        ),
-    ):
-        with pytest.warns(FutureWarning, match="append method is deprecated"):
-            df.append(sr, ignore_index=True)
+    sr = cudf.Series([1, 2, 3, 4])
+    psr = sr.to_pandas()
+
+    assert_eq(
+        cudf.concat([df, sr], ignore_index=True),
+        pd.concat([pdf, psr], ignore_index=True),
+        check_dtype=False,
+    )
 
 
 @pytest_unmark_spilling
@@ -7540,24 +7553,40 @@ def test_dataframe_append_series_mixed_index():
 )
 @pytest.mark.parametrize("sort", [False, True])
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
+def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
     pdf = df
     other_pd = other
 
     gdf = cudf.from_pandas(df)
-    other_gd = [
-        cudf.from_pandas(o) if isinstance(o, pd.DataFrame) else o
-        for o in other
-    ]
+    other_gd = [cudf.from_pandas(o) for o in other]
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    expected = pd.concat(
+        [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+    )
+    actual = cudf.concat(
+        [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+    )
+
+    # In some cases, Pandas creates an empty Index([], dtype="object") for
+    # columns whereas cudf creates a RangeIndex(0, 0).
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
+
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
 
 
 @pytest.mark.parametrize(
@@ -7633,20 +7662,19 @@ def test_dataframe_ffill(df):
 )
 @pytest.mark.parametrize("sort", [False, True])
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_dataframe_append_lists(df, other, sort, ignore_index):
+def test_dataframe_concat_lists(df, other, sort, ignore_index):
     pdf = df
-    other_pd = other
+    other_pd = [pd.DataFrame(o) for o in other]
 
     gdf = cudf.from_pandas(df)
-    other_gd = [
-        cudf.from_pandas(o) if isinstance(o, pd.DataFrame) else o
-        for o in other
-    ]
+    other_gd = [cudf.from_pandas(o) for o in other_pd]
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    expected = pd.concat(
+        [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+    )
+    actual = cudf.concat(
+        [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+    )
 
     if expected.shape != df.shape:
         assert_eq(
@@ -7659,17 +7687,13 @@ def test_dataframe_append_lists(df, other, sort, ignore_index):
         assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
-def test_dataframe_append_error():
+def test_dataframe_concat_series_without_name():
     df = cudf.DataFrame({"a": [1, 2, 3]})
-    ps = cudf.Series([1, 2, 3])
+    pdf = df.to_pandas()
+    gs = cudf.Series([1, 2, 3])
+    ps = gs.to_pandas()
 
-    with pytest.raises(
-        TypeError,
-        match="Can only append a Series if ignore_index=True "
-        "or if the Series has a name",
-    ):
-        with pytest.warns(FutureWarning, match="append method is deprecated"):
-            df.append(ps)
+    assert_eq(pd.concat([pdf, ps]), cudf.concat([df, gs]))
 
 
 def test_cudf_arrow_array_error():
