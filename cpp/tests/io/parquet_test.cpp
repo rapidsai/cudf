@@ -4511,7 +4511,6 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
             dlcw{dlcw{}}};
 
   // 4 nulls
-  // TODO: uint16_t lists are not read properly in parquet reader
   // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
   // [[7, 8]]
   // []
