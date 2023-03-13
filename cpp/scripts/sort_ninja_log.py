@@ -283,18 +283,10 @@ def output_html(entries, sorted_list, cmp_entries, args):
     # output detail table in build-time descending order
     print("<table id='detail' bgcolor='#EEEEEE'>")
     print(
-        "<tr><th>File</th>",
-        "<th>Compile time</th>",
-        "<th>Size</th>",
-        sep="",
+        "<tr><th>File</th>", "<th>Compile time</th>", "<th>Size</th>", sep=""
     )
-
     if cmp_entries:
-        print(
-            "<th>Diff</th>",
-            "<th>Diff Size</th>",
-            sep="",
-        )
+        print("<th>Base-t</th>", sep="")
     print("</tr>")
 
     for name in sorted_list:
@@ -309,18 +301,34 @@ def output_html(entries, sorted_list, cmp_entries, args):
         # output entry row
         print("<tr ", color, "><td>", name, "</td>", sep="", end="")
         print("<td align='right'>", build_time_str, "</td>", sep="", end="")
-        print("<td align='right'>", file_size_str, "</td>", sep="")
-
+        print("<td align='right'>", file_size_str, "</td>", sep="", end="")
+        # output diff column
         cmp_entry = (
             cmp_entries[name] if cmp_entries and name in cmp_entries else None
         )
         if cmp_entry:
-            diff_time_str = format_build_time(
-                cmp_entry[1] - cmp_entry[0] - build_time
+            diff_time = build_time - (cmp_entry[1] - cmp_entry[0])
+            diff_time_str = format_build_time(diff_time)
+            diff_color = white
+            diff_percent = int((diff_time / build_time) * 100)
+            if build_time > 60000:
+                if diff_percent > 20:
+                    diff_color = red
+                    diff_time_str = "<b>" + diff_time_str + "</b>"
+                elif diff_percent < -20:
+                    diff_color = green
+                    diff_time_str = "<b>" + diff_time_str + "</b>"
+                elif diff_percent > 0:
+                    diff_color = yellow
+            print(
+                "<td align='right' ",
+                diff_color,
+                ">",
+                diff_time_str,
+                "</td>",
+                sep="",
+                end="",
             )
-            diff_size_str = format_file_size(cmp_entry[2] - file_size)
-            print("<td align='right'>", diff_time_str, "</td>", sep="")
-            print("<td align='right'>", diff_size_str, "</td>", sep="")
         print("</tr>")
 
     print("</table><br/>")
@@ -335,12 +343,29 @@ def output_html(entries, sorted_list, cmp_entries, args):
     print("<td align='right'>", summary["green"], "</td></tr>")
     print("<tr><td", white, ">time &lt; 1 second</td>")
     print("<td align='right'>", summary["white"], "</td></tr>")
-    print("</table></body></html>")
+    print("</table>")
+
+    if cmp_entries:
+        print("<table id='legend' border='2' bgcolor='#EEEEEE'>")
+        print("<tr><td", red, ">time increase &gt; 20%</td></tr>")
+        print("<tr><td", yellow, ">time increase &gt; 0</td></tr>")
+        print("<tr><td", green, ">time decrease &gt; 20%</td></tr>")
+        print(
+            "<tr><td",
+            white,
+            ">time change &lt; 20%% or build time &lt; 1 minute</td></tr>",
+        )
+        print("</table>")
+
+    print("</body></html>")
 
 
 # output results in CSV format
 def output_csv(entries, sorted_list, cmp_entries, args):
-    print("time,size,file")
+    print("time,size,file", end="")
+    if cmp_entries:
+        print(",diff", end="")
+    print()
     for name in sorted_list:
         entry = entries[name]
         build_time = entry[1] - entry[0]
@@ -348,12 +373,11 @@ def output_csv(entries, sorted_list, cmp_entries, args):
         cmp_entry = (
             cmp_entries[name] if cmp_entries and name in cmp_entries else None
         )
+        print(build_time, file_size, name, sep=",", end="")
         if cmp_entry:
             diff_time = cmp_entry[1] - cmp_entry[0] - build_time
-            diff_size = cmp_entry[2] - file_size
-            print(build_time, file_size, name, diff_time, diff_size, sep=",")
-        else:
-            print(build_time, file_size, name, sep=",")
+            print(",", diff_time, sep="", end="")
+        print()
 
 
 # parse log file into map
