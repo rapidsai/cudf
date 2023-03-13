@@ -31,8 +31,8 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-
 #include <rmm/mr/device/per_device_resource.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>

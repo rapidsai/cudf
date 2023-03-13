@@ -26,8 +26,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/exec_policy.hpp>
-
 #include <rmm/mr/device/per_device_resource.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
