@@ -4465,6 +4465,144 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   }
 }
 
+TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
+{
+  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  // 4 nulls
+  // [NULL, 2, NULL]
+  // []
+  // [4, 5]
+  // NULL
+  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+
+  // 4 nulls
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // 4 nulls
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // 6 nulls
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  using dlcw = cudf::test::lists_column_wrapper<double>;
+  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, valids}}, valids2},
+            {{7., 8.}},
+            dlcw{},
+            dlcw{dlcw{}}};
+
+  // 4 nulls
+  // TODO: uint16_t lists are not read properly in parquet reader
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // NULL
+  using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
+  cudf::test::lists_column_wrapper<uint16_t> col4{
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
+    valids2};
+
+  // 6 nulls
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // NULL
+  lcw col5{
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
+    valids2};
+
+  // 4 nulls
+  using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
+  cudf::test::lists_column_wrapper<cudf::string_view> col6{
+    {{"Monday", "Monday", "Friday"}, {}, {"Monday", "Friday"}, {}, {"Sunday", "Funday"}},
+    {{"bee", "sting"}},
+    strlcw{},
+    strlcw{strlcw{}}};
+
+  // 11 nulls
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [NULL, [], NULL, [[]]]
+  // NULL
+  lcw col7{{
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             lcw{lcw{lcw{}}},
+           },
+           valids2};
+
+  table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("col_list_int_0");
+  expected_metadata.column_metadata[1].set_name("col_list_list_int_1");
+  expected_metadata.column_metadata[2].set_name("col_list_list_int_nullable_2");
+  expected_metadata.column_metadata[3].set_name("col_list_list_nullable_double_nullable_3");
+  expected_metadata.column_metadata[0].set_name("col_list_list_uint16_4");
+  expected_metadata.column_metadata[4].set_name("col_list_nullable_list_nullable_int_nullable_5");
+  expected_metadata.column_metadata[5].set_name("col_list_list_string_6");
+  expected_metadata.column_metadata[6].set_name("col_list_list_list_7");
+
+  int64_t const null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
+
+  auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
+  auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+                    .metadata(&expected_metadata)
+                    .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+                    .compression(cudf::io::compression_type::NONE);
+
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
+        // last column has 2 values per row
+        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check null counts in column chunk stats and page indexes
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+      EXPECT_EQ(stats.null_count, null_counts[c]);
+
+      // should only be one page
+      EXPECT_FALSE(ci.null_pages[0]);
+      EXPECT_EQ(ci.null_counts[0], null_counts[c]);
+    }
+  }
+}
+
 TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
 {
   const char* coldata[] = {
