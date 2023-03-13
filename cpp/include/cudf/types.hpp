@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ using thread_index_type = int64_t;   ///< Thread index type in kernels
  * @tparam T Iterator type
  * @param f "first" iterator
  * @param l "last" iterator
- * @return size_type The distance between first and last
+ * @return The distance between first and last
  */
 template <typename T>
 size_type distance(T f, T l)

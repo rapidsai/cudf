@@ -1313,11 +1313,8 @@ TEST_F(ParquetWriterTest, ListOfStruct)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 5, 5, 6}.release();
   auto num_list_rows = list_offsets_column->size() - 1;
 
-  auto list_col = cudf::make_lists_column(num_list_rows,
-                                          std::move(list_offsets_column),
-                                          std::move(struct_2),
-                                          cudf::UNKNOWN_NULL_COUNT,
-                                          {});
+  auto list_col = cudf::make_lists_column(
+    num_list_rows, std::move(list_offsets_column), std::move(struct_2), 0, {});
 
   auto expected = table_view({*list_col});
 
@@ -1779,11 +1776,8 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 3}.release();
   auto num_list_rows_1 = list_offsets_column_1->size() - 1;
 
-  auto list_col_1 = cudf::make_lists_column(num_list_rows_1,
-                                            std::move(list_offsets_column_1),
-                                            struct_2_1.release(),
-                                            cudf::UNKNOWN_NULL_COUNT,
-                                            {});
+  auto list_col_1 = cudf::make_lists_column(
+    num_list_rows_1, std::move(list_offsets_column_1), struct_2_1.release(), 0, {});
 
   auto table_1 = table_view({*list_col_1});
 
@@ -1798,11 +1792,8 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3}.release();
   auto num_list_rows_2 = list_offsets_column_2->size() - 1;
 
-  auto list_col_2 = cudf::make_lists_column(num_list_rows_2,
-                                            std::move(list_offsets_column_2),
-                                            struct_2_2.release(),
-                                            cudf::UNKNOWN_NULL_COUNT,
-                                            {});
+  auto list_col_2 = cudf::make_lists_column(
+    num_list_rows_2, std::move(list_offsets_column_2), struct_2_2.release(), 0, {});
 
   auto table_2 = table_view({*list_col_2});
 
@@ -1861,11 +1852,8 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4}.release();
   auto num_list_rows_1 = list_offsets_column_1->size() - 1;
 
-  auto list_col_1 = cudf::make_lists_column(num_list_rows_1,
-                                            std::move(list_offsets_column_1),
-                                            struct_2_1.release(),
-                                            cudf::UNKNOWN_NULL_COUNT,
-                                            {});
+  auto list_col_1 = cudf::make_lists_column(
+    num_list_rows_1, std::move(list_offsets_column_1), struct_2_1.release(), 0, {});
 
   auto table_1 = table_view({*list_col_1});
 
@@ -1889,11 +1877,8 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2}.release();
   auto num_list_rows_2 = list_offsets_column_2->size() - 1;
 
-  auto list_col_2 = cudf::make_lists_column(num_list_rows_2,
-                                            std::move(list_offsets_column_2),
-                                            struct_2_2.release(),
-                                            cudf::UNKNOWN_NULL_COUNT,
-                                            {});
+  auto list_col_2 = cudf::make_lists_column(
+    num_list_rows_2, std::move(list_offsets_column_2), struct_2_2.release(), 0, {});
 
   auto table_2 = table_view({*list_col_2});
 
