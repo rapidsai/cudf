@@ -4473,8 +4473,9 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
 TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
 {
-  auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto null_at_even_idx =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto null_at_idx_3 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -4483,7 +4484,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // []
   // [4, 5]
   // NULL
-  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+  lcw col0{{{{1, 2, 3}, null_at_even_idx}, {}, {4, 5}, {}}, null_at_idx_3};
 
   // 4 nulls
   // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
@@ -4497,7 +4498,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
-  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at_idx_3}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 6 nulls
   // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
@@ -4505,7 +4506,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // []
   // [[]]
   using dlcw = cudf::test::lists_column_wrapper<double>;
-  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, valids}}, valids2},
+  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, null_at_even_idx}}, null_at_idx_3},
             {{7., 8.}},
             dlcw{},
             dlcw{dlcw{}}};
@@ -4517,17 +4518,22 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // NULL
   using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
   cudf::test::lists_column_wrapper<uint16_t> col4{
-    {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
-    valids2};
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at_idx_3},
+     {{7, 8}},
+     ui16lcw{},
+     ui16lcw{ui16lcw{}}},
+    null_at_idx_3};
 
   // 6 nulls
   // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
   // [[7, 8]]
   // []
   // NULL
-  lcw col5{
-    {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
-    valids2};
+  lcw col5{{{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, null_at_even_idx}}, null_at_idx_3},
+            {{7, 8}},
+            lcw{},
+            lcw{lcw{}}},
+           null_at_idx_3};
 
   // 4 nulls
   using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -4543,16 +4549,16 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // [NULL, [], NULL, [[]]]
   // NULL
   lcw col7{{
-             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
-             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
-             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             {{{{1, 2, 3, 4}, null_at_even_idx}}, {{{5, 6, 7}, null_at_even_idx}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, null_at_even_idx},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, null_at_even_idx},
              lcw{lcw{lcw{}}},
            },
-           valids2};
+           null_at_idx_3};
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  int64_t const null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
+  int64_t const expected_null_counts[] = {4, 4, 4, 6, 4, 6, 4, 11};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4588,11 +4594,11 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
       // check null counts in column chunk stats and page indexes
       auto const ci    = read_column_index(source, chunk);
       auto const stats = parse_statistics(chunk);
-      EXPECT_EQ(stats.null_count, null_counts[c]);
+      EXPECT_EQ(stats.null_count, expected_null_counts[c]);
 
       // should only be one page
       EXPECT_FALSE(ci.null_pages[0]);
-      EXPECT_EQ(ci.null_counts[0], null_counts[c]);
+      EXPECT_EQ(ci.null_counts[0], expected_null_counts[c]);
     }
   }
 }
