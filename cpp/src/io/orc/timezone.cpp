@@ -388,10 +388,10 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
 
   timezone_file const tzf(tzif_dir, timezone_name);
 
-  std::vector<timestamp_s::rep> ttimes(1);
+  std::vector<timestamp_s::rep> transition_times(1);
   std::vector<duration_s::rep> offsets(1);
   // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
-  ttimes.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
+  transition_times.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
   offsets.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
   size_t earliest_std_idx = 0;
   for (size_t t = 0; t < tzf.timecnt(); t++) {
@@ -399,15 +399,17 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
     auto const idx   = tzf.ttime_idx[t];
     CUDF_EXPECTS(idx < tzf.typecnt(), "Out-of-range type index");
     auto const utcoff = tzf.ttype[idx].utcoff;
-    ttimes.push_back(ttime);
+    transition_times.push_back(ttime);
     offsets.push_back(utcoff);
-    if (!earliest_std_idx && !tzf.ttype[idx].isdst) { earliest_std_idx = ttimes.size() - 1; }
+    if (!earliest_std_idx && !tzf.ttype[idx].isdst) {
+      earliest_std_idx = transition_times.size() - 1;
+    }
   }
 
   if (tzf.timecnt() != 0) {
     if (!earliest_std_idx) { earliest_std_idx = 1; }
-    ttimes[0]  = ttimes[earliest_std_idx];
-    offsets[0] = offsets[earliest_std_idx];
+    transition_times[0] = transition_times[earliest_std_idx];
+    offsets[0]          = offsets[earliest_std_idx];
   } else {
     if (tzf.typecnt() == 0 || tzf.ttype[0].utcoff == 0) {
       // No transitions, offset is zero; Table would be a no-op.
@@ -415,8 +417,8 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
       return std::make_unique<cudf::table>();
     }
     // No transitions to use for the time/offset - use the first offset and apply to all timestamps
-    ttimes[0]  = std::numeric_limits<int64_t>::max();
-    offsets[0] = tzf.ttype[0].utcoff;
+    transition_times[0] = std::numeric_limits<int64_t>::max();
+    offsets[0]          = tzf.ttype[0].utcoff;
   }
 
   // Generate entries for times after the last transition
@@ -450,14 +452,14 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
     // Two entries per year, since there are two transitions
-    ttimes.push_back(year_timestamp + dst_start_time - future_std_offset);
+    transition_times.push_back(year_timestamp + dst_start_time - future_std_offset);
     offsets.push_back(future_dst_offset);
-    ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
+    transition_times.push_back(year_timestamp + dst_end_time - future_dst_offset);
     offsets.push_back(future_std_offset);
 
     // Swap the newly added transitions if in descending order
-    if (ttimes.rbegin()[1] > ttimes.rbegin()[0]) {
-      std::swap(ttimes.rbegin()[0], ttimes.rbegin()[1]);
+    if (transition_times.rbegin()[1] > transition_times.rbegin()[0]) {
+      std::swap(transition_times.rbegin()[0], transition_times.rbegin()[1]);
       std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
     }
 
@@ -466,14 +468,15 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
                         .count();
   }
 
-  CUDF_EXPECTS(ttimes.size() == offsets.size(),
+  CUDF_EXPECTS(transition_times.size() == offsets.size(),
                "Error reading TZif file for timezone " + std::string{timezone_name});
 
   std::vector<timestamp_s> ttimes_typed;
-  ttimes_typed.reserve(ttimes.size());
-  std::transform(ttimes.cbegin(), ttimes.cend(), std::back_inserter(ttimes_typed), [](auto ts) {
-    return timestamp_s{duration_s{ts}};
-  });
+  ttimes_typed.reserve(transition_times.size());
+  std::transform(transition_times.cbegin(),
+                 transition_times.cend(),
+                 std::back_inserter(ttimes_typed),
+                 [](auto ts) { return timestamp_s{duration_s{ts}}; });
   std::vector<duration_s> offsets_typed;
   offsets_typed.reserve(offsets.size());
   std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
@@ -487,7 +490,7 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   tz_table_columns.emplace_back(std::make_unique<cudf::column>(std::move(d_ttimes)));
   tz_table_columns.emplace_back(std::make_unique<cudf::column>(std::move(d_offsets)));
 
-  // Need to finish copies before ttimes and offsets go out of scope
+  // Need to finish copies before transition_times and offsets go out of scope
   stream.synchronize();
 
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
