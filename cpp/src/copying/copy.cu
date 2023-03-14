@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -174,7 +175,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                     gather_map,
                                                     out_of_bounds_policy::DONT_CHECK,
                                                     negative_index_policy::NOT_ALLOWED,
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
