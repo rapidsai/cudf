@@ -2151,13 +2151,13 @@ write_to_buffer(const table_view& input)
 }  // namespace
 
 void writer::impl::write_to_buffer(table_view const& input,
-                                   std::unique_ptr<table_input_metadata>& table_meta,
+                                   table_input_metadata const& table_meta,
                                    stripe_size_limits max_stripe_size,
                                    size_type row_index_stride,
                                    bool enable_dictionary,
                                    CompressionKind compression_kind,
                                    size_t compression_blocksize,
-                                   const std::unique_ptr<data_sink>& out_sink,
+                                   std::unique_ptr<data_sink> const& out_sink,
                                    statistics_freq stats_freq,
                                    persisted_statistics& persisted_stripe_statistics,
                                    bool single_write_mode,
@@ -2166,7 +2166,7 @@ void writer::impl::write_to_buffer(table_view const& input,
 {
   auto const input_tview = table_device_view::create(input, stream);
 
-  auto orc_table = make_orc_table_view(input, *input_tview, *table_meta, stream);
+  auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
 
   auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
@@ -2207,13 +2207,14 @@ void writer::impl::write_to_buffer(table_view const& input,
 
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
   auto const compressed_block_align   = comp_block_alignment(compression_kind);
-  auto streams                        = create_streams(orc_table.columns,
+
+  auto streams  = create_streams(orc_table.columns,
                                 segmentation,
                                 decimal_column_sizes(dec_chunk_sizes.rg_sizes),
                                 enable_dictionary,
                                 compression_kind,
                                 single_write_mode);
-  auto enc_data                       = encode_columns(orc_table,
+  auto enc_data = encode_columns(orc_table,
                                  std::move(dictionaries),
                                  std::move(dec_chunk_sizes),
                                  segmentation,
@@ -2432,7 +2433,7 @@ void writer::impl::write(table_view const& input)
   if (not table_meta) { table_meta = make_table_meta(input); }
 
   write_to_buffer(input,
-                  table_meta,
+                  *table_meta,
                   max_stripe_size,
                   row_index_stride,
                   enable_dictionary_,

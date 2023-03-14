@@ -445,7 +445,7 @@ class writer::impl {
   void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
 
   static void write_to_buffer(table_view const& input,
-                              std::unique_ptr<table_input_metadata>& table_meta,
+                              table_input_metadata const& table_meta,
                               stripe_size_limits max_stripe_size,
                               size_type row_index_stride,
                               bool enable_dictionary,
