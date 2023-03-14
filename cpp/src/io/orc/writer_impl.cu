@@ -1442,8 +1442,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     }
   }
 
-  ProtobufWriter pbw;
-  pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+  ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
 
   // Add row index entries
   auto const& rowgroups_range = segmentation.stripes[stripe_id];
@@ -2306,8 +2305,7 @@ void writer::impl::write(table_view const& table)
             : 0;
         if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
       }
-      ProtobufWriter pbw;
-      pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+      ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
       pbw.write(sf);
       stripe.footerLength = pbw.size();
       if (compression_kind_ != NONE) {
@@ -2418,8 +2416,7 @@ void writer::impl::close()
 
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {
-    ProtobufWriter pbw;
-    pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+    ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
     pbw.write(md);
     add_uncompressed_block_headers(pbw.buffer());
     ps.metadataLength = pbw.size();
@@ -2427,8 +2424,7 @@ void writer::impl::close()
   } else {
     ps.metadataLength = 0;
   }
-  ProtobufWriter pbw;
-  pbw.resize((compression_kind_ != NONE) ? 3 : 0);
+  ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
   pbw.write(ff);
   add_uncompressed_block_headers(pbw.buffer());
 
