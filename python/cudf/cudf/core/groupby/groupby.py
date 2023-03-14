@@ -654,6 +654,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         to_take += np.repeat(group_offsets - fixup, size_per_group)
         return group_values.iloc[to_take]
 
+    @_cudf_nvtx_annotate
     def head(self, n: int = 5):
         """Return first n rows of each group
 
@@ -702,6 +703,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return self._head_tail(n, take_head=True)
 
+    @_cudf_nvtx_annotate
     def tail(self, n: int = 5):
         """Return last n rows of each group
 
