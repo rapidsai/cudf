@@ -897,7 +897,9 @@ def _get_groups_and_offsets(
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
     part_names = (
-        part_keys.to_pandas(nullable=True).unique().to_frame(index=False)
+        part_keys.take(part_offsets[:-1])
+        .to_pandas(nullable=True)
+        .to_frame(index=False)
     )
     return part_names, grouped_df, part_offsets
 
