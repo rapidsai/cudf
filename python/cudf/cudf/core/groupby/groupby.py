@@ -825,7 +825,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             scan = np.empty_like(samples_per_group)
             scan[0] = 0
             np.cumsum(samples_per_group[:-1], out=scan[1:])
-            want += np.repeat(offsets[:-1] - scan, samples_per_group)
+            want += np.repeat(group_offsets[:-1] - scan, samples_per_group)
             indices = indices[want]
         return group_values.iloc[indices]
 
