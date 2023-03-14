@@ -668,6 +668,31 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Subset of the original grouped object as determined by n
 
+        See Also
+        --------
+        .tail
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+        ...     {
+        ...         "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+        ...         "b": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ...     }
+        ... )
+        >>> df.groupby("a").head(1)
+           a  b
+        1  0  1
+        0  1  0
+        3  2  3
+        6  3  6
+        >>> df.groupby("a").head(-2)
+           a  b
+        0  1  0
+        3  2  3
+        6  3  6
+        8  3  8
+
         .. pandas-compat::
 
            Note that the returned object will be ordered group-wise
@@ -690,6 +715,32 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         Series or DataFrame
             Subset of the original grouped object as determined by n
+
+
+        See Also
+        --------
+        .head
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+        ...     {
+        ...         "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+        ...         "b": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ...     }
+        ... )
+        >>> df.groupby("a").tail(1)
+            a   b
+        1   0   1
+        5   1   5
+        7   2   7
+        10  3  10
+        >>> df.groupby("a").tail(-2)
+            a   b
+        5   1   5
+        7   2   7
+        9   3   9
+        10  3  10
 
         .. pandas-compat::
 
