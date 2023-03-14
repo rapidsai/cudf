@@ -18,7 +18,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -53,7 +53,8 @@ struct equality_functor {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
     // We don't call this for nulls so this is fine
-    return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
+    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };
 

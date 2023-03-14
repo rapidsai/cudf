@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import contextlib
 
@@ -11,7 +11,6 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -160,18 +159,8 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
 @pytest.mark.parametrize(
     "func",
     [
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).x.sum(),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        ),
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).sum(),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        ),
+        lambda df: df.groupby(["a", "b"]).x.sum(),
+        lambda df: df.groupby(["a", "b"]).sum(),
         pytest.param(
             lambda df: df.groupby(["a", "b"]).agg({"x", "sum"}),
             marks=pytest.mark.xfail,
