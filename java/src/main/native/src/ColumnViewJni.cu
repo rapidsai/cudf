@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <cudf/utilities/span.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 #include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -187,13 +188,14 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   // Use `cudf::duplicate_keep_option::KEEP_LAST` so this will produce the desired behavior when
   // being called in `create_map` in spark-rapids.
   // Other options comparing nulls and NaNs are set as all-equal.
-  auto out_columns = cudf::detail::stable_distinct(
-                         table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
-                                     child.child(0), child.child(1)}}, // input table
-                         std::vector<size_type>{0, 1},                 // key columns
-                         cudf::duplicate_keep_option::KEEP_LAST, cudf::null_equality::EQUAL,
-                         cudf::nan_equality::ALL_EQUAL, stream)
-                         ->release();
+  auto out_columns =
+      cudf::detail::stable_distinct(
+          table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}}, child.child(0),
+                      child.child(1)}}, // input table
+          std::vector<size_type>{0, 1}, // key columns
+          cudf::duplicate_keep_option::KEEP_LAST, cudf::null_equality::EQUAL,
+          cudf::nan_equality::ALL_EQUAL, stream, rmm::mr::get_current_device_resource())
+          ->release();
   auto const out_labels = out_columns.front()->view();
 
   // Assemble a structs column of <out_keys, out_vals>.
