@@ -1271,7 +1271,7 @@ libcudf provides view types for nested column types as well as for the data elem
 `cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of
 any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore
 `cudf::string_view` is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
-data type for a `cudf::column` of type [`size_type`](#cudfsize_type). As it's name implies, this is a read-only object
+data type for a `cudf::column` of type [`size_type`](#cudfsize_type). As its name implies, this is a read-only object
 instance that points to device memory inside the strings column. It's lifespan is the same (or less)
 as the column it views.
 

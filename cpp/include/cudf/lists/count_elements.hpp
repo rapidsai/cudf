@@ -44,9 +44,9 @@ namespace lists {
  * Any null input element will result in a corresponding null entry
  * in the output column.
  *
- * @param input Input lists column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with the number of elements for each row.
+ * @param input Input lists column
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with the number of elements for each row
  */
 std::unique_ptr<column> count_elements(
   lists_column_view const& input,

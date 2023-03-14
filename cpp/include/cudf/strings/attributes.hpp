@@ -32,7 +32,7 @@ namespace strings {
  */
 
 /**
- * @brief Returns a column containing cudf::size_type of character lengths
+ * @brief Returns a column containing character lengths
  * of each string in the given column
  *
  * The output column will have the same number of rows as the
@@ -50,7 +50,7 @@ std::unique_ptr<column> count_characters(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a column containing cudf::size_type of byte lengths
+ * @brief Returns a column containing byte lengths
  * of each string in the given column
  *
  * The output column will have the same number of rows as the
@@ -69,7 +69,7 @@ std::unique_ptr<column> count_bytes(
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
- * character of each string.
+ * character of each string
  *
  * A code point is the integer value representation of a character.
  * For example, the code point value for the character 'A' in UTF-8 is 65.
@@ -79,9 +79,9 @@ std::unique_ptr<column> count_bytes(
  *
  * Any null string is ignored. No null entries will appear in the output column.
  *
- * @param input Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column with code point integer values for each character.
+ * @param input Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New INT32 column with code point integer values for each character
  */
 std::unique_ptr<column> code_points(
   strings_column_view const& input,

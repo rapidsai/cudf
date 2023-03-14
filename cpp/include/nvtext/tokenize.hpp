@@ -112,10 +112,10 @@ std::unique_ptr<cudf::column> tokenize(
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
  *
- * @param strings Strings column to use for this operation.
- * @param delimiter Strings used to separate each string into tokens.
+ * @param strings Strings column to use for this operation
+ * @param delimiter Strings used to separate each string into tokens;
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(
@@ -141,11 +141,11 @@ std::unique_ptr<cudf::column> count_tokens(
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
  *
- * @throw cudf::logic_error if the delimiters column is empty or contains nulls.
+ * @throw cudf::logic_error if the delimiters column is empty or contains nulls
  *
- * @param strings Strings column to use for this operation.
- * @param delimiters Strings used to separate each string into tokens.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings column to use for this operation
+ * @param delimiters Strings used to separate each string into tokens
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of token counts
  */
 std::unique_ptr<cudf::column> count_tokens(

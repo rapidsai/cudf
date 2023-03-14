@@ -60,16 +60,16 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 
 /**
  * @brief Returns a numeric column containing lengths of each string in
- * based on the provided unary function.
+ * based on the provided unary function
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @tparam UnaryFunction Device function that returns an integer given a string_view.
- * @param strings Strings instance for this operation.
- * @param ufn Function returns an integer for each string.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @tparam UnaryFunction Device function that returns an integer given a string_view
+ * @param strings Strings instance for this operation
+ * @param ufn Function returns an integer for each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New column with lengths for each string.
+ * @return New column with lengths for each string
  */
 template <typename UnaryFunction>
 std::unique_ptr<column> counts_fn(strings_column_view const& strings,
