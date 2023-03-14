@@ -321,7 +321,8 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
-    object partitions_info=None
+    object partitions_info=None,
+    bool nullability=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -364,7 +365,7 @@ def write_parquet(
 
         tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
-            table[name]._column, tbl_meta.get().column_metadata[i]
+            table[name]._column, tbl_meta.get().column_metadata[i], nullability
         )
 
     cdef map[string, string] tmp_user_data
@@ -597,7 +598,7 @@ cdef class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
             _set_col_metadata(
-                table[name]._column, self.tbl_meta.get().column_metadata[i]
+                table[name]._column, self.tbl_meta.get().column_metadata[i], True
             )
 
         index = (
@@ -675,15 +676,16 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
+cdef _set_col_metadata(Column col, column_in_metadata& col_meta, bool nullability):
+    col_meta.set_nullability(nullability)
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_metadata(child_col, col_meta.child(i))
+            _set_col_metadata(child_col, col_meta.child(i), nullability)
     elif is_list_dtype(col):
-        _set_col_metadata(col.children[1], col_meta.child(1))
+        _set_col_metadata(col.children[1], col_meta.child(1), nullability)
     else:
         if is_decimal_dtype(col):
             col_meta.set_decimal_precision(col.dtype.precision)

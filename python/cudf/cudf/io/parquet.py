@@ -60,6 +60,7 @@ def _write_parquet(
     max_page_size_rows=None,
     partitions_info=None,
     storage_options=None,
+    nullability=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -89,6 +90,7 @@ def _write_parquet(
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
+        "nullability": nullability,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -126,6 +128,7 @@ def write_to_dataset(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     storage_options=None,
+    nullability=True,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -702,6 +705,7 @@ def to_parquet(
     max_page_size_rows=None,
     storage_options=None,
     return_metadata=False,
+    nullability=True,
     *args,
     **kwargs,
 ):
@@ -750,6 +754,7 @@ def to_parquet(
                 max_page_size_rows=max_page_size_rows,
                 return_metadata=return_metadata,
                 storage_options=storage_options,
+                nullability=nullability,
             )
 
         partition_info = (
@@ -774,6 +779,7 @@ def to_parquet(
             max_page_size_rows=max_page_size_rows,
             partitions_info=partition_info,
             storage_options=storage_options,
+            nullability=nullability,
         )
 
     else:
