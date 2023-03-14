@@ -66,11 +66,11 @@ def to_dlpack(list source_columns):
     return pycapsule.PyCapsule_New(
         dlpack_tensor,
         'dltensor',
-        <pycapsule.PyCapsule_Destructor>dlmanaged_tensor_pycapsule_deleter
+        dlmanaged_tensor_pycapsule_deleter
     )
 
 
-cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
+cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
