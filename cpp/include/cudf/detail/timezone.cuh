@@ -60,8 +60,12 @@ inline __device__ duration_s get_ut_offset(table_device_view tz_table, timestamp
       return last_less_equal(transition_times.begin(), file_entry_end, ts);
     } else {
       auto project_to_cycle = [](timestamp_s ts) {
+        // Years divisible by four are leap years
+        // Exceptions are years divisible by 100, but not divisible by 400
+        static constexpr int32_t num_leap_years_in_cycle =
+          solar_cycle_years / 4 - (solar_cycle_years / 100 - solar_cycle_years / 400);
         static constexpr duration_s cycle_s = cuda::std::chrono::duration_cast<duration_s>(
-          duration_D{365 * solar_cycle_years + (100 - 3)});
+          duration_D{365 * solar_cycle_years + num_leap_years_in_cycle});
         return timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s};
       };
       // Search the 400-year cycle if outside of the file entries range
