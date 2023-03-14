@@ -441,12 +441,14 @@ void init_dictionaries(orc_table_view& orc_table,
   dict->device_to_host(stream, true);
 }
 
-void writer::impl::build_dictionaries(orc_table_view& orc_table,
-                                      host_span<stripe_rowgroups const> stripe_bounds,
-                                      hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
-                                      host_span<rmm::device_uvector<uint32_t>> dict_index,
-                                      host_span<bool const> dictionary_enabled,
-                                      hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict)
+void build_dictionaries(orc_table_view& orc_table,
+                        host_span<stripe_rowgroups const> stripe_bounds,
+                        hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
+                        host_span<rmm::device_uvector<uint32_t>> dict_index,
+                        host_span<bool const> dictionary_enabled,
+                        hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict,
+                        bool enable_dictionary,
+                        rmm::cuda_stream_view stream)
 {
   const auto num_rowgroups = dict.size().first;
 
@@ -470,7 +472,7 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
       sd.leaf_column = dict[0][dict_idx].leaf_column;
     }
 
-    if (enable_dictionary_) {
+    if (enable_dictionary) {
       struct string_column_cost {
         size_t direct     = 0;
         size_t dictionary = 0;
@@ -2105,17 +2107,16 @@ void writer::impl::persisted_statistics::persist(int num_table_rows,
   num_rows     = num_table_rows;
 }
 
-void writer::impl::write(table_view const& table)
-{
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  auto const num_rows = table.num_rows();
+namespace {
 
-  if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
+std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
+{
+  auto table_meta = std::make_unique<table_input_metadata>(input);
 
   // Fill unnamed columns' names in table_meta
   std::function<void(column_in_metadata&, std::string)> add_default_name =
     [&](column_in_metadata& col_meta, std::string default_name) {
-      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
+      if (col_meta.get_name().empty()) { col_meta.set_name(default_name); }
       for (size_type i = 0; i < col_meta.num_children(); ++i) {
         add_default_name(col_meta.child(i), std::to_string(i));
       }
@@ -2124,9 +2125,47 @@ void writer::impl::write(table_view const& table)
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto const d_table = table_device_view::create(table, stream);
+  return table_meta;
+}
 
-  auto orc_table = make_orc_table_view(table, *d_table, *table_meta, stream);
+#if 0
+std::vector<uint8_t> /*writer::impl::*/
+write_to_buffer(const table_view& input)
+{
+  //  auto const num_rows = input.num_rows();
+
+  return {};
+}
+#endif
+
+}  // namespace
+
+void writer::impl::write(table_view const& input)
+{
+  write(input,
+        table_meta,
+        max_stripe_size,
+        row_index_stride,
+        enable_dictionary_,
+        compression_kind_,
+        stream);
+}
+
+void writer::impl::write(table_view const& input,
+                         std::unique_ptr<table_input_metadata>& table_meta,
+                         stripe_size_limits max_stripe_size,
+                         size_type row_index_stride,
+                         bool enable_dictionary,
+                         CompressionKind compression_kind,
+                         rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+
+  if (not table_meta) { table_meta = make_table_meta(input); }
+
+  auto const input_tview = table_device_view::create(input, stream);
+
+  auto orc_table = make_orc_table_view(input, *input_tview, *table_meta, stream);
 
   auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
@@ -2158,13 +2197,15 @@ void writer::impl::write(table_view const& table)
                        dict,
                        dictionaries.index,
                        dictionaries.dictionary_enabled,
-                       stripe_dict);
+                       stripe_dict,
+                       enable_dictionary,
+                       stream);
   }
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
-  auto const uncompressed_block_align = uncomp_block_alignment(compression_kind_);
-  auto const compressed_block_align   = comp_block_alignment(compression_kind_);
+  auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
+  auto const compressed_block_align   = comp_block_alignment(compression_kind);
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(orc_table,
@@ -2174,6 +2215,8 @@ void writer::impl::write(table_view const& table)
                                  streams,
                                  uncompressed_block_align,
                                  stream);
+
+  auto const num_rows = input.num_rows();
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
@@ -2188,7 +2231,7 @@ void writer::impl::write(table_view const& table)
     size_t num_compressed_blocks = 0;
 
     auto const max_compressed_block_size =
-      max_compression_output_size(compression_kind_, compression_blocksize_);
+      max_compression_output_size(compression_kind, compression_blocksize_);
     auto const padded_max_compressed_block_size =
       util::round_up_unsafe<size_t>(max_compressed_block_size, compressed_block_align);
     auto const padded_block_header_size =
@@ -2368,12 +2411,6 @@ void writer::impl::write(table_view const& table)
                     std::make_move_iterator(stripes.begin()),
                     std::make_move_iterator(stripes.end()));
   ff.numberOfRows += num_rows;
-}
-
-std::vector<uint8_t> writer::impl::write_to_buffer(const table_view& input)
-{
-  //
-  return {};
 }
 
 void writer::impl::close()

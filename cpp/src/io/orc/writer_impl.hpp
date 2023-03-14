@@ -229,7 +229,15 @@ class writer::impl {
    *
    * @param[in] table The table information to be written
    */
-  void write(table_view const& table);
+  void write(table_view const& input);
+
+  void write(table_view const& input,
+             std::unique_ptr<table_input_metadata>& table_meta,
+             stripe_size_limits max_stripe_size,
+             size_type row_index_stride,
+             bool enable_dictionary,
+             CompressionKind compression_kind,
+             rmm::cuda_stream_view stream);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -261,12 +269,12 @@ class writer::impl {
    * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
    * @param stripe_dict List of stripe dictionaries
    */
-  void build_dictionaries(orc_table_view& orc_table,
-                          host_span<stripe_rowgroups const> stripe_bounds,
-                          hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
-                          host_span<rmm::device_uvector<uint32_t>> dict_index,
-                          host_span<bool const> dictionary_enabled,
-                          hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict);
+  //  void build_dictionaries(orc_table_view& orc_table,
+  //                          host_span<stripe_rowgroups const> stripe_bounds,
+  //                          hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
+  //                          host_span<rmm::device_uvector<uint32_t>> dict_index,
+  //                          host_span<bool const> dictionary_enabled,
+  //                          hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict);
 
   /**
    * @brief Builds up per-column streams.
