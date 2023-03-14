@@ -740,10 +740,15 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
-    cudftestutil STATIC
+    # This library must also be compiled as a dynamic library to support
+    # LD_PRELOAD injection of symbols. We currently leverage this for
+    # stream-related library validation and may make use of it for other
+    # similar features in the future.
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/default_stream.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -790,18 +795,27 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
   endif()
 
-  # Libraries for stream-related testing.
-  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+  # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
+  # on and one with it set to off. Each test will then be configured to use the appropriate library
+  # depending via ctest and whether it has been updated to expose public stream APIs.
+  foreach(_mode cudf testing)
+    set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
-  set_target_properties(
-    cudf_identify_stream_usage
-    PROPERTIES # set target compile options
-               CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-  )
-  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
-  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+    set_target_properties(
+      ${_tgt}
+      PROPERTIES # set target compile options
+                 CXX_STANDARD 17
+                 CXX_STANDARD_REQUIRED ON
+                 POSITION_INDEPENDENT_CODE ON
+    )
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    add_library(cudf::${_tgt} ALIAS ${_tgt})
+
+    if("${_mode}" STREQUAL "testing")
+      target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
+    endif()
+  endforeach()
 endif()
 
 # ##################################################################################################
@@ -877,7 +891,8 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
 endif()
 
 set(doc_string

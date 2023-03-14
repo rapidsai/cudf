@@ -74,7 +74,9 @@ outputs:
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
-        - test -f $PREFIX/lib/libcudftestutil.a
+        - test -f $PREFIX/lib/libcudftestutil.so
+        - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_cudf.so
+        - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_testing.so
         - test -f $PREFIX/include/cudf/aggregation.hpp
         - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
         - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
@@ -294,11 +296,12 @@ outputs:
         - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
         - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
         - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+        - test -f $PREFIX/include/cudf_test/default_stream.hpp
         - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
         - test -f $PREFIX/include/cudf_test/file_utilities.hpp
         - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
         - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adapter.hpp
+        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adaptor.hpp
         - test -f $PREFIX/include/cudf_test/table_utilities.hpp
         - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
         - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
