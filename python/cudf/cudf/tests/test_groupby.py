@@ -2,6 +2,7 @@
 
 import datetime
 import itertools
+import operator
 import textwrap
 from decimal import Decimal
 
@@ -1474,7 +1475,6 @@ def test_grouping(grouper):
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_count(agg, by):
-
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1540,7 +1540,6 @@ def test_groupby_nth(n, by):
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_raise_data_error():
-
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
@@ -1551,7 +1550,6 @@ def test_raise_data_error():
 
 
 def test_drop_unsupported_multi_agg():
-
     gdf = cudf.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
     )
@@ -2567,7 +2565,6 @@ def test_groupby_apply_series():
     ],
 )
 def test_groupby_apply_series_args(func, args):
-
     got = make_frame(DataFrame, 100).groupby("x").y.apply(func, *args)
     expect = (
         make_frame(pd.DataFrame, 100)
@@ -2963,3 +2960,58 @@ def test_groupby_dtypes(groups):
     pdf = df.to_pandas()
 
     assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+
+
+class TestHeadTail:
+    @pytest.fixture(params=[-3, -2, -1, 0, 1, 2, 3])
+    def n(self, request):
+        return request.param
+
+    @pytest.fixture
+    def df(self):
+        return cudf.DataFrame(
+            {
+                "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+                "b": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            }
+        )
+
+    @pytest.fixture(params=[True, False])
+    def take_head(self, request):
+        return request.param
+
+    @pytest.fixture
+    def expected(self, df, n, take_head):
+        if n == 0:
+            # We'll get an empty dataframe in this case
+            return df.iloc[:0]
+        else:
+            # We groupby "a" which is the first column
+            keyfunc = operator.itemgetter(0)
+            if take_head or n == 0:
+                # Head does group[:n] as does tail for n == 0
+                slicefunc = operator.itemgetter(slice(None, n))
+            else:
+                # Tail does group[-n:] except when n == 0
+                slicefunc = operator.itemgetter(
+                    slice(-n, None) if n else slice(0)
+                )
+            expect_a, expect_b = zip(
+                *itertools.chain.from_iterable(
+                    slicefunc(list(group))
+                    for _, group in itertools.groupby(
+                        sorted(df.values_host.tolist(), key=keyfunc),
+                        key=keyfunc,
+                    )
+                )
+            )
+            return cudf.DataFrame(
+                {"a": expect_a, "b": expect_b}, index=cudf.Index(expect_b)
+            )
+
+    def test_head_tail(self, df, n, take_head, expected):
+        if take_head:
+            actual = df.groupby("a").head(n=n)
+        else:
+            actual = df.groupby("a").tail(n=n)
+        assert_eq(actual, expected)

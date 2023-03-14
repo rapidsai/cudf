@@ -608,6 +608,98 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     aggregate = agg
 
+    def _head_tail(self, n, *, take_head=True):
+        """Return the head or tail of each group
+
+        Parameters
+        ----------
+        n
+           Number of entries to include (if negative, number of
+           entries to exclude)
+        take_head
+           Do we want the head or the tail of the group
+
+        Returns
+        -------
+        New DataFrame or Series
+
+        Notes
+        -----
+        Unlike pandas, this returns an object in group order, not
+        original order
+        """
+        # A more memory-efficient implementation would merge the take
+        # into the grouping, but that probably requires a new
+        # aggregation scheme in libcudf. This is probably "fast
+        # enough" for most reasonable input sizes.
+        _, offsets, _, group_values = self._grouped()
+        group_offsets = np.asarray(offsets, dtype=np.int32)
+        size_per_group = np.diff(group_offsets)
+        # "Out of bounds" n for the group size either means no entries
+        # (negative) or all the entries (positive)
+        if n < 0:
+            size_per_group = np.maximum(
+                size_per_group + n, 0, out=size_per_group
+            )
+        else:
+            size_per_group = np.minimum(size_per_group, n, out=size_per_group)
+        if take_head:
+            group_offsets = group_offsets[:-1]
+        else:
+            group_offsets = group_offsets[1:] - size_per_group
+        to_take = np.arange(size_per_group.sum(), dtype=np.int32)
+        fixup = np.empty_like(size_per_group)
+        fixup[0] = 0
+        np.cumsum(size_per_group[:-1], out=fixup[1:])
+        to_take += np.repeat(group_offsets - fixup, size_per_group)
+        return group_values.iloc[to_take]
+
+    def head(self, n: int = 5):
+        """Return first n rows of each group
+
+        Parameters
+        ----------
+        n
+            If positive: number of entries to include from start of group
+            If negative: number of entries to exclude from end of group
+
+        Returns
+        -------
+        Series or DataFrame
+            Subset of the original grouped object as determined by n
+
+        .. pandas-compat::
+
+           Note that the returned object will be ordered group-wise
+           (with the same ordering as ``.apply(lambda x: x.head(n))``
+           though the original index is preserved, rather than in the
+           original input order.
+        """
+        return self._head_tail(n, take_head=True)
+
+    def tail(self, n: int = 5):
+        """Return last n rows of each group
+
+        Parameters
+        ----------
+        n
+            If positive: number of entries to include from end of group
+            If negative: number of entries to exclude from start of group
+
+        Returns
+        -------
+        Series or DataFrame
+            Subset of the original grouped object as determined by n
+
+        .. pandas-compat::
+
+           Note that the returned object will be ordered group-wise
+           (with the same ordering as ``.apply(lambda x: x.tail(n))``
+           though the original index is preserved, rather than in the
+           original input order.
+        """
+        return self._head_tail(n, take_head=False)
+
     def nth(self, n):
         """
         Return the nth row from each group.
