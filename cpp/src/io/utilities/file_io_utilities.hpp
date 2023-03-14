@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,35 +50,9 @@ class file_wrapper {
 };
 
 /**
- * @brief Base class for cuFile input/output.
- *
- * Contains the common API for cuFile input and output classes.
- */
-class cufile_io_base {
- public:
-  /**
-   * @brief Returns an estimate of whether the cuFile operation is the optimal option.
-   *
-   * @param size Read/write operation size, in bytes.
-   * @return Whether a cuFile operation with the given size is expected to be faster than a host
-   * read + H2D copy
-   */
-  static bool is_cufile_io_preferred(size_t size) { return size > op_size_threshold; }
-
- protected:
-  /**
-   * @brief The read/write size above which cuFile is faster then host read + copy
-   *
-   * This may not be the optimal threshold for all systems. Derived `is_cufile_io_preferred`
-   * implementations can use a different logic.
-   */
-  static constexpr size_t op_size_threshold = 128 << 10;
-};
-
-/**
  * @brief Interface class for cufile input.
  */
-class cufile_input : public cufile_io_base {
+class cufile_input {
  public:
   /**
    * @brief Asynchronously reads into existing device memory.
@@ -101,7 +75,7 @@ class cufile_input : public cufile_io_base {
 /**
  * @brief Interface class for cufile output.
  */
-class cufile_output : public cufile_io_base {
+class cufile_output {
  public:
   /**
    * @brief Asynchronously writes the data from a device buffer into a file.
