@@ -2984,7 +2984,7 @@ class TestHeadTail:
     def expected(self, df, n, take_head):
         if n == 0:
             # We'll get an empty dataframe in this case
-            return df.iloc[:0]
+            return df._empty_like(keep_index=True)
         else:
             # We groupby "a" which is the first column
             keyfunc = operator.itemgetter(0)
