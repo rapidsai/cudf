@@ -4280,7 +4280,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       auto const stats = parse_statistics(chunk);
 
       // should be half nulls, except no nulls in column 0
-      EXPECT_EQ(stats.null_count, c > 0 ? num_rows / 2 : 0);
+      EXPECT_EQ(stats.null_count, c == 0 ? 0 : num_rows / 2);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4473,10 +4473,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
 TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
 {
-  auto null_at_even_idx =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto null_at_idx_3 = cudf::test::iterators::null_at(3);
-
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
   // 4 nulls
@@ -4484,7 +4482,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // []
   // [4, 5]
   // NULL
-  lcw col0{{{{1, 2, 3}, null_at_even_idx}, {}, {4, 5}, {}}, null_at_idx_3};
+  lcw col0{{{{1, 2, 3}, nulls_at({0, 2})}, {}, {4, 5}, {}}, null_at(3)};
 
   // 4 nulls
   // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
@@ -4498,7 +4496,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // [[7, 8]]
   // []
   // [[]]
-  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at_idx_3}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // 6 nulls
   // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
@@ -4506,7 +4504,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // []
   // [[]]
   using dlcw = cudf::test::lists_column_wrapper<double>;
-  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, null_at_even_idx}}, null_at_idx_3},
+  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, nulls_at({0, 2})}}, null_at(3)},
             {{7., 8.}},
             dlcw{},
             dlcw{dlcw{}}};
@@ -4518,22 +4516,19 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // NULL
   using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
   cudf::test::lists_column_wrapper<uint16_t> col4{
-    {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at_idx_3},
-     {{7, 8}},
-     ui16lcw{},
-     ui16lcw{ui16lcw{}}},
-    null_at_idx_3};
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, null_at(3)}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
+    null_at(3)};
 
   // 6 nulls
   // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
   // [[7, 8]]
   // []
   // NULL
-  lcw col5{{{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, null_at_even_idx}}, null_at_idx_3},
+  lcw col5{{{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, nulls_at({0, 2})}}, null_at(3)},
             {{7, 8}},
             lcw{},
             lcw{lcw{}}},
-           null_at_idx_3};
+           null_at(3)};
 
   // 4 nulls
   using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -4549,12 +4544,12 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
   // [NULL, [], NULL, [[]]]
   // NULL
   lcw col7{{
-             {{{{1, 2, 3, 4}, null_at_even_idx}}, {{{5, 6, 7}, null_at_even_idx}, {8, 9}}},
-             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, null_at_even_idx},
-             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, null_at_even_idx},
+             {{{{1, 2, 3, 4}, nulls_at({0, 2})}}, {{{5, 6, 7}, nulls_at({0, 2})}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, nulls_at({0, 2})},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, nulls_at({0, 2})},
              lcw{lcw{lcw{}}},
            },
-           null_at_idx_3};
+           null_at(3)};
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
