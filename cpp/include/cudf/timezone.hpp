@@ -37,7 +37,7 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
  * @param tzif_dir The directory where the TZif files are located
- * @param timezone_name standard timezone name (for example, "US/Pacific")
+ * @param timezone_name standard timezone name (for example, "America/Los_Angeles")
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The transition table for the given timezone
