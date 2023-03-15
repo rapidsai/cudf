@@ -375,7 +375,7 @@ def output_csv(entries, sorted_list, cmp_entries, args):
         )
         print(build_time, file_size, name, sep=",", end="")
         if cmp_entry:
-            diff_time = cmp_entry[1] - cmp_entry[0] - build_time
+            diff_time = build_time - (cmp_entry[1] - cmp_entry[0])
             print(",", diff_time, sep="", end="")
         print()
 
