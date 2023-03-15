@@ -2187,7 +2187,7 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
     __syncwarp();
 
     // remove next lane from mask
-    mask &= ~(1 << (i + 1));
+    mask <<= 1;
   }
 }
 
