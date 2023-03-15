@@ -687,8 +687,8 @@ cdef _set_col_metadata(
     object nullability
 ):
     if col.nullable and nullability is False:
-        warnings.warn(f"column {col_meta.get_name()} contains null values, "
-                      f"nullability={nullability} is being ignored")
+        warnings.warn(f"column {col_meta.get_name().decode()} contains null "
+                      f"values, nullability={nullability} is being ignored")
         col_meta.set_nullability(True)
     elif nullability is not None:
         col_meta.set_nullability(nullability)
