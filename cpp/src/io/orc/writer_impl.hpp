@@ -445,13 +445,13 @@ class writer::impl {
   void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
 
   static void write_to_buffer(table_view const& input,
-                              std::size_t bytes_written,
                               table_input_metadata const& table_meta,
                               stripe_size_limits max_stripe_size,
                               size_type row_index_stride,
                               bool enable_dictionary,
                               CompressionKind compression_kind,
                               size_t compression_blocksize,
+                              std::unique_ptr<data_sink> const& out_sink,
                               statistics_freq stats_freq,
                               persisted_statistics& persisted_stripe_statistics,
                               bool single_write_mode,
