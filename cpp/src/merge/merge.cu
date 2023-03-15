@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,8 +170,8 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     bool nullable                = true,
-                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
+                                     bool nullable,
+                                     rmm::cuda_stream_view stream)
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
@@ -410,7 +410,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
   // extract merged row order according to indices:
   //
   auto const merged_indices = generate_merged_indices(
-    index_left_view, index_right_view, column_order, null_precedence, nullable);
+    index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
 
   // create merged table:
   //
