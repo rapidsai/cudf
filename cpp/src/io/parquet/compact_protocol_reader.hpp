@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,8 @@ class CompactProtocolReader {
   bool read(KeyValue* k);
   bool read(PageLocation* p);
   bool read(OffsetIndex* o);
+  bool read(PageSize* p);
+  bool read(ColumnChunkSize* o);
   bool read(ColumnIndex* c);
   bool read(Statistics* s);
 

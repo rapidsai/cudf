@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,8 @@ class CompactProtocolWriter {
   size_t write(const ColumnChunkMetaData&);
   size_t write(const PageLocation&);
   size_t write(const OffsetIndex&);
+  size_t write(const PageSize&);
+  size_t write(const ColumnChunkSize&);
 
  protected:
   std::vector<uint8_t>& m_buf;

@@ -231,6 +231,7 @@ struct aggregate_writer_metadata {
     std::vector<KeyValue> key_value_metadata;
     std::vector<OffsetIndex> offset_indexes;
     std::vector<std::vector<uint8_t>> column_indexes;
+    std::vector<ColumnChunkSize> column_sizes;
   };
   std::vector<per_file_metadata> files;
   std::string created_by         = "";
@@ -1872,6 +1873,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           dev_bfr = ck.uncompressed_bfr;
         }
 
+        // experimental: add data sizes to parquet metadata.
         auto add_size_metadata = [](column_view const& col,
                                     ColumnChunkMetaData& col_meta,
                                     host_span<gpu::EncPage> col_pages,
@@ -1892,23 +1894,22 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
               return column_size(slice, stream);
             });
-          size_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
-          std::string page_sizes_str;
+          int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
 
-          std::for_each(page_sizes.begin(), page_sizes.end(), [&page_sizes_str](auto size) {
-            page_sizes_str.append(std::to_string(size));
-            page_sizes_str.append(1, ',');
-          });
-
-          col_meta.key_value_metadata.push_back(
-            std::move(KeyValue{"data_size", std::to_string(chunk_size)}));
-          col_meta.key_value_metadata.push_back(std::move(KeyValue{"page_sizes", page_sizes_str}));
+          ColumnChunkSize cs{chunk_size, 0};
+          std::transform(
+            page_sizes.begin(), page_sizes.end(), std::back_inserter(cs.page_sizes), [](auto sz) {
+              return PageSize{static_cast<int64_t>(sz), 0};
+            });
+          return cs;
         };
 
-        add_size_metadata(single_streams_table.column(i),
-                          column_chunk_meta,
-                          {host_pages.data() + first_page_in_chunk, ck.num_pages},
-                          stream);
+        auto cs = add_size_metadata(single_streams_table.column(i),
+                                    column_chunk_meta,
+                                    {host_pages.data() + first_page_in_chunk, ck.num_pages},
+                                    stream);
+        md->file(p).column_sizes.push_back(cs);
+
         first_page_in_chunk += ck.num_pages;
 
         if (out_sink_[p]->is_device_write_preferred(ck.compressed_size)) {
@@ -2027,6 +2028,22 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
 
+    // experimental: write page size info ahead of other footer metadata
+    {
+      auto& fmd    = md->file(p);
+      int chunkidx = 0;
+      for (auto& r : fmd.row_groups) {
+        for (auto& c : r.columns) {
+          auto const& sizes = fmd.column_sizes[chunkidx++];
+          buffer.resize(0);
+          int32_t len = cpw.write(sizes);
+          c.meta_data.key_value_metadata.push_back(
+            KeyValue{"sizes_offset", std::to_string(out_sink_[p]->bytes_written())});
+          c.meta_data.key_value_metadata.push_back(KeyValue{"sizes_size", std::to_string(len)});
+          out_sink_[p]->host_write(buffer.data(), buffer.size());
+        }
+      }
+    }
     if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
       auto& fmd = md->file(p);
 
