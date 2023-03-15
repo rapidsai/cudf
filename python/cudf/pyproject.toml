@@ -62,6 +62,7 @@ test = [
     "pytest",
     "pytest-benchmark",
     "pytest-cases",
+    "pytest-cov",
     "pytest-xdist",
     "python-snappy>=0.6.0",
     "scipy",

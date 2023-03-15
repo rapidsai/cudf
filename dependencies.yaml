@@ -24,7 +24,6 @@ files:
       - test_cpp
       - test_python_common
       - test_python_cudf
-      - test_python_cov
       - test_python_dask_cudf
   test_cpp:
     output: none
@@ -39,7 +38,6 @@ files:
       - py_version
       - test_python_common
       - test_python_cudf
-      - test_python_cov
       - test_python_dask_cudf
       - pyarrow_run
   test_java:
@@ -439,6 +437,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - pytest
+          - pytest-cov
           - pytest-xdist
   test_python_cudf:
     common:
@@ -481,11 +480,6 @@ dependencies:
               - *transformers
           - matrix:
             packages:
-  test_python_cov:
-    common:
-      - output_types: [conda, requirements]
-        packages:
-          - pytest-cov
   test_python_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
