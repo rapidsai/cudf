@@ -1,0 +1,3 @@
+# Cython files
+recursive-include cudf_kafka *.pxd
+recursive-include cudf_kafka *.pyx

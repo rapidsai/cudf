@@ -509,20 +509,15 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
                             bool single_write_mode)
 {
-  if (single_write_mode) {
-    return col->nullable();
-  } else {
-    if (col_meta.is_nullability_defined()) {
-      CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
-                   "Mismatch in metadata prescribed nullability and input column nullability. "
-                   "Metadata for nullable input column cannot prescribe nullability = false");
-      return col_meta.nullable();
-    } else {
-      // For chunked write, when not provided nullability, we assume the worst case scenario
-      // that all columns are nullable.
-      return true;
-    }
+  if (col_meta.is_nullability_defined()) {
+    CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
+                 "Mismatch in metadata prescribed nullability and input column nullability. "
+                 "Metadata for nullable input column cannot prescribe nullability = false");
+    return col_meta.nullable();
   }
+  // For chunked write, when not provided nullability, we assume the worst case scenario
+  // that all columns are nullable.
+  return not single_write_mode or col->nullable();
 }
 
 /**
