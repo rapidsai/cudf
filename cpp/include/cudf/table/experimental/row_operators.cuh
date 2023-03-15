@@ -739,6 +739,25 @@ struct preprocessed_table {
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
   /**
+   * @brief create_preprocessed_table
+   * @param input
+   * @param flattened_input_aux_data
+   * @param transformed_aux_data
+   * @param column_order
+   * @param null_precedence
+   * @param safe_for_two_table_comparator
+   * @param stream
+   */
+  static std::shared_ptr<preprocessed_table> create_preprocessed_table(
+    table_view const& input,
+    std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
+    std::vector<std::unique_ptr<column>>&& transformed_aux_data,
+    host_span<order const> column_order,
+    host_span<null_order const> null_precedence,
+    bool safe_for_two_table_comparator,
+    rmm::cuda_stream_view stream);
+
+  /**
    * @brief Construct a preprocessed table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can

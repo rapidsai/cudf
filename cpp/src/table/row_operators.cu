@@ -386,16 +386,15 @@ std::
     // Should not use sliced child because we reuse the input's offset value and offsets child.
     auto const child_lhs = lhs.child(lists_column_view::child_column_index);
     auto const child_rhs =
-      rhs ? std::optional<column_view>{rhs.child(lists_column_view::child_column_index)}
+      rhs ? std::optional<column_view>{rhs.value().child(lists_column_view::child_column_index)}
           : std::nullopt;
 
     if (child_lhs.type().id() == type_id::STRUCT) {
       if (child_rhs) {
-        auto child_lhs_rhs = std::move(
-          cudf::detail::concatenate(
-            /*std::vector<column_view>*/ {child_lhs, child_rhs.value()}, stream, default_mr)
-            ->release()
-            .front());
+        auto child_lhs_rhs = cudf::detail::concatenate(
+          /*std::vector<column_view>*/ std::vector<column_view>{child_lhs, child_rhs.value()},
+          stream,
+          default_mr);
 
         // Dense ranks should be used because we are ranking two separate columns concatenating
         // together.
@@ -408,13 +407,13 @@ std::
                                               stream,
                                               default_mr);
         auto const ranks_slices = cudf::detail::slice(
-          ranks,
+          ranks->view(),
           {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.value().size()},
           stream);
         auto child_lhs_ranks = std::make_unique<column>(ranks_slices.front());
         auto child_rhs_ranks = std::make_unique<column>(ranks_slices.back());
         auto transformed_lhs = make_transformed_input(lhs, child_lhs_ranks->view());
-        auto transformed_rhs = make_transformed_input(rhs, child_rhs_ranks->view());
+        auto transformed_rhs = make_transformed_input(rhs.value(), child_rhs_ranks->view());
         return {
           transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
       } else {
@@ -435,11 +434,11 @@ std::
         return {std::move(transformed_lhs), std::nullopt, std::move(child_lhs_ranks), nullptr};
       }
     } else if (child_lhs.type().id() == type_id::LIST) {
-      auto [new_child_lhs, new_child_rhs, child_lhs_ranks, child_rhs_ranks] =
+      auto [new_child_lhs, new_child_rhs_opt, child_lhs_ranks, child_rhs_ranks] =
         transform_lists_of_structs(child_lhs, child_rhs, stream);
       if (child_lhs_ranks) {
         auto transformed_lhs = make_transformed_input(lhs, new_child_lhs);
-        auto transformed_rhs = make_transformed_input(rhs, new_child_rhs);
+        auto transformed_rhs = make_transformed_input(rhs.value(), new_child_rhs_opt.value());
         return {
           transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
       }
@@ -477,16 +476,19 @@ transform_lists_of_structs(table_view const& lhs,
   std::vector<std::unique_ptr<column>> rhs_aux_cols;
   for (size_type child_idx = 0; child_idx < lhs.num_columns(); ++child_idx) {
     auto const& col = lhs.column(child_idx);
-    auto [transformed_lhs, transformed_rhs_opt, lhs_aux_data] =
-      transform_lists_of_structs(col, rhs ? rhs.value().column(child_idx) : std::nullopt, stream);
+    auto [transformed_lhs, transformed_rhs_opt, lhs_aux_data, rhs_aux_data] =
+      transform_lists_of_structs(
+        col,
+        rhs ? std::optional<column_view>{rhs.value().column(child_idx)} : std::nullopt,
+        stream);
     transformed_lhs_cols.push_back(transformed_lhs);
     if (rhs) { transformed_rhs_cols.push_back(transformed_rhs_opt.value()); }
     if (lhs_aux_data) { lhs_aux_cols.emplace_back(std::move(lhs_aux_data)); }
     if (rhs_aux_data) { rhs_aux_cols.emplace_back(std::move(rhs_aux_data)); }
-  });
+  }
 
   return {table_view{transformed_lhs_cols},
-          rhs ? table_view{transformed_rhs_cols} : std::nullopt,
+          rhs ? std::optional<table_view>{table_view{transformed_rhs_cols}} : std::nullopt,
           std::move(lhs_aux_cols),
           std::move(rhs_aux_cols)};
 }
@@ -541,20 +543,23 @@ flatten_nested_structs_of_lists(table_view const& input,
   return {input, nullptr};
 }
 
-std::shared_ptr<preprocessed_table> create_preprocessed_table(
+}  // namespace
+
+std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
   table_view const& input,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
   std::vector<std::unique_ptr<column>>&& transformed_aux_data,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
-  bool safe_for_two_table_comparator)
+  bool safe_for_two_table_comparator,
+  rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(input);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    flattened_t_aux_data
+    flattened_input_aux_data
       ? decompose_structs(
-          input, flattened_t_aux_data->orders(), flattened_t_aux_data->null_orders())
+          input, flattened_input_aux_data->orders(), flattened_input_aux_data->null_orders())
       : decompose_structs(input, column_order, null_precedence);
 
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
@@ -571,7 +576,7 @@ std::shared_ptr<preprocessed_table> create_preprocessed_table(
                              std::move(d_depths),
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
-                             std::move(flattened_t_aux_data),
+                             std::move(flattened_input_aux_data),
                              std::move(transformed_aux_data),
                              safe_for_two_table_comparator));
   } else {
@@ -580,13 +585,11 @@ std::shared_ptr<preprocessed_table> create_preprocessed_table(
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
-                             std::move(flattened_t_aux_data),
+                             std::move(flattened_input_aux_data),
                              std::move(transformed_aux_data),
                              safe_for_two_table_comparator));
   }
 }
-
-}  // namespace
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& t,
@@ -611,7 +614,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                                    std::move(transformed_aux_data),
                                    column_order,
                                    null_precedence,
-                                   safe_for_two_table_comparator);
+                                   safe_for_two_table_comparator,
+                                   stream);
 }
 
 std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>>
@@ -636,13 +640,16 @@ preprocessed_table::create(table_view const& lhs,
                                     std::move(transformed_aux_lhs),
                                     column_order,
                                     null_precedence,
-                                    true /*safe_for_two_table_comparator*/),
+                                    true /*safe_for_two_table_comparator*/
+                                    ,
+                                    stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(flattened_rhs_aux_data),
                                     std::move(transformed_aux_rhs),
                                     column_order,
                                     null_precedence,
-                                    true /*safe_for_two_table_comparator*/)};
+                                    true /*safe_for_two_table_comparator*/,
+                                    stream)};
 }
 
 preprocessed_table::preprocessed_table(
