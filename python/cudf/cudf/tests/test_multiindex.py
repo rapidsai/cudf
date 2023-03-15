@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -1102,7 +1102,6 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):
@@ -1819,8 +1818,14 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if func == "is_object":
         assert_eq(False, actual)
