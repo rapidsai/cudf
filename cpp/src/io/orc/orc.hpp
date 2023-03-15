@@ -479,6 +479,8 @@ class ProtobufWriter {
  public:
   ProtobufWriter() = default;
 
+  ProtobufWriter(std::size_t bytes) : m_buff(bytes) {}
+
   uint32_t put_byte(uint8_t v)
   {
     m_buff.push_back(v);
@@ -530,8 +532,6 @@ class ProtobufWriter {
                            int32_t data2_ofs,
                            TypeKind kind,
                            ColStatsBlob const* stats);
-
-  void resize(std::size_t bytes) { m_buff.resize(bytes); }
 
   std::size_t size() const { return m_buff.size(); }
   uint8_t const* data() { return m_buff.data(); }
