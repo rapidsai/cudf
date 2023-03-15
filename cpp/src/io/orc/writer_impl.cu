@@ -2151,13 +2151,13 @@ write_to_buffer(const table_view& input)
 }  // namespace
 
 void writer::impl::write_to_buffer(table_view const& input,
+                                   std::size_t bytes_written,
                                    table_input_metadata const& table_meta,
                                    stripe_size_limits max_stripe_size,
                                    size_type row_index_stride,
                                    bool enable_dictionary,
                                    CompressionKind compression_kind,
                                    size_t compression_blocksize,
-                                   std::unique_ptr<data_sink> const& out_sink,
                                    statistics_freq stats_freq,
                                    persisted_statistics& persisted_stripe_statistics,
                                    bool single_write_mode,
@@ -2231,6 +2231,8 @@ void writer::impl::write_to_buffer(table_view const& input,
     segmentation.num_stripes(), num_data_streams, stream);
   auto stripes =
     gather_stripes(num_index_streams, segmentation, &enc_data.streams, &strm_descs, stream);
+
+  std::vector<uint8_t> chunk_output_buffer;
 
   if (num_rows > 0) {
     // Allocate intermediate output stream buffer
@@ -2316,6 +2318,7 @@ void writer::impl::write_to_buffer(table_view const& input,
     for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
       auto& stripe = stripes[stripe_id];
 
+      // bytes_written + chunk_output_buffer.size()
       stripe.offset = out_sink->bytes_written();
 
       // Column (skippable) index streams appear at the start of the stripe
@@ -2433,13 +2436,13 @@ void writer::impl::write(table_view const& input)
   if (not table_meta) { table_meta = make_table_meta(input); }
 
   write_to_buffer(input,
+                  out_sink_->bytes_written(),
                   *table_meta,
                   max_stripe_size,
                   row_index_stride,
                   enable_dictionary_,
                   compression_kind_,
                   compression_blocksize_,
-                  out_sink_,
                   stats_freq_,
                   persisted_stripe_statistics,
                   single_write_mode,
