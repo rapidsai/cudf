@@ -125,7 +125,10 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
-    auto row_bitmask = cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first;
+    auto row_bitmask =
+      cudf::detail::bitmask_and(
+        table_view{nullable_columns}, stream, rmm::mr::get_current_device_resource())
+        .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
   }
