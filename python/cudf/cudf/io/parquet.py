@@ -15,7 +15,7 @@ from pyarrow import dataset as ds, parquet as pq
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import build_categorical_column, column_empty, full
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -609,11 +609,12 @@ def _parquet_to_frame(
         )
         # Add partition columns to the last DataFrame
         for (name, value) in part_key:
+            _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = as_column(
-                    partition_categories[name].index(value),
-                    length=len(dfs[-1]),
+                codes = full(
+                    size=_len,
+                    fill_value=partition_categories[name].index(value),
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -625,14 +626,23 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                if partition_meta is not None:
-                    dfs[-1][name] = as_column(
-                        value,
-                        length=len(dfs[-1]),
-                        dtype=partition_meta[name].dtype,
+                _dtype = (
+                    partition_meta[name].dtype
+                    if partition_meta is not None
+                    else None
+                )
+                if pd.isna(value):
+                    dfs[-1][name] = column_empty(
+                        row_count=_len,
+                        dtype=_dtype,
+                        masked=True,
                     )
                 else:
-                    dfs[-1][name] = as_column(value, length=len(dfs[-1]))
+                    dfs[-1][name] = full(
+                        size=_len,
+                        fill_value=value,
+                        dtype=_dtype,
+                    )
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.
@@ -886,8 +896,11 @@ def _get_groups_and_offsets(
         grouped_df.reset_index(drop=True, inplace=True)
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_keys.to_pandas().unique().to_frame(index=False)
-
+    part_names = (
+        part_keys.take(part_offsets[:-1])
+        .to_pandas(nullable=True)
+        .to_frame(index=False)
+    )
     return part_names, grouped_df, part_offsets
 
 

@@ -547,3 +547,13 @@ def test_rolling_indexer_support(indexer):
     actual = gdf.rolling(window=indexer, min_periods=2).sum()
 
     assert_eq(expected, actual)
+
+
+def test_rolling_series():
+    df = cudf.DataFrame({"a": range(0, 100), "b": [10, 20, 30, 40, 50] * 20})
+    pdf = df.to_pandas()
+
+    expected = pdf.groupby("b")["a"].rolling(5).mean()
+    actual = df.groupby("b")["a"].rolling(5).mean()
+
+    assert_eq(expected, actual)
