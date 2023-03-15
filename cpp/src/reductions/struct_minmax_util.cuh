@@ -102,7 +102,8 @@ class comparison_binop_generator {
         {},
         std::vector<null_order>{DEFAULT_NULL_ORDER},
         cudf::structs::detail::column_nullability::MATCH_INCOMING,
-        stream)},
+        stream,
+        rmm::mr::get_current_device_resource())},
       d_flattened_input_ptr{
         table_device_view::create(flattened_input->flattened_columns(), stream)},
       is_min_op(is_min_op),
