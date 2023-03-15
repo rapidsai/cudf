@@ -2809,5 +2809,5 @@ def test_parquet_chunked_writer_schema_nullability(data, nullability):
 
     writer.close()
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
-        nullability or df.isnull().any().any()
+        (nullability in {None, True}) or df.isnull().any().any()
     )
