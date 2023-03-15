@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
@@ -267,7 +268,8 @@ void tdigest_simple_all_nulls_aggregation(Func op)
     static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -558,9 +560,12 @@ template <typename MergeFunc>
 void tdigest_merge_empty(MergeFunc merge_op)
 {
   // 3 empty tdigests all in the same group
-  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
-  auto b = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
-  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
+  auto b = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
+  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
   std::vector<column_view> cols;
   cols.push_back(*a);
   cols.push_back(*b);
@@ -570,7 +575,8 @@ void tdigest_merge_empty(MergeFunc merge_op)
   auto const delta = 1000;
   auto result      = merge_op(*values, delta);
 
-  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
 }
