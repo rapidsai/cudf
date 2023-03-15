@@ -251,36 +251,25 @@ TYPED_TEST(SegmentedReductionTest, AnyExcludeNulls)
     {false, false, true, true, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
     {true, true, true, true, false, true, true, false, false}};
 
-  auto res =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_any_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::BOOL8},
-                           cudf::null_policy::EXCLUDE);
+  auto const agg         = cudf::make_any_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::BOOL8};
+  auto const policy      = cudf::null_policy::EXCLUDE;
+
+  auto res = cudf::segmented_reduce(input, d_offsets, *agg, output_type, policy);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 
   // Test with initial value
-  auto const init_scalar = cudf::make_fixed_width_scalar<TypeParam>(1);
+  auto const init_scalar = cudf::make_fixed_width_scalar<TypeParam>(0);
   auto const init_expect = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, true, true, true, true, true, true, true},
+    {false, false, true, true, false, false, true, false, false},
     {true, true, true, true, true, true, true, true, true}};
 
-  res = cudf::segmented_reduce(input,
-                               d_offsets,
-                               *cudf::make_any_aggregation<cudf::segmented_reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::BOOL8},
-                               cudf::null_policy::EXCLUDE,
-                               *init_scalar);
+  res = cudf::segmented_reduce(input, d_offsets, *agg, output_type, policy, *init_scalar);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, init_expect);
 
   // Test with null initial value
   init_scalar->set_valid_async(false);
-  res = cudf::segmented_reduce(input,
-                               d_offsets,
-                               *cudf::make_any_aggregation<cudf::segmented_reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::BOOL8},
-                               cudf::null_policy::EXCLUDE,
-                               *init_scalar);
+  res = cudf::segmented_reduce(input, d_offsets, *agg, output_type, policy, *init_scalar);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
