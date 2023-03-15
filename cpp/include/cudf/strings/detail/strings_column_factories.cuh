@@ -175,7 +175,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
 
   // build offsets column -- this is the number of strings + 1
   auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   thrust::transform(rmm::exec_policy(stream),
                     offsets_begin,
