@@ -390,7 +390,7 @@ std::
           : std::nullopt;
 
     if (child_lhs.type().id() == type_id::STRUCT) {
-      if (child_rhs) {
+      if (rhs) {
         auto child_lhs_rhs = cudf::detail::concatenate(
           /*std::vector<column_view>*/ std::vector<column_view>{child_lhs, child_rhs.value()},
           stream,
@@ -436,9 +436,11 @@ std::
     } else if (child_lhs.type().id() == type_id::LIST) {
       auto [new_child_lhs, new_child_rhs_opt, child_lhs_ranks, child_rhs_ranks] =
         transform_lists_of_structs(child_lhs, child_rhs, stream);
-      if (child_lhs_ranks) {
+      if (child_lhs_ranks || child_rhs_ranks) {
         auto transformed_lhs = make_transformed_input(lhs, new_child_lhs);
-        auto transformed_rhs = make_transformed_input(rhs.value(), new_child_rhs_opt.value());
+        auto transformed_rhs = rhs ? std::optional<column_view>{make_transformed_input(
+                                       rhs.value(), new_child_rhs_opt.value())}
+                                   : std::nullopt;
         return {
           transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
       }
