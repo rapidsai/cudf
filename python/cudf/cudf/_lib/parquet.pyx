@@ -3,6 +3,7 @@
 # cython: boundscheck = False
 
 import io
+import warnings
 
 import pyarrow as pa
 
@@ -322,7 +323,7 @@ def write_parquet(
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
     object partitions_info=None,
-    bool nullability=False,
+    object nullability=None,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -491,7 +492,8 @@ cdef class ParquetWriter:
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000):
+                  int max_page_size_rows=20000,
+                  object nullability=None):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -506,6 +508,7 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
+        self.nullability = nullability
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -598,7 +601,9 @@ cdef class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
             _set_col_metadata(
-                table[name]._column, self.tbl_meta.get().column_metadata[i], True
+                table[name]._column,
+                self.tbl_meta.get().column_metadata[i],
+                self.nullability
             )
 
         index = (
@@ -676,8 +681,18 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, column_in_metadata& col_meta, bool nullability):
-    col_meta.set_nullability(nullability)
+cdef _set_col_metadata(
+    Column col,
+    column_in_metadata& col_meta,
+    object nullability
+):
+    if col.nullable and nullability is False:
+        warnings.warn(f"column {col_meta.get_name()} contains null values, "
+                      f"nullability={nullability} is being ignored")
+        col_meta.set_nullability(True)
+    elif nullability is not None:
+        col_meta.set_nullability(nullability)
+
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))

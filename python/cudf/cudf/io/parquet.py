@@ -60,7 +60,7 @@ def _write_parquet(
     max_page_size_rows=None,
     partitions_info=None,
     storage_options=None,
-    nullability=True,
+    nullability=None,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -128,7 +128,7 @@ def write_to_dataset(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     storage_options=None,
-    nullability=True,
+    nullability=None,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -227,6 +227,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            nullability=nullability,
         )
 
     else:
@@ -247,6 +248,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            nullability=nullability,
         )
 
     return metadata
@@ -705,7 +707,7 @@ def to_parquet(
     max_page_size_rows=None,
     storage_options=None,
     return_metadata=False,
-    nullability=True,
+    nullability=None,
     *args,
     **kwargs,
 ):
