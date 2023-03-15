@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ class column_view_base {
    * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -85,7 +85,7 @@ class column_view_base {
    * false.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* data() const noexcept
@@ -101,7 +101,7 @@ class column_view_base {
    * false.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to the first element after casting
+   * @return Pointer to the first element after casting
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* begin() const noexcept
@@ -117,7 +117,7 @@ class column_view_base {
    * false.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to one past the last element after casting
+   * @return Pointer to one past the last element after casting
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* end() const noexcept
@@ -389,7 +389,7 @@ class column_view : public detail::column_view_base {
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
-   * @return column_view The requested child `column_view`
+   * @return The requested child `column_view`
    */
   [[nodiscard]] column_view child(size_type child_index) const noexcept
   {
@@ -553,7 +553,7 @@ class mutable_column_view : public detail::column_view_base {
    * column, and instead, accessing the elements should be done via `data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -572,7 +572,7 @@ class mutable_column_view : public detail::column_view_base {
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
-   * @return T* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* data() const noexcept
@@ -588,7 +588,7 @@ class mutable_column_view : public detail::column_view_base {
    * false.
    *
    * @tparam T The desired type
-   * @return T* Pointer to the first element after casting
+   * @return Pointer to the first element after casting
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* begin() const noexcept
@@ -604,7 +604,7 @@ class mutable_column_view : public detail::column_view_base {
    * false.
    *
    * @tparam T The desired type
-   * @return T* Pointer to one past the last element after casting
+   * @return Pointer to one past the last element after casting
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* end() const noexcept
@@ -639,7 +639,7 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns a reference to the specified child
    *
    * @param child_index The index of the desired child
-   * @return mutable_column_view The requested child `mutable_column_view`
+   * @return The requested child `mutable_column_view`
    */
   [[nodiscard]] mutable_column_view child(size_type child_index) const noexcept
   {
@@ -670,7 +670,7 @@ class mutable_column_view : public detail::column_view_base {
   /**
    * @brief Converts a mutable view into an immutable view
    *
-   * @return column_view An immutable view of the mutable view's elements
+   * @return An immutable view of the mutable view's elements
    */
   operator column_view() const;
 
@@ -684,7 +684,7 @@ class mutable_column_view : public detail::column_view_base {
  * @brief Counts the number of descendants of the specified parent.
  *
  * @param parent The parent whose descendants will be counted
- * @return size_type The number of descendants of the parent
+ * @return The number of descendants of the parent
  */
 size_type count_descendants(column_view parent);
 
