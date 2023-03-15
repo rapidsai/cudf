@@ -29,10 +29,10 @@
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/timezone.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -929,7 +929,7 @@ std::unique_ptr<table> reader::impl::compute_timezone_table(
     });
   if (not has_timestamp_column) return std::make_unique<cudf::table>();
 
-  return make_timezone_transition_table(
+  return cudf::detail::make_timezone_transition_table(
     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 

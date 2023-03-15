@@ -15,21 +15,20 @@
  */
 #pragma once
 
-#include <cudf/table/table.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 #include <optional>
 #include <string>
 
 namespace cudf {
+class table;
 
-// Cycle in which the time offsets repeat
-static constexpr int32_t cycle_years = 400;
+// Cycle in which the time offsets repeat in Gregorian calendar
+static constexpr int32_t solar_cycle_years = 400;
 // Number of future entries in the timezone transition table:
-// Two entries per year, over the length of the cycle
-static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
+// Two entries per year, over the length of the Gregorian calendar's solar cycle
+static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
 
 /**
  * @brief Creates a transition table to convert ORC timestamps to UTC.
@@ -37,13 +36,14 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
  * @param tzif_dir The directory where the TZif files are located
- * @param timezone_name standard timezone name (for example, "US/Pacific")
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param timezone_name standard timezone name (for example, "America/Los_Angeles")
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @return The transition table for the given timezone
  */
-std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
-                                                      std::string_view timezone_name,
-                                                      rmm::cuda_stream_view stream);
+std::unique_ptr<table> make_timezone_transition_table(
+  std::optional<std::string_view> tzif_dir,
+  std::string_view timezone_name,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf

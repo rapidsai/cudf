@@ -43,9 +43,6 @@ inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode
 
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
-// Seconds from January 1st, 1970 to January 1st, 2015
-static __device__ __constant__ duration_s orc_utc_epoch = duration_s{1420070400};
-
 struct orc_bytestream_s {
   const uint8_t* base;
   uint32_t pos;
@@ -101,7 +98,7 @@ struct orc_datadec_state_s {
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
-  duration_s tz_epoch;      // orc_utc_epoch - gmtOffset
+  duration_s tz_epoch;      // orc_ut_epoch - ut_offset
   RowGroup index;
 };
 
@@ -1446,7 +1443,8 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.tz_epoch = orc_utc_epoch - get_gmt_offset(tz_table, timestamp_s{orc_utc_epoch});
+    static constexpr duration_s d_orc_utc_epoch = duration_s{orc_utc_epoch};
+    s->top.data.tz_epoch = d_orc_utc_epoch - get_ut_offset(tz_table, timestamp_s{d_orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1771,7 +1769,7 @@ __global__ void __launch_bounds__(block_size)
             case TIMESTAMP: {
               auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
               // Convert to UTC
-              seconds += get_gmt_offset(tz_table, timestamp_s{seconds});
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
                                               kTimestampNanoScale[secondary_val & 7]};

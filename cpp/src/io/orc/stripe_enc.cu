@@ -49,9 +49,6 @@ constexpr int scratch_buffer_size = 512 * 4;
 // Workaround replaces zero-length patch lists by a dummy zero patch
 constexpr bool zero_pll_war = true;
 
-static __device__ __constant__ int64_t orc_utc_epoch =
-  1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
-
 struct byterle_enc_state_s {
   uint32_t literal_run;
   uint32_t repeat_run;

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import math
 from contextlib import contextmanager
@@ -8,12 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.testing._utils import _create_pandas_series, assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -48,10 +43,7 @@ def _hide_pandas_rolling_min_periods_warning(agg):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
     rng = np.random.default_rng(1)
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+
     if len(data) > 0:
         if nulls == "one":
             p = rng.integers(0, len(data))
@@ -73,7 +65,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
             got = getattr(
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            assert_eq(expect, got, check_dtype=False, **kwargs)
+            assert_eq(expect, got, check_dtype=False, check_freq=False)
 
 
 @pytest.mark.parametrize(
@@ -159,10 +151,6 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
 
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
@@ -214,15 +202,11 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
             mask = (got[col].fillna(-1) != 0).to_pandas()
             expect[col] = expect[col][mask]
             got[col] = got[col][mask]
-            assert_eq(expect[col], got[col], **kwargs)
+            assert_eq(expect[col], got[col], check_freq=False)
     else:
-        assert_eq(expect, got, **kwargs)
+        assert_eq(expect, got, check_freq=False)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_130,
-    reason="https://github.com/pandas-dev/pandas/issues/37051",
-)
 def test_rolling_var_uniform_window():
     """
     Pandas adopts an online variance calculation algorithm. This gives a
@@ -310,17 +294,17 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     index = pd.DatetimeIndex(
         pd.date_range("2000-01-01", "2000-01-02", freq="1h")
     )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean(), **kwargs)
+    assert_eq(
+        pdf.rolling("2h").x.mean(),
+        gdf.rolling("2h").x.mean(),
+        check_freq=False,
+    )
 
 
 @pytest.mark.parametrize(
