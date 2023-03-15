@@ -290,6 +290,11 @@ return_metadata : bool, default False
     include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
+nullability : bool, default None.
+    If True, writes all columns as `null` in schema.
+    If False, writes all columns as `not null` in schema,
+    however if a column contains null values, this parameter
+    is ignored.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.

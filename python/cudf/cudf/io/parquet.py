@@ -182,7 +182,6 @@ def write_to_dataset(
     max_page_size_rows: integer or None, default None
         Maximum number of rows of each page of the output.
         If None, 20000 will be used.
-
     storage_options : dict, optional, default None
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
@@ -190,6 +189,11 @@ def write_to_dataset(
         header options. For other URLs (e.g. starting with "s3://", and
         "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
+    nullability : bool, default None.
+        If True, writes all columns as `null` in schema.
+        If False, writes all columns as `not null` in schema,
+        however if a column contains null values, this parameter
+        is ignored.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)

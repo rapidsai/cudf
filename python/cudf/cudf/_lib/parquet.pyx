@@ -469,6 +469,11 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
+    nullability : bool, default None.
+        If True, writes all columns as `null` in schema.
+        If False, writes all columns as `not null` in schema,
+        however if a column contains null values, this parameter
+        is ignored.
 
     See Also
     --------
@@ -486,6 +491,7 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
+    cdef object nullability
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
