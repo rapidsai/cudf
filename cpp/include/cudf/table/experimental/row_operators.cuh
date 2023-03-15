@@ -684,7 +684,12 @@ struct preprocessed_table {
    * @brief Preprocess table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
-   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
+   * be passed to the constructor of `lexicographic::self_comparator` or
+   * `lexicographic::two_table_comparator` to avoid preprocessing again.
+   *
+   * Note that the output of this factory function cannot be used in `two_table_comparator` if the
+   * input table contains lists-of-structs. In such cases, please use the overload
+   * `preprocessed_table::create(table_view const&, table_view const&,...)`.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
@@ -700,6 +705,34 @@ struct preprocessed_table {
                                                     host_span<order const> column_order,
                                                     host_span<null_order const> null_precedence,
                                                     rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Preprocess tables for use with lexicographical comparison
+   *
+   * Sets up the tables for use with lexicographical comparison. The resulting preprocessed tables
+   * can be passed to the constructor of `lexicographic::self_comparator` or
+   * `lexicographic::two_table_comparator` to avoid preprocessing again.
+   *
+   * This factory function performs some extra operations to guarantee that its output can be safely
+   * used in `two_table_comparator` for all cases.
+   *
+   * @param lhs The lhs table to preprocess
+   * @param rhs The rhs table to preprocess
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If it is nullptr, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   * @return A pair of shared pointers to the preprocessed tables
+   */
+  static std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>> create(
+    table_view const& lhs,
+    table_view const& rhs,
+    host_span<order const> column_order,
+    host_span<null_order const> null_precedence,
+    rmm::cuda_stream_view stream);
 
  private:
   friend class self_comparator;       ///< Allow self_comparator to access private members
@@ -732,6 +765,8 @@ struct preprocessed_table {
    * @param transformed_structs_columns The intermediate columns resulted from transforming child
    * of lists-of-structs columns into lists-of-integers columns and will be used for row
    * comparison.
+   * @param safe_for_two_table_comparator Flat indicating if the preprocessed table is safe to use
+   * for two-table comparator.
    */
   preprocessed_table(
     table_device_view_owner&& table,
@@ -741,7 +776,8 @@ struct preprocessed_table {
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
+    std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+    bool safe_for_two_table_comparator);
 
   preprocessed_table(
     table_device_view_owner&& table,
@@ -749,7 +785,8 @@ struct preprocessed_table {
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
+    std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+    bool safe_for_two_table_comparator);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -822,6 +859,9 @@ struct preprocessed_table {
   // Auxiliary data generated from transforming lists-of-structs into lists-of-integer
   // that needs to be kept alive.
   std::vector<std::unique_ptr<column>> _transformed_structs_aux_data;
+
+  // A flag indicating if the preprocessed table is safe to use for two-table comparator.
+  bool const _safe_for_two_table_comparator;
 };
 
 /**
@@ -1024,6 +1064,9 @@ class two_table_comparator {
                        std::shared_ptr<preprocessed_table> right)
     : d_left_table{std::move(left)}, d_right_table{std::move(right)}
   {
+    CUDF_EXPECTS(
+      d_left_table->_safe_for_two_table_comparator && d_right_table->_safe_for_two_table_comparator,
+      "The pre-generated preprocessed_table(s) are not be able to use for two_table_comparator.");
   }
 
   /**
