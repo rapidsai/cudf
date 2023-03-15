@@ -1942,11 +1942,12 @@ __global__ void __launch_bounds__(block_size)
 
 // DELTA_XXX encoding support
 //
-// returns the number of values encoded in the block data. first value
-// is in the header.
-constexpr uint32_t num_encoded_values(delta_binary_state_s* db)
+// returns the number of values encoded in the block data. when is_decode is true,
+// account for the first value in the header. otherwise just count the values encoded
+// in the mini-block data.
+constexpr uint32_t num_encoded_values(delta_binary_state_s* db, bool is_decode)
 {
-  return db->value_count == 0 ? 0 : db->value_count - 1;
+  return db->value_count == 0 ? 0 : is_decode ? db->value_count : db->value_count - 1;
 }
 
 // read mini-block header into state object. should only be called from InitDeltaBinaryBlock or
@@ -1956,12 +1957,12 @@ constexpr uint32_t num_encoded_values(delta_binary_state_s* db)
 //
 // on exit db->cur_mb is 0 and db->cur_mb_start points to the first mini-block of data, or nullptr
 // if out of data.
-__device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
+__device__ void InitDeltaMiniBlock(delta_binary_state_s* db, bool is_decode)
 {
   db->cur_mb       = 0;
   db->cur_mb_start = nullptr;
 
-  if (db->current_value_idx < num_encoded_values(db)) {
+  if (db->current_value_idx < num_encoded_values(db, is_decode)) {
     auto d_start      = db->block_start;
     db->cur_min_delta = get_i64(d_start, db->block_end);
     db->cur_bitwidths = d_start;
@@ -1991,14 +1992,14 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
 
   // init the first mini-block
   db->block_start = d_start;
-  InitDeltaMiniBlock(db);
+  InitDeltaMiniBlock(db, false);
 }
 
 // skip to the start of the next mini-block. should only be called on thread 0.
 // calls InitDeltaMiniBlock if currently on the last mini-block in a block.
-__device__ void SetupNextMiniBlock(delta_binary_state_s* db)
+__device__ void SetupNextMiniBlock(delta_binary_state_s* db, bool is_decode)
 {
-  if (db->current_value_idx >= num_encoded_values(db)) { return; }
+  if (db->current_value_idx >= num_encoded_values(db, is_decode)) { return; }
 
   db->current_value_idx += db->values_per_mb;
 
@@ -2010,7 +2011,7 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   // out of mini-blocks, start a new block
   else {
     db->block_start = db->cur_mb_start + db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
-    InitDeltaMiniBlock(db);
+    InitDeltaMiniBlock(db, is_decode);
   }
 }
 
@@ -2024,8 +2025,8 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
   // read block header
   InitDeltaBinaryBlock(db, start, end);
   // read mini-block headers and skip over data
-  while (db->current_value_idx < num_encoded_values(db)) {
-    SetupNextMiniBlock(db);
+  while (db->current_value_idx < num_encoded_values(db, false)) {
+    SetupNextMiniBlock(db, false);
   }
   // calculate the correct end of the block
   auto const* const new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
@@ -2039,7 +2040,7 @@ __device__ uint8_t const* FindEndOfBlock(delta_binary_state_s* db,
 __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 {
   using cudf::detail::warp_size;
-  if (db->current_value_idx >= num_encoded_values(db)) { return; }
+  if (db->current_value_idx >= db->value_count) { return; }
 
   uint32_t const mb_bits = db->cur_bitwidths[db->cur_mb];
 
@@ -2302,7 +2303,7 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   __syncthreads();
 
   // step through prefixes and suffixes to get total length
-  while (prefix_db->current_value_idx < num_encoded_values(prefix_db)) {
+  while (prefix_db->current_value_idx < num_encoded_values(prefix_db, true)) {
     auto* const db = t < 32 ? prefix_db : suffix_db;
 
     for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
@@ -2321,7 +2322,7 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
       __syncthreads();
     }
 
-    if (lane_id == 0) { SetupNextMiniBlock(db); }
+    if (lane_id == 0) { SetupNextMiniBlock(db, true); }
   }
   __syncthreads();
 
@@ -2356,10 +2357,10 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need.
   while (db->current_value_idx < skipped_leaf_values &&
-         db->current_value_idx < num_encoded_values(db)) {
+         db->current_value_idx < num_encoded_values(db, true)) {
     if (t < 32) {
       CalcMiniBlockValues(db, lane_id);
-      if (lane_id == 0) { SetupNextMiniBlock(db); }
+      if (lane_id == 0) { SetupNextMiniBlock(db, true); }
     }
     __syncthreads();
   }
@@ -2391,7 +2392,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       CalcMiniBlockValues(db, lane_id);
 
       // set up for next mini-block
-      if (lane_id == 0) { SetupNextMiniBlock(db); }
+      if (lane_id == 0) { SetupNextMiniBlock(db, true); }
 
     } else if (t < 96 && src_pos < target_pos) {
       // warp 2
@@ -2471,12 +2472,12 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   // testing prefix_db.
   uint32_t skip_pos = 0;
   while (prefix_db->current_value_idx < skipped_leaf_values &&
-         prefix_db->current_value_idx < num_encoded_values(prefix_db)) {
+         prefix_db->current_value_idx < num_encoded_values(prefix_db, true)) {
     // warp 0 gets prefixes and warp 1 gets suffixes
     auto* const db = t < 32 ? prefix_db : suffix_db;
     if (t < 64) {
       CalcMiniBlockValues(db, lane_id);
-      if (lane_id == 0) { SetupNextMiniBlock(db); }
+      if (lane_id == 0) { SetupNextMiniBlock(db, true); }
     }
     __syncthreads();
     if (t < 32) {
@@ -2515,7 +2516,7 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       CalcMiniBlockValues(db, lane_id);
 
       // set up for next mini-block
-      if (lane_id == 0) { SetupNextMiniBlock(db); }
+      if (lane_id == 0) { SetupNextMiniBlock(db, true); }
 
     } else if (src_pos < target_pos) {
       // warp 3
