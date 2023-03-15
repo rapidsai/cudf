@@ -519,8 +519,8 @@ ConfigureTest(
 # tests by manually invoking the executable, so we'll have to manually pass this environment
 # variable in that setup.
 set_tests_properties(
-  STREAM_IDENTIFICATION_TEST PROPERTIES ENVIRONMENT
-                                        LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage>
+  STREAM_IDENTIFICATION_TEST
+  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
 )
 
 # ##################################################################################################
