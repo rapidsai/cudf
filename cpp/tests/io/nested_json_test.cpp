@@ -262,8 +262,8 @@ TEST_F(JsonTest, TokenStream)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] =
-    cuio_json::detail::get_token_stream(d_input, default_options, stream);
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
@@ -398,8 +398,8 @@ TEST_F(JsonTest, TokenStream2)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] =
-    cuio_json::detail::get_token_stream(d_input, default_options, stream);
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
