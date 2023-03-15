@@ -392,10 +392,7 @@ std::
     if (child_lhs.type().id() == type_id::STRUCT) {
       if (rhs) {
         auto child_lhs_rhs = cudf::detail::concatenate(
-          /*std::vector<column_view>*/ std::vector<column_view>{child_lhs, child_rhs.value()},
-          stream,
-          default_mr);
-
+          std::vector<column_view>{child_lhs, child_rhs.value()}, stream, default_mr);
         // Dense ranks should be used because we are ranking two separate columns concatenating
         // together.
         auto const ranks        = cudf::detail::rank(child_lhs_rhs->view(),
@@ -419,9 +416,9 @@ std::
       } else {
         // Dense ranks can accurately reflect the order of structs: structs compared equal will have
         // the same rank values.
-        // However, first ranks are computed faster and are good enough for ordering them. Structs
-        // compared equal always have consecutive rank values (in stable order) thus they are still
-        // sorted correctly by their ranks.
+        // However, first ranks are computed faster and are good enough for ordering them within one
+        // column. Structs compared equal always have consecutive rank values (in stable order) thus
+        // they are still sorted correctly by their ranks.
         auto child_lhs_ranks = cudf::detail::rank(child_lhs,
                                                   rank_method::FIRST,
                                                   order::ASCENDING,
