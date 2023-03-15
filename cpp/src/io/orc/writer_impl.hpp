@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,7 +382,6 @@ class writer::impl {
    * @param[in] rg_stats row group level statistics
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
-   * @param[in,out] pbw Protobuf writer
    */
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
@@ -393,8 +392,7 @@ class writer::impl {
                           host_span<compression_result const> comp_out,
                           std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
-                          orc_streams* streams,
-                          ProtobufWriter* pbw);
+                          orc_streams* streams);
 
   /**
    * @brief Write the specified column's data streams
@@ -451,7 +449,6 @@ class writer::impl {
   // statistics data saved between calls to write before a close writes out the statistics
   persisted_statistics persisted_stripe_statistics;
 
-  std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
 };
 
