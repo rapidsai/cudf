@@ -608,7 +608,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     aggregate = agg
 
-    def _head_tail(self, n, *, take_head=True):
+    def _head_tail(self, n, *, take_head: bool, preserve_order: bool):
         """Return the head or tail of each group
 
         Parameters
@@ -618,6 +618,10 @@ class GroupBy(Serializable, Reducible, Scannable):
            entries to exclude)
         take_head
            Do we want the head or the tail of the group
+        preserve_order
+            If True, return the n rows from each group in original
+            dataframe order (this mimics pandas behavior though is
+            more expensive).
 
         Returns
         -------
@@ -626,7 +630,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Notes
         -----
         Unlike pandas, this returns an object in group order, not
-        original order
+        original order unless ``preserve_order`` is ``True``.
         """
         # A more memory-efficient implementation would merge the take
         # into the grouping, but that probably requires a new
@@ -652,10 +656,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         fixup[0] = 0
         np.cumsum(size_per_group[:-1], out=fixup[1:])
         to_take += np.repeat(group_offsets - fixup, size_per_group)
-        return group_values.iloc[to_take]
+        to_take = as_column(to_take)
+        result = group_values.iloc[to_take]
+        if preserve_order:
+            # Can't use _mimic_pandas_order because we need to
+            # subsample the gather map from the full input ordering,
+            # rather than permuting the gather map of the output.
+            _, (ordering,), _ = self._groupby.groups(
+                [arange(0, self.obj._data.nrows)]
+            )
+            # Invert permutation from original order to groups on the
+            # subset of entries we want.
+            gather_map = ordering.take(to_take).argsort()
+            return result.take(gather_map)
+        else:
+            return result
 
     @_cudf_nvtx_annotate
-    def head(self, n: int = 5):
+    def head(self, n: int = 5, preserve_order: bool = False):
         """Return first n rows of each group
 
         Parameters
@@ -663,6 +681,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         n
             If positive: number of entries to include from start of group
             If negative: number of entries to exclude from end of group
+
+        preserve_order
+            If True, return the n rows from each group in original
+            dataframe order (this mimics pandas behavior though is
+            more expensive).
 
         Returns
         -------
@@ -696,15 +719,19 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         .. pandas-compat::
 
-           Note that the returned object will be ordered group-wise
-           (with the same ordering as ``.apply(lambda x: x.head(n))``
-           though the original index is preserved, rather than in the
-           original input order.
+           Note that by default the returned object will be ordered
+           group-wise (with the same ordering as
+           ``.apply(lambda x: x.head(n))``, rather than in the
+           original input order (though the original index is
+           preserved). If you need the same ordering as pandas, set
+           ``preserve_order=True``.
         """
-        return self._head_tail(n, take_head=True)
+        return self._head_tail(
+            n, take_head=True, preserve_order=preserve_order
+        )
 
     @_cudf_nvtx_annotate
-    def tail(self, n: int = 5):
+    def tail(self, n: int = 5, preserve_order: bool = False):
         """Return last n rows of each group
 
         Parameters
@@ -712,6 +739,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         n
             If positive: number of entries to include from end of group
             If negative: number of entries to exclude from start of group
+
+        preserve_order
+            If True, return the n rows from each group in original
+            dataframe order (this mimics pandas behavior though is
+            more expensive).
 
         Returns
         -------
@@ -746,12 +778,16 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         .. pandas-compat::
 
-           Note that the returned object will be ordered group-wise
-           (with the same ordering as ``.apply(lambda x: x.tail(n))``
-           though the original index is preserved, rather than in the
-           original input order.
+           Note that by default the returned object will be ordered
+           group-wise (with the same ordering as
+           ``.apply(lambda x: x.head(n))``, rather than in the
+           original input order (though the original index is
+           preserved). If you need the same ordering as pandas, set
+           ``preserve_order=True``.
         """
-        return self._head_tail(n, take_head=False)
+        return self._head_tail(
+            n, take_head=False, preserve_order=preserve_order
+        )
 
     def nth(self, n):
         """
