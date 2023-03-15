@@ -1091,7 +1091,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   }
   dictionaries.data.clear();
   dictionaries.index.clear();
-  stream.synchronize();
+  chunk_streams.device_to_host(stream, true);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
@@ -1099,21 +1099,46 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_index_streams,
   file_segmentation const& segmentation,
-  hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
+  encoded_data* enc_data,
   hostdevice_2dvector<gpu::StripeStream>* strm_desc)
 {
   if (segmentation.num_stripes() == 0) { return {}; }
+
+  // actual encoded stripe sizes - per stripe, per column, per stream
+  std::vector<std::vector<std::array<size_t, gpu::CI_INDEX>>> actual_stripe_sizes(
+    enc_data->data.size(),
+    std::vector<std::array<size_t, gpu::CI_INDEX>>{enc_data->streams.size().first});
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> gathered_stripes(enc_data->data.size());
+  for (auto& stripe_data : gathered_stripes) {
+    for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
+      stripe_data.emplace_back(0, stream);
+    }
+  }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
-    for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
-      const auto& strm = (*enc_streams)[col_idx][stripe.first];
-
+    for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {
+      auto const& col_streams = (enc_data->streams)[col_idx];
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
-        const auto stream_id = strm.ids[k];
+        const auto stream_id = col_streams[0].ids[k];
         if (stream_id != -1) {
+          auto& actual_stripe_size = actual_stripe_sizes[stripe.id][col_idx][k];
+          actual_stripe_size       = std::accumulate(
+            col_streams.begin() + stripe.first,
+            col_streams.begin() + stripe.first + stripe.size,
+            0ul,
+            [&](auto const& sum, auto const& strm) { return sum + strm.lengths[k]; });
+
+          CUDF_EXPECTS(enc_data->data[stripe.id][stream_id].size() >= actual_stripe_size,
+                       "Insufficient allocation");
+          if (enc_data->data[stripe.id][stream_id].size() > actual_stripe_size) {
+            gathered_stripes[stripe.id][stream_id] =
+              rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
+          }
+
           auto* ss           = &(*strm_desc)[stripe.id][stream_id - num_index_streams];
-          ss->stream_size    = 0;
+          ss->data_ptr       = gathered_stripes[stripe.id][stream_id].data();
+          ss->stream_size    = actual_stripe_size;
           ss->first_chunk_id = stripe.first;
           ss->num_chunks     = stripe.size;
           ss->column_id      = col_idx;
@@ -1129,9 +1154,16 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   }
 
   strm_desc->host_to_device(stream);
-  gpu::CompactOrcDataStreams(*strm_desc, *enc_streams, stream);
+  gpu::CompactOrcDataStreams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host(stream);
-  enc_streams->device_to_host(stream, true);
+  enc_data->streams.device_to_host(stream, true);
+
+  for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
+    for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
+      if (not gathered_stripes[stripe_id][stream_id].is_empty())
+        enc_data->data[stripe_id][stream_id] = std::move(gathered_stripes[stripe_id][stream_id]);
+    }
+  }
 
   return stripes;
 }
@@ -2184,7 +2216,7 @@ void writer::impl::write(table_view const& table)
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
-  auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data.streams, &strm_descs);
+  auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs);
 
   if (num_rows > 0) {
     // Allocate intermediate output stream buffer

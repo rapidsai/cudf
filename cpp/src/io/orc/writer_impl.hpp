@@ -130,7 +130,7 @@ class orc_streams {
   [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                                    size_t num_rowgroups) const;
 
-  operator std::vector<Stream> const &() const { return streams; }
+  operator std::vector<Stream> const&() const { return streams; }
 
  private:
   std::vector<Stream> streams;
@@ -277,11 +277,10 @@ class writer::impl {
    *
    * @return The stripes' information
    */
-  std::vector<StripeInformation> gather_stripes(
-    size_t num_index_streams,
-    file_segmentation const& segmentation,
-    hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
-    hostdevice_2dvector<gpu::StripeStream>* strm_desc);
+  std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
+                                                file_segmentation const& segmentation,
+                                                encoded_data* enc_data,
+                                                hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
   /**
    * @brief Statistics data stored between calls to write for chunked writes

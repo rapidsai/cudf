@@ -1091,45 +1091,32 @@ __global__ void __launch_bounds__(1024)
                            device_2dspan<encoder_chunk_streams> streams)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ __align__(16) encoder_chunk_streams strm0;
-  __shared__ uint8_t* volatile ck_curptr_g;
-  __shared__ uint32_t volatile ck_curlen_g;
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
-  uint32_t t           = threadIdx.x;
+  auto const t         = threadIdx.x;
 
-  if (t == 0) {
-    ss    = strm_desc[stripe_id][stream_id];
-    strm0 = streams[ss.column_id][ss.first_chunk_id];
-  }
+  if (t == 0) { ss = strm_desc[stripe_id][stream_id]; }
   __syncthreads();
+
+  if (ss.data_ptr == nullptr) { return; }
+
   auto const cid = ss.stream_type;
-  auto dst_ptr   = strm0.data_ptrs[cid] + strm0.lengths[cid];
-  for (auto group = ss.first_chunk_id + 1; group < ss.first_chunk_id + ss.num_chunks; ++group) {
-    uint8_t* src_ptr;
-    uint32_t len;
-    if (t == 0) {
-      src_ptr = streams[ss.column_id][group].data_ptrs[cid];
-      len     = streams[ss.column_id][group].lengths[cid];
-      if (src_ptr != dst_ptr) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
-      ck_curptr_g = src_ptr;
-      ck_curlen_g = len;
-    }
-    __syncthreads();
-    src_ptr = ck_curptr_g;
-    len     = ck_curlen_g;
-    if (len > 0 && src_ptr != dst_ptr) {
+  auto dst_ptr   = ss.data_ptr;
+  for (auto group = ss.first_chunk_id; group < ss.first_chunk_id + ss.num_chunks; ++group) {
+    auto const src_ptr = streams[ss.column_id][group].data_ptrs[cid];
+    auto const len     = streams[ss.column_id][group].lengths[cid];
+    if (len > 0) {
       for (uint32_t i = 0; i < len; i += 1024) {
         uint8_t v = (i + t < len) ? src_ptr[i + t] : 0;
         __syncthreads();
         if (i + t < len) { dst_ptr[i + t] = v; }
       }
     }
+    if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
     dst_ptr += len;
     __syncthreads();
   }
-  if (!t) { strm_desc[stripe_id][stream_id].stream_size = dst_ptr - strm0.data_ptrs[cid]; }
 }
 
 /**
