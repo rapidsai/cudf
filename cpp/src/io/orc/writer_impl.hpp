@@ -54,6 +54,12 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
+ * @brief Helper for pinned host memory
+ */
+template <typename T>
+using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
+
+/**
  * Non-owning view of a cuDF table that includes ORC-related information.
  *
  * Columns hierarchy is flattened and stored in pre-order.
@@ -452,7 +458,9 @@ class writer::impl {
                     file_segmentation,
                     std::vector<StripeInformation>,
                     orc_table_view,
-                    writer::impl::intermediate_statistics>
+                    rmm::device_buffer,
+                    intermediate_statistics,
+                    pinned_buffer<uint8_t>>
   write_to_buffer(table_view const& input,
                   table_input_metadata const& table_meta,
                   stripe_size_limits max_stripe_size,
@@ -462,18 +470,23 @@ class writer::impl {
                   size_t compression_blocksize,
                   statistics_freq stats_freq,
                   bool single_write_mode,
+                  data_sink const& out_sink,
                   rmm::cuda_stream_view stream);
 
-  void apply_write(orc_streams const& streams,
+  void apply_write(orc_streams& streams,
                    hostdevice_vector<compression_result> const& comp_results,
                    hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
                    encoded_data const& enc_data,
                    file_segmentation const& segmentation,
-                   std::vector<StripeInformation> const& stripes,
+                   std::vector<StripeInformation>& stripes,
                    orc_table_view const& orc_table,
-                   writer::impl::intermediate_statistics const& intermediate_stats);
+                   rmm::device_buffer const& compressed_data,
+                   writer::impl::intermediate_statistics& intermediate_stats,
+                   pinned_buffer<uint8_t>& stream_output);
 
-  void update_footer(orc_table_view const& orc_table, size_type num_rows);
+  void update_footer(orc_table_view const& orc_table,
+                     std::vector<StripeInformation>& stripes,
+                     size_type num_rows);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
