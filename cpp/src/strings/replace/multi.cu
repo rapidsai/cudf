@@ -230,8 +230,8 @@ struct replace_multi_parallel_fn {
   }
 
   replace_multi_parallel_fn(column_device_view const& d_strings,
-                            device_span<string_view const> const d_targets,
-                            device_span<string_view const> const d_replacements)
+                            device_span<string_view const> d_targets,
+                            device_span<string_view const> d_replacements)
     : d_strings(d_strings), d_targets{d_targets}, d_replacements{d_replacements}
   {
   }
