@@ -45,7 +45,7 @@ namespace nvtext {
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::size_type width               = 4,
-  cudf::hash_value_type               = cudf::DEFAULT_HASH_SEED,
+  cudf::hash_value_type seed          = cudf::DEFAULT_HASH_SEED,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
