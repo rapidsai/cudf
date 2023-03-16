@@ -18,6 +18,7 @@
 
 #include <numeric>
 #include <regex>
+#include <set>
 
 namespace cudf::io::detail::parquet {
 
@@ -635,6 +636,79 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
   return std::make_tuple(
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
+}
+
+void aggregate_reader_metadata::populate_column_metadata(
+  std::vector<input_column_info> const& input_columns,
+  std::vector<std::unique_ptr<datasource>> const& sources)
+{
+  std::set<size_type> schema_cols;
+  std::transform(input_columns.begin(),
+                 input_columns.end(),
+                 std::inserter(schema_cols, schema_cols.end()),
+                 [](auto& col) { return col.schema_idx; });
+
+  for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+    auto const& source = sources[src_idx];
+    auto& metadata     = per_file_metadata[src_idx];
+    for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
+      auto& rg = per_file_metadata[src_idx].row_groups[rg_idx];
+      for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
+        auto& col = rg.columns[col_idx];
+        if (schema_cols.find(col.schema_idx) != schema_cols.end()) {
+          auto& chunk_meta = col.meta_data;
+          if (chunk_meta.key_value_metadata.size() > 0) {
+            size_t len    = 0;
+            size_t offset = 0;
+            for (size_t i = 0; i < chunk_meta.key_value_metadata.size(); i++) {
+              auto& kv = chunk_meta.key_value_metadata[i];
+              if (kv.key == "sizes_size") {
+                len = std::stol(kv.value);
+              } else if (kv.key == "sizes_offset") {
+                offset = std::stol(kv.value);
+              }
+            }
+
+            if (len > 0) {
+              ColumnChunkSize colsize;
+              const auto ci_buf = source->host_read(offset, len);
+              cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+              bool res = cp.read(&colsize);
+              if (res) {
+                metadata.column_sizes.push_back(colsize);
+              } else {
+                metadata.column_sizes.push_back(ColumnChunkSize{0, 0});
+              }
+            }
+          }
+
+          if (col.column_index_length > 0) {
+            cudf::io::parquet::ColumnIndex colidx;
+            const auto ci_buf = source->host_read(col.column_index_offset, col.column_index_length);
+            cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+            bool res = cp.read(&colidx);
+            if (res) {
+              metadata.column_indexes.push_back(colidx);
+            } else {
+              metadata.column_indexes.push_back(ColumnIndex{});
+            }
+          }
+
+          if (col.offset_index_length > 0) {
+            cudf::io::parquet::OffsetIndex offidx;
+            const auto ci_buf = source->host_read(col.offset_index_offset, col.offset_index_length);
+            cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+            bool res = cp.read(&offidx);
+            if (res) {
+              metadata.offset_indexes.push_back(offidx);
+            } else {
+              metadata.offset_indexes.push_back(OffsetIndex{});
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 }  // namespace cudf::io::detail::parquet

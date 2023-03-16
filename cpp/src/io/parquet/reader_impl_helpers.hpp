@@ -65,6 +65,10 @@ struct row_group_info {
  */
 struct metadata : public FileMetaData {
   explicit metadata(datasource* source);
+
+  std::vector<ColumnIndex> column_indexes;
+  std::vector<OffsetIndex> offset_indexes;
+  std::vector<ColumnChunkSize> column_sizes;
 };
 
 class aggregate_reader_metadata {
@@ -192,6 +196,11 @@ class aggregate_reader_metadata {
                    bool include_index,
                    bool strings_to_categorical,
                    type_id timestamp_type_id) const;
+
+  // read per-file page index and column/page size thrift structures for the selected input
+  // columns
+  void populate_column_metadata(std::vector<input_column_info> const&,
+                                std::vector<std::unique_ptr<datasource>> const& sources);
 };
 
 }  // namespace cudf::io::detail::parquet

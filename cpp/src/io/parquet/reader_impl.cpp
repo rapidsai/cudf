@@ -227,6 +227,9 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               _timestamp_type.id());
 
+  // get column metadata (column/offset index, column sizes) for selected columns
+  _metadata->populate_column_metadata(_input_columns, _sources);
+
   // Save the states of the output buffers for reuse in `chunk_read()`.
   // Don't need to do it if we read the file all at once.
   if (_chunk_read_limit > 0) {
