@@ -766,6 +766,8 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
+  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
+  # fPIC enabled and therefore can't be embedded into shared libraries.
   add_library(
     cudftestutil STATIC
     tests/io/metadata_utilities.cpp
