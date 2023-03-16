@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,9 +111,9 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
-                                       std::vector<column_metadata> const& metadata = {},
-                                       rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                       arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
+                                       std::vector<column_metadata> const& metadata,
+                                       rmm::cuda_stream_view stream,
+                                       arrow::MemoryPool* ar_mr);
 
 /**
  * @copydoc cudf::arrow_to_cudf

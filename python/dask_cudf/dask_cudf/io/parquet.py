@@ -71,6 +71,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitioning=None,
         partition_keys=None,
         open_file_options=None,
+        dataset_kwargs=None,
         **kwargs,
     ):
 
@@ -78,6 +79,8 @@ class CudfEngine(ArrowDatasetEngine):
         if row_groups == [None for path in paths]:
             row_groups = None
 
+        dataset_kwargs = dataset_kwargs or {}
+        dataset_kwargs["partitioning"] = partitioning or "hive"
         with ExitStack() as stack:
 
             # Non-local filesystem handling
@@ -100,6 +103,8 @@ class CudfEngine(ArrowDatasetEngine):
                     columns=columns,
                     row_groups=row_groups if row_groups else None,
                     strings_to_categorical=strings_to_categorical,
+                    dataset_kwargs=dataset_kwargs,
+                    categorical_partitions=False,
                     **kwargs,
                 )
             except RuntimeError as err:
@@ -127,15 +132,10 @@ class CudfEngine(ArrowDatasetEngine):
         if partitions and partition_keys is None:
 
             # Use `HivePartitioning` by default
-            partitioning = partitioning or {"obj": pa_ds.HivePartitioning}
             ds = pa_ds.dataset(
                 paths,
                 filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
+                **dataset_kwargs,
             )
             frag = next(ds.get_fragments())
             if frag:
@@ -188,6 +188,9 @@ class CudfEngine(ArrowDatasetEngine):
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        dataset_kwargs = kwargs.get("dataset", {})
+        partitioning = partitioning or dataset_kwargs.get("partitioning", None)
 
         # Check if we are actually selecting any columns
         read_columns = columns
@@ -249,6 +252,7 @@ class CudfEngine(ArrowDatasetEngine):
                             partitions=partitions,
                             partitioning=partitioning,
                             partition_keys=last_partition_keys,
+                            dataset_kwargs=dataset_kwargs,
                             **read_kwargs,
                         )
                     )
@@ -274,6 +278,7 @@ class CudfEngine(ArrowDatasetEngine):
                     partitions=partitions,
                     partitioning=partitioning,
                     partition_keys=last_partition_keys,
+                    dataset_kwargs=dataset_kwargs,
                     **read_kwargs,
                 )
             )
