@@ -825,6 +825,7 @@ struct cumulative_row_info {
   int key;            // schema index
 };
 
+//#define PREPROCESS_DEBUG 1
 #if defined(PREPROCESS_DEBUG)
 void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
@@ -1101,7 +1102,9 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
       cur_cumulative_size = sizes[split_pos].size_bytes;
     }
   }
-  // print_cumulative_row_info(sizes, "adjusted", splits);
+#if defined(PREPROCESS_DEBUG)
+  print_cumulative_row_info(sizes, "adjusted", splits);
+#endif
 
   return splits;
 }
@@ -1138,7 +1141,15 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                                 c_info.begin(),
                                 thrust::equal_to{},
                                 cumulative_row_sum{});
-  // print_cumulative_page_info(pages, page_index, c_info, stream);
+#if defined(PREPROCESS_DEBUG)
+  std::vector<cumulative_row_info> h_c_info(c_info.size());
+  CUDF_CUDA_TRY(cudaMemcpy(h_c_info.data(),
+                           c_info.data(),
+                           sizeof(cumulative_row_info) * c_info.size(),
+                           cudaMemcpyDefault));
+  print_cumulative_page_info(pages, page_index, c_info, stream);
+  print_cumulative_row_info(h_c_info, "og");
+#endif
 
   // sort by row count
   rmm::device_uvector<cumulative_row_info> c_info_sorted{c_info, stream};
@@ -1148,13 +1159,14 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
                  return a.row_count < b.row_count;
                });
-
-  // std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
-  // CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
-  //                          c_info_sorted.data(),
-  //                          sizeof(cumulative_row_info) * c_info_sorted.size(),
-  //                          cudaMemcpyDefault));
-  // print_cumulative_row_info(h_c_info_sorted, "raw");
+#if defined(PREPROCESS_DEBUG)
+  std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
+  CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
+                           c_info_sorted.data(),
+                           sizeof(cumulative_row_info) * c_info_sorted.size(),
+                           cudaMemcpyDefault));
+  print_cumulative_row_info(h_c_info_sorted, "raw");
+#endif
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
   // key
@@ -1426,13 +1438,17 @@ void reader::impl::preprocess_pages(size_t skip_rows,
                       pages.device_ptr() + pages.size(),
                       page_keys.begin(),
                       get_page_schema{});
+    // page_keys: 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
 
     thrust::sequence(rmm::exec_policy(_stream), page_index.begin(), page_index.end());
+    // page_index: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
     thrust::stable_sort_by_key(rmm::exec_policy(_stream),
                                page_keys.begin(),
                                page_keys.end(),
                                page_index.begin(),
                                thrust::less<int>());
+    // page_keys:  1, 1, 1, 1, 2, 2, 2, 2, 3, 3,  3,  3
+    // page_index: 0, 1, 6, 7, 2, 3, 8, 9, 4, 5, 10, 11
   }
 
   // detect malformed columns.
@@ -1550,7 +1566,9 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // retrieve pages back
     pages.device_to_host(_stream, true);
 
-    // print_pages(pages, _stream);
+#if defined(PREPROCESS_DEBUG)
+    print_pages(pages, _stream);
+#endif
   }
 
   // compute splits if necessary. otherwise return a single split representing

@@ -20,6 +20,13 @@
 #include <regex>
 #include <set>
 
+#include <thrust/binary_search.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/iterator_categories.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/sort.h>
+
 namespace cudf::io::detail::parquet {
 
 namespace {
@@ -651,8 +658,8 @@ void aggregate_reader_metadata::populate_column_metadata(
   for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
     auto const& source = sources[src_idx];
     auto& metadata     = per_file_metadata[src_idx];
-    for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
-      auto& rg = per_file_metadata[src_idx].row_groups[rg_idx];
+    for (size_t rg_idx = 0; rg_idx < metadata.row_groups.size(); ++rg_idx) {
+      auto& rg = metadata.row_groups[rg_idx];
       for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
         auto& col = rg.columns[col_idx];
         if (schema_cols.find(col.schema_idx) != schema_cols.end()) {
@@ -709,6 +716,168 @@ void aggregate_reader_metadata::populate_column_metadata(
       }
     }
   }
+}
+
+template <typename UnaryFunction>
+inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
+{
+  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
+}
+
+std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size_t chunk_read_limit)
+{
+  std::vector<gpu::chunk_read_info> splits;
+  if (per_file_metadata[0].column_sizes.size() == 0) return splits;
+
+  struct cumulative_row_info {
+    size_t row_count;   // cumulative row count
+    size_t size_bytes;  // cumulative size in bytes
+    int key;            // schema index
+  };
+
+  std::vector<cumulative_row_info> page_sizes;
+
+  // create page_keys and page_index
+  std::vector<size_type> page_keys;
+  std::vector<size_type> page_index;
+
+  int global_page_idx = 0;
+  for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+    auto const& metadata = per_file_metadata[src_idx];
+    size_t chunk_idx     = 0;
+    for (size_t rg_idx = 0; rg_idx < metadata.row_groups.size(); ++rg_idx) {
+      auto const& rg = metadata.row_groups[rg_idx];
+      for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++, chunk_idx++) {
+        auto const& col        = rg.columns[col_idx];
+        auto const& chunk_size = metadata.column_sizes[chunk_idx];
+        auto const& offsets    = metadata.offset_indexes[chunk_idx];
+
+        for (size_t page_idx = 0; page_idx < chunk_size.page_sizes.size(); page_idx++) {
+          page_keys.push_back(col.schema_idx);
+          page_index.push_back(global_page_idx++);
+
+          size_t num_rows = (page_idx == chunk_size.page_sizes.size() - 1
+                               ? rg.num_rows
+                               : offsets.page_locations[page_idx + 1].first_row_index) -
+                            offsets.page_locations[page_idx].first_row_index;
+          size_t page_size = chunk_size.page_sizes[page_idx].data_size;
+          page_sizes.push_back({num_rows, page_size, col.schema_idx});
+        }
+      }
+    }
+  }
+
+  thrust::stable_sort_by_key(
+    page_keys.begin(), page_keys.end(), page_index.begin(), thrust::less<int>());
+
+  struct cumulative_row_sum {
+    cumulative_row_info operator()(cumulative_row_info const& a, cumulative_row_info const& b) const
+    {
+      return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
+    }
+  };
+
+  struct get_cumulative_row_info {
+    cumulative_row_info const* ci;
+
+    cumulative_row_info operator()(size_type index) { return ci[index]; }
+  };
+
+  std::vector<cumulative_row_info> c_info(page_keys.size());
+  auto page_input =
+    thrust::make_transform_iterator(page_index.begin(), get_cumulative_row_info{page_sizes.data()});
+  thrust::inclusive_scan_by_key(page_keys.begin(),
+                                page_keys.end(),
+                                page_input,
+                                c_info.begin(),
+                                thrust::equal_to{},
+                                cumulative_row_sum{});
+
+  // sort by row count
+  std::vector<cumulative_row_info> c_info_sorted{c_info};
+  thrust::sort(c_info_sorted.begin(),
+               c_info_sorted.end(),
+               [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
+                 return a.row_count < b.row_count;
+               });
+
+  // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
+  // key
+  std::vector<size_type> key_offsets(page_keys.size() + 1);
+  auto const key_offsets_end = thrust::reduce_by_key(page_keys.begin(),
+                                                     page_keys.end(),
+                                                     thrust::make_constant_iterator(1),
+                                                     thrust::make_discard_iterator(),
+                                                     key_offsets.begin())
+                                 .second;
+  size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
+  thrust::exclusive_scan(key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+
+  struct row_total_size {
+    cumulative_row_info const* c_info;
+    size_type const* key_offsets;
+    size_t num_keys;
+
+    cumulative_row_info operator()(cumulative_row_info const& i)
+    {
+      // sum sizes for each input column at this row
+      size_t sum = 0;
+      for (size_t idx = 0; idx < num_keys; idx++) {
+        auto const start = key_offsets[idx];
+        auto const end   = key_offsets[idx + 1];
+        auto iter =
+          make_counting_transform_iterator(0, [&](size_type i) { return c_info[i].row_count; });
+        auto const page_index =
+          thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_count) - iter;
+        sum += c_info[page_index].size_bytes;
+      }
+      return {i.row_count, sum, i.key};
+    }
+  };
+
+  std::vector<cumulative_row_info> aggregated_info(c_info.size());
+  thrust::transform(c_info_sorted.begin(),
+                    c_info_sorted.end(),
+                    aggregated_info.begin(),
+                    row_total_size{c_info.data(), key_offsets.data(), num_unique_keys});
+
+  {
+    size_t cur_pos             = 0;
+    size_t cur_cumulative_size = 0;
+    size_t cur_row_count       = 0;
+    auto start                 = thrust::make_transform_iterator(
+      aggregated_info.begin(),
+      [&](cumulative_row_info const& i) { return i.size_bytes - cur_cumulative_size; });
+    auto end = start + aggregated_info.size();
+    while (cur_row_count < static_cast<size_t>(num_rows)) {
+      int64_t split_pos = thrust::lower_bound(start + cur_pos, end, chunk_read_limit) - start;
+
+      // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
+      // one.
+      if (static_cast<size_t>(split_pos) >= aggregated_info.size() ||
+          (aggregated_info[split_pos].size_bytes - cur_cumulative_size > chunk_read_limit)) {
+        split_pos--;
+      }
+
+      // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
+      // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
+      // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
+      // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
+      // either do this, or we have to call unique() on the input first.
+      while (split_pos < (static_cast<int64_t>(aggregated_info.size()) - 1) &&
+             (split_pos < 0 || aggregated_info[split_pos].row_count == cur_row_count)) {
+        split_pos++;
+      }
+
+      auto const start_row = cur_row_count;
+      cur_row_count        = aggregated_info[split_pos].row_count;
+      splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
+      cur_pos             = split_pos;
+      cur_cumulative_size = aggregated_info[split_pos].size_bytes;
+    }
+  }
+
+  return splits;
 }
 
 }  // namespace cudf::io::detail::parquet

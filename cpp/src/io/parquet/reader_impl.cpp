@@ -231,11 +231,16 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // filtering (or num_rows filtering). since we don't do the latter yet, just
   // test for the former.  That's why this isn't in the if{} immediately following this one.
   // get column metadata (column/offset index, column sizes) for selected columns
-  if (_chunk_read_limit > 0) { _metadata->populate_column_metadata(_input_columns, _sources); }
+  if (_chunk_read_limit > 0) {
+    _metadata->populate_column_metadata(_input_columns, _sources);
+    auto splits           = _metadata->compute_splits(_chunk_read_limit);
+    _meta_chunk_read_info = std::move(splits);
+    _chunk_read_limit     = 0;  // don't need this since we already have splits
+  }
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   // Don't need to do it if we read the file all at once.
-  if (_chunk_read_limit > 0) {
+  if (_chunk_read_limit > 0 or not _meta_chunk_read_info.empty()) {
     for (auto const& buff : _output_buffers) {
       _output_buffers_template.emplace_back(column_buffer::empty_like(buff));
     }
@@ -279,7 +284,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     return finalize_output(out_metadata, out_columns);
   }
 
-  auto const& read_info = _chunk_read_info[_current_read_chunk++];
+  auto const& read_info = _meta_chunk_read_info.empty()
+                            ? _chunk_read_info[_current_read_chunk++]
+                            : _meta_chunk_read_info[_current_read_chunk++];
 
   // Allocate memory buffers for the output columns.
   allocate_columns(read_info.skip_rows, read_info.num_rows, uses_custom_row_bounds);
@@ -352,27 +359,38 @@ table_with_metadata reader::impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
-  if (_chunk_read_limit > 0) {
+  if (_chunk_read_limit > 0 || not _meta_chunk_read_info.empty()) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
       _output_buffers.emplace_back(column_buffer::empty_like(buff));
     }
   }
 
-  prepare_data(0 /*skip_rows*/,
-               -1 /*num_rows, `-1` means unlimited*/,
-               true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/);
-  return read_chunk_internal(true);
+  if (_meta_chunk_read_info.empty()) {
+    prepare_data(0 /*skip_rows*/,
+                 -1 /*num_rows, `-1` means unlimited*/,
+                 true /*uses_custom_row_bounds*/,
+                 {} /*row_group_indices, empty means read all row groups*/);
+    return read_chunk_internal(true);
+  } else {
+    auto const& chunk_info = _meta_chunk_read_info[_current_read_chunk];
+    _file_preprocessed     = false;
+    prepare_data(chunk_info.skip_rows, chunk_info.num_rows, true, {});
+    return read_chunk_internal(true);
+  }
 }
 
 bool reader::impl::has_next()
 {
-  prepare_data(0 /*skip_rows*/,
-               -1 /*num_rows, `-1` means unlimited*/,
-               true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/);
-  return _current_read_chunk < _chunk_read_info.size();
+  if (_meta_chunk_read_info.empty()) {
+    prepare_data(0 /*skip_rows*/,
+                 -1 /*num_rows, `-1` means unlimited*/,
+                 true /*uses_custom_row_bounds*/,
+                 {} /*row_group_indices, empty means read all row groups*/);
+    return _current_read_chunk < _chunk_read_info.size();
+  } else {
+    return _current_read_chunk < _meta_chunk_read_info.size();
+  }
 }
 
 }  // namespace cudf::io::detail::parquet
