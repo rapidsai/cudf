@@ -227,8 +227,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               _timestamp_type.id());
 
+  // only need this info for chunk estimation, or if using indexes for pushdown
+  // filtering (or num_rows filtering). since we don't do the latter yet, just
+  // test for the former.  That's why this isn't in the if{} immediately following this one.
   // get column metadata (column/offset index, column sizes) for selected columns
-  _metadata->populate_column_metadata(_input_columns, _sources);
+  if (_chunk_read_limit > 0) { _metadata->populate_column_metadata(_input_columns, _sources); }
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   // Don't need to do it if we read the file all at once.
