@@ -685,7 +685,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         preserve_order
             If True (default), return the n rows from each group in
             original dataframe order (this mimics pandas behavior
-            though is more expensive).
+            though is more expensive). If you don't need rows in
+            original dataframe order you will see a performance
+            improvement by setting ``preserve_order=False``. In both
+            cases, the original index is preserved, so ``.loc``-based
+            indexing will work identically.
 
         Returns
         -------
@@ -706,8 +710,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         ... )
         >>> df.groupby("a").head(1)
            a  b
-        1  0  1
         0  1  0
+        1  0  1
         3  2  3
         6  3  6
         >>> df.groupby("a").head(-2)
@@ -716,15 +720,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         3  2  3
         6  3  6
         8  3  8
-
-        .. pandas-compat::
-
-           Note that by default the returned object will be re-ordered
-           to match the original dataframe order (matching pandas
-           behavior). If you don't need to preserve ordering, passing
-           ``preserve_order=False`` will be faster. In both cases, the
-           original index is preserved, so ``.loc``-based indexing
-           will work identically.
         """
         return self._head_tail(
             n, take_head=True, preserve_order=preserve_order
@@ -743,7 +738,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         preserve_order
             If True (default), return the n rows from each group in
             original dataframe order (this mimics pandas behavior
-            though is more expensive).
+            though is more expensive). If you don't need rows in
+            original dataframe order you will see a performance
+            improvement by setting ``preserve_order=False``. In both
+            cases, the original index is preserved, so ``.loc``-based
+            indexing will work identically.
 
         Returns
         -------
@@ -775,15 +774,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         7   2   7
         9   3   9
         10  3  10
-
-        .. pandas-compat::
-
-           Note that by default the returned object will be re-ordered
-           to match the original dataframe order (matching pandas
-           behavior). If you don't need to preserve ordering, passing
-           ``preserve_order=False`` will be faster. In both cases, the
-           original index is preserved, so ``.loc``-based indexing
-           will work identically.
         """
         return self._head_tail(
             n, take_head=False, preserve_order=preserve_order
