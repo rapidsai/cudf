@@ -37,6 +37,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace cudf {
@@ -444,19 +445,35 @@ class writer::impl {
    */
   void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
 
-  static void write_to_buffer(table_view const& input,
-                              table_input_metadata const& table_meta,
-                              stripe_size_limits max_stripe_size,
-                              size_type row_index_stride,
-                              bool enable_dictionary,
-                              CompressionKind compression_kind,
-                              size_t compression_blocksize,
-                              std::unique_ptr<data_sink> const& out_sink,
-                              statistics_freq stats_freq,
-                              persisted_statistics& persisted_stripe_statistics,
-                              bool single_write_mode,
-                              cudf::io::orc::FileFooter& ffooter,
-                              rmm::cuda_stream_view stream);
+  static std::tuple<orc_streams,
+                    hostdevice_vector<compression_result>,
+                    hostdevice_2dvector<gpu::StripeStream>,
+                    encoded_data,
+                    file_segmentation,
+                    std::vector<StripeInformation>,
+                    orc_table_view,
+                    writer::impl::intermediate_statistics>
+  write_to_buffer(table_view const& input,
+                  table_input_metadata const& table_meta,
+                  stripe_size_limits max_stripe_size,
+                  size_type row_index_stride,
+                  bool enable_dictionary,
+                  CompressionKind compression_kind,
+                  size_t compression_blocksize,
+                  statistics_freq stats_freq,
+                  bool single_write_mode,
+                  rmm::cuda_stream_view stream);
+
+  void apply_write(orc_streams const& streams,
+                   hostdevice_vector<compression_result> const& comp_results,
+                   hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
+                   encoded_data const& enc_data,
+                   file_segmentation const& segmentation,
+                   std::vector<StripeInformation> const& stripes,
+                   orc_table_view const& orc_table,
+                   writer::impl::intermediate_statistics const& intermediate_stats);
+
+  void update_footer(orc_table_view const& orc_table, size_type num_rows);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
