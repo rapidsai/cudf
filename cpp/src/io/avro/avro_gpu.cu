@@ -96,7 +96,11 @@ avro_decode_row(schemadesc_s const* schema,
         --skip;
       }
       if (i >= schema_len || skip_after < 0) break;
-      kind = schema[i].kind;
+      kind         = schema[i].kind;
+      logical_kind = schema[i].logical_kind;
+      if (is_supported_logical_type(logical_kind)) {
+        kind = static_cast<type_kind_e>(logical_kind);
+      }
       skip = skip_after;
     }
 
@@ -110,13 +114,15 @@ avro_decode_row(schemadesc_s const* schema,
         break;
 
       case type_int: {
-        int64_t v                           = avro_decode_zigzag_varint(cur, end);
-        static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        int64_t v = avro_decode_zigzag_varint(cur, end);
+        if (dataptr != nullptr && row < max_rows) {
+          static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        }
       } break;
 
       case type_long: {
-        int64_t v                           = avro_decode_zigzag_varint(cur, end);
-        static_cast<int64_t*>(dataptr)[row] = v;
+        int64_t v = avro_decode_zigzag_varint(cur, end);
+        if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
       } break;
 
       case type_bytes: [[fallthrough]];

@@ -14,6 +14,7 @@
 
 import datetime
 import io
+import pathlib
 from typing import Optional
 
 import fastavro
@@ -355,3 +356,91 @@ def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
     )
 
     assert_eq(expected, actual)
+
+
+def test_alltypes_plain_avro():
+    # During development of the logical type support, the Java avro tests were
+    # triggering CUDA kernel crashes (null pointer dereferences).  We were able
+    # to replicate the behavior in a C++ test case, and then subsequently came
+    # up with this Python unit test to also trigger the problematic code path.
+    #
+    # So, unlike the other tests, this test is inherently reactive in nature,
+    # added simply to verify we fixed the problematic code path that was
+    # causing CUDA kernel crashes.
+    #
+    # See https://github.com/rapidsai/cudf/pull/12788#issuecomment-1468822875
+    # for more information.
+    relpath = "../../../../java/src/test/resources/alltypes_plain.avro"
+    path = pathlib.Path(__file__).parent.joinpath(relpath).resolve()
+    assert path.is_file(), path
+    path = str(path)
+
+    with open(path, "rb") as f:
+        reader = fastavro.reader(f)
+        records = [record for record in reader]
+
+    # For reference:
+    #
+    # >>> from pprint import pprint
+    # >>> pprint(reader.writer_schema)
+    # {'fields': [{'name': 'id', 'type': ['int', 'null']},
+    #             {'name': 'bool_col', 'type': ['boolean', 'null']},
+    #             {'name': 'tinyint_col', 'type': ['int', 'null']},
+    #             {'name': 'smallint_col', 'type': ['int', 'null']},
+    #             {'name': 'int_col', 'type': ['int', 'null']},
+    #             {'name': 'bigint_col', 'type': ['long', 'null']},
+    #             {'name': 'float_col', 'type': ['float', 'null']},
+    #             {'name': 'double_col', 'type': ['double', 'null']},
+    #             {'name': 'date_string_col', 'type': ['bytes', 'null']},
+    #             {'name': 'string_col', 'type': ['bytes', 'null']},
+    #             {'name': 'timestamp_col',
+    #              'type': [{'logicalType': 'timestamp-micros',
+    #                        'type': 'long'},
+    #                       'null']}],
+    #  'name': 'topLevelRecord',
+    #  'type': 'record'}
+    #
+    # >>> pprint(records[0])
+    # {'bigint_col': 0,
+    #  'bool_col': True,
+    #  'date_string_col': b'03/01/09',
+    #  'double_col': 0.0,
+    #  'float_col': 0.0,
+    #  'id': 4,
+    #  'int_col': 0,
+    #  'smallint_col': 0,
+    #  'string_col': b'0',
+    #  'timestamp_col': datetime.datetime(2009, 3, 1, 0, 0,
+    #                                     tzinfo=datetime.timezone.utc),
+    #  'tinyint_col': 0}
+
+    # Nothing particularly special about these columns, other than them being
+    # the ones that @davidwendt used to coerce the crash.
+    columns = ["bool_col", "int_col", "timestamp_col"]
+
+    # This next line would trigger the fatal CUDA kernel crash.
+    actual = cudf.read_avro(path, columns=columns)
+
+    # If we get here, we haven't crashed, obviously.  Verify the returned data
+    # frame meets our expectations.  We need to fiddle with the dtypes of the
+    # expected data frame in order to correctly match the schema definition and
+    # our corresponding read_avro()-returned data frame.
+
+    data = [{column: row[column] for column in columns} for row in records]
+    expected = cudf.DataFrame(data)
+
+    # The fastavro.reader supports the `'logicalType': 'timestamp-micros'` used
+    # by the 'timestamp_col' column, which is converted into Python
+    # datetime.datetime() objects (see output of pprint(records[0]) above).
+    # As we don't support that logical type yet in cudf, we need to convert to
+    # int64, then divide by 1000 to convert from nanoseconds to microseconds.
+    timestamps = expected["timestamp_col"].astype("int64")
+    timestamps //= 1000
+    expected["timestamp_col"] = timestamps
+
+    # Furthermore, we need to force the 'int_col' into an int32, per the schema
+    # definition.  (It ends up as an int64 due to cudf.DataFrame() defaulting
+    # all Python int values to int64 sans a dtype= override.)
+    expected["int_col"] = expected["int_col"].astype("int32")
+
+    assert_eq(actual, expected)
