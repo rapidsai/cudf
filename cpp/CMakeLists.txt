@@ -864,31 +864,17 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
 )
-
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-if(CUDF_BUILD_TESTUTIL)
+if(TARGET cudftestutil)
   install(
     TARGETS cudftestutil
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
-
-  install(
-    EXPORT cudf-testing-exports
-    FILE cudf-testing-targets.cmake
-    NAMESPACE cudf::
-    DESTINATION "${lib_dir}/cmake/cudf"
-  )
-
-  include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-  rapids_export_write_dependencies(
-    INSTALL cudf-testing-exports
-    "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
-  )
 endif()
+
+install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
@@ -951,12 +937,6 @@ string(
   [=[
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-  endif()
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-  endif()
 endif()
 ]=]
 )
@@ -965,7 +945,9 @@ string(APPEND install_code_string "${common_code_string}")
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  COMPONENTS testing
+  COMPONENTS_EXPORT_SET cudf-testing-exports
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK install_code_string
@@ -989,22 +971,14 @@ string(APPEND build_code_string "${common_code_string}")
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  COMPONENTS testing
+  COMPONENTS_EXPORT_SET cudf-testing-exports
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
 )
 
-if(CUDF_BUILD_TESTUTIL)
-  export(
-    EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-    NAMESPACE cudf::
-  )
-  rapids_export_write_dependencies(
-    BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
-  )
-endif()
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
 
