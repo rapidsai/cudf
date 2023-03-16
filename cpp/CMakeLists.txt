@@ -741,10 +741,9 @@ add_library(cudf::cudf ALIAS cudf)
 if(CUDF_BUILD_TESTUTIL)
   add_library(
     cudftest_default_stream
-    # This library when compiled as a dynamic library allows us to
-    # LD_PRELOAD injection of symbols. We currently leverage this for
-    # stream-related library validation and may make use of it for other
-    # similar features in the future.
+    # When compiled as a dynamic library allows us to use LD_PRELOAD injection of symbols. We
+    # currently leverage this for stream-related library validation and may make use of it for
+    # other similar features in the future.
     tests/utilities/default_stream.cpp
   )
   set_target_properties(
