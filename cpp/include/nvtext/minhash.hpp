@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2023, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
+#include <cudf/column/column.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
+namespace nvtext {
+/**
+ * @addtogroup nvtext_minhash
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Returns the minhash value for each string
+ *
+ * Hash values are computed from substrings of each string and the
+ * minimum hash value is returned for each string.
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ *
+ * @param input Strings column to compute minhash
+ * @param width The character width used for apply substrings;
+ *              Any string smaller than this width will not be hashed.
+ *              Default is 4 characters.
+ * @param seed Seed value used for the Murmur32_3 hash algorithm
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Minhash values for each string in input
+ */
+std::unique_ptr<cudf::column> minhash(
+  cudf::strings_column_view const& input,
+  cudf::size_type width               = 4,
+  cudf::hash_value_type               = cudf::DEFAULT_HASH_SEED,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
+}  // namespace nvtext
