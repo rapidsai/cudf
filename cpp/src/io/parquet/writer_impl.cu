@@ -1887,7 +1887,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           std::vector<size_t> page_sizes;
           std::transform(
             slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
-              return column_size(slice, stream);
+              // FIXME: fudge factor to try to match size including overhead. remove when we
+              // calculate both.
+              return (column_size(slice, stream) * 13) / 10; 
             });
           int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
 
