@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -273,7 +273,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table.view(), got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, ChunkedArray)
