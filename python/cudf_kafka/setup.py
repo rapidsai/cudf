@@ -10,10 +10,6 @@ from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
-install_requires = ["cudf", "cython"]
-
-extras_require = {"test": ["pytest", "pytest-xdist"]}
-
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
@@ -85,23 +81,6 @@ extensions = [
 ]
 
 setup(
-    name="cudf_kafka",
-    version="23.04.00",
-    description="cuDF Kafka Datasource",
-    url="https://github.com/rapidsai/cudf",
-    author="NVIDIA Corporation",
-    license="Apache 2.0",
-    classifiers=[
-        "Intended Audience :: Developers",
-        "Topic :: Streaming",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Apache Kafka",
-        "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-    ],
     # Include the separately-compiled shared library
     ext_modules=cythonize(
         extensions,
@@ -115,7 +94,5 @@ setup(
         find_packages(include=["cudf_kafka._lib*"]),
         ["*.pxd"],
     ),
-    install_requires=install_requires,
-    extras_require=extras_require,
     zip_safe=False,
 )
