@@ -1452,7 +1452,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     }
   }
 
-  ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
+  ProtobufWriter pbw((compression_kind != NONE) ? 3 : 0);
 
   // Add row index entries
   auto const& rowgroups_range = segmentation.stripes[stripe_id];
