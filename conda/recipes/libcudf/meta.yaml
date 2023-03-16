@@ -73,6 +73,8 @@ outputs:
         - librmm ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
