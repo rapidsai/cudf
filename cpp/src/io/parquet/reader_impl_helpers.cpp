@@ -718,6 +718,9 @@ void aggregate_reader_metadata::populate_column_metadata(
   }
 }
 
+// the following code intends to replicate compute_splits/find_splits using
+// file metadata rather than having to read the pages. the should be refactored
+// so both implementations can share code (if possible).
 template <typename UnaryFunction>
 inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
 {
@@ -727,7 +730,9 @@ inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunctio
 std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size_t chunk_read_limit)
 {
   std::vector<gpu::chunk_read_info> splits;
-  if (per_file_metadata[0].column_sizes.size() == 0) return splits;
+  if (per_file_metadata[0].column_sizes.empty() or per_file_metadata[0].offset_indexes.empty()) {
+    return splits;
+  }
 
   struct cumulative_row_info {
     size_t row_count;   // cumulative row count
