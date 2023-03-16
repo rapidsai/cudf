@@ -5210,4 +5210,51 @@ TYPED_TEST(ParquetReaderSourceTest, BufferSourceArrayTypes)
   }
 }
 
+TEST_F(ParquetWriterTest, UserNullability)
+{
+  auto weight_col = cudf::test::fixed_width_column_wrapper<float>{{57.5, 51.1, 15.3}};
+  auto ages_col   = cudf::test::fixed_width_column_wrapper<int32_t>{{30, 27, 5}};
+  auto struct_col = cudf::test::structs_column_wrapper{weight_col, ages_col};
+
+  auto expected = table_view({struct_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_nullability(false);
+  expected_metadata.column_metadata[0].child(0).set_nullability(true);
+
+  auto filepath = temp_env->get_temp_filepath("SingleWriteNullable.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf::io::write_parquet(write_opts);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  EXPECT_FALSE(result.tbl->view().column(0).nullable());
+  EXPECT_TRUE(result.tbl->view().column(0).child(0).nullable());
+  EXPECT_FALSE(result.tbl->view().column(0).child(1).nullable());
+}
+
+TEST_F(ParquetWriterTest, UserNullabilityInvalid)
+{
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 2; });
+  auto col      = cudf::test::fixed_width_column_wrapper<double>{{57.5, 51.1, 15.3}, valids};
+  auto expected = table_view({col});
+
+  auto filepath = temp_env->get_temp_filepath("SingleWriteNullableInvalid.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  // Should work without the nullability option
+  EXPECT_NO_THROW(cudf::io::write_parquet(write_opts));
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_nullability(false);
+  write_opts.set_metadata(&expected_metadata);
+  // Can't write a column with nulls as not nullable
+  EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
