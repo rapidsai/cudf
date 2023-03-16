@@ -51,6 +51,7 @@ requirements:
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - spdlog {{ spdlog_version }}
+    - gtest==1.10.0.*
 
 outputs:
   - name: libcudf
