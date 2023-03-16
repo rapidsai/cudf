@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -12,7 +12,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
@@ -90,13 +89,13 @@ pandas_dtypes_alias_to_cudf_alias = {
     "boolean": "bool",
 }
 
-if PANDAS_GE_120:
-    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
-    pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
-    pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
+
+np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
+pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}

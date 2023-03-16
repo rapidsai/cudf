@@ -120,15 +120,16 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
-# Set RMM logging level
-set(RMM_LOGGING_LEVEL
+# Set logging level
+set(LIBCUDF_LOGGING_LEVEL
     "INFO"
     CACHE STRING "Choose the logging level."
 )
 set_property(
-  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+  CACHE LIBCUDF_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL"
+                                       "OFF"
 )
-message(VERBOSE "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
 
 if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
@@ -191,6 +192,10 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
+# find fmt
+include(cmake/thirdparty/get_fmt.cmake)
+# find spdlog
+include(cmake/thirdparty/get_spdlog.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -597,6 +602,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
@@ -677,8 +683,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Define RMM logging level
+target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
+
 # Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
+target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
@@ -731,10 +740,15 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
-    cudftestutil STATIC
+    # This library must also be compiled as a dynamic library to support
+    # LD_PRELOAD injection of symbols. We currently leverage this for
+    # stream-related library validation and may make use of it for other
+    # similar features in the future.
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/default_stream.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -781,18 +795,27 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
   endif()
 
-  # Libraries for stream-related testing.
-  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+  # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
+  # on and one with it set to off. Each test will then be configured to use the appropriate library
+  # depending via ctest and whether it has been updated to expose public stream APIs.
+  foreach(_mode cudf testing)
+    set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
-  set_target_properties(
-    cudf_identify_stream_usage
-    PROPERTIES # set target compile options
-               CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-  )
-  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
-  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+    set_target_properties(
+      ${_tgt}
+      PROPERTIES # set target compile options
+                 CXX_STANDARD 17
+                 CXX_STANDARD_REQUIRED ON
+                 POSITION_INDEPENDENT_CODE ON
+    )
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    add_library(cudf::${_tgt} ALIAS ${_tgt})
+
+    if("${_mode}" STREQUAL "testing")
+      target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
+    endif()
+  endforeach()
 endif()
 
 # ##################################################################################################
@@ -868,7 +891,8 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
 endif()
 
 set(doc_string

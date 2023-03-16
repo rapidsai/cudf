@@ -40,8 +40,7 @@ namespace cudf {
  *
  * @param views host_span of column views whose bitmasks will be concatenated
  * @param mr Device memory resource used for allocating the new device_buffer
- * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
- * the column views in the views vector
+ * @return A `device_buffer` containing the bitmasks of all the column views in the views vector
  */
 rmm::device_buffer concatenate_masks(
   host_span<column_view const> views,
