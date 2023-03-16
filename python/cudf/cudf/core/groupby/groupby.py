@@ -630,7 +630,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Notes
         -----
         Unlike pandas, this returns an object in group order, not
-        original order unless ``preserve_order`` is ``True``.
+        original order, unless ``preserve_order`` is ``True``.
         """
         # A more memory-efficient implementation would merge the take
         # into the grouping, but that probably requires a new
@@ -673,7 +673,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             return result
 
     @_cudf_nvtx_annotate
-    def head(self, n: int = 5, *, preserve_order: bool = False):
+    def head(self, n: int = 5, *, preserve_order: bool = True):
         """Return first n rows of each group
 
         Parameters
@@ -683,9 +683,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             If negative: number of entries to exclude from end of group
 
         preserve_order
-            If True, return the n rows from each group in original
-            dataframe order (this mimics pandas behavior though is
-            more expensive).
+            If True (default), return the n rows from each group in
+            original dataframe order (this mimics pandas behavior
+            though is more expensive).
 
         Returns
         -------
@@ -719,19 +719,19 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         .. pandas-compat::
 
-           Note that by default the returned object will be ordered
-           group-wise (with the same ordering as
-           ``.apply(lambda x: x.head(n))``, rather than in the
-           original input order (though the original index is
-           preserved). If you need the same ordering as pandas, set
-           ``preserve_order=True``.
+           Note that by default the returned object will be re-ordered
+           to match the original dataframe order (matching pandas
+           behavior). If you don't need to preserve ordering, passing
+           ``preserve_order=False`` will be faster. In both cases, the
+           original index is preserved, so ``.loc``-based indexing
+           will work identically.
         """
         return self._head_tail(
             n, take_head=True, preserve_order=preserve_order
         )
 
     @_cudf_nvtx_annotate
-    def tail(self, n: int = 5, *, preserve_order: bool = False):
+    def tail(self, n: int = 5, *, preserve_order: bool = True):
         """Return last n rows of each group
 
         Parameters
@@ -741,9 +741,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             If negative: number of entries to exclude from start of group
 
         preserve_order
-            If True, return the n rows from each group in original
-            dataframe order (this mimics pandas behavior though is
-            more expensive).
+            If True (default), return the n rows from each group in
+            original dataframe order (this mimics pandas behavior
+            though is more expensive).
 
         Returns
         -------
@@ -778,12 +778,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         .. pandas-compat::
 
-           Note that by default the returned object will be ordered
-           group-wise (with the same ordering as
-           ``.apply(lambda x: x.head(n))``, rather than in the
-           original input order (though the original index is
-           preserved). If you need the same ordering as pandas, set
-           ``preserve_order=True``.
+           Note that by default the returned object will be re-ordered
+           to match the original dataframe order (matching pandas
+           behavior). If you don't need to preserve ordering, passing
+           ``preserve_order=False`` will be faster. In both cases, the
+           original index is preserved, so ``.loc``-based indexing
+           will work identically.
         """
         return self._head_tail(
             n, take_head=False, preserve_order=preserve_order
