@@ -52,7 +52,6 @@ class CompactProtocolWriter {
   size_t write(const ColumnChunkMetaData&);
   size_t write(const PageLocation&);
   size_t write(const OffsetIndex&);
-  size_t write(const PageSize&);
   size_t write(const ColumnChunkSize&);
 
  protected:

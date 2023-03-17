@@ -203,7 +203,7 @@ class aggregate_reader_metadata {
                                 std::vector<std::unique_ptr<datasource>> const& sources);
 
   // use metadata to create {skip_rows,num_rows} pairs for the chunked reader
-  std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit);
+  [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit);
 };
 
 }  // namespace cudf::io::detail::parquet

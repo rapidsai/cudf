@@ -352,25 +352,13 @@ struct OffsetIndex {
 };
 
 /**
- * @brief Thrift struct for page size info.
- *
- * This is meant to be used by readers that need to know the full memory footprint of
- * the fully decompressed and decoded page. Want to add this to PageLocation in the future.
- */
-struct PageSize {
-  int64_t data_size;  // size of data without overhead, meant to be writer agnostic
-  int64_t page_size;  // optional writer-specific size with overhead
-};
-
-/**
  * @brief Thrift struct for column chunk size info.
  *
  * Like PageSize, but for column chunks. Want to add this to OffsetIndex in the future.
  */
 struct ColumnChunkSize {
-  int64_t chunk_size;       // sum of page data_sizes...no overhead
-  int64_t full_chunk_size;  // sum of page page_sizes...includes overhead
-  std::vector<PageSize> page_sizes;
+  int64_t chunk_size;               // sum of page_sizes...no overhead
+  std::vector<int64_t> page_sizes;  // size of page data in bytes not accounting for overhead
 };
 
 /**

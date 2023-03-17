@@ -296,17 +296,10 @@ bool CompactProtocolReader::read(OffsetIndex* o)
   return function_builder(this, op);
 }
 
-bool CompactProtocolReader::read(PageSize* p)
-{
-  auto op = std::make_tuple(ParquetFieldInt64(1, p->data_size), ParquetFieldInt64(2, p->page_size));
-  return function_builder(this, op);
-}
-
 bool CompactProtocolReader::read(ColumnChunkSize* c)
 {
-  auto op = std::make_tuple(ParquetFieldInt64(1, c->chunk_size),
-                            ParquetFieldInt64(2, c->full_chunk_size),
-                            ParquetFieldStructList(3, c->page_sizes));
+  auto op =
+    std::make_tuple(ParquetFieldInt64(1, c->chunk_size), ParquetFieldInt64List(2, c->page_sizes));
   return function_builder(this, op);
 }
 

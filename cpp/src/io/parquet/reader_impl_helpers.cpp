@@ -684,7 +684,7 @@ void aggregate_reader_metadata::populate_column_metadata(
               if (res) {
                 metadata.column_sizes.push_back(colsize);
               } else {
-                metadata.column_sizes.push_back(ColumnChunkSize{0, 0});
+                metadata.column_sizes.push_back(ColumnChunkSize{0});
               }
             }
           }
@@ -765,7 +765,7 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size
                                ? rg.num_rows
                                : offsets.page_locations[page_idx + 1].first_row_index) -
                             offsets.page_locations[page_idx].first_row_index;
-          size_t page_size = chunk_size.page_sizes[page_idx].data_size;
+          size_t page_size = chunk_size.page_sizes[page_idx];
           page_sizes.push_back({num_rows, page_size, col.schema_idx});
         }
       }

@@ -1875,7 +1875,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                     rmm::cuda_stream_view stream) {
           std::vector<size_type> slice_offsets;
 
-          for (auto& page : col_pages) {
+          for (auto const& page : col_pages) {
             if (page.page_type == PageType::DATA_PAGE) {
               slice_offsets.push_back(page.start_row);
               slice_offsets.push_back(page.start_row + page.num_rows);
@@ -1887,16 +1887,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           std::vector<size_t> page_sizes;
           std::transform(
             slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
-              // FIXME: fudge factor to try to match size including overhead. remove when we
-              // calculate both.
-              return (column_size(slice, stream) * 13) / 10; 
+              return column_size(slice, stream);
             });
           int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
 
-          ColumnChunkSize cs{chunk_size, 0};
+          ColumnChunkSize cs{chunk_size};
           std::transform(
             page_sizes.begin(), page_sizes.end(), std::back_inserter(cs.page_sizes), [](auto sz) {
-              return PageSize{static_cast<int64_t>(sz), 0};
+              return static_cast<int64_t>(sz);
             });
           return cs;
         };
