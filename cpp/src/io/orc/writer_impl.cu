@@ -333,6 +333,7 @@ size_type orc_table_view::num_rows() const noexcept
   return columns.empty() ? 0 : columns.front().size();
 }
 
+namespace {
 /**
  * @brief Gathers stripe information.
  *
@@ -734,6 +735,8 @@ orc_streams create_streams(host_span<orc_column_view> columns,
   }
   return {std::move(streams), std::move(ids), std::move(types)};
 }
+
+}  // namespace
 
 orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   host_span<orc_column_view const> columns, size_t num_rowgroups) const
