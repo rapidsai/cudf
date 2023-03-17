@@ -38,7 +38,7 @@ namespace nvtext {
  * @param width The character width used for apply substrings;
  *              Any string smaller than this width will not be hashed.
  *              Default is 4 characters.
- * @param seed Seed value used for the Murmur32_3 hash algorithm
+ * @param seed Seed value used for the MurmurHash3_32 algorithm
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Minhash values for each string in input
  */
