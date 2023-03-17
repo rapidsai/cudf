@@ -1104,18 +1104,17 @@ __global__ void __launch_bounds__(1024)
   auto const cid = ss.stream_type;
   auto dst_ptr   = ss.data_ptr;
   for (auto group = ss.first_chunk_id; group < ss.first_chunk_id + ss.num_chunks; ++group) {
-    auto const src_ptr = streams[ss.column_id][group].data_ptrs[cid];
-    auto const len     = streams[ss.column_id][group].lengths[cid];
+    auto const len = streams[ss.column_id][group].lengths[cid];
     if (len > 0) {
-      for (uint32_t i = 0; i < len; i += 1024) {
-        uint8_t v = (i + t < len) ? src_ptr[i + t] : 0;
-        __syncthreads();
-        if (i + t < len) { dst_ptr[i + t] = v; }
+      auto const src_ptr = streams[ss.column_id][group].data_ptrs[cid];
+      for (uint32_t i = t; i < len; i += 1024) {
+        dst_ptr[i] = src_ptr[i];
       }
+
+      __syncthreads();
+      if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
+      dst_ptr += len;
     }
-    if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
-    dst_ptr += len;
-    __syncthreads();
   }
 }
 
