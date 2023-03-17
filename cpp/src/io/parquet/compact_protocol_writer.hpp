@@ -91,6 +91,8 @@ class CompactProtocolFieldWriter {
   template <typename Enum>
   inline void field_int_list(int field, const std::vector<Enum>& val);
 
+  inline void field_int_list(int field, const std::vector<int64_t>& val);
+
   template <typename T>
   inline void field_struct(int field, const T& val);
 
