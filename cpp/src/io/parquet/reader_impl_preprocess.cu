@@ -1555,9 +1555,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // retrieve pages back
     pages.device_to_host(_stream, true);
 
-#if defined(PREPROCESS_DEBUG)
-    print_pages(pages, _stream);
-#endif
+    // print_pages(pages, _stream);
   }
 
   // compute splits if necessary. otherwise return a single split representing
