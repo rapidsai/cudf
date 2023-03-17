@@ -1131,7 +1131,8 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 
           CUDF_EXPECTS(enc_data->data[stripe.id][stream_id].size() >= actual_stripe_size,
                        "Insufficient allocation");
-          if (enc_data->data[stripe.id][stream_id].size() > actual_stripe_size) {
+          if (stripe.size > 1 and
+              enc_data->data[stripe.id][stream_id].size() > actual_stripe_size) {
             gathered_stripes[stripe.id][stream_id] =
               rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
           }
