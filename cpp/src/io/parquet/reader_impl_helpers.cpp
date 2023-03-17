@@ -669,9 +669,9 @@ void aggregate_reader_metadata::populate_column_metadata(
             size_t offset = 0;
             for (size_t i = 0; i < chunk_meta.key_value_metadata.size(); i++) {
               auto& kv = chunk_meta.key_value_metadata[i];
-              if (kv.key == "sizes_size") {
+              if (kv.key == COL_META_SIZES_SIZE) {
                 len = std::stol(kv.value);
-              } else if (kv.key == "sizes_offset") {
+              } else if (kv.key == COL_META_SIZES_OFFSET) {
                 offset = std::stol(kv.value);
               }
             }

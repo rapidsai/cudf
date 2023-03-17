@@ -2023,10 +2023,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
           auto const& sizes = fmd.column_sizes[chunkidx++];
           buffer.resize(0);
           int32_t len = cpw.write(sizes);
-          // TODO these should be constants
+          c.meta_data.key_value_metadata.push_back(KeyValue{
+            std::string(COL_META_SIZES_OFFSET), std::to_string(out_sink_[p]->bytes_written())});
           c.meta_data.key_value_metadata.push_back(
-            KeyValue{"sizes_offset", std::to_string(out_sink_[p]->bytes_written())});
-          c.meta_data.key_value_metadata.push_back(KeyValue{"sizes_size", std::to_string(len)});
+            KeyValue{std::string(COL_META_SIZES_SIZE), std::to_string(len)});
           out_sink_[p]->host_write(buffer.data(), buffer.size());
         }
       }

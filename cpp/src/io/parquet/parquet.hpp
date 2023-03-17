@@ -28,6 +28,9 @@ namespace io {
 namespace parquet {
 constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
+constexpr std::string_view COL_META_SIZES_OFFSET = "sizes_offset";
+constexpr std::string_view COL_META_SIZES_SIZE   = "sizes_size";
+
 /**
  * @brief Struct that describes the Parquet file data header
  */
