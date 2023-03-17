@@ -80,6 +80,12 @@ struct row_group_index_info {
 namespace {
 
 /**
+ * @brief Helper for pinned host memory
+ */
+template <typename T>
+using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
+
+/**
  * @brief Translates ORC compression to nvCOMP compression
  */
 auto to_nvcomp_compression_type(CompressionKind compression_kind)
@@ -1193,17 +1199,24 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   return blobs;
 }
 
-writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
-  statistics_freq const stats_freq,
-  orc_table_view const& orc_table,
-  file_segmentation const& segmentation,
-  rmm::cuda_stream_view stream)
+/**
+ * @brief Returns column statistics in an intermediate format.
+ *
+ * @param statistics_freq Frequency of statistics to be included in the output file
+ * @param orc_table Table information to be written
+ * @param segmentation stripe and rowgroup ranges
+ * @return The statistic information
+ */
+intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
+                                               orc_table_view const& orc_table,
+                                               file_segmentation const& segmentation,
+                                               rmm::cuda_stream_view stream)
 {
   auto const num_rowgroup_blobs     = segmentation.rowgroups.count();
   auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
   if (not are_statistics_enabled or num_rowgroup_blobs + num_stripe_blobs == 0) {
-    return writer::impl::intermediate_statistics{stream};
+    return intermediate_statistics{stream};
   }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
@@ -1321,8 +1334,16 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
           std::move(col_types)};
 }
 
-writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
-  int num_stripes, persisted_statistics& per_chunk_stats, rmm::cuda_stream_view stream)
+/**
+ * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
+ *
+ * @param num_stripes number of stripes in the data
+ * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+ * @return The encoded statistic blobs
+ */
+encoded_footer_statistics finish_statistic_blobs(int num_stripes,
+                                                 persisted_statistics& per_chunk_stats,
+                                                 rmm::cuda_stream_view stream)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
@@ -2130,10 +2151,10 @@ size_t max_compression_output_size(CompressionKind compression_kind, uint32_t co
                                         compression_blocksize);
 }
 
-void writer::impl::persisted_statistics::persist(int num_table_rows,
-                                                 bool single_write_mode,
-                                                 intermediate_statistics& intermediate_stats,
-                                                 rmm::cuda_stream_view stream)
+void persisted_statistics::persist(int num_table_rows,
+                                   bool single_write_mode,
+                                   intermediate_statistics& intermediate_stats,
+                                   rmm::cuda_stream_view stream)
 {
   if (not single_write_mode) {
     // persist the strings in the chunks into a string pool and update pointers
@@ -2196,6 +2217,21 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
 
 }  // namespace
 
+/**
+ * @brief process_for_write
+ * @param input
+ * @param table_meta
+ * @param max_stripe_size
+ * @param row_index_stride
+ * @param enable_dictionary
+ * @param compression_kind
+ * @param compression_blocksize
+ * @param stats_freq
+ * @param single_write_mode
+ * @param out_sink
+ * @param stream
+ * @return
+ */
 std::tuple<orc_streams,
            hostdevice_vector<compression_result>,
            hostdevice_2dvector<gpu::StripeStream>,
@@ -2204,19 +2240,19 @@ std::tuple<orc_streams,
            std::vector<StripeInformation>,
            orc_table_view,
            rmm::device_buffer,
-           writer::impl::intermediate_statistics,
-           writer::impl::pinned_buffer<uint8_t>>
-writer::impl::process_for_write(table_view const& input,
-                                table_input_metadata const& table_meta,
-                                stripe_size_limits max_stripe_size,
-                                size_type row_index_stride,
-                                bool enable_dictionary,
-                                CompressionKind compression_kind,
-                                size_t compression_blocksize,
-                                statistics_freq stats_freq,
-                                bool single_write_mode,
-                                data_sink const& out_sink,
-                                rmm::cuda_stream_view stream)
+           intermediate_statistics,
+           pinned_buffer<uint8_t>>
+process_for_write(table_view const& input,
+                  table_input_metadata const& table_meta,
+                  stripe_size_limits max_stripe_size,
+                  size_type row_index_stride,
+                  bool enable_dictionary,
+                  CompressionKind compression_kind,
+                  size_t compression_blocksize,
+                  statistics_freq stats_freq,
+                  bool single_write_mode,
+                  data_sink const& out_sink,
+                  rmm::cuda_stream_view stream)
 {
   auto const input_tview = table_device_view::create(input, stream);
 
@@ -2392,8 +2428,8 @@ void writer::impl::write_data_internal(orc_streams& streams,
                                        std::vector<StripeInformation>& stripes,
                                        orc_table_view const& orc_table,
                                        rmm::device_buffer const& compressed_data,
-                                       writer::impl::intermediate_statistics& intermediate_stats,
-                                       pinned_buffer<uint8_t>& stream_output)
+                                       intermediate_statistics& intermediate_stats,
+                                       uint8_t* stream_output)
 {
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
     persisted_stripe_statistics.persist(
@@ -2431,7 +2467,7 @@ void writer::impl::write_data_internal(orc_streams& streams,
         strm_desc,
         enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
         static_cast<uint8_t const*>(compressed_data.data()),
-        stream_output.get(),
+        stream_output,
         &stripe,
         &streams,
         compression_kind_,
@@ -2562,7 +2598,7 @@ void writer::impl::write(table_view const& input)
                         orc_table,
                         compressed_data,
                         intermediate_stats,
-                        stream_output);
+                        stream_output.get());
   }
 
   // Update data into the footer. This needs to be called even when num_rows==0.
