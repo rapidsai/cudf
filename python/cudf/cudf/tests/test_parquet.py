@@ -2454,7 +2454,7 @@ def test_parquet_writer_decimal(decimal_type, data):
     buff = BytesIO()
     gdf.to_parquet(buff)
 
-    got = pd.read_parquet(buff, use_nullable_dtypes=True)
+    got = pd.read_parquet(buff, dtype_backend="numpy_nullable")
     assert_eq(gdf.to_pandas(nullable=True), got)
 
 

@@ -290,25 +290,18 @@ def test_kurtosis_series(data, null_flag):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew_series(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_skew_series(data, null_flag, numeric_only):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
+    got = data.skew(numeric_only=numeric_only)
+    expected = pdata.skew(numeric_only=numeric_only)
 
-    got = data.skew(numeric_only=False)
-    expected = pdata.skew(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
-
-    with pytest.raises(NotImplementedError):
-        data.skew(numeric_only=True)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
