@@ -304,17 +304,21 @@ class writer::impl {
 
  private:
   /**
-   * @brief write_chunk_internal
-   * @param streams
-   * @param comp_results
-   * @param strm_descs
-   * @param enc_data
-   * @param segmentation
-   * @param stripes
-   * @param orc_table
-   * @param compressed_data
-   * @param intermediate_stats
-   * @param stream_output
+   * @brief Write the intermediate data into the data sink.
+   *
+   * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
+   * by `process_for_write` called in the `write()` function.
+   *
+   * @param streams List of stream descriptors
+   * @param comp_results Status of data compression
+   * @param strm_descs List of stream descriptors
+   * @param enc_data ORC per-chunk streams of encoded data
+   * @param segmentation Description of how the ORC file is segmented into stripes and rowgroups
+   * @param stripes List of stripe description
+   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param compressed_data Compressed stream data
+   * @param intermediate_stats Statistics data stored between calls to write
+   * @param stream_output Temporary host output buffer
    */
   void write_data_internal(orc_streams& streams,
                            hostdevice_vector<compression_result> const& comp_results,
@@ -328,12 +332,13 @@ class writer::impl {
                            uint8_t* stream_output);
 
   /**
-   * @brief update_chunk_to_footer
-   * @param orc_table
-   * @param stripes
-   * @param num_rows
+   * @brief Update the processed table data into the internal file footer.
+   *
+   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param stripes List of stripe description
+   * @param num_rows Number of rows in the input table
    */
-  void update_chunk_to_footer(orc_table_view const& orc_table,
+  void update_table_to_footer(orc_table_view const& orc_table,
                               std::vector<StripeInformation>& stripes,
                               size_type num_rows);
 

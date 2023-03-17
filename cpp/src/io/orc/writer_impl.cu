@@ -2482,7 +2482,7 @@ void writer::impl::write(table_view const& input)
   }
 
   // Update data into the footer. This needs to be called even when num_rows==0.
-  update_chunk_to_footer(orc_table, stripes, num_rows);
+  update_table_to_footer(orc_table, stripes, num_rows);
 }
 
 void writer::impl::write_data_internal(orc_streams& streams,
@@ -2569,7 +2569,7 @@ void writer::impl::write_data_internal(orc_streams& streams,
   }
 }
 
-void writer::impl::update_chunk_to_footer(orc_table_view const& orc_table,
+void writer::impl::update_table_to_footer(orc_table_view const& orc_table,
                                           std::vector<StripeInformation>& stripes,
                                           size_type num_rows)
 {
