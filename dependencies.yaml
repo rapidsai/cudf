@@ -212,11 +212,13 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
-          - librdkafka=1.7.0
-          - spdlog>=1.11.0,<1.12
+          - &gtest gtest==1.10.0.*
+          - &gmock gmock==1.10.0.*
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - libarrow==10.0.1.*
+          - librdkafka=1.7.0
+          - spdlog>=1.11.0,<1.12
   build_wheels:
     common:
       - output_types: pyproject
@@ -405,6 +407,11 @@ dependencies:
           - *cudf
           - cudf_kafka==23.4.*
   test_cpp:
+    common:
+      - output_types: conda
+        packages:
+          - *gtest
+          - *gmock
     specific:
       - output_types: conda
         matrices:
