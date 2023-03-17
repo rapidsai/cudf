@@ -1843,9 +1843,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
   }
 
-  // need pages on host to create offset_indexes and chunk size metadata
-  thrust::host_vector<gpu::EncPage> host_pages;
-
   if (num_pages != 0) {
     init_encoder_pages(chunks,
                        col_desc,
@@ -1856,7 +1853,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                        num_columns,
                        num_pages,
                        num_stats_bfr);
-    host_pages = cudf::detail::make_host_vector_sync(pages, stream);
   }
 
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
@@ -1951,8 +1947,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
-    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_async(pages, stream);
-    stream.synchronize();
+    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_sync(pages, stream);
 
     // add column and offset indexes to metadata
     for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -2028,6 +2023,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
           auto const& sizes = fmd.column_sizes[chunkidx++];
           buffer.resize(0);
           int32_t len = cpw.write(sizes);
+          // TODO these should be constants
           c.meta_data.key_value_metadata.push_back(
             KeyValue{"sizes_offset", std::to_string(out_sink_[p]->bytes_written())});
           c.meta_data.key_value_metadata.push_back(KeyValue{"sizes_size", std::to_string(len)});
