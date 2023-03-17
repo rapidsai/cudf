@@ -519,8 +519,6 @@ class column_in_metadata {
   /**
    * @brief Set the nullability of this column
    *
-   * Only valid in case of chunked writes. In single writes, this option is ignored.
-   *
    * @param nullable Whether this column is nullable
    * @return this for chaining
    */

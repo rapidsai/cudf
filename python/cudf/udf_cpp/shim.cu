@@ -239,6 +239,17 @@ extern "C" __device__ int udf_string_from_string_view(int* nb_retbal,
   return 0;
 }
 
+extern "C" __device__ int string_view_from_udf_string(int* nb_retval,
+                                                      void const* udf_str,
+                                                      void* str)
+{
+  auto udf_str_ptr = reinterpret_cast<udf_string const*>(udf_str);
+  auto sv_ptr      = new (str) cudf::string_view;
+  *sv_ptr          = cudf::string_view(*udf_str_ptr);
+
+  return 0;
+}
+
 extern "C" __device__ int strip(int* nb_retval,
                                 void* udf_str,
                                 void* const* to_strip,

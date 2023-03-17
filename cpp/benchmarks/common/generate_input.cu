@@ -31,6 +31,7 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -542,7 +543,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                         sample_indices,
                                         cudf::out_of_bounds_policy::DONT_CHECK,
                                         cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                        cudf::get_default_stream());
+                                        cudf::get_default_stream(),
+                                        rmm::mr::get_current_device_resource());
   return std::move(str_table->release()[0]);
 }
 
@@ -716,7 +718,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
-      profile.get_null_probability().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
   }
   return list_column;  // return the top-level column

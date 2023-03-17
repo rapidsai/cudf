@@ -13,7 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -1842,14 +1842,7 @@ def test_isin_datetime(data, values):
         ["this", "is"],
         [None, None, None],
         ["12", "14", "19"],
-        pytest.param(
-            [12, 14, 19],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_120,
-                reason="pandas's failure here seems like a bug(in < 1.2) "
-                "given the reverse succeeds",
-            ),
-        ),
+        [12, 14, 19],
         ["is", "this", "is", "this", "is"],
     ],
 )

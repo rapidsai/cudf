@@ -28,6 +28,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -209,6 +210,6 @@ cudf::size_type distinct_count(column_view const& input,
 cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, nulls_equal);
+  return detail::distinct_count(input, nulls_equal, cudf::get_default_stream());
 }
 }  // namespace cudf
