@@ -150,13 +150,11 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     ngroups = len(offsets) - 1
 
     cache_key = _generate_cache_key(grouped_values, function)
-    if precompiled.get(cache_key) is not None:
-        kernel, return_type = precompiled[cache_key]
-    else:
-        kernel, return_type = _get_groupby_apply_kernel(
+    if cache_key not in precompiled:
+        precompiled[cache_key] = _get_groupby_apply_kernel(
             grouped_values, function, args
         )
-        precompiled[cache_key] = (kernel, return_type)
+    kernel, return_type = precompiled[cache_key]
 
     return_type = numpy_support.as_dtype(return_type)
     output = cudf.core.column.column_empty(ngroups, dtype=return_type)
