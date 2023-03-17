@@ -52,16 +52,16 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
-#include <algorithm>
-#include <cstring>
-#include <numeric>
-#include <utility>
-
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
+
+#include <algorithm>
+#include <cstring>
+#include <numeric>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -1155,6 +1155,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   }
 
   strm_desc->host_to_device(stream);
+  // TODO: use cub::DeviceMemcpy::Batched
   gpu::CompactOrcDataStreams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host(stream);
   enc_data->streams.device_to_host(stream, true);
