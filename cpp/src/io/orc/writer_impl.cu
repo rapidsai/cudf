@@ -2474,6 +2474,9 @@ void writer::impl::write(table_view const& input)
 
   if (not table_meta) { table_meta = make_table_meta(input); }
 
+  // All kinds of memory allocation and data compressions/encoding are performed here.
+  // If any error occurs, such as out-of-memory exception, the internal state of the current writer
+  // is still intact.
   auto [streams,
         comp_results,
         strm_descs,
@@ -2495,6 +2498,7 @@ void writer::impl::write(table_view const& input)
                                          *out_sink_,
                                          stream);
 
+  // Compression/encoding were all successful. Now write the intermediate results.
   auto const num_rows = input.num_rows();
   if (num_rows > 0) {
     apply_write(streams,
