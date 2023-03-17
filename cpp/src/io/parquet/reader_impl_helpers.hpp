@@ -48,6 +48,15 @@ using namespace cudf::io::parquet;
 }
 
 /**
+ * @brief Struct used to compute splits for the chunked reader
+ */
+struct cumulative_row_info {
+  size_t row_count;   // cumulative row count
+  size_t size_bytes;  // cumulative size in bytes
+  int key;            // schema index
+};
+
+/**
  * @brief The row_group_info class
  */
 struct row_group_info {
@@ -203,7 +212,16 @@ class aggregate_reader_metadata {
                                 std::vector<std::unique_ptr<datasource>> const& sources);
 
   // use metadata to create {skip_rows,num_rows} pairs for the chunked reader
-  [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit);
+  [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit,
+                                                                 rmm::cuda_stream_view stream);
 };
+
+std::vector<gpu::chunk_read_info> compute_splits(
+  rmm::device_uvector<size_type> const& page_keys,
+  rmm::device_uvector<size_type> const& page_index,
+  rmm::device_uvector<cumulative_row_info> const& c_info,
+  size_t num_rows,
+  size_t chunk_read_limit,
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail::parquet

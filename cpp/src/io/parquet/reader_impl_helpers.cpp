@@ -20,6 +20,8 @@
 #include <regex>
 #include <set>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -727,24 +729,19 @@ inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunctio
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
-std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size_t chunk_read_limit)
+std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(
+  size_t chunk_read_limit, rmm::cuda_stream_view stream)
 {
-  std::vector<gpu::chunk_read_info> splits;
   if (per_file_metadata[0].column_sizes.empty() or per_file_metadata[0].offset_indexes.empty()) {
-    return splits;
+    return {};
   }
 
-  struct cumulative_row_info {
-    size_t row_count;   // cumulative row count
-    size_t size_bytes;  // cumulative size in bytes
-    int key;            // schema index
-  };
-
-  std::vector<cumulative_row_info> page_sizes;
-
-  // create page_keys and page_index
+  // need to replicate what's done in compute_splits() in reader_impl_preprocess.cu, but without
+  // the PageInfo data.
+  // create page_keys and page_index and populate page_sizes
   std::vector<size_type> page_keys;
   std::vector<size_type> page_index;
+  std::vector<cumulative_row_info> page_sizes;
 
   int global_page_idx = 0;
   for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
@@ -776,115 +773,26 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size
   thrust::stable_sort_by_key(
     page_keys.begin(), page_keys.end(), page_index.begin(), thrust::less<int>());
 
-  struct cumulative_row_sum {
-    cumulative_row_info operator()(cumulative_row_info const& a, cumulative_row_info const& b) const
-    {
-      return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
-    }
-  };
-
   std::vector<cumulative_row_info> c_info(page_keys.size());
   auto page_input =
     thrust::make_transform_iterator(page_index.begin(), [&](auto idx) { return page_sizes[idx]; });
-  thrust::inclusive_scan_by_key(page_keys.begin(),
-                                page_keys.end(),
-                                page_input,
-                                c_info.begin(),
-                                thrust::equal_to{},
-                                cumulative_row_sum{});
+  thrust::inclusive_scan_by_key(
+    page_keys.begin(),
+    page_keys.end(),
+    page_input,
+    c_info.begin(),
+    thrust::equal_to{},
+    [](auto const& a, auto const& b) {
+      return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
+    });
 
-  // TODO: move page_keys, page_index, and c_info to device, and then use the code that already
-  // exists in the reader.
-  auto tstart = std::chrono::system_clock::now();
+  // now move to device and call parquet::compute_splits().
+  auto const d_page_keys  = cudf::detail::make_device_uvector_async(page_keys, stream);
+  auto const d_page_index = cudf::detail::make_device_uvector_async(page_index, stream);
+  auto const d_c_info     = cudf::detail::make_device_uvector_async(c_info, stream);
 
-  // sort by row count
-  std::vector<cumulative_row_info> c_info_sorted{c_info};
-  thrust::sort(c_info_sorted.begin(),
-               c_info_sorted.end(),
-               [] __device__(cumulative_row_info const& a, cumulative_row_info const& b) {
-                 return a.row_count < b.row_count;
-               });
-
-  // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
-  // key
-  std::vector<size_type> key_offsets(page_keys.size() + 1);
-  auto const key_offsets_end = thrust::reduce_by_key(page_keys.begin(),
-                                                     page_keys.end(),
-                                                     thrust::make_constant_iterator(1),
-                                                     thrust::make_discard_iterator(),
-                                                     key_offsets.begin())
-                                 .second;
-  size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
-  thrust::exclusive_scan(key_offsets.begin(), key_offsets.end(), key_offsets.begin());
-
-  struct row_total_size {
-    cumulative_row_info const* c_info;
-    size_type const* key_offsets;
-    size_t num_keys;
-
-    cumulative_row_info operator()(cumulative_row_info const& i)
-    {
-      // sum sizes for each input column at this row
-      size_t sum = 0;
-      for (size_t idx = 0; idx < num_keys; idx++) {
-        auto const start = key_offsets[idx];
-        auto const end   = key_offsets[idx + 1];
-        auto iter =
-          make_counting_transform_iterator(0, [&](size_type i) { return c_info[i].row_count; });
-        auto const page_index =
-          thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_count) - iter;
-        sum += c_info[page_index].size_bytes;
-      }
-      return {i.row_count, sum, i.key};
-    }
-  };
-
-  std::vector<cumulative_row_info> aggregated_info(c_info.size());
-  thrust::transform(c_info_sorted.begin(),
-                    c_info_sorted.end(),
-                    aggregated_info.begin(),
-                    row_total_size{c_info.data(), key_offsets.data(), num_unique_keys});
-
-  {
-    size_t cur_pos             = 0;
-    size_t cur_cumulative_size = 0;
-    size_t cur_row_count       = 0;
-    auto start                 = thrust::make_transform_iterator(
-      aggregated_info.begin(),
-      [&](cumulative_row_info const& i) { return i.size_bytes - cur_cumulative_size; });
-    auto end = start + aggregated_info.size();
-    while (cur_row_count < static_cast<size_t>(num_rows)) {
-      int64_t split_pos = thrust::lower_bound(start + cur_pos, end, chunk_read_limit) - start;
-
-      // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
-      // one.
-      if (static_cast<size_t>(split_pos) >= aggregated_info.size() ||
-          (aggregated_info[split_pos].size_bytes - cur_cumulative_size > chunk_read_limit)) {
-        split_pos--;
-      }
-
-      // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
-      // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
-      // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
-      // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
-      // either do this, or we have to call unique() on the input first.
-      while (split_pos < (static_cast<int64_t>(aggregated_info.size()) - 1) &&
-             (split_pos < 0 || aggregated_info[split_pos].row_count == cur_row_count)) {
-        split_pos++;
-      }
-
-      auto const start_row = cur_row_count;
-      cur_row_count        = aggregated_info[split_pos].row_count;
-      splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
-      cur_pos             = split_pos;
-      cur_cumulative_size = aggregated_info[split_pos].size_bytes;
-    }
-  }
-  auto tend = std::chrono::system_clock::now();
-  auto t    = std::chrono::duration_cast<std::chrono::milliseconds>(tend - tstart).count();
-  printf("splits time %ldms\n", t);
-
-  return splits;
+  return parquet::compute_splits(
+    d_page_keys, d_page_index, d_c_info, num_rows, chunk_read_limit, stream);
 }
 
 }  // namespace cudf::io::detail::parquet
