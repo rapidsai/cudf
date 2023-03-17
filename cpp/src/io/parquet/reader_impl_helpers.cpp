@@ -766,6 +766,7 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size
                                : offsets.page_locations[page_idx + 1].first_row_index) -
                             offsets.page_locations[page_idx].first_row_index;
           size_t page_size = chunk_size.page_sizes[page_idx];
+          // FIXME: need to add overhead cost to page_size. figure out how to do that.
           page_sizes.push_back({num_rows, page_size, col.schema_idx});
         }
       }
@@ -782,21 +783,19 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size
     }
   };
 
-  struct get_cumulative_row_info {
-    cumulative_row_info const* ci;
-
-    cumulative_row_info operator()(size_type index) { return ci[index]; }
-  };
-
   std::vector<cumulative_row_info> c_info(page_keys.size());
   auto page_input =
-    thrust::make_transform_iterator(page_index.begin(), get_cumulative_row_info{page_sizes.data()});
+    thrust::make_transform_iterator(page_index.begin(), [&](auto idx) { return page_sizes[idx]; });
   thrust::inclusive_scan_by_key(page_keys.begin(),
                                 page_keys.end(),
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
                                 cumulative_row_sum{});
+
+  // TODO: move page_keys, page_index, and c_info to device, and then use the code that already
+  // exists in the reader.
+  auto tstart = std::chrono::system_clock::now();
 
   // sort by row count
   std::vector<cumulative_row_info> c_info_sorted{c_info};
@@ -881,6 +880,9 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(size
       cur_cumulative_size = aggregated_info[split_pos].size_bytes;
     }
   }
+  auto tend = std::chrono::system_clock::now();
+  auto t    = std::chrono::duration_cast<std::chrono::milliseconds>(tend - tstart).count();
+  printf("splits time %ldms\n", t);
 
   return splits;
 }
