@@ -21,7 +21,7 @@ dependencies:
 - cupy>=9.5.0,<12.0.0a0
 - cxx-compiler
 - cython>=0.29,<0.30
-- dask-cuda=23.04.*
+- dask-cuda==23.4.*
 - dask>=2023.1.1
 - distributed>=2023.1.1
 - dlpack>=0.5,<0.6.0a0
@@ -32,11 +32,12 @@ dependencies:
 - gcc_linux-64=11.*
 - hypothesis
 - ipython
-- libarrow=10
+- libarrow==10.0.1.*
 - librdkafka=1.7.0
-- librmm=23.04.*
+- librmm==23.4.*
 - mimesis>=4.1.0
 - moto>=4.0.8
+- msgpack-python
 - myst-nb
 - nbsphinx
 - ninja
@@ -53,7 +54,7 @@ dependencies:
 - pre-commit
 - protobuf>=4.21.6,<4.22
 - ptxcompiler
-- pyarrow=10
+- pyarrow==10.0.1.*
 - pydata-sphinx-theme
 - pyorc
 - pytest
@@ -61,11 +62,11 @@ dependencies:
 - pytest-cases
 - pytest-cov
 - pytest-xdist
-- python-confluent-kafka=1.7.0
+- python-confluent-kafka==1.7.0
 - python-snappy>=0.6.0
 - python>=3.8,<3.11
 - pytorch<1.12.0
-- rmm=23.04.*
+- rmm==23.4.*
 - s3fs>=2022.3.0
 - scikit-build>=0.13.1
 - scipy

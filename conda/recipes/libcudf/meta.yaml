@@ -74,7 +74,7 @@ outputs:
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
-        - test -f $PREFIX/lib/libcudftestutil.so
+        - test -f $PREFIX/lib/libcudftestutil.a
         - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_cudf.so
         - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_testing.so
         - test -f $PREFIX/include/cudf/aggregation.hpp
