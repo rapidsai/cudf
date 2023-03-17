@@ -24,7 +24,9 @@
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
@@ -32,8 +34,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <rmm/exec_policy.hpp>
 
 // for use with groupby and reduction aggregation tests.
 
