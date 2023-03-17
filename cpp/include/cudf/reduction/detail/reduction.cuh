@@ -31,6 +31,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
 
+#include <optional>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
