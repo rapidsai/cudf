@@ -126,6 +126,37 @@ bool is_col_fixed_width(column_view const& column)
   return is_fixed_width(column.type());
 }
 
+// given a column_view and the encoded page info for the pages in that chunk,
+// return a ColumnChunkSize object with the data sizes for each page.
+ColumnChunkSize sizes_for_chunk(column_view const& col,
+                                host_span<gpu::EncPage> col_pages,
+                                rmm::cuda_stream_view stream)
+{
+  std::vector<size_type> slice_offsets;
+  std::for_each(col_pages.begin(), col_pages.end(), [&](auto const& page) {
+    if (page.page_type == PageType::DATA_PAGE) {
+      slice_offsets.push_back(page.start_row);
+      slice_offsets.push_back(page.start_row + page.num_rows);
+    }
+  });
+
+  auto slices = cudf::slice(col, slice_offsets);
+
+  std::vector<size_t> page_sizes;
+  std::transform(
+    slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
+      return column_size(slice, stream);
+    });
+  int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
+
+  ColumnChunkSize cs{chunk_size};
+  std::transform(
+    page_sizes.begin(), page_sizes.end(), std::back_inserter(cs.page_sizes), [](auto sz) {
+      return static_cast<int64_t>(sz);
+    });
+  return cs;
+}
+
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1851,7 +1882,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                                                : nullptr,
       (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr);
 
-    auto first_page_in_chunk = first_page_in_batch;
     std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++) {
       int p           = rg_to_part[r];
@@ -1867,45 +1897,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         } else {
           dev_bfr = ck.uncompressed_bfr;
         }
-
-        // experimental: add data sizes to parquet metadata.
-        auto add_size_metadata = [](column_view const& col,
-                                    ColumnChunkMetaData& col_meta,
-                                    host_span<gpu::EncPage> col_pages,
-                                    rmm::cuda_stream_view stream) {
-          std::vector<size_type> slice_offsets;
-
-          for (auto const& page : col_pages) {
-            if (page.page_type == PageType::DATA_PAGE) {
-              slice_offsets.push_back(page.start_row);
-              slice_offsets.push_back(page.start_row + page.num_rows);
-            }
-          }
-
-          auto slices = cudf::slice(col, slice_offsets);
-
-          std::vector<size_t> page_sizes;
-          std::transform(
-            slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
-              return column_size(slice, stream);
-            });
-          int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
-
-          ColumnChunkSize cs{chunk_size};
-          std::transform(
-            page_sizes.begin(), page_sizes.end(), std::back_inserter(cs.page_sizes), [](auto sz) {
-              return static_cast<int64_t>(sz);
-            });
-          return cs;
-        };
-
-        auto cs = add_size_metadata(single_streams_table.column(i),
-                                    column_chunk_meta,
-                                    {host_pages.data() + first_page_in_chunk, ck.num_pages},
-                                    stream);
-        md->file(p).column_sizes.push_back(cs);
-
-        first_page_in_chunk += ck.num_pages;
 
         if (out_sink_[p]->is_device_write_preferred(ck.compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
@@ -1983,6 +1974,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                         ck.column_index_size,
                                         cudaMemcpyDefault,
                                         stream.value()));
+
+          // experimental: add data sizes to parquet metadata.
+          auto cs = sizes_for_chunk(
+            single_streams_table.column(i), {h_pages.data() + curr_page_idx, ck.num_pages}, stream);
+          md->file(p).column_sizes.push_back(cs);
 
           // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
