@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ namespace cudf {
  * @param column_order Vector of column sort order
  * @param null_precedence Vector of null_precedence enums needles
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A non-nullable column of cudf::size_type elements containing the insertion points
+ * @return A non-nullable column of elements containing the insertion points
  */
 std::unique_ptr<column> lower_bound(
   table_view const& haystack,
@@ -104,7 +104,7 @@ std::unique_ptr<column> lower_bound(
  * @param column_order Vector of column sort order
  * @param null_precedence Vector of null_precedence enums needles
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A non-nullable column of cudf::size_type elements containing the insertion points
+ * @return A non-nullable column of elements containing the insertion points
  */
 std::unique_ptr<column> upper_bound(
   table_view const& haystack,

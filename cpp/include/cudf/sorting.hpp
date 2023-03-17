@@ -44,7 +44,7 @@ namespace cudf {
  * for each column. Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A non-nullable column of `size_type` elements containing the permuted row indices of
+ * @return A non-nullable column of elements containing the permuted row indices of
  * `input` if it were sorted
  */
 std::unique_ptr<column> sorted_order(
