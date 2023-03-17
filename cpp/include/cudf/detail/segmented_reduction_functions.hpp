@@ -337,6 +337,10 @@ std::unique_ptr<column> segmented_variance(
 /**
  * @brief Counts the number of unique values within each segment of a column
  *
+ * Unique entries are counted by comparing adjacent values so the column segments
+ * are expected to be sorted before calling this function otherwise the results
+ * are undefined.
+ *
  * If input segment is empty, the segment result is null.
  *
  * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
