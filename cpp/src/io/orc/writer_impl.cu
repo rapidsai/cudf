@@ -333,6 +333,135 @@ size_type orc_table_view::num_rows() const noexcept
   return columns.empty() ? 0 : columns.front().size();
 }
 
+orc_streams::orc_stream_offsets orc_streams::compute_offsets(
+  host_span<orc_column_view const> columns, size_t num_rowgroups) const
+{
+  std::vector<size_t> strm_offsets(streams.size());
+  size_t non_rle_data_size = 0;
+  size_t rle_data_size     = 0;
+  for (size_t i = 0; i < streams.size(); ++i) {
+    const auto& stream = streams[i];
+
+    auto const is_rle_data = [&]() {
+      // First stream is an index stream, don't check types, etc.
+      if (!stream.column_index().has_value()) return true;
+
+      auto const& column = columns[stream.column_index().value()];
+      // Dictionary encoded string column - dictionary characters or
+      // directly encoded string - column characters
+      if (column.orc_kind() == TypeKind::STRING &&
+          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
+           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
+        return false;
+      // Decimal data
+      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
+
+      // Everything else uses RLE
+      return true;
+    }();
+    // non-RLE and RLE streams are separated in the buffer that stores encoded data
+    // The computed offsets do not take the streams of the other type into account
+    if (is_rle_data) {
+      strm_offsets[i] = rle_data_size;
+      rle_data_size += (stream.length + 7) & ~7;
+    } else {
+      strm_offsets[i] = non_rle_data_size;
+      non_rle_data_size += stream.length;
+    }
+  }
+  non_rle_data_size = (non_rle_data_size + 7) & ~7;
+
+  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
+}
+
+namespace {
+struct string_length_functor {
+  __device__ inline size_type operator()(int const i) const
+  {
+    // we translate from 0 -> num_chunks * 2 because each statistic has a min and max
+    // string and we need to calculate lengths for both.
+    if (i >= num_chunks * 2) return 0;
+
+    // min strings are even values, max strings are odd values of i
+    auto const should_copy_min = i % 2 == 0;
+    // index of the chunk
+    auto const idx = i / 2;
+    auto& str_val  = should_copy_min ? stripe_stat_chunks[idx].min_value.str_val
+                                     : stripe_stat_chunks[idx].max_value.str_val;
+    auto const str = stripe_stat_merge[idx].stats_dtype == dtype_string;
+    return str ? str_val.length : 0;
+  }
+
+  int const num_chunks;
+  statistics_chunk const* stripe_stat_chunks;
+  statistics_merge_group const* stripe_stat_merge;
+};
+
+__global__ void copy_string_data(char* string_pool,
+                                 size_type* offsets,
+                                 statistics_chunk* chunks,
+                                 statistics_merge_group const* groups)
+{
+  auto const idx = blockIdx.x / 2;
+  if (groups[idx].stats_dtype == dtype_string) {
+    // min strings are even values, max strings are odd values of i
+    auto const should_copy_min = blockIdx.x % 2 == 0;
+    auto& str_val = should_copy_min ? chunks[idx].min_value.str_val : chunks[idx].max_value.str_val;
+    auto dst      = &string_pool[offsets[blockIdx.x]];
+    auto src      = str_val.ptr;
+
+    for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
+      dst[i] = src[i];
+    }
+    if (threadIdx.x == 0) { str_val.ptr = dst; }
+  }
+}
+
+}  // namespace
+
+void persisted_statistics::persist(int num_table_rows,
+                                   bool single_write_mode,
+                                   intermediate_statistics& intermediate_stats,
+                                   rmm::cuda_stream_view stream)
+{
+  if (not single_write_mode) {
+    // persist the strings in the chunks into a string pool and update pointers
+    auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
+    // min offset and max offset + 1 for total size
+    rmm::device_uvector<size_type> offsets((num_chunks * 2) + 1, stream);
+
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0,
+      string_length_functor{num_chunks,
+                            intermediate_stats.stripe_stat_chunks.data(),
+                            intermediate_stats.stripe_stat_merge.device_ptr()});
+    thrust::exclusive_scan(rmm::exec_policy(stream), iter, iter + offsets.size(), offsets.begin());
+
+    // pull size back to host
+    auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
+    if (total_string_pool_size > 0) {
+      rmm::device_uvector<char> string_pool(total_string_pool_size, stream);
+
+      // offsets describes where in the string pool each string goes. Going with the simple
+      // approach for now, but it is possible something fancier with breaking up each thread into
+      // copying x bytes instead of a single string is the better method since we are dealing in
+      // min/max strings they almost certainly will not be uniform length.
+      copy_string_data<<<num_chunks * 2, 256, 0, stream.value()>>>(
+        string_pool.data(),
+        offsets.data(),
+        intermediate_stats.stripe_stat_chunks.data(),
+        intermediate_stats.stripe_stat_merge.device_ptr());
+      string_pools.emplace_back(std::move(string_pool));
+    }
+  }
+
+  stripe_stat_chunks.emplace_back(std::move(intermediate_stats.stripe_stat_chunks));
+  stripe_stat_merge.emplace_back(std::move(intermediate_stats.stripe_stat_merge));
+  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
+  col_types    = std::move(intermediate_stats.col_types);
+  num_rows     = num_table_rows;
+}
+
 namespace {
 /**
  * @brief Gathers stripe information.
@@ -734,49 +863,6 @@ orc_streams create_streams(host_span<orc_column_view> columns,
     }
   }
   return {std::move(streams), std::move(ids), std::move(types)};
-}
-
-}  // namespace
-
-orc_streams::orc_stream_offsets orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const
-{
-  std::vector<size_t> strm_offsets(streams.size());
-  size_t non_rle_data_size = 0;
-  size_t rle_data_size     = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    const auto& stream = streams[i];
-
-    auto const is_rle_data = [&]() {
-      // First stream is an index stream, don't check types, etc.
-      if (!stream.column_index().has_value()) return true;
-
-      auto const& column = columns[stream.column_index().value()];
-      // Dictionary encoded string column - dictionary characters or
-      // directly encoded string - column characters
-      if (column.orc_kind() == TypeKind::STRING &&
-          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
-        return false;
-      // Decimal data
-      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
-
-      // Everything else uses RLE
-      return true;
-    }();
-    // non-RLE and RLE streams are separated in the buffer that stores encoded data
-    // The computed offsets do not take the streams of the other type into account
-    if (is_rle_data) {
-      strm_offsets[i] = rle_data_size;
-      rle_data_size += (stream.length + 7) & ~7;
-    } else {
-      strm_offsets[i] = non_rle_data_size;
-      non_rle_data_size += stream.length;
-    }
-  }
-  non_rle_data_size = (non_rle_data_size + 7) & ~7;
-
-  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
 std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
@@ -1622,58 +1708,6 @@ void add_uncompressed_block_headers(CompressionKind compression_kind,
   }
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   orc_writer_options const& options,
-                   SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    stream(stream),
-    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
-    row_index_stride{options.get_row_index_stride()},
-    compression_kind_(to_orc_compression(options.get_compression())),
-    compression_blocksize_(compression_block_size(compression_kind_)),
-    stats_freq_(options.get_statistics_freq()),
-    single_write_mode(mode == SingleWriteMode::YES),
-    kv_meta(options.get_key_value_metadata()),
-    out_sink_(std::move(sink))
-{
-  if (options.get_metadata()) {
-    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
-  }
-  init_state();
-}
-
-writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   chunked_orc_writer_options const& options,
-                   SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    stream(stream),
-    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
-    row_index_stride{options.get_row_index_stride()},
-    compression_kind_(to_orc_compression(options.get_compression())),
-    compression_blocksize_(compression_block_size(compression_kind_)),
-    stats_freq_(options.get_statistics_freq()),
-    single_write_mode(mode == SingleWriteMode::YES),
-    kv_meta(options.get_key_value_metadata()),
-    out_sink_(std::move(sink))
-{
-  if (options.get_metadata()) {
-    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
-  }
-  init_state();
-}
-
-writer::impl::~impl() { close(); }
-
-void writer::impl::init_state()
-{
-  // Write file header
-  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
-}
-
 void pushdown_lists_null_mask(orc_column_view const& col,
                               device_span<orc_column_device_view> d_columns,
                               bitmask_type const* parent_pd_mask,
@@ -2104,48 +2138,6 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
           std::move(is_dict_enabled)};
 }
 
-struct string_length_functor {
-  __device__ inline size_type operator()(int const i) const
-  {
-    // we translate from 0 -> num_chunks * 2 because each statistic has a min and max
-    // string and we need to calculate lengths for both.
-    if (i >= num_chunks * 2) return 0;
-
-    // min strings are even values, max strings are odd values of i
-    auto const should_copy_min = i % 2 == 0;
-    // index of the chunk
-    auto const idx = i / 2;
-    auto& str_val  = should_copy_min ? stripe_stat_chunks[idx].min_value.str_val
-                                     : stripe_stat_chunks[idx].max_value.str_val;
-    auto const str = stripe_stat_merge[idx].stats_dtype == dtype_string;
-    return str ? str_val.length : 0;
-  }
-
-  int const num_chunks;
-  statistics_chunk const* stripe_stat_chunks;
-  statistics_merge_group const* stripe_stat_merge;
-};
-
-__global__ void copy_string_data(char* string_pool,
-                                 size_type* offsets,
-                                 statistics_chunk* chunks,
-                                 statistics_merge_group const* groups)
-{
-  auto const idx = blockIdx.x / 2;
-  if (groups[idx].stats_dtype == dtype_string) {
-    // min strings are even values, max strings are odd values of i
-    auto const should_copy_min = blockIdx.x % 2 == 0;
-    auto& str_val = should_copy_min ? chunks[idx].min_value.str_val : chunks[idx].max_value.str_val;
-    auto dst      = &string_pool[offsets[blockIdx.x]];
-    auto src      = str_val.ptr;
-
-    for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
-      dst[i] = src[i];
-    }
-    if (threadIdx.x == 0) { str_val.ptr = dst; }
-  }
-}
-
 size_t max_compression_output_size(CompressionKind compression_kind, uint32_t compression_blocksize)
 {
   if (compression_kind == NONE) return 0;
@@ -2153,51 +2145,6 @@ size_t max_compression_output_size(CompressionKind compression_kind, uint32_t co
   return compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
                                         compression_blocksize);
 }
-
-void persisted_statistics::persist(int num_table_rows,
-                                   bool single_write_mode,
-                                   intermediate_statistics& intermediate_stats,
-                                   rmm::cuda_stream_view stream)
-{
-  if (not single_write_mode) {
-    // persist the strings in the chunks into a string pool and update pointers
-    auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
-    // min offset and max offset + 1 for total size
-    rmm::device_uvector<size_type> offsets((num_chunks * 2) + 1, stream);
-
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0,
-      string_length_functor{num_chunks,
-                            intermediate_stats.stripe_stat_chunks.data(),
-                            intermediate_stats.stripe_stat_merge.device_ptr()});
-    thrust::exclusive_scan(rmm::exec_policy(stream), iter, iter + offsets.size(), offsets.begin());
-
-    // pull size back to host
-    auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
-    if (total_string_pool_size > 0) {
-      rmm::device_uvector<char> string_pool(total_string_pool_size, stream);
-
-      // offsets describes where in the string pool each string goes. Going with the simple
-      // approach for now, but it is possible something fancier with breaking up each thread into
-      // copying x bytes instead of a single string is the better method since we are dealing in
-      // min/max strings they almost certainly will not be uniform length.
-      copy_string_data<<<num_chunks * 2, 256, 0, stream.value()>>>(
-        string_pool.data(),
-        offsets.data(),
-        intermediate_stats.stripe_stat_chunks.data(),
-        intermediate_stats.stripe_stat_merge.device_ptr());
-      string_pools.emplace_back(std::move(string_pool));
-    }
-  }
-
-  stripe_stat_chunks.emplace_back(std::move(intermediate_stats.stripe_stat_chunks));
-  stripe_stat_merge.emplace_back(std::move(intermediate_stats.stripe_stat_merge));
-  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
-  col_types    = std::move(intermediate_stats.col_types);
-  num_rows     = num_table_rows;
-}
-
-namespace {
 
 std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
 {
@@ -2217,8 +2164,6 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
 
   return table_meta;
 }
-
-}  // namespace
 
 /**
  * @brief process_for_write
@@ -2423,6 +2368,109 @@ process_for_write(table_view const& input,
           std::move(stream_output)};
 }
 
+}  // namespace
+
+writer::impl::impl(std::unique_ptr<data_sink> sink,
+                   orc_writer_options const& options,
+                   SingleWriteMode mode,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _mr(mr),
+    stream(stream),
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
+    compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
+    stats_freq_(options.get_statistics_freq()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
+    out_sink_(std::move(sink))
+{
+  if (options.get_metadata()) {
+    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+  }
+  init_state();
+}
+
+writer::impl::impl(std::unique_ptr<data_sink> sink,
+                   chunked_orc_writer_options const& options,
+                   SingleWriteMode mode,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _mr(mr),
+    stream(stream),
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
+    compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
+    stats_freq_(options.get_statistics_freq()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
+    out_sink_(std::move(sink))
+{
+  if (options.get_metadata()) {
+    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+  }
+  init_state();
+}
+
+writer::impl::~impl() { close(); }
+
+void writer::impl::init_state()
+{
+  // Write file header
+  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
+}
+
+void writer::impl::write(table_view const& input)
+{
+  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+
+  if (not table_meta) { table_meta = make_table_meta(input); }
+
+  // All kinds of memory allocation and data compressions/encoding are performed here.
+  // If any error occurs, such as out-of-memory exception, the internal state of the current writer
+  // is still intact.
+  auto [streams,
+        comp_results,
+        strm_descs,
+        enc_data,
+        segmentation,
+        stripes,
+        orc_table,
+        compressed_data,
+        intermediate_stats,
+        stream_output] = process_for_write(input,
+                                           *table_meta,
+                                           max_stripe_size,
+                                           row_index_stride,
+                                           enable_dictionary_,
+                                           compression_kind_,
+                                           compression_blocksize_,
+                                           stats_freq_,
+                                           single_write_mode,
+                                           *out_sink_,
+                                           stream);
+
+  // Compression/encoding were all successful. Now write the intermediate results.
+  auto const num_rows = input.num_rows();
+  if (num_rows > 0) {
+    write_data_internal(streams,
+                        comp_results,
+                        strm_descs,
+                        enc_data,
+                        segmentation,
+                        stripes,
+                        orc_table,
+                        compressed_data,
+                        intermediate_stats,
+                        stream_output.get());
+  }
+
+  // Update data into the footer. This needs to be called even when num_rows==0.
+  update_chunk_to_footer(orc_table, stripes, num_rows);
+}
+
 void writer::impl::write_data_internal(orc_streams& streams,
                                        hostdevice_vector<compression_result> const& comp_results,
                                        hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
@@ -2557,55 +2605,6 @@ void writer::impl::update_chunk_to_footer(orc_table_view const& orc_table,
                     std::make_move_iterator(stripes.begin()),
                     std::make_move_iterator(stripes.end()));
   ff.numberOfRows += num_rows;
-}
-
-void writer::impl::write(table_view const& input)
-{
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-
-  if (not table_meta) { table_meta = make_table_meta(input); }
-
-  // All kinds of memory allocation and data compressions/encoding are performed here.
-  // If any error occurs, such as out-of-memory exception, the internal state of the current writer
-  // is still intact.
-  auto [streams,
-        comp_results,
-        strm_descs,
-        enc_data,
-        segmentation,
-        stripes,
-        orc_table,
-        compressed_data,
-        intermediate_stats,
-        stream_output] = process_for_write(input,
-                                           *table_meta,
-                                           max_stripe_size,
-                                           row_index_stride,
-                                           enable_dictionary_,
-                                           compression_kind_,
-                                           compression_blocksize_,
-                                           stats_freq_,
-                                           single_write_mode,
-                                           *out_sink_,
-                                           stream);
-
-  // Compression/encoding were all successful. Now write the intermediate results.
-  auto const num_rows = input.num_rows();
-  if (num_rows > 0) {
-    write_data_internal(streams,
-                        comp_results,
-                        strm_descs,
-                        enc_data,
-                        segmentation,
-                        stripes,
-                        orc_table,
-                        compressed_data,
-                        intermediate_stats,
-                        stream_output.get());
-  }
-
-  // Update data into the footer. This needs to be called even when num_rows==0.
-  update_chunk_to_footer(orc_table, stripes, num_rows);
 }
 
 void writer::impl::close()
