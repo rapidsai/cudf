@@ -2445,6 +2445,8 @@ void writer::impl::write(table_view const& input)
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current writer
   // is still intact.
+  // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
+  // writing anything to it.
   auto [streams,
         comp_results,
         strm_descs,
