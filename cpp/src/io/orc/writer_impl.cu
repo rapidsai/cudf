@@ -2567,6 +2567,7 @@ void writer::impl::write(table_view const& input)
                         stream_output);
   }
 
+  // Update data into the footer. This needs to be called even when num_rows==0.
   update_chunk_to_footer(orc_table, stripes, num_rows);
 }
 
