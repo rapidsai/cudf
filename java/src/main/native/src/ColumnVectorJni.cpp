@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -296,7 +297,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
         cudf::jni::native_jpointerArray<column_view>{env, column_handles}.get_dereferenced();
     auto const is_lists_column = columns[0].type().id() == cudf::type_id::LIST;
     return release_as_jlong(
-        is_lists_column ? cudf::lists::detail::concatenate(columns, cudf::get_default_stream()) :
+        is_lists_column ? cudf::lists::detail::concatenate(columns, cudf::get_default_stream(),
+                                                           rmm::mr::get_current_device_resource()) :
                           cudf::concatenate(columns));
   }
   CATCH_STD(env, 0);
