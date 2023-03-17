@@ -118,18 +118,6 @@ class orc_streams {
   auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
-  /**
-   * @brief List of ORC stream offsets and their total size.
-   */
-  struct orc_stream_offsets {
-    std::vector<size_t> offsets;
-    size_t non_rle_data_size = 0;
-    size_t rle_data_size     = 0;
-    [[nodiscard]] auto data_size() const { return non_rle_data_size + rle_data_size; }
-  };
-  [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
-                                                   size_t num_rowgroups) const;
-
   operator std::vector<Stream> const &() const { return streams; }
 
  private:
