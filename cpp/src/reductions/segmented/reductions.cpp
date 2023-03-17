@@ -91,19 +91,19 @@ struct segmented_reduce_dispatch_functor {
           col, offsets, output_dtype, null_handling, stream, mr);
       case segmented_reduce_aggregation::MEAN:
         return reduction::segmented_mean(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::VARIANCE: {
+      case segmented_reduce_aggregation::VARIANCE: {
         auto var_agg = static_cast<var_aggregation const&>(agg);
         return reduction::segmented_variance(
           col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
       }
-      case aggregation::STD: {
+      case segmented_reduce_aggregation::STD: {
         auto var_agg = static_cast<std_aggregation const&>(agg);
         return reduction::segmented_standard_deviation(
           col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
       }
-      default:
-        CUDF_FAIL("Unsupported aggregation type.");
-        // TODO: Add support for compound_ops. GH #10432
+      case segmented_reduce_aggregation::NUNIQUE:
+        return reduction::segmented_nunique(col, offsets, null_handling, stream, mr);
+      default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
 };
