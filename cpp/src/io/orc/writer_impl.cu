@@ -957,49 +957,46 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         auto col_streams   = chunk_streams[col_idx];
         auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
+        std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+          col_streams[rg_idx].ids[strm_type]     = strm_id;
+          col_streams[rg_idx].lengths[strm_type] = 0;
+        });
+
         // Calculate rowgroup sizes and stripe size
-        size_t stripe_size = 0;
-        for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
-          auto const rg_idx = *rg_idx_it;
-          auto const& ck    = chunks[col_idx][rg_idx];
-          auto& strm        = col_streams[rg_idx];
-
-          // TODO we can skip this case on a higher level
-          strm.ids[strm_type] = strm_id;
-          if (strm_id < 0) {
-            strm.lengths[strm_type] = 0;
-            continue;
-          }
-
-          if ((strm_type == gpu::CI_DICTIONARY) ||
-              (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
-            if (rg_idx_it == stripe.cbegin()) {
-              const auto stripe_dict = column.host_stripe_dict(stripe.id);
-              strm.lengths[strm_type] =
-                (strm_type == gpu::CI_DICTIONARY)
-                  ? stripe_dict->dict_char_count
-                  : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
-            } else {
-              strm.lengths[strm_type] = 0;
-            }
-          } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
-                     ck.encoding_kind == DIRECT_V2) {
-            strm.lengths[strm_type] =
-              std::max(column.host_dict_chunk(rg_idx)->string_char_count, 1u);
-          } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
-                     (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
-            // Pass-through
-            strm.lengths[strm_type] = ck.num_rows * ck.dtype_len;
-          } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
-            strm.lengths[strm_type] = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
-          } else {
-            strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
-          }
-          // Allow extra space for alignment
-          stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
-        }
-
         if (strm_id >= 0) {
+          size_t stripe_size = 0;
+          std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+            auto const& ck = chunks[col_idx][rg_idx];
+            auto& strm     = col_streams[rg_idx];
+
+            if ((strm_type == gpu::CI_DICTIONARY) ||
+                (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
+              if (rg_idx == *stripe.cbegin()) {
+                const auto stripe_dict = column.host_stripe_dict(stripe.id);
+                strm.lengths[strm_type] =
+                  (strm_type == gpu::CI_DICTIONARY)
+                    ? stripe_dict->dict_char_count
+                    : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+              } else {
+                strm.lengths[strm_type] = 0;
+              }
+            } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
+                       ck.encoding_kind == DIRECT_V2) {
+              strm.lengths[strm_type] =
+                std::max(column.host_dict_chunk(rg_idx)->string_char_count, 1u);
+            } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                       (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
+              // Pass-through
+              strm.lengths[strm_type] = ck.num_rows * ck.dtype_len;
+            } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
+              strm.lengths[strm_type] = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
+            } else {
+              strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
+            }
+            // Allow extra space for alignment
+            stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
+          });
+
           encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream);
         }
 
