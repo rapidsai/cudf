@@ -602,8 +602,10 @@ void make_device_json_column(device_span<SymbolT const> input,
                                             col.validity.data()};
   }
 
-  auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
-  auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
+  auto d_ignore_vals = cudf::detail::make_device_uvector_async(
+    ignore_vals, stream, rmm::mr::get_current_device_resource());
+  auto d_columns_data = cudf::detail::make_device_uvector_async(
+    columns_data, stream, rmm::mr::get_current_device_resource());
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
