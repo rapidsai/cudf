@@ -864,12 +864,15 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
 )
+
+set(_components_export_string)
 if(TARGET cudftestutil)
   install(
     TARGETS cudftestutil
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
+  set(_components_export_string COMPONENTS testing COMPONENTS_EXPORT_SET cudf-testing-exports)
 endif()
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
@@ -944,9 +947,7 @@ string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
-  EXPORT_SET cudf-exports
-  COMPONENTS testing
-  COMPONENTS_EXPORT_SET cudf-testing-exports
+  EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
@@ -970,9 +971,7 @@ string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf
-  EXPORT_SET cudf-exports
-  COMPONENTS testing
-  COMPONENTS_EXPORT_SET cudf-testing-exports
+  EXPORT_SET cudf-exports ${_components_export_string}
   GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
