@@ -80,7 +80,9 @@ void reduce_by_key_fn(column_device_view const& values,
   auto var_fn = var_transform<ResultType, decltype(values_iter)>{
     values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof};
   auto const itr = thrust::make_counting_iterator<size_type>(0);
-  auto vars      = rmm::device_uvector<ResultType>(values.size(), stream);
+  // using a temporary buffer for the transform instead of a transform-iterator
+  // improves compile-time significantly
+  auto vars = rmm::device_uvector<ResultType>(values.size(), stream);
   thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), vars.begin(), var_fn);
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
