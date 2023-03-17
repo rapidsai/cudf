@@ -54,12 +54,6 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
-
-/**
  * Non-owning view of a cuDF table that includes ORC-related information.
  *
  * Columns hierarchy is flattened and stored in pre-order.
@@ -190,6 +184,12 @@ class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
+  /**
+   * @brief Helper for pinned host memory
+   */
+  template <typename T>
+  using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
+
  public:
   /**
    * @brief Constructor with writer options.
@@ -236,7 +236,7 @@ class writer::impl {
    *
    * @param[in] table The table information to be written
    */
-  void write(table_view const& input);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -332,10 +332,9 @@ class writer::impl {
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
    * @return The encoded statistic blobs
    */
-  static encoded_footer_statistics finish_statistic_blobs(
-    int num_stripes,
-    writer::impl::persisted_statistics& incoming_stats,
-    rmm::cuda_stream_view stream);
+  static encoded_footer_statistics finish_statistic_blobs(int num_stripes,
+                                                          persisted_statistics& incoming_stats,
+                                                          rmm::cuda_stream_view stream);
 
   /**
    * @brief process_for_write

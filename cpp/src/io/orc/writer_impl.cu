@@ -1322,9 +1322,7 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
 }
 
 writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
-  int num_stripes,
-  writer::impl::persisted_statistics& per_chunk_stats,
-  rmm::cuda_stream_view stream)
+  int num_stripes, persisted_statistics& per_chunk_stats, rmm::cuda_stream_view stream)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
@@ -2207,7 +2205,7 @@ std::tuple<orc_streams,
            orc_table_view,
            rmm::device_buffer,
            writer::impl::intermediate_statistics,
-           pinned_buffer<uint8_t>>
+           writer::impl::pinned_buffer<uint8_t>>
 writer::impl::process_for_write(table_view const& input,
                                 table_input_metadata const& table_meta,
                                 stripe_size_limits max_stripe_size,
