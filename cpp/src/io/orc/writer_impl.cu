@@ -2196,15 +2196,6 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
   return table_meta;
 }
 
-#if 0
-std::vector<uint8_t> /*writer::impl::*/
-write_to_buffer(const table_view& input)
-{
-  //  auto const num_rows = input.num_rows();
-
-  return {};
-}
-#endif
 }  // namespace
 
 std::tuple<orc_streams,
@@ -2217,17 +2208,17 @@ std::tuple<orc_streams,
            rmm::device_buffer,
            writer::impl::intermediate_statistics,
            pinned_buffer<uint8_t>>
-writer::impl::write_to_buffer(table_view const& input,
-                              table_input_metadata const& table_meta,
-                              stripe_size_limits max_stripe_size,
-                              size_type row_index_stride,
-                              bool enable_dictionary,
-                              CompressionKind compression_kind,
-                              size_t compression_blocksize,
-                              statistics_freq stats_freq,
-                              bool single_write_mode,
-                              data_sink const& out_sink,
-                              rmm::cuda_stream_view stream)
+writer::impl::process_for_write(table_view const& input,
+                                table_input_metadata const& table_meta,
+                                stripe_size_limits max_stripe_size,
+                                size_type row_index_stride,
+                                bool enable_dictionary,
+                                CompressionKind compression_kind,
+                                size_t compression_blocksize,
+                                statistics_freq stats_freq,
+                                bool single_write_mode,
+                                data_sink const& out_sink,
+                                rmm::cuda_stream_view stream)
 {
   auto const input_tview = table_device_view::create(input, stream);
 
@@ -2395,16 +2386,16 @@ writer::impl::write_to_buffer(table_view const& input,
           std::move(stream_output)};
 }
 
-void writer::impl::apply_write(orc_streams& streams,
-                               hostdevice_vector<compression_result> const& comp_results,
-                               hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-                               encoded_data const& enc_data,
-                               file_segmentation const& segmentation,
-                               std::vector<StripeInformation>& stripes,
-                               orc_table_view const& orc_table,
-                               rmm::device_buffer const& compressed_data,
-                               writer::impl::intermediate_statistics& intermediate_stats,
-                               pinned_buffer<uint8_t>& stream_output)
+void writer::impl::write_data_internal(orc_streams& streams,
+                                       hostdevice_vector<compression_result> const& comp_results,
+                                       hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
+                                       encoded_data const& enc_data,
+                                       file_segmentation const& segmentation,
+                                       std::vector<StripeInformation>& stripes,
+                                       orc_table_view const& orc_table,
+                                       rmm::device_buffer const& compressed_data,
+                                       writer::impl::intermediate_statistics& intermediate_stats,
+                                       pinned_buffer<uint8_t>& stream_output)
 {
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
     persisted_stripe_statistics.persist(
@@ -2479,9 +2470,9 @@ void writer::impl::apply_write(orc_streams& streams,
   }
 }
 
-void writer::impl::update_footer(orc_table_view const& orc_table,
-                                 std::vector<StripeInformation>& stripes,
-                                 size_type num_rows)
+void writer::impl::update_chunk_to_footer(orc_table_view const& orc_table,
+                                          std::vector<StripeInformation>& stripes,
+                                          size_type num_rows)
 {
   if (ff.headerLength == 0) {
     // First call
@@ -2549,34 +2540,34 @@ void writer::impl::write(table_view const& input)
         orc_table,
         compressed_data,
         intermediate_stats,
-        stream_output] = write_to_buffer(input,
-                                         *table_meta,
-                                         max_stripe_size,
-                                         row_index_stride,
-                                         enable_dictionary_,
-                                         compression_kind_,
-                                         compression_blocksize_,
-                                         stats_freq_,
-                                         single_write_mode,
-                                         *out_sink_,
-                                         stream);
+        stream_output] = process_for_write(input,
+                                           *table_meta,
+                                           max_stripe_size,
+                                           row_index_stride,
+                                           enable_dictionary_,
+                                           compression_kind_,
+                                           compression_blocksize_,
+                                           stats_freq_,
+                                           single_write_mode,
+                                           *out_sink_,
+                                           stream);
 
   // Compression/encoding were all successful. Now write the intermediate results.
   auto const num_rows = input.num_rows();
   if (num_rows > 0) {
-    apply_write(streams,
-                comp_results,
-                strm_descs,
-                enc_data,
-                segmentation,
-                stripes,
-                orc_table,
-                compressed_data,
-                intermediate_stats,
-                stream_output);
+    write_data_internal(streams,
+                        comp_results,
+                        strm_descs,
+                        enc_data,
+                        segmentation,
+                        stripes,
+                        orc_table,
+                        compressed_data,
+                        intermediate_stats,
+                        stream_output);
   }
 
-  update_footer(orc_table, stripes, num_rows);
+  update_chunk_to_footer(orc_table, stripes, num_rows);
 }
 
 void writer::impl::close()
