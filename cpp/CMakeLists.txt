@@ -73,7 +73,7 @@ option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compila
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
-if(${CUDA_STATIC_RUNTIME})
+if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
   set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 endif()
 option(
@@ -741,15 +741,39 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
-    # This library must also be compiled as a dynamic library to support
-    # LD_PRELOAD injection of symbols. We currently leverage this for
-    # stream-related library validation and may make use of it for other
-    # similar features in the future.
-    cudftestutil SHARED
+    cudftest_default_stream
+    # When compiled as a dynamic library allows us to use LD_PRELOAD injection of symbols. We
+    # currently leverage this for stream-related library validation and may make use of it for
+    # other similar features in the future.
+    tests/utilities/default_stream.cpp
+  )
+  set_target_properties(
+    cudftest_default_stream
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(
+    cudftest_default_stream
+    PUBLIC cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
+
+  add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
+
+  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
+  # fPIC enabled and therefore can't be embedded into shared libraries.
+  add_library(
+    cudftestutil STATIC
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
-    tests/utilities/default_stream.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -774,7 +798,7 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -872,7 +896,7 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 
 if(CUDF_BUILD_TESTUTIL)
   install(
-    TARGETS cudftestutil
+    TARGETS cudftest_default_stream cudftestutil
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
