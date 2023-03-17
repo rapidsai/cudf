@@ -22,11 +22,6 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/sort.h>
 
 namespace cudf::io::detail::parquet {
@@ -718,15 +713,6 @@ void aggregate_reader_metadata::populate_column_metadata(
       }
     }
   }
-}
-
-// the following code intends to replicate compute_splits/find_splits using
-// file metadata rather than having to read the pages. the should be refactored
-// so both implementations can share code (if possible).
-template <typename UnaryFunction>
-inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
-{
-  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
 std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(

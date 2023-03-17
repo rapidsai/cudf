@@ -206,16 +206,42 @@ class aggregate_reader_metadata {
                    bool strings_to_categorical,
                    type_id timestamp_type_id) const;
 
-  // read per-file page index and column/page size thrift structures for the selected input
-  // columns
-  void populate_column_metadata(std::vector<input_column_info> const&,
+  /**
+   * @brief Read per-file page index and size thrift structures for the selected input columns
+   *
+   * @param input_columns Columns selected by select_columns()
+   * @param sources List of datasources
+   */
+  void populate_column_metadata(std::vector<input_column_info> const& input_columns,
                                 std::vector<std::unique_ptr<datasource>> const& sources);
 
-  // use metadata to create {skip_rows,num_rows} pairs for the chunked reader
+  /**
+   * @brief Use file metadata to create {skip_rows, num_rows} pairs for the chunked reader.
+   *
+   * Each pair should generate output columns of total size <= `chunk_read_limit` bytes.
+   *
+   * @param chunk_read_limit Size to limit reads to.
+   * @param stream CUDA stream to use
+   * @return List of {skip_rows, num_rows} pairs
+   */
   [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit,
                                                                  rmm::cuda_stream_view stream);
 };
 
+/**
+ * @brief Generate {skip_rows, num_rows} pairs where each range will fit within a predefined limit
+ *
+ * Given a list of cumulative page sizes that have been computed by nesting level and
+ * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
+ * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
+ *
+ * @param page_keys Schema index for each page, sorted
+ * @param page_index Global page index, sorted in same order as page_keys
+ * @param c_info Cumulative page size info
+ * @param num_rows Total number of rows to read
+ * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
+ * @param stream CUDA stream to use
+ */
 std::vector<gpu::chunk_read_info> compute_splits(
   rmm::device_uvector<size_type> const& page_keys,
   rmm::device_uvector<size_type> const& page_index,

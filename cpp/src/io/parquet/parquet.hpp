@@ -357,7 +357,7 @@ struct OffsetIndex {
 /**
  * @brief Thrift struct for column chunk size info.
  *
- * Like PageSize, but for column chunks. Want to add this to OffsetIndex in the future.
+ * Want to add this to OffsetIndex in the future.
  */
 struct ColumnChunkSize {
   int64_t chunk_size;               // sum of page_sizes...no overhead

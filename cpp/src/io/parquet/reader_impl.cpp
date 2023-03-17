@@ -231,12 +231,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // filtering (or num_rows filtering). since we don't do the latter yet, just
   // test for the former.
   if (_chunk_read_limit > 0) {
-    auto tstart = std::chrono::system_clock::now();
     _metadata->populate_column_metadata(_input_columns, _sources);
     _meta_chunk_read_info = _metadata->compute_splits(_chunk_read_limit, _stream);
-    auto tend = std::chrono::system_clock::now();
-    auto t = std::chrono::duration_cast<std::chrono::milliseconds>(tend - tstart).count();
-    printf("meta data time %ldms\n", t);
     if (not _meta_chunk_read_info.empty()) {
       _chunk_read_limit = 0;  // don't need this since we already have splits
     }
