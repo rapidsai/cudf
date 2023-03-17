@@ -17,9 +17,10 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <algorithm>
 #include <fstream>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace io {
