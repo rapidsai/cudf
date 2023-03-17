@@ -55,6 +55,7 @@
 #include <algorithm>
 #include <cstring>
 #include <numeric>
+#include <tuple>
 #include <utility>
 
 #include <cooperative_groups.h>
