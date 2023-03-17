@@ -282,6 +282,7 @@ __global__ void __launch_bounds__(128)
       g.col            = ck_g->col_desc;
       g.start_row      = fragments[frag_id].start_value_idx;
       g.num_rows       = fragments[frag_id].num_leaf_values;
+      g.non_leaf_nulls = fragments[frag_id].num_values - g.num_rows;
       groups[frag_id]  = g;
     }
   }
