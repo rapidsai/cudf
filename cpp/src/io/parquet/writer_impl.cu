@@ -2014,9 +2014,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
 
-    // experimental: write page size info ahead of other footer metadata
-    {
-      auto& fmd    = md->file(p);
+    if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+      auto& fmd = md->file(p);
+
+      // experimental: write page size info ahead of other footer metadata
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
@@ -2030,12 +2031,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
           out_sink_[p]->host_write(buffer.data(), buffer.size());
         }
       }
-    }
-    if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
-      auto& fmd = md->file(p);
 
       // write column indices, updating column metadata along the way
-      int chunkidx = 0;
+      chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
           auto const& index     = fmd.column_indexes[chunkidx++];
