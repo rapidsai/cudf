@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/reduction_operators.cuh>
+#include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
