@@ -79,7 +79,6 @@ struct row_group_index_info {
 };
 
 namespace {
-
 /**
  * @brief Helper for pinned host memory
  */
@@ -582,6 +581,8 @@ void init_dictionaries(orc_table_view& orc_table,
  * @param dict_index List of dictionary indices
  * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
  * @param stripe_dict List of stripe dictionaries
+ * @param enable_dictionary Whether dictionary is enabled
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void build_dictionaries(orc_table_view& orc_table,
                         host_span<stripe_rowgroups const> stripe_bounds,
@@ -1213,7 +1214,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
  * @param[in] segmentation stripe and rowgroup ranges
  * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
- *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
  */
 std::vector<StripeInformation> gather_stripes(
@@ -1295,6 +1296,7 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
  * @param statistics_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
  * @param segmentation stripe and rowgroup ranges
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The statistic information
  */
 intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
@@ -1429,6 +1431,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
  *
  * @param num_stripes number of stripes in the data
  * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
 encoded_footer_statistics finish_statistic_blobs(int num_stripes,
@@ -1532,10 +1535,13 @@ encoded_footer_statistics finish_statistic_blobs(int num_stripes,
  * @param[in] segmentation stripe and rowgroup ranges
  * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
  * @param[in] strm_desc List of stream descriptors
- * @param[in] comp_out Output status for compressed streams
+ * @param[in] comp_res Output status for compressed streams
  * @param[in] rg_stats row group level statistics
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
+ * @param[in] compression_kind The compression kind
+ * @param[in] compression_blocksize The block size used for compression
+ * @param[in] out_sink Sink for writing data
  */
 void write_index_stream(int32_t stripe_id,
                         int32_t stream_id,
@@ -1549,7 +1555,7 @@ void write_index_stream(int32_t stripe_id,
                         orc_streams* streams,
                         CompressionKind compression_kind,
                         size_t compression_blocksize,
-                        const std::unique_ptr<data_sink>& out_sink)
+                        std::unique_ptr<data_sink> const& out_sink)
 {
   row_group_index_info present;
   row_group_index_info data;
@@ -1645,6 +1651,9 @@ void write_index_stream(int32_t stripe_id,
  * @param[in,out] stream_out Temporary host output buffer
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
+ * @param[in] compression_kind The compression kind
+ * @param[in] out_sink Sink for writing data
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return An std::future that should be synchronized to ensure the writing is complete
  */
 std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
@@ -1685,7 +1694,9 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
 /**
  * @brief Insert 3-byte uncompressed block headers in a byte vector
  *
- * @param byte_vector Raw data (must include initial 3-byte header)
+ * @param compression_kind The compression kind
+ * @param compression_blocksize The block size used for compression
+ * @param v The destitation byte vector to write, which must include initial 3-byte header
  */
 void add_uncompressed_block_headers(CompressionKind compression_kind,
                                     size_t compression_blocksize,
@@ -2167,19 +2178,21 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
 }
 
 /**
- * @brief process_for_write
- * @param input
- * @param table_meta
- * @param max_stripe_size
- * @param row_index_stride
- * @param enable_dictionary
- * @param compression_kind
- * @param compression_blocksize
- * @param stats_freq
- * @param single_write_mode
- * @param out_sink
- * @param stream
- * @return
+ * @brief Perform the processing steps needed to convert the input table into the output ORC data
+ * for writing, such as compression and ORC encoding.
+ *
+ * @param input The input table
+ * @param table_meta The table metadata
+ * @param max_stripe_size Maximum size of stripes in the output file
+ * @param row_index_stride The row index stride
+ * @param enable_dictionary Whether dictionary is enabled
+ * @param compression_kind The compression kind
+ * @param compression_blocksize The block size used for compression
+ * @param stats_freq Column statistics granularity type for parquet/orc writers
+ * @param single_write_mode Flag to indicate if there is only a single table write
+ * @param out_sink Sink for writing data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A tuple of the intermediate results containing the processed data
  */
 std::tuple<orc_streams,
            hostdevice_vector<compression_result>,

@@ -293,7 +293,7 @@ class writer::impl {
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
-   * @param[in] table The table information to be written
+   * @param table The table information to be written
    */
   void write(table_view const& table);
 
