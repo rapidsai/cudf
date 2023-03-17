@@ -245,76 +245,14 @@ class writer::impl {
 
  private:
   /**
-   * @brief write_to_buffer
-   * @param input
-   * @return
-   */
-  //  static std::vector<uint8_t> write_to_buffer(table_view const& input);
-
-  /**
-   * @brief xxx
-   * @param input
-   * @return
-   */
-  static std::vector<uint8_t> finalize_write_to_buffer();
-
-  /**
-   * @brief Builds up per-stripe dictionaries for string columns.
-   *
-   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
-   * @param stripe_bounds List of stripe boundaries
-   * @param dict List of dictionary chunks [rowgroup][column]
-   * @param dict_index List of dictionary indices
-   * @param dictionary_enabled Whether dictionary encoding is enabled for a given column
-   * @param stripe_dict List of stripe dictionaries
-   */
-  //  void build_dictionaries(orc_table_view& orc_table,
-  //                          host_span<stripe_rowgroups const> stripe_bounds,
-  //                          hostdevice_2dvector<gpu::DictionaryChunk> const& dict,
-  //                          host_span<rmm::device_uvector<uint32_t>> dict_index,
-  //                          host_span<bool const> dictionary_enabled,
-  //                          hostdevice_2dvector<gpu::StripeDictionary>& stripe_dict);
-
-  /**
-   * @brief Builds up per-column streams.
-   *
-   * @param[in,out] columns List of columns
-   * @param[in] segmentation stripe and rowgroup ranges
-   * @param[in] decimal_column_sizes Sizes of encoded decimal columns
-   * @return List of stream descriptors
-   */
-  static orc_streams create_streams(host_span<orc_column_view> columns,
-                                    file_segmentation const& segmentation,
-                                    std::map<uint32_t, size_t> const& decimal_column_sizes,
-                                    bool enable_dictionary,
-                                    CompressionKind compression_kind,
-                                    bool single_write_mode);
-
-  /**
-   * @brief Returns stripe information after compacting columns' individual data
-   * chunks into contiguous data streams.
-   *
-   * @param[in] num_index_streams Total number of index streams
-   * @param[in] segmentation stripe and rowgroup ranges
-   * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
-   * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
-   *
-   * @return The stripes' information
-   */
-  static std::vector<StripeInformation> gather_stripes(
-    size_t num_index_streams,
-    file_segmentation const& segmentation,
-    hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
-    hostdevice_2dvector<gpu::StripeStream>* strm_desc,
-    rmm::cuda_stream_view stream);
-
-  /**
    * @brief Statistics data stored between calls to write for chunked writes
    *
    */
   struct intermediate_statistics {
-    explicit intermediate_statistics(rmm::cuda_stream_view stream)
-      : stripe_stat_chunks(0, stream){};
+    explicit intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream)
+    {
+    }
+
     intermediate_statistics(std::vector<ColStatsBlob> rb,
                             rmm::device_uvector<statistics_chunk> sc,
                             hostdevice_vector<statistics_merge_group> smg,
@@ -324,7 +262,9 @@ class writer::impl {
         stripe_stat_chunks(std::move(sc)),
         stripe_stat_merge(std::move(smg)),
         stats_dtypes(std::move(sdt)),
-        col_types(std::move(sct)){};
+        col_types(std::move(sct))
+    {
+    }
 
     // blobs for the rowgroups. Not persisted
     std::vector<ColStatsBlob> rowgroup_blobs;
@@ -392,64 +332,10 @@ class writer::impl {
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
    * @return The encoded statistic blobs
    */
-  encoded_footer_statistics finish_statistic_blobs(
-    int num_stripes, writer::impl::persisted_statistics& incoming_stats);
-
-  /**
-   * @brief Writes the specified column's row index stream.
-   *
-   * @param[in] stripe_id Stripe's identifier
-   * @param[in] stream_id Stream identifier (column id + 1)
-   * @param[in] columns List of columns
-   * @param[in] segmentation stripe and rowgroup ranges
-   * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
-   * @param[in] strm_desc List of stream descriptors
-   * @param[in] comp_out Output status for compressed streams
-   * @param[in] rg_stats row group level statistics
-   * @param[in,out] stripe Stream's parent stripe
-   * @param[in,out] streams List of all streams
-   */
-  static void write_index_stream(int32_t stripe_id,
-                                 int32_t stream_id,
-                                 host_span<orc_column_view const> columns,
-                                 file_segmentation const& segmentation,
-                                 host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
-                                 host_2dspan<gpu::StripeStream const> strm_desc,
-                                 host_span<compression_result const> comp_out,
-                                 std::vector<ColStatsBlob> const& rg_stats,
-                                 StripeInformation* stripe,
-                                 orc_streams* streams,
-                                 CompressionKind compression_kind,
-                                 size_t compression_blocksize,
-                                 std::unique_ptr<data_sink> const& out_sink);
-
-  /**
-   * @brief Write the specified column's data streams
-   *
-   * @param[in] strm_desc Stream's descriptor
-   * @param[in] enc_stream Chunk's streams
-   * @param[in] compressed_data Compressed stream data
-   * @param[in,out] stream_out Temporary host output buffer
-   * @param[in,out] stripe Stream's parent stripe
-   * @param[in,out] streams List of all streams
-   * @return An std::future that should be synchronized to ensure the writing is complete
-   */
-  static std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
-                                             gpu::encoder_chunk_streams const& enc_stream,
-                                             uint8_t const* compressed_data,
-                                             uint8_t* stream_out,
-                                             StripeInformation* stripe,
-                                             orc_streams* streams,
-                                             CompressionKind compression_kind,
-                                             std::unique_ptr<data_sink> const& out_sink,
-                                             rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Insert 3-byte uncompressed block headers in a byte vector
-   *
-   * @param byte_vector Raw data (must include initial 3-byte header)
-   */
-  void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
+  static encoded_footer_statistics finish_statistic_blobs(
+    int num_stripes,
+    writer::impl::persisted_statistics& incoming_stats,
+    rmm::cuda_stream_view stream);
 
   static std::tuple<orc_streams,
                     hostdevice_vector<compression_result>,
