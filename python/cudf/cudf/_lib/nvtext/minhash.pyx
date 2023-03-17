@@ -9,9 +9,7 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.minhash cimport (
-    minhash as cpp_minhash
-)
+from cudf._lib.cpp.nvtext.minhash cimport minhash as cpp_minhash
 from cudf._lib.cpp.types cimport size_type
 
 
@@ -33,5 +31,3 @@ def minhash(Column strings, int width, int seed=0):
         )
 
     return Column.from_unique_ptr(move(c_result))
-
-
