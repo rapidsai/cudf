@@ -1053,6 +1053,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
+// TODO: remove StripeInformation from this function and return strm_desc instead
 std::vector<StripeInformation> writer::impl::gather_stripes(
   size_t num_index_streams,
   file_segmentation const& segmentation,
