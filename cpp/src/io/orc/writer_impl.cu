@@ -948,9 +948,10 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   // per-stripe, per-stream owning buffers
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> encoded_data(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
-    for (auto i = 0ul; i < streams.size(); ++i) {
-      encoded_data[stripe.id].emplace_back(0, stream);
-    }
+    std::generate_n(std::back_inserter(encoded_data[stripe.id]), streams.size(), [stream]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
+
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
         auto const& column = orc_table.column(col_idx);
@@ -1060,15 +1061,12 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 {
   if (segmentation.num_stripes() == 0) { return {}; }
 
-  // actual encoded stripe sizes - per stripe, per column, per stream
-  std::vector<std::vector<std::array<size_t, gpu::CI_INDEX>>> actual_stripe_sizes(
-    enc_data->data.size(),
-    std::vector<std::array<size_t, gpu::CI_INDEX>>{enc_data->streams.size().first});
+  // gathered stripes - per-stripe, per-stream (same as encoded_data.data)
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> gathered_stripes(enc_data->data.size());
   for (auto& stripe_data : gathered_stripes) {
-    for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
-      stripe_data.emplace_back(0, stream);
-    }
+    std::generate_n(std::back_inserter(stripe_data), enc_data->data[0].size(), [&]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
   }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
@@ -1078,17 +1076,15 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
       for (int k = 0; k < gpu::CI_INDEX; k++) {
         const auto stream_id = col_streams[0].ids[k];
         if (stream_id != -1) {
-          auto& actual_stripe_size = actual_stripe_sizes[stripe.id][col_idx][k];
-          actual_stripe_size       = std::accumulate(
+          auto const actual_stripe_size = std::accumulate(
             col_streams.begin() + stripe.first,
             col_streams.begin() + stripe.first + stripe.size,
             0ul,
             [&](auto const& sum, auto const& strm) { return sum + strm.lengths[k]; });
 
-          CUDF_EXPECTS(enc_data->data[stripe.id][stream_id].size() >= actual_stripe_size,
-                       "Insufficient allocation");
-          if (stripe.size > 1 and
-              enc_data->data[stripe.id][stream_id].size() > actual_stripe_size) {
+          auto const& allocated_stripe_size = enc_data->data[stripe.id][stream_id].size();
+          CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size, "OOB memory access");
+          if (stripe.size > 1 and allocated_stripe_size > actual_stripe_size) {
             gathered_stripes[stripe.id][stream_id] =
               rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
           }
@@ -1116,6 +1112,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   strm_desc->device_to_host(stream);
   enc_data->streams.device_to_host(stream, true);
 
+  // move the gathered stripes to encoded_data.data for lifetime management
   for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
     for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
       if (not gathered_stripes[stripe_id][stream_id].is_empty())
