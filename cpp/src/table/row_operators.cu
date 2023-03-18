@@ -385,7 +385,7 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
       // compared equal always have consecutive rank values (in stable order) thus they are still
       // sorted correctly by their ranks.
       auto ranks             = cudf::detail::rank(child,
-                                      rank_method::FIRST,
+                                      rank_method::DENSE,
                                       order::ASCENDING,
                                       null_policy::EXCLUDE,
                                       null_order::BEFORE,
