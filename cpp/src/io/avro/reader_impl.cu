@@ -66,15 +66,42 @@ namespace {
  */
 type_id to_type_id(avro::schema_entry const* col)
 {
-  switch (col->kind) {
+  avro::type_kind_e kind;
+
+  // N.B. The switch statement seems a bit ridiculous for a single type, but the
+  //      plan is to incrementally add more types to it as support is added for
+  //      them in the future.
+  switch (col->logical_kind) {
+    case avro::logicaltype_date: kind = static_cast<avro::type_kind_e>(col->logical_kind); break;
+    case avro::logicaltype_not_set: [[fallthrough]];
+    default: kind = col->kind; break;
+  }
+
+  switch (kind) {
     case avro::type_boolean: return type_id::BOOL8;
     case avro::type_int: return type_id::INT32;
     case avro::type_long: return type_id::INT64;
     case avro::type_float: return type_id::FLOAT32;
     case avro::type_double: return type_id::FLOAT64;
-    case avro::type_bytes:
+    case avro::type_bytes: [[fallthrough]];
     case avro::type_string: return type_id::STRING;
+    case avro::type_date: return type_id::TIMESTAMP_DAYS;
+    case avro::type_timestamp_millis: return type_id::TIMESTAMP_MILLISECONDS;
+    case avro::type_timestamp_micros: return type_id::TIMESTAMP_MICROSECONDS;
+    case avro::type_local_timestamp_millis: return type_id::TIMESTAMP_MILLISECONDS;
+    case avro::type_local_timestamp_micros: return type_id::TIMESTAMP_MICROSECONDS;
     case avro::type_enum: return (!col->symbols.empty()) ? type_id::STRING : type_id::INT32;
+    // The avro time-millis and time-micros types are closest to Arrow's
+    // TIME32 and TIME64.  They're single-day units, i.e. they won't exceed
+    // 23:59:59.9999 (or .999999 for micros).  There's no equivalent cudf
+    // type for this; type_id::DURATION_MILLISECONDS/MICROSECONDS are close,
+    // but they're not semantically the same.
+    case avro::type_time_millis: [[fallthrough]];
+    case avro::type_time_micros: [[fallthrough]];
+    // There's no cudf equivalent for the avro duration type, which is a fixed
+    // 12 byte value which stores three little-endian unsigned 32-bit integers
+    // representing months, days, and milliseconds, respectively.
+    case avro::type_duration: [[fallthrough]];
     default: return type_id::EMPTY;
   }
 }
@@ -141,6 +168,7 @@ class metadata : public file_metadata {
             break;
           }
         }
+
         if (!column_in_array) {
           auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
           CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
@@ -360,7 +388,9 @@ std::vector<column_buffer> decode_data(metadata& meta,
   int skip_field_cnt         = 0;
 
   for (size_t i = 0; i < meta.schema.size(); i++) {
-    type_kind_e kind = meta.schema[i].kind;
+    type_kind_e kind                = meta.schema[i].kind;
+    logicaltype_kind_e logical_kind = meta.schema[i].logical_kind;
+
     if (skip_field_cnt != 0) {
       // Exclude union and array members from min_row_data_size
       skip_field_cnt += meta.schema[i].num_children - 1;
@@ -382,7 +412,8 @@ std::vector<column_buffer> decode_data(metadata& meta,
       }
     }
     if (kind == type_enum && !meta.schema[i].symbols.size()) { kind = type_int; }
-    schema_desc[i].kind = kind;
+    schema_desc[i].kind         = kind;
+    schema_desc[i].logical_kind = logical_kind;
     schema_desc[i].count =
       (kind == type_enum) ? 0 : static_cast<uint32_t>(meta.schema[i].num_children);
     schema_desc[i].dataptr = nullptr;

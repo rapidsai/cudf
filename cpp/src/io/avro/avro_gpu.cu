@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,8 +78,11 @@ avro_decode_row(schemadesc_s const* schema,
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
   for (uint32_t i = 0; i < schema_len;) {
-    uint32_t kind = schema[i].kind;
-    int skip      = 0;
+    type_kind_e kind                = schema[i].kind;
+    logicaltype_kind_e logical_kind = schema[i].logical_kind;
+    int skip                        = 0;
+
+    if (is_supported_logical_type(logical_kind)) { kind = static_cast<type_kind_e>(logical_kind); }
 
     if (kind == type_union) {
       int skip_after;
@@ -93,7 +96,11 @@ avro_decode_row(schemadesc_s const* schema,
         --skip;
       }
       if (i >= schema_len || skip_after < 0) break;
-      kind = schema[i].kind;
+      kind         = schema[i].kind;
+      logical_kind = schema[i].logical_kind;
+      if (is_supported_logical_type(logical_kind)) {
+        kind = static_cast<type_kind_e>(logical_kind);
+      }
       skip = skip_after;
     }
 
@@ -106,36 +113,38 @@ avro_decode_row(schemadesc_s const* schema,
         }
         break;
 
-      case type_int:
-      case type_long:
-      case type_bytes:
-      case type_string:
-      case type_enum: {
+      case type_int: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (kind == type_int) {
-          if (dataptr != nullptr && row < max_rows) {
-            static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        if (dataptr != nullptr && row < max_rows) {
+          static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        }
+      } break;
+
+      case type_long: {
+        int64_t v = avro_decode_zigzag_varint(cur, end);
+        if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
+      } break;
+
+      case type_bytes: [[fallthrough]];
+      case type_string: [[fallthrough]];
+      case type_enum: {
+        int64_t v       = avro_decode_zigzag_varint(cur, end);
+        size_t count    = 0;
+        const char* ptr = nullptr;
+        if (kind == type_enum) {  // dictionary
+          size_t idx = schema[i].count + v;
+          if (idx < global_dictionary.size()) {
+            ptr   = global_dictionary[idx].first;
+            count = global_dictionary[idx].second;
           }
-        } else if (kind == type_long) {
-          if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
-        } else {  // string or enum
-          size_t count    = 0;
-          const char* ptr = nullptr;
-          if (kind == type_enum) {  // dictionary
-            size_t idx = schema[i].count + v;
-            if (idx < global_dictionary.size()) {
-              ptr   = global_dictionary[idx].first;
-              count = global_dictionary[idx].second;
-            }
-          } else if (v >= 0 && cur + v <= end) {  // string
-            ptr   = reinterpret_cast<const char*>(cur);
-            count = (size_t)v;
-            cur += count;
-          }
-          if (dataptr != nullptr && row < max_rows) {
-            static_cast<string_index_pair*>(dataptr)[row].first  = ptr;
-            static_cast<string_index_pair*>(dataptr)[row].second = count;
-          }
+        } else if (v >= 0 && cur + v <= end) {  // string or bytes
+          ptr   = reinterpret_cast<const char*>(cur);
+          count = (size_t)v;
+          cur += count;
+        }
+        if (dataptr != nullptr && row < max_rows) {
+          static_cast<string_index_pair*>(dataptr)[row].first  = ptr;
+          static_cast<string_index_pair*>(dataptr)[row].second = count;
         }
       } break;
 
@@ -190,7 +199,48 @@ avro_decode_row(schemadesc_s const* schema,
           skip += schema[i].count;  // Should always be 1
         }
       } break;
+
+      case type_duration: {
+        // A duration logical type annotates Avro fixed type of size 12, which
+        // stores three little-endian unsigned integers that represent durations
+        // at different granularities of time. The first stores a number in
+        // months, the second stores a number in days, and the third stores a
+        // number in milliseconds.
+        CUDF_UNREACHABLE("avro type 'duration' not yet implemented");
+      } break;
+
+      // N.B. These aren't handled yet, see the discussion on
+      //      https://github.com/rapidsai/cudf/pull/12788.  The decoding logic
+      //      is correct, though, so there's no harm in having them here.
+      case type_timestamp_millis: [[fallthrough]];
+      case type_timestamp_micros: [[fallthrough]];
+      case type_local_timestamp_millis: [[fallthrough]];
+      case type_local_timestamp_micros: [[fallthrough]];
+      case type_time_millis: [[fallthrough]];
+      case type_time_micros: {
+        // N.B. time-millis is stored as a 32-bit int, however, cudf expects an
+        //      int64 for DURATION_MILLISECONDS.  From our perspective, the fact
+        //      that time-millis comes from a 32-bit int is hidden from us by
+        //      way of the zig-zag varint encoding, so we can safely treat them
+        //      both as int64_t.  Everything else is 64-bit in both avro and
+        //      cudf.
+        CUDF_UNREACHABLE("avro time/timestamp types not yet implemented");
+        //
+        // When we do implement these, the following decoding logic should
+        // be correct:
+        //
+        // int64_t v = avro_decode_zigzag_varint(cur, end);
+        // if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
+      } break;
+
+      case type_date: {
+        int64_t v = avro_decode_zigzag_varint(cur, end);
+        if (dataptr != nullptr && row < max_rows) {
+          static_cast<int32_t*>(dataptr)[row] = static_cast<int32_t>(v);
+        }
+      } break;
     }
+
     if (array_repeat_count != 0) {
       array_children--;
       if (schema[i].kind >= type_record) { array_children += schema[i].count; }

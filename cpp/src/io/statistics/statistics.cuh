@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,6 +111,7 @@ struct statistics_group {
   const stats_column_desc* col;  //!< Column information
   uint32_t start_row;            //!< Start row of this group
   uint32_t num_rows;             //!< Number of rows in group
+  uint32_t non_leaf_nulls;       //!< Number of null non-leaf values in the group
 };
 
 struct statistics_merge_group {
