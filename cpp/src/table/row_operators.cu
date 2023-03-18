@@ -359,7 +359,7 @@ namespace {
  * @param input The input column to transform
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new column_view representing the transformed input and the generated rank
- *         (integer) column which needs to be kept alive
+ *         (size_type) column which needs to be kept alive
  */
 std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
   column_view const& input, rmm::cuda_stream_view stream)
@@ -383,7 +383,7 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
       // Consider this example: input = [ [{0, "a"}, {3, "c"}], [{0, "a"}, {2, "b"}] ].
       // If first rank is used, transformed_input = [ [0, 3], [1, 2] ]. Comparing them will lead to
       // the result row(0) < row(1) which is incorrect.
-      // With dense rank, ranks(input) = [ [0, 2], [0, 1] ], producing correct comparison.
+      // With dense rank, transformed_input = [ [0, 2], [0, 1] ], producing correct comparison.
       auto ranks             = cudf::detail::rank(child,
                                       rank_method::DENSE,
                                       order::ASCENDING,
@@ -402,7 +402,8 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
       }
     }
   } else if (input.type().id() == type_id::STRUCT) {
-    CUDF_UNREACHABLE("Structs columns should be flattened before calling this function.");
+    CUDF_FAIL(
+      "Structs columns containing lists should be flattened before reaching this function.");
   }
 
   return {input, nullptr};
@@ -493,7 +494,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     flatten_nested_structs_of_lists(t, column_order, null_precedence, stream);
 
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
-  auto [transformed_t, transformed_aux_data] = transform_lists_of_structs(flattened_t, stream);
+  auto [transformed_t, structs_ranked_columns] = transform_lists_of_structs(flattened_t, stream);
 
   check_lex_compatibility(transformed_t);
 
@@ -518,7 +519,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(flattened_t_aux_data),
-                             std::move(transformed_aux_data)));
+                             std::move(structs_ranked_columns)));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
@@ -526,7 +527,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(flattened_t_aux_data),
-                             std::move(transformed_aux_data)));
+                             std::move(structs_ranked_columns)));
   }
 }
 
@@ -538,7 +539,7 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& transformed_structs_columns)
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -546,7 +547,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _transformed_structs_aux_data(std::move(transformed_structs_columns))
+    _structs_ranked_columns(std::move(structs_ranked_columns))
 {
 }
 
@@ -556,7 +557,7 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& transformed_structs_columns)
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -564,7 +565,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data{},
     _dremel_device_views{},
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _transformed_structs_aux_data(std::move(transformed_structs_columns))
+    _structs_ranked_columns(std::move(structs_ranked_columns))
 {
 }
 

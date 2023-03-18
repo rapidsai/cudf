@@ -727,11 +727,11 @@ struct preprocessed_table {
    * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
    * of list columns).
    * @param flattened_input_aux_data The data structure generated from
-   * `cudf::structs::detail::flatten_nested_columns` that contains additional information used for
-   * row comparisons.
-   * @param transformed_structs_columns The intermediate columns resulted from transforming child
-   * of lists-of-structs columns into lists-of-integers columns and will be used for row
-   * comparison.
+   * `cudf::structs::detail::flatten_nested_columns` containing the input flattened table along
+   * with its corresponding flattened column orders and null orders.
+   * @param structs_ranked_columns Store the intermediate results from transforming the
+   * child columns of lists-of-structs columns into integer columns using `cudf::rank()`
+   * and will be used for row comparison.
    */
   preprocessed_table(
     table_device_view_owner&& table,
@@ -741,7 +741,7 @@ struct preprocessed_table {
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
 
   preprocessed_table(
     table_device_view_owner&& table,
@@ -749,7 +749,7 @@ struct preprocessed_table {
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns);
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -819,9 +819,9 @@ struct preprocessed_table {
   // that needs to be kept alive.
   std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
 
-  // Auxiliary data generated from transforming lists-of-structs into lists-of-integer
-  // that needs to be kept alive.
-  std::vector<std::unique_ptr<column>> _transformed_structs_aux_data;
+  // Intermediate columns generated from transforming the child columns of lists-of-structs columns
+  // into integer columns using `cudf::rank()`, also need to be kept alive.
+  std::vector<std::unique_ptr<column>> _structs_ranked_columns;
 };
 
 /**
