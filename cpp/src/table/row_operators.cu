@@ -402,7 +402,10 @@ std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
       }
     }
   } else if (input.type().id() == type_id::STRUCT) {
-    CUDF_FAIL(
+    CUDF_EXPECTS(
+      std::all_of(input.child_begin(),
+                  input.child_end(),
+                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
       "Structs columns containing lists should be flattened before reaching this function.");
   }
 
