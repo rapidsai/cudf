@@ -902,6 +902,11 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -922,6 +927,12 @@ class self_comparator {
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
+
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
