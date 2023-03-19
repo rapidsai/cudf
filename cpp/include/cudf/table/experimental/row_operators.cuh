@@ -907,6 +907,7 @@ class self_comparator {
         d_t->_structs_ranked_columns.size() == 0,
         "The input table was preprocessed using a different type of physical element comparator.");
     }
+
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
