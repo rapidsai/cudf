@@ -900,7 +900,7 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
       CUDF_EXPECTS(
@@ -924,8 +924,7 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
       CUDF_EXPECTS(
