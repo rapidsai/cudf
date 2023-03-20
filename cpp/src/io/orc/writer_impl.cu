@@ -2478,22 +2478,19 @@ void writer::impl::write(table_view const& input)
   }();
 
   // Compression/encoding were all successful. Now write the intermediate results.
-  auto const num_rows = input.num_rows();
-  if (num_rows > 0) {
-    write_orc_data_to_sink(streams,
-                           comp_results,
-                           strm_descs,
-                           enc_data,
-                           segmentation,
-                           stripes,
-                           orc_table,
-                           compressed_data,
-                           intermediate_stats,
-                           stream_output.get());
-  }
+  write_orc_data_to_sink(streams,
+                         comp_results,
+                         strm_descs,
+                         enc_data,
+                         segmentation,
+                         stripes,
+                         orc_table,
+                         compressed_data,
+                         intermediate_stats,
+                         stream_output.get());
 
   // Update data into the footer. This needs to be called even when num_rows==0.
-  add_table_to_footer_data(orc_table, stripes, num_rows);
+  add_table_to_footer_data(orc_table, stripes);
 }
 
 void writer::impl::write_orc_data_to_sink(orc_streams& streams,
@@ -2507,6 +2504,8 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
                                           intermediate_statistics& intermediate_stats,
                                           uint8_t* stream_output)
 {
+  if (orc_table.num_rows() == 0) { return; }
+
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
     persisted_stripe_statistics.persist(
       orc_table.num_rows(), single_write_mode, intermediate_stats, stream);
@@ -2581,8 +2580,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
 }
 
 void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
-                                            std::vector<StripeInformation>& stripes,
-                                            size_type num_rows)
+                                            std::vector<StripeInformation>& stripes)
 {
   if (ff.headerLength == 0) {
     // First call
@@ -2629,7 +2627,7 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
   ff.stripes.insert(ff.stripes.end(),
                     std::make_move_iterator(stripes.begin()),
                     std::make_move_iterator(stripes.end()));
-  ff.numberOfRows += num_rows;
+  ff.numberOfRows += orc_table.num_rows();
 }
 
 void writer::impl::close()

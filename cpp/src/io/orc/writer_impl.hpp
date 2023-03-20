@@ -336,11 +336,9 @@ class writer::impl {
    *
    * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
    * @param stripes List of stripe description
-   * @param num_rows Number of rows in the input table
    */
   void add_table_to_footer_data(orc_table_view const& orc_table,
-                                std::vector<StripeInformation>& stripes,
-                                size_type num_rows);
+                                std::vector<StripeInformation>& stripes);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
