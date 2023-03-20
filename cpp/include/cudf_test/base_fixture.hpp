@@ -248,7 +248,7 @@ inline auto make_pool()
   auto min_alloc =
     rmm::detail::align_down(std::min(free, total / 10), rmm::detail::CUDA_ALLOCATION_ALIGNMENT);
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda(), thrust::optional<std::size_t>{min_alloc});
+    make_cuda(), {min_alloc});
 }
 
 inline auto make_arena()
