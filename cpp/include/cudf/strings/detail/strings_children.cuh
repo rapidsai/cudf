@@ -17,7 +17,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -25,10 +24,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {
@@ -38,7 +37,7 @@ namespace detail {
  * @brief Creates child offsets and chars columns by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
- * @throws cudf::logic_error if the output strings column exceeds the column size limit
+ * @throws std::overflow_error if the output strings column exceeds the column size limit
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must also have members d_offsets and d_chars which are set to
@@ -60,7 +59,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            rmm::mr::device_memory_resource* mr)
 {
   auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
   size_and_exec_fn.d_offsets = d_offsets;
@@ -81,7 +80,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   auto const bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
+               "Size of output exceeds column size limit",
+               std::overflow_error);
 
   // Now build the chars column
   std::unique_ptr<column> chars_column =

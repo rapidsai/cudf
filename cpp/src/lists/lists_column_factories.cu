@@ -120,10 +120,13 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                          std::move(children));
 
   // We need to enforce all null lists to be empty.
-  // Checking `null_count==0` is not enough as it can be `UNKNOWN_NULL_COUNT` for nullable column.
-  return null_count == 0 || !output->nullable() || child_type_id == type_id::EMPTY
-           ? std::move(output)
-           : detail::purge_nonempty_nulls(output->view(), stream, mr);
+  // `has_nonempty_nulls` is less expensive than `purge_nonempty_nulls` and can save some
+  // run time if we don't have any non-empty nulls.
+  if (auto const output_cv = output->view(); detail::has_nonempty_nulls(output_cv, stream)) {
+    return detail::purge_nonempty_nulls(output_cv, stream, mr);
+  }
+
+  return output;
 }
 
 }  // namespace cudf

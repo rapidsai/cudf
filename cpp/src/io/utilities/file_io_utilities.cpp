@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,11 +202,11 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   rmm::cuda_stream_view stream)
 {
   int device;
-  cudaGetDevice(&device);
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto read_slice = [device, gds_read = shim->read, file_handle = cf_file.handle()](
                       void* dst, size_t size, size_t offset) -> ssize_t {
-    cudaSetDevice(device);
+    CUDF_CUDA_TRY(cudaSetDevice(device));
     auto read_size = gds_read(file_handle, dst, size, offset, 0);
     CUDF_EXPECTS(read_size != -1, "cuFile error reading from a file");
     return read_size;
@@ -234,11 +234,11 @@ cufile_output_impl::cufile_output_impl(std::string const& filepath)
 std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
 {
   int device;
-  cudaGetDevice(&device);
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto write_slice = [device, gds_write = shim->write, file_handle = cf_file.handle()](
                        void const* src, size_t size, size_t offset) -> void {
-    cudaSetDevice(device);
+    CUDF_CUDA_TRY(cudaSetDevice(device));
     auto write_size = gds_write(file_handle, src, size, offset, 0);
     CUDF_EXPECTS(write_size != -1 and write_size == static_cast<decltype(write_size)>(size),
                  "cuFile error writing to a file");

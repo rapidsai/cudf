@@ -113,10 +113,10 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
     std::vector<offset_type> h_offsets{0, tdigest.mean.size()};
     auto offsets =
       cudf::make_fixed_width_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED);
-    cudaMemcpy(offsets->mutable_view().begin<offset_type>(),
-               h_offsets.data(),
-               sizeof(offset_type) * 2,
-               cudaMemcpyDefault);
+    CUDF_CUDA_TRY(cudaMemcpy(offsets->mutable_view().begin<offset_type>(),
+                             h_offsets.data(),
+                             sizeof(offset_type) * 2,
+                             cudaMemcpyDefault));
 
     auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});
 

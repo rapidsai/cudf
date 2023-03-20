@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import pytest
@@ -52,7 +52,7 @@ def test_buffer_creation_from_any():
     ary = cp.arange(arr_len)
     b = as_buffer(ary, exposed=True)
     assert isinstance(b, Buffer)
-    assert ary.data.ptr == b.ptr
+    assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
 
     with pytest.raises(
@@ -62,7 +62,7 @@ def test_buffer_creation_from_any():
 
     b = as_buffer(ary.data.ptr, size=ary.nbytes, owner=ary, exposed=True)
     assert isinstance(b, Buffer)
-    assert ary.data.ptr == b.ptr
+    assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
     assert b.owner.owner is ary
 

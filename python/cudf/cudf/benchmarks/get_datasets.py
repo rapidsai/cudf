@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import argparse
 import os
@@ -9,10 +9,7 @@ from collections import namedtuple
 Dataset = namedtuple("Dataset", ["url", "dir"])
 datasets = {
     "cuio_dataset": Dataset(
-        (
-            "https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/"
-            "benchmark/avro_json_datasets.zip"
-        ),
+        "https://data.rapids.ai/cudf/benchmark/avro_json_datasets.zip",
         "cudf/benchmarks/cuio_data/",
     ),
 }

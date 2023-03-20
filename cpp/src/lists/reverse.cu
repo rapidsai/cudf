@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
   auto const child = input.get_sliced_child(stream);
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
-  auto const labels = generate_labels(input, child.size(), stream);
+  auto const labels =
+    generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
 
   // The offsets of the output lists column.
   auto out_offsets = get_normalized_offsets(input, stream, mr);

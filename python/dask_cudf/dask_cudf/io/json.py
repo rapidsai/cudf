@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -49,7 +49,7 @@ def read_json(url_path, engine="auto", **kwargs):
 
     Load nested JSON data
 
-    >>> read_json('myfile.json', engine='cudf_experimental')  # doctest: +SKIP
+    >>> read_json('myfile.json')  # doctest: +SKIP
 
     See Also
     --------

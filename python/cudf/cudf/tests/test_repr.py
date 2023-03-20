@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -9,7 +9,6 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
@@ -31,7 +30,7 @@ def test_null_series(nrows, dtype):
     sr[np.random.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
-            sr._column.data_array_view.copy_to_host(),
+            sr._column.data_array_view(mode="read").copy_to_host(),
             dtype=np_dtypes_to_pandas_dtypes.get(
                 cudf.dtype(dtype), cudf.dtype(dtype)
             ),
@@ -600,9 +599,6 @@ def test_series_null_index_repr(sr, pandas_special_case):
     ],
 )
 @pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
-)
 def test_timedelta_series_s_us_repr(data, dtype):
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
@@ -1102,9 +1098,6 @@ def test_timedelta_dataframe_repr(df, expected_repr):
             "      dtype='timedelta64[s]')",
         ),
     ],
-)
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
 )
 def test_timedelta_index_repr(index, expected_repr):
     actual_repr = repr(index)

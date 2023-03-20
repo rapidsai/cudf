@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@ static constexpr cudf::size_type max_str_length     = 32;
 
 static void nvbench_structs_scan(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const null_probability = [&] {
     auto const null_prob_val = state.get_float64("null_probability");
     return null_prob_val > 0 ? std::optional{null_prob_val} : std::nullopt;

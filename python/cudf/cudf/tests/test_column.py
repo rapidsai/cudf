@@ -285,8 +285,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    gpu_ptr = gpu_data.data.ptr
-    assert gpu_ptr == got._column.data.ptr
+    gpu_ptr = gpu_data.data.get_ptr(mode="read")
+    assert gpu_ptr == got._column.data.get_ptr(mode="read")
     assert_eq(expect, got)
 
 
@@ -520,10 +520,7 @@ def test_concatenate_large_column_strings():
     s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
     s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
 
-    with pytest.raises(
-        OverflowError,
-        match="total size of output is too large for a cudf column",
-    ):
+    with pytest.raises(OverflowError):
         cudf.concat([s_1, s_2])
 
 

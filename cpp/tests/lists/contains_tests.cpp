@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -503,10 +503,11 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
       {{1, 2, 3},
        {4, 5, 6}}}.release();
     auto skey = create_scalar_search_key<int32_t>(10);
-    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), *skey), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), *skey), cudf::data_type_error);
     EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_FIRST),
-                 cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_LAST), cudf::logic_error);
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key must match list elements in type.
@@ -517,9 +518,11 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
       }
         .release();
     auto skey = create_scalar_search_key<std::string>("Hello, World!");
-    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), *skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), *skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_LAST),
+                 cudf::data_type_error);
   }
 }
 
@@ -813,9 +816,11 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
       {{1, 2, 3},
        {4, 5, 6}}}.release();
     auto skey = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
-    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key must match list elements in type.
@@ -826,9 +831,11 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
       }
         .release();
     auto skey = cudf::test::strings_column_wrapper{"Hello", "World"};
-    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key column size must match lists column size.

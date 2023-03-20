@@ -22,13 +22,7 @@ from numba import cuda
 from packaging import version
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_120,
-    PANDAS_GE_134,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
@@ -38,6 +32,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,
@@ -1323,9 +1318,10 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_values(nrows, method):
+@pytest.mark.parametrize("seed", [None, 42])
+def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
+    data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
@@ -1334,12 +1330,41 @@ def test_dataframe_hash_values(nrows, method):
     assert len(out) == nrows
     assert out.dtype == np.uint32
 
+    warning_expected = (
+        True if seed is not None and method not in {"murmur3"} else False
+    )
     # Check single column
-    out_one = gdf[["a"]].hash_values(method=method)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
+    else:
+        out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+    else:
+        assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+
+
+@pytest.mark.parametrize("method", ["murmur3"])
+def test_dataframe_hash_values_seed(method):
+    gdf = cudf.DataFrame()
+    data = np.arange(10)
+    data[0] = data[-1]  # make first and last the same
+    gdf["a"] = data
+    gdf["b"] = gdf.a + 100
+    out_one = gdf.hash_values(method=method, seed=0)
+    out_two = gdf.hash_values(method=method, seed=1)
+    assert out_one.iloc[0] == out_one.iloc[-1]
+    assert out_two.iloc[0] == out_two.iloc[-1]
+    assert_neq(out_one, out_two)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
@@ -1419,17 +1444,16 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 
 @pytest.mark.parametrize("keep_index", [True, False])
 def test_dataframe_hash_partition_keep_index(keep_index):
-
     gdf = cudf.DataFrame(
-        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+        {"val": [1, 2, 3, 4, 5], "key": [3, 2, 1, 4, 5]}, index=[5, 4, 3, 2, 1]
     )
 
     expected_df1 = cudf.DataFrame(
-        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+        {"val": [1, 5], "key": [3, 5]}, index=[5, 1] if keep_index else None
     )
     expected_df2 = cudf.DataFrame(
         {"val": [2, 3, 4], "key": [2, 1, 4]},
-        index=[3, 2, 1] if keep_index else range(1, 4),
+        index=[4, 3, 2] if keep_index else None,
     )
     expected = [expected_df1, expected_df2]
 
@@ -1869,7 +1893,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        gs1._column.mask_array_view.copy_to_host().view("u1")[0],
+        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1880,7 +1904,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        gs2._column.mask_array_view.copy_to_host().view("u1")[0],
+        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -2660,11 +2684,11 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
         == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
     )
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
         == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
     )
 
@@ -3197,10 +3221,6 @@ def test_dataframe_reindex_fill_value(
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = cudf.datasets.randomdata(
@@ -3212,7 +3232,7 @@ def test_dataframe_reindex_change_dtype(copy):
     assert_eq(
         pdf.reindex(index=index, columns=columns, copy=True),
         gdf.reindex(index=index, columns=columns, copy=copy),
-        **kwargs,
+        check_freq=False,
     )
 
 
@@ -3626,7 +3646,8 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=["float"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3641,7 +3662,8 @@ def test_dataframe_describe_include():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=["int"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3655,7 +3677,8 @@ def test_dataframe_describe_default():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe()
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe()
     pdf_results = pdf.describe()
 
     assert_eq(pdf_results, gdf_results)
@@ -3672,7 +3695,8 @@ def test_series_describe_include_all():
     df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
 
     pdf = df.to_pandas()
-    gdf_results = df.describe(include="all")
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include="all")
     pdf_results = pdf.describe(include="all")
 
     assert_eq(gdf_results[["x", "y"]], pdf_results[["x", "y"]])
@@ -3693,7 +3717,8 @@ def test_dataframe_describe_percentiles():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(percentiles=sample_percentiles)
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(percentiles=sample_percentiles)
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
     assert_eq(pdf_results, gdf_results)
@@ -3814,17 +3839,22 @@ def test_ndim():
         -3,
         0,
         5,
-        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
-        cudf.Series([-4, -2, 12], index=["x", "y", "z"]),
-        {"w": -1, "x": 15, "y": 2},
+        pd.Series(
+            [1, 4, 3, -6],
+            index=["floats", "ints", "floats_with_nan", "floats_same"],
+        ),
+        cudf.Series(
+            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
+        ),
+        {"floats": -1, "ints": 15, "floats_will_nan": 2},
     ],
 )
 def test_dataframe_round(decimals):
-    pdf = pd.DataFrame(
+    gdf = cudf.DataFrame(
         {
-            "w": np.arange(0.5, 10.5, 1),
-            "x": np.random.normal(-100, 100, 10),
-            "y": np.array(
+            "floats": np.arange(0.5, 10.5, 1),
+            "ints": np.random.normal(-100, 100, 10),
+            "floats_with_na": np.array(
                 [
                     14.123,
                     2.343,
@@ -3833,30 +3863,24 @@ def test_dataframe_round(decimals):
                     -8.302,
                     np.nan,
                     94.313,
-                    -112.236,
+                    None,
                     -8.029,
                     np.nan,
                 ]
             ),
-            "z": np.repeat([-0.6459412758761901], 10),
+            "floats_same": np.repeat([-0.6459412758761901], 10),
+            "bools": np.random.choice([True, None, False], 10),
+            "strings": np.random.choice(["abc", "xyz", None], 10),
+            "struct": np.random.choice([{"abc": 1}, {"xyz": 2}, None], 10),
+            "list": [[1], [2], None, [4], [3]] * 2,
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf = gdf.to_pandas()
 
     if isinstance(decimals, cudf.Series):
         pdecimals = decimals.to_pandas()
     else:
         pdecimals = decimals
-
-    result = gdf.round(decimals)
-    expected = pdf.round(pdecimals)
-    assert_eq(result, expected)
-
-    # with nulls, maintaining existing null mask
-    for c in pdf.columns:
-        arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
-        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
-        pdf[c] = gdf[c] = arr
 
     result = gdf.round(decimals)
     expected = pdf.round(pdecimals)
@@ -4021,7 +4045,8 @@ def test_empty_dataframe_describe():
     gdf = cudf.from_pandas(pdf)
 
     expected = pdf.describe()
-    actual = gdf.describe()
+    with pytest.warns(FutureWarning):
+        actual = gdf.describe()
 
     assert_eq(expected, actual)
 
@@ -4597,10 +4622,6 @@ def test_isin_dataframe(data, values):
     else:
         try:
             expected = pdf.isin(values)
-        except ValueError as e:
-            if str(e) == "Lengths must match." and not PANDAS_GE_110:
-                # https://github.com/pandas-dev/pandas/issues/34256
-                return
         except TypeError as e:
             # Can't do isin with different categories
             if str(e) == (
@@ -5267,12 +5288,7 @@ def test_rowwise_ops_datetime_dtypes_pdbug(data):
     expected = pdf.max(axis=1, skipna=False)
     got = gdf.max(axis=1, skipna=False)
 
-    if PANDAS_GE_120:
-        assert_eq(got, expected)
-    else:
-        # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/36907
-        with pytest.raises(AssertionError, match="numpy array are different"):
-            assert_eq(got, expected)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -10011,5 +10027,19 @@ def test_dataframe_transpose_complex_types(data):
 
     expected = pdf.T
     actual = gdf.T
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
 
     assert_eq(expected, actual)

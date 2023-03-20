@@ -74,8 +74,7 @@ class datasource_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     if (_source->supports_device_read() && _source->is_device_read_preferred(read_size)) {
-      _source->device_read_async(
-        _offset, read_size, reinterpret_cast<uint8_t*>(chunk.data()), stream);
+      _source->device_read(_offset, read_size, reinterpret_cast<uint8_t*>(chunk.data()), stream);
     } else {
       auto& h_ticket = _tickets[_next_ticket_idx];
 

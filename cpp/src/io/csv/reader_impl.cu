@@ -845,7 +845,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       stream,
       mr);
     for (size_t i = 0; i < column_types.size(); ++i) {
-      metadata.column_names.emplace_back(out_buffers[i].name);
+      metadata.schema_info.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
           parse_opts.doublequote) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
@@ -869,7 +869,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     // Handle empty metadata
     for (int col = 0; col < num_actual_columns; ++col) {
       if (column_flags[col] & column_parse::enabled) {
-        metadata.column_names.emplace_back(column_names[col]);
+        metadata.schema_info.emplace_back(column_names[col]);
       }
     }
   }

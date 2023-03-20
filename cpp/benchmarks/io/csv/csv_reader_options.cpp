@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,6 @@ void BM_csv_read_varying_options(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<ColSelection>, nvbench::enum_type<RowSelection>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,8 +63,8 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    return !_kvikio_file.closed() ||
-           (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size));
+    if (size < _gds_write_preferred_threshold) { return false; }
+    return supports_device_write();
   }
 
   std::future<void> device_write_async(void const* gpu_data,
@@ -96,6 +96,8 @@ class file_sink : public data_sink {
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
+  // The write size above which GDS is faster then d2h-copy + posix-write
+  static constexpr size_t _gds_write_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ class ConditionalJoin : public cudf::benchmark {
                    cudf::null_equality compare_nulls) {                                 \
       return cudf::conditional_inner_join(left, right, binary_pred);                    \
     };                                                                                  \
-    constexpr bool is_conditional = true;                                               \
-    BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                \
+    BM_join<key_type, payload_type, nullable, join_t::CONDITIONAL>(st, join);           \
   }
 
 CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_32bit, int32_t, int32_t, false);
@@ -53,8 +52,7 @@ CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit_nulls, int6
                    cudf::null_equality compare_nulls) {                                \
       return cudf::conditional_left_join(left, right, binary_pred);                    \
     };                                                                                 \
-    constexpr bool is_conditional = true;                                              \
-    BM_join<key_type, payload_type, nullable, is_conditional>(st, join);               \
+    BM_join<key_type, payload_type, nullable, join_t::CONDITIONAL>(st, join);          \
   }
 
 CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_32bit, int32_t, int32_t, false);
@@ -72,8 +70,7 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_
                    cudf::null_equality compare_nulls) {                                \
       return cudf::conditional_full_join(left, right, binary_pred);                    \
     };                                                                                 \
-    constexpr bool is_conditional = true;                                              \
-    BM_join<key_type, payload_type, nullable, is_conditional>(st, join);               \
+    BM_join<key_type, payload_type, nullable, join_t::CONDITIONAL>(st, join);          \
   }
 
 CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_32bit, int32_t, int32_t, false);
@@ -91,8 +88,7 @@ CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit_nulls, int64_
                    cudf::null_equality compare_nulls) {                                     \
       return cudf::conditional_left_anti_join(left, right, binary_pred);                    \
     };                                                                                      \
-    constexpr bool is_conditional = true;                                                   \
-    BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                    \
+    BM_join<key_type, payload_type, nullable, join_t::CONDITIONAL>(st, join);               \
   }
 
 CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_32bit,
@@ -122,8 +118,7 @@ CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit_nul
                    cudf::null_equality compare_nulls) {                                     \
       return cudf::conditional_left_semi_join(left, right, binary_pred);                    \
     };                                                                                      \
-    constexpr bool is_conditional = true;                                                   \
-    BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                    \
+    BM_join<key_type, payload_type, nullable, join_t::CONDITIONAL>(st, join);               \
   }
 
 CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(conditional_left_semi_join_32bit,

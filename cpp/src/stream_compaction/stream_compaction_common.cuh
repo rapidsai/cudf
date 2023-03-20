@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,24 +28,6 @@
 
 namespace cudf {
 namespace detail {
-
-/**
- * @brief Device callable to hash a given row.
- */
-template <typename Nullate>
-class compaction_hash {
- public:
-  compaction_hash(Nullate has_nulls, table_device_view t) : _hash{has_nulls, t} {}
-
-  __device__ inline auto operator()(size_type i) const noexcept
-  {
-    auto hash = _hash(i);
-    return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
-  }
-
- private:
-  row_hash _hash;
-};
 
 namespace experimental {
 

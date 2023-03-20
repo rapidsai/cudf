@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,8 @@ void dispatch_equality_op(mutable_column_view& out,
                           rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
-               "Unsupported operator for these types");
+               "Unsupported operator for these types",
+               cudf::data_type_error);
   auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
   auto outd         = mutable_column_device_view::create(out, stream);
   auto lhsd         = column_device_view::create(lhs, stream);

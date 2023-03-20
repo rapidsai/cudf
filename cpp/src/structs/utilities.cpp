@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,17 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <bitset>
-#include <iterator>
 
 namespace cudf::structs::detail {
 
@@ -95,22 +87,29 @@ bool is_or_has_nested_lists(cudf::column_view const& col)
  */
 struct table_flattener {
   table_view input;
-  // reference variables
   std::vector<order> const& column_order;
   std::vector<null_order> const& null_precedence;
-  // output
-  std::vector<std::unique_ptr<column>> validity_as_column;
+  column_nullability nullability;
+  rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
+
   temporary_nullable_data nullable_data;
+  std::vector<std::unique_ptr<column>> validity_as_column;
   std::vector<column_view> flat_columns;
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
-  column_nullability nullability;
 
   table_flattener(table_view const& input,
                   std::vector<order> const& column_order,
                   std::vector<null_order> const& null_precedence,
-                  column_nullability nullability)
-    : column_order(column_order), null_precedence(null_precedence), nullability(nullability)
+                  column_nullability nullability,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr)
+    : column_order{column_order},
+      null_precedence{null_precedence},
+      nullability{nullability},
+      stream{stream},
+      mr{mr}
   {
     superimpose_nulls(input);
     fail_if_unsupported_types(input);
@@ -122,7 +121,7 @@ struct table_flattener {
    */
   void superimpose_nulls(table_view const& input_table)
   {
-    auto [table, tmp_nullable_data] = push_down_nulls(input_table, cudf::get_default_stream());
+    auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
   }
@@ -151,10 +150,10 @@ struct table_flattener {
     // sure the flattening results are tables having the same number of columns.
 
     if (nullability == column_nullability::FORCE || col.has_nulls()) {
-      validity_as_column.push_back(cudf::is_valid(col));
+      validity_as_column.push_back(cudf::detail::is_valid(col, stream, mr));
       if (col.has_nulls()) {
         // copy bitmask is needed only if the column has null
-        validity_as_column.back()->set_null_mask(copy_bitmask(col));
+        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, mr));
       }
       flat_columns.push_back(validity_as_column.back()->view());
       if (not column_order.empty()) { flat_column_order.push_back(col_order); }  // doesn't matter.
@@ -194,74 +193,35 @@ struct table_flattener {
       }
     }
 
-    return flattened_table{table_view{flat_columns},
-                           std::move(flat_column_order),
-                           std::move(flat_null_precedence),
-                           std::move(validity_as_column),
-                           std::move(nullable_data)};
+    return std::make_unique<flattened_table>(table_view{flat_columns},
+                                             std::move(flat_column_order),
+                                             std::move(flat_null_precedence),
+                                             std::move(validity_as_column),
+                                             std::move(nullable_data));
   }
 };
 
-flattened_table flatten_nested_columns(table_view const& input,
-                                       std::vector<order> const& column_order,
-                                       std::vector<null_order> const& null_precedence,
-                                       column_nullability nullability)
+std::unique_ptr<flattened_table> flatten_nested_columns(
+  table_view const& input,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  column_nullability nullability,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
-  if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
+  if (not has_struct) {
+    return std::make_unique<flattened_table>(input,
+                                             column_order,
+                                             null_precedence,
+                                             std::vector<std::unique_ptr<column>>{},
+                                             temporary_nullable_data{});
+  }
 
-  return table_flattener{input, column_order, null_precedence, nullability}();
+  return table_flattener{input, column_order, null_precedence, nullability, stream, mr}();
 }
 
 namespace {
-
-/**
- * @brief Dispatcher to conservatively check if the input column may contain any non-empty nulls.
- *
- * For performance reason, no non-empty null will actually be checked. Instead, this will perform
- * conservative checking to see if the input column contains any lists or strings column that is
- * nulllable. As such, it may return false positive answer.
- */
-struct may_contain_non_empty_nulls_dispatch {
-  template <typename T>
-  bool operator()(column_view const& col) const
-  {
-    return std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
-      return type_dispatcher(child.type(), may_contain_non_empty_nulls_dispatch{}, child);
-    });
-  }
-};
-
-template <>
-bool may_contain_non_empty_nulls_dispatch::operator()<cudf::string_view>(
-  column_view const& col) const
-{
-  return col.nullable();
-}
-
-template <>
-bool may_contain_non_empty_nulls_dispatch::operator()<cudf::list_view>(column_view const& col) const
-{
-  // A lists column may have empty data (i.e., having child column of type EMPTY).
-  // Thus, it needs to be sanitized only if the child column is not empty.
-  return col.nullable() &&
-         col.child(lists_column_view::child_column_index).type().id() != type_id::EMPTY;
-}
-
-/**
- * @brief Conservatively check if the input column may contain any non-empty nulls.
- *
- * This will just call `type_dispatcher` on the `may_contain_non_empty_nulls_dispatch` functor.
- *
- * @param col The input column to check
- */
-bool may_contain_non_empty_nulls(column_view const& col)
-{
-  // Type EMPTY is not handled by `type_dispatcher`.
-  if (col.type().id() == type_id::EMPTY) { return false; }
-
-  return type_dispatcher(col.type(), may_contain_non_empty_nulls_dispatch{}, col);
-}
 
 /**
  * @brief Superimpose the given null mask into the input column without any sanitization for
@@ -426,7 +386,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
-  if (auto const input_view = input->view(); may_contain_non_empty_nulls(input_view)) {
+  if (auto const input_view = input->view(); has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
@@ -444,7 +404,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first; may_contain_non_empty_nulls(output_view)) {
+  if (auto const output_view = output.first; has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();

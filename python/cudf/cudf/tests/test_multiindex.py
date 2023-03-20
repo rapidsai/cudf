@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -782,13 +782,15 @@ def test_multiindex_copy_sem(data, levels, codes, names):
         ),
     ],
 )
+@pytest.mark.parametrize("copy_on_write", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-def test_multiindex_copy_deep(data, deep):
+def test_multiindex_copy_deep(data, copy_on_write, deep):
     """Test memory identity for deep copy
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
-    same_ref = not deep
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", copy_on_write)
 
     if isinstance(data, dict):
         import operator
@@ -805,32 +807,52 @@ def test_multiindex_copy_deep(data, deep):
         lchildren = reduce(operator.add, lchildren)
         rchildren = reduce(operator.add, rchildren)
 
-        lptrs = [child.base_data.ptr for child in lchildren]
-        rptrs = [child.base_data.ptr for child in rchildren]
+        lptrs = [child.base_data.get_ptr(mode="read") for child in lchildren]
+        rptrs = [child.base_data.get_ptr(mode="read") for child in rchildren]
 
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+        assert all((x == y) for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
+        same_ref = (not deep) or (
+            cudf.get_option("copy_on_write") and not deep
+        )
         mi1 = data
         mi2 = mi1.copy(deep=deep)
 
         # Assert ._levels identity
-        lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
-        rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
+        lptrs = [
+            lv._data._data[None].base_data.get_ptr(mode="read")
+            for lv in mi1._levels
+        ]
+        rptrs = [
+            lv._data._data[None].base_data.get_ptr(mode="read")
+            for lv in mi2._levels
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
-        lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
-        rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
+        lptrs = [
+            c.base_data.get_ptr(mode="read")
+            for _, c in mi1._codes._data.items()
+        ]
+        rptrs = [
+            c.base_data.get_ptr(mode="read")
+            for _, c in mi2._codes._data.items()
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
-        lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
-        rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
+        lptrs = [
+            d.base_data.get_ptr(mode="read") for _, d in mi1._data.items()
+        ]
+        rptrs = [
+            d.base_data.get_ptr(mode="read") for _, d in mi2._data.items()
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize(
@@ -1081,7 +1103,6 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):
@@ -1798,8 +1819,14 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if func == "is_object":
         assert_eq(False, actual)

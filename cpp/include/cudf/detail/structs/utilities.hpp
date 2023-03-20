@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,16 +162,20 @@ class flattened_table {
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
- * @param nullability force output to have nullability columns even if input columns
- * are all valid
- * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
- * alongside the supporting columns and device_buffers for the flattened table.
+ * @param nullability force output to have nullability columns even if input columns are all valid
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A pointer of type `flattened_table` containing flattened columns, flattened column
+ *         orders, flattened null precedence, alongside the supporting columns and device_buffers
+ *         for the flattened table.
  */
-[[nodiscard]] flattened_table flatten_nested_columns(
+[[nodiscard]] std::unique_ptr<flattened_table> flatten_nested_columns(
   table_view const& input,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  column_nullability nullability = column_nullability::MATCH_INCOMING);
+  column_nullability nullability,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.

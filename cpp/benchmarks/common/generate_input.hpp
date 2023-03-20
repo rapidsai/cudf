@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -373,13 +373,13 @@ class data_profile {
 
   void set_bool_probability_true(double p)
   {
-    CUDF_EXPECTS(p >= 0. and p <= 1., "probablity must be in range [0...1]");
+    CUDF_EXPECTS(p >= 0. and p <= 1., "probability must be in range [0...1]");
     bool_probability_true = p;
   }
   void set_null_probability(std::optional<double> p)
   {
     CUDF_EXPECTS(p.value_or(0.) >= 0. and p.value_or(0.) <= 1.,
-                 "probablity must be in range [0...1]");
+                 "probability must be in range [0...1]");
     null_probability = p;
   }
   void set_cardinality(cudf::size_type c) { cardinality = c; }

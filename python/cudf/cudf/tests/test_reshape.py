@@ -1,6 +1,7 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import re
+from itertools import chain
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,6 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -86,16 +86,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
-    "dtype",
-    list(NUMERIC_TYPES + DATETIME_TYPES)
-    + [
-        pytest.param(
-            "str",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        )
-    ],
+    "dtype", list(chain(NUMERIC_TYPES, DATETIME_TYPES, ["str"]))
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):

@@ -1127,8 +1127,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length,
-    jint header_row, jbyte delim, jbyte quote, jbyte comment, jobjectArray null_values,
-    jobjectArray true_values, jobjectArray false_values) {
+    jint header_row, jbyte delim, jint j_quote_style, jbyte quote, jbyte comment,
+    jobjectArray null_values, jobjectArray true_values, jobjectArray false_values) {
   JNI_NULL_CHECK(env, null_values, "null_values must be supplied, even if it is empty", NULL);
 
   bool read_buffer = true;
@@ -1179,6 +1179,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char *>(buffer),
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
 
     cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(source)
                                             .delimiter(delim)
@@ -1191,6 +1192,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                             .na_values(n_null_values.as_cpp_vector())
                                             .keep_default_na(false)
                                             .na_filter(n_null_values.size() > 0)
+                                            .quoting(quote_style)
                                             .quotechar(quote)
                                             .comment(comment)
                                             .build();
@@ -1203,7 +1205,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
-    jstring j_false_value, jstring j_output_path) {
+    jstring j_false_value, jint j_quote_style, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
@@ -1227,6 +1229,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
 
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
                        .names(column_names)
@@ -1235,7 +1238,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
                        .inter_column_delimiter(j_field_delimiter)
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
-                       .false_value(false_value.get());
+                       .false_value(false_value.get())
+                       .quoting(quote_style);
 
     cudf::io::write_csv(options.build());
   }
@@ -1245,7 +1249,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
-    jstring j_false_value, jobject j_buffer) {
+    jstring j_false_value, jint j_quote_style, jobject j_buffer) {
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
@@ -1264,6 +1268,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
 
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
                                                          cudf::table_view{})
@@ -1274,6 +1279,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
                        .false_value(false_value.get())
+                       .quoting(quote_style)
                        .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
@@ -2647,7 +2653,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
     JNIEnv *env, jclass, jlong input_table, jintArray columns_to_hash, jint hash_function,
-    jint number_of_partitions, jintArray output_offsets) {
+    jint number_of_partitions, jint seed, jintArray output_offsets) {
 
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, columns_to_hash, "columns_to_hash is null", NULL);
@@ -2657,6 +2663,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
   try {
     cudf::jni::auto_set_device(env);
     auto const hash_func = static_cast<cudf::hash_id>(hash_function);
+    auto const hash_seed = static_cast<uint32_t>(seed);
     auto const n_input_table = reinterpret_cast<cudf::table_view const *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
@@ -2664,8 +2671,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
     std::vector<cudf::size_type> columns_to_hash_vec(n_columns_to_hash.begin(),
                                                      n_columns_to_hash.end());
 
-    auto [partitioned_table, partition_offsets] =
-        cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions, hash_func);
+    auto [partitioned_table, partition_offsets] = cudf::hash_partition(
+        *n_input_table, columns_to_hash_vec, number_of_partitions, hash_func, hash_seed);
 
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
     std::copy(partition_offsets.begin(), partition_offsets.end(), n_output_offsets.begin());

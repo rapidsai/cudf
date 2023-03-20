@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -492,6 +492,8 @@ template std::unique_ptr<aggregation> make_sum_of_squares_aggregation<aggregatio
 template std::unique_ptr<groupby_aggregation>
 make_sum_of_squares_aggregation<groupby_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_sum_of_squares_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_sum_of_squares_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MEAN aggregation
 template <typename Base>
@@ -503,6 +505,8 @@ template std::unique_ptr<aggregation> make_mean_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_mean_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_mean_aggregation<groupby_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_mean_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_mean_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a M2 aggregation
 template <typename Base>
@@ -526,6 +530,8 @@ template std::unique_ptr<groupby_aggregation> make_variance_aggregation<groupby_
   size_type ddof);
 template std::unique_ptr<reduce_aggregation> make_variance_aggregation<reduce_aggregation>(
   size_type ddof);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_variance_aggregation<segmented_reduce_aggregation>(size_type ddof);
 
 /// Factory to create a STD aggregation
 template <typename Base>
@@ -540,6 +546,8 @@ template std::unique_ptr<groupby_aggregation> make_std_aggregation<groupby_aggre
   size_type ddof);
 template std::unique_ptr<reduce_aggregation> make_std_aggregation<reduce_aggregation>(
   size_type ddof);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_std_aggregation<segmented_reduce_aggregation>(size_type ddof);
 
 /// Factory to create a MEDIAN aggregation
 template <typename Base>

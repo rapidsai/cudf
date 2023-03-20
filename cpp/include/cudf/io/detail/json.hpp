@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
+namespace cudf::io::json::detail {
 
 /**
  * @brief Reads and returns the entire data set.
@@ -42,7 +39,18 @@ table_with_metadata read_json(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+/**
+ * @brief Write an entire dataset to JSON format.
+ *
+ * @param sink Output sink
+ * @param table The set of columns
+ * @param options Settings for controlling behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_json(data_sink* sink,
+                table_view const& table,
+                json_writer_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+}  // namespace cudf::io::json::detail

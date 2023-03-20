@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,10 @@
 
 #define NVCOMP_HAS_DEFLATE(MAJOR, MINOR, PATCH) (MAJOR > 2 or (MAJOR == 2 and MINOR >= 5))
 
-#define NVCOMP_HAS_TEMPSIZE_EX(MAJOR, MINOR, PATCH) \
+#define NVCOMP_HAS_DECOMP_TEMPSIZE_EX(MAJOR, MINOR, PATCH) \
   (MAJOR > 2 or (MAJOR == 2 and MINOR > 3) or (MAJOR == 2 and MINOR == 3 and PATCH >= 1))
+
+#define NVCOMP_HAS_COMP_TEMPSIZE_EX(MAJOR, MINOR, PATCH) (MAJOR > 2 or (MAJOR == 2 and MINOR >= 6))
 
 // ZSTD is stable for nvcomp 2.3.2 or newer
 #define NVCOMP_ZSTD_DECOMP_IS_STABLE(MAJOR, MINOR, PATCH) \
@@ -56,7 +58,7 @@ template <typename... Args>
 std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_type compression,
                                                                   Args&&... args)
 {
-#if NVCOMP_HAS_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
+#if NVCOMP_HAS_DECOMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
   switch (compression) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSizeEx(std::forward<Args>(args)...);
@@ -178,10 +180,10 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
-// Dispatcher for nvcompBatched<format>CompressGetTempSize
-auto batched_compress_temp_size(compression_type compression,
-                                size_t batch_size,
-                                size_t max_uncompressed_chunk_bytes)
+// Wrapper for nvcompBatched<format>CompressGetTempSize
+auto batched_compress_get_temp_size(compression_type compression,
+                                    size_t batch_size,
+                                    size_t max_uncompressed_chunk_bytes)
 {
   size_t temp_size             = 0;
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
@@ -214,6 +216,63 @@ auto batched_compress_temp_size(compression_type compression,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for compression");
   return temp_size;
+}
+
+#if NVCOMP_HAS_COMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
+// Wrapper for nvcompBatched<format>CompressGetTempSizeEx
+auto batched_compress_get_temp_size_ex(compression_type compression,
+                                       size_t batch_size,
+                                       size_t max_uncompressed_chunk_bytes,
+                                       size_t max_total_uncompressed_bytes)
+{
+  size_t temp_size             = 0;
+  nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
+  switch (compression) {
+    case compression_type::SNAPPY:
+      nvcomp_status = nvcompBatchedSnappyCompressGetTempSizeEx(batch_size,
+                                                               max_uncompressed_chunk_bytes,
+                                                               nvcompBatchedSnappyDefaultOpts,
+                                                               &temp_size,
+                                                               max_total_uncompressed_bytes);
+      break;
+    case compression_type::DEFLATE:
+      nvcomp_status = nvcompBatchedDeflateCompressGetTempSizeEx(batch_size,
+                                                                max_uncompressed_chunk_bytes,
+                                                                nvcompBatchedDeflateDefaultOpts,
+                                                                &temp_size,
+                                                                max_total_uncompressed_bytes);
+      break;
+    case compression_type::ZSTD:
+      nvcomp_status = nvcompBatchedZstdCompressGetTempSizeEx(batch_size,
+                                                             max_uncompressed_chunk_bytes,
+                                                             nvcompBatchedZstdDefaultOpts,
+                                                             &temp_size,
+                                                             max_total_uncompressed_bytes);
+      break;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+               "Unable to get scratch size for compression");
+  return temp_size;
+}
+#endif
+
+size_t batched_compress_temp_size(compression_type compression,
+                                  size_t num_chunks,
+                                  size_t max_uncomp_chunk_size,
+                                  size_t max_total_uncomp_size)
+{
+#if NVCOMP_HAS_COMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
+  try {
+    return batched_compress_get_temp_size_ex(
+      compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
+  } catch (...) {
+    // Ignore errors in the expanded version; fall back to the old API in case of failure
+  }
+#endif
+
+  return batched_compress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size);
 }
 
 size_t compress_max_output_chunk_size(compression_type compression,
@@ -336,10 +395,15 @@ void batched_compress(compression_type compression,
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
-  auto const max_uncomp_chunk_size = skip_unsupported_inputs(
+  skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
-  auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
+  auto const [max_uncomp_chunk_size, total_uncomp_size] =
+    max_chunk_and_total_input_size(nvcomp_args.input_data_sizes, stream);
+
+  auto const temp_size =
+    batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size, total_uncomp_size);
+
   rmm::device_buffer scratch(temp_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
 

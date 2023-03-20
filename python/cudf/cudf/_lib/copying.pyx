@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import pickle
 
@@ -765,7 +765,7 @@ cdef class _CPackedColumns:
         gpu_data = Buffer.deserialize(header["data"], frames)
 
         dbuf = DeviceBuffer(
-            ptr=gpu_data.ptr,
+            ptr=gpu_data.get_ptr(mode="write"),
             size=gpu_data.nbytes
         )
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from pandas.core.groupby.groupby import DataError
 
@@ -41,15 +41,33 @@ from cudf._lib.cpp.types cimport size_type
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
-_CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
-_STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
-                "UNIQUE"}
+# The libcudf infrastructure exists for "COLLECT" support on
+# categoricals, but the dtype support in python does not.
+_CATEGORICAL_AGGS = {"COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
+_STRING_AGGS = {
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SIZE",
+    "UNIQUE",
+}
 _LIST_AGGS = {"COLLECT"}
-_STRUCT_AGGS = {"CORRELATION", "COVARIANCE"}
-_INTERVAL_AGGS = set()
-_DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
-                 "NTH", "COLLECT"}
-
+_STRUCT_AGGS = {"COLLECT", "CORRELATION", "COVARIANCE"}
+_INTERVAL_AGGS = {"COLLECT"}
+_DECIMAL_AGGS = {
+    "ARGMIN",
+    "ARGMAX",
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SUM",
+}
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
 

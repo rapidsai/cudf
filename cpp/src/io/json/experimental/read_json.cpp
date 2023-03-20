@@ -180,14 +180,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
 
-  try {
-    return cudf::io::json::detail::device_parse_nested_json(buffer, reader_opts, stream, mr);
-  } catch (cudf::logic_error const& err) {
-#ifdef NJP_DEBUG_PRINT
-    std::cout << "Fall back to host nested json parser" << std::endl;
-#endif
-    return cudf::io::json::detail::host_parse_nested_json(buffer, reader_opts, stream, mr);
-  }
+  return cudf::io::json::detail::device_parse_nested_json(buffer, reader_opts, stream, mr);
+  // For debug purposes, use host_parse_nested_json()
 }
 
 }  // namespace cudf::io::detail::json::experimental

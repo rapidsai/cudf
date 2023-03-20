@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 import warnings
 from contextlib import ExitStack
 from functools import partial
@@ -71,6 +71,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitioning=None,
         partition_keys=None,
         open_file_options=None,
+        dataset_kwargs=None,
         **kwargs,
     ):
 
@@ -78,6 +79,8 @@ class CudfEngine(ArrowDatasetEngine):
         if row_groups == [None for path in paths]:
             row_groups = None
 
+        dataset_kwargs = dataset_kwargs or {}
+        dataset_kwargs["partitioning"] = partitioning or "hive"
         with ExitStack() as stack:
 
             # Non-local filesystem handling
@@ -93,27 +96,46 @@ class CudfEngine(ArrowDatasetEngine):
                 )
 
             # Use cudf to read in data
-            df = cudf.read_parquet(
-                paths_or_fobs,
-                engine="cudf",
-                columns=columns,
-                row_groups=row_groups if row_groups else None,
-                strings_to_categorical=strings_to_categorical,
-                **kwargs,
-            )
+            try:
+                df = cudf.read_parquet(
+                    paths_or_fobs,
+                    engine="cudf",
+                    columns=columns,
+                    row_groups=row_groups if row_groups else None,
+                    strings_to_categorical=strings_to_categorical,
+                    dataset_kwargs=dataset_kwargs,
+                    categorical_partitions=False,
+                    **kwargs,
+                )
+            except RuntimeError as err:
+                # TODO: Remove try/except after null-schema issue is resolved
+                # (See: https://github.com/rapidsai/cudf/issues/12702)
+                if len(paths_or_fobs) > 1:
+                    df = cudf.concat(
+                        [
+                            cudf.read_parquet(
+                                pof,
+                                engine="cudf",
+                                columns=columns,
+                                row_groups=row_groups[i]
+                                if row_groups
+                                else None,
+                                strings_to_categorical=strings_to_categorical,
+                                **kwargs,
+                            )
+                            for i, pof in enumerate(paths_or_fobs)
+                        ]
+                    )
+                else:
+                    raise err
 
         if partitions and partition_keys is None:
 
             # Use `HivePartitioning` by default
-            partitioning = partitioning or {"obj": pa_ds.HivePartitioning}
             ds = pa_ds.dataset(
                 paths,
                 filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
+                **dataset_kwargs,
             )
             frag = next(ds.get_fragments())
             if frag:
@@ -166,6 +188,9 @@ class CudfEngine(ArrowDatasetEngine):
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        dataset_kwargs = kwargs.get("dataset", {})
+        partitioning = partitioning or dataset_kwargs.get("partitioning", None)
 
         # Check if we are actually selecting any columns
         read_columns = columns
@@ -227,10 +252,12 @@ class CudfEngine(ArrowDatasetEngine):
                             partitions=partitions,
                             partitioning=partitioning,
                             partition_keys=last_partition_keys,
+                            dataset_kwargs=dataset_kwargs,
                             **read_kwargs,
                         )
                     )
-                    paths = rgs = []
+                    paths = []
+                    rgs = []
                     last_partition_keys = None
                 paths.append(path)
                 rgs.append(
@@ -251,6 +278,7 @@ class CudfEngine(ArrowDatasetEngine):
                     partitions=partitions,
                     partitioning=partitioning,
                     partition_keys=last_partition_keys,
+                    dataset_kwargs=dataset_kwargs,
                     **read_kwargs,
                 )
             )

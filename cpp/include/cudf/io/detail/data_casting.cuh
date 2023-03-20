@@ -94,6 +94,27 @@ __device__ __forceinline__ char get_escape_char(char escaped_char)
 }
 
 /**
+ * @brief Returns the escaped characters for a given character.
+ *
+ * @param escaped_char The character to escape.
+ * @return The escaped characters for a given character.
+ */
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
+/**
  * @brief Parses the hex value from the four hex digits of a unicode code point escape sequence
  * \uXXXX.
  *
@@ -162,8 +183,10 @@ process_string(in_iterator_t in_begin,
   int32_t bytes           = 0;
   const auto num_in_chars = thrust::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
-  bool const is_string_value = num_in_chars >= 2LL && (*in_begin == options.quotechar) &&
-                               (*thrust::prev(in_end) == options.quotechar);
+  bool const is_string_value =
+    num_in_chars >= 2LL &&
+    (options.quotechar == '\0' ||
+     (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
 
   // Copy literal/numeric value
   if (not is_string_value) {
@@ -282,7 +305,7 @@ struct string_parse {
 
   __device__ void operator()(size_type idx)
   {
-    if (not bit_is_set(null_mask, idx)) {
+    if (null_mask != nullptr && not bit_is_set(null_mask, idx)) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
@@ -294,7 +317,7 @@ struct string_parse {
     auto const is_null_literal =
       (!d_chars) &&
       serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-    if (is_null_literal) {
+    if (is_null_literal && null_mask != nullptr) {
       clear_bit(null_mask, idx);
       if (!d_chars) d_offsets[idx] = 0;
       return;
@@ -303,7 +326,7 @@ struct string_parse {
     char* d_buffer        = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto str_process_info = process_string(in_begin, in_end, d_buffer, options);
     if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
-      clear_bit(null_mask, idx);
+      if (null_mask != nullptr) clear_bit(null_mask, idx);
       if (!d_chars) d_offsets[idx] = 0;
     } else {
       if (!d_chars) d_offsets[idx] = str_process_info.bytes;
