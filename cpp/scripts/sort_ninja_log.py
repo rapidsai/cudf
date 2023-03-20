@@ -286,7 +286,7 @@ def output_html(entries, sorted_list, cmp_entries, args):
         "<tr><th>File</th>", "<th>Compile time</th>", "<th>Size</th>", sep=""
     )
     if cmp_entries:
-        print("<th>Base-t</th>", sep="")
+        print("<th>t-cmp</th>", sep="")
     print("</tr>")
 
     for name in sorted_list:
