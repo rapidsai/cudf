@@ -403,6 +403,7 @@ class corresponding_rows_not_equivalent {
   column_device_view lhs_row_indices;
   column_device_view rhs_row_indices;
   size_type const fp_ulps;
+  DeviceComparator comp;
   column_device_view lhs;
   column_device_view rhs;
 
@@ -410,12 +411,13 @@ class corresponding_rows_not_equivalent {
   corresponding_rows_not_equivalent(column_device_view lhs_row_indices_,
                                     column_device_view rhs_row_indices_,
                                     size_type fp_ulps_,
-                                    DeviceComparator /*comp*/,
+                                    DeviceComparator comp_,
                                     column_device_view lhs_,
                                     column_device_view rhs_)
     : lhs_row_indices(lhs_row_indices_),
       rhs_row_indices(rhs_row_indices_),
       fp_ulps(fp_ulps_),
+      comp(comp_),
       lhs(lhs_),
       rhs(rhs_)
   {
@@ -460,11 +462,13 @@ class corresponding_rows_not_equivalent {
 
   __device__ bool operator()(size_type index)
   {
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
     auto const lhs_index = lhs_row_indices.element<size_type>(index);
     auto const rhs_index = rhs_row_indices.element<size_type>(index);
 
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator comp;
-    if (not comp(lhs_index, rhs_index)) {
+    if (not comp(lhs_index_type{lhs_index}, rhs_index_type{rhs_index})) {
       return type_dispatcher(
         lhs.type(), typed_element_not_equivalent{}, lhs, rhs, lhs_index, rhs_index, fp_ulps);
     }
@@ -555,21 +559,15 @@ struct column_comparator_impl {
                          cudf::get_default_stream());  // shrink back down
     };
 
-    if constexpr (check_exact_equality) {
-      auto lhs_tview = table_view{{lhs}};
-      auto rhs_tview = table_view{{rhs}};
+    auto lhs_tview = table_view{{lhs}};
+    auto rhs_tview = table_view{{rhs}};
 
-      auto const comparator = cudf::experimental::row::equality::two_table_comparator{
-        lhs_tview, rhs_tview, cudf::get_default_stream()};
-      auto const has_nulls = cudf::has_nested_nulls(lhs_tview) or cudf::has_nested_nulls(rhs_tview);
+    auto const comparator = cudf::experimental::row::equality::two_table_comparator{
+      lhs_tview, rhs_tview, cudf::get_default_stream()};
+    auto const has_nulls = cudf::has_nested_nulls(lhs_tview) or cudf::has_nested_nulls(rhs_tview);
 
-      auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
-      comparator_helper(device_comparator);
-    } else {
-      // equivalence can be checked between column of different types,
-      // but the new comparator does not support that
-      comparator_helper(int{0});
-    }
+    auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
+    comparator_helper(device_comparator);
 
     if (not differences.is_empty()) {
       if (verbosity != debug_output_level::QUIET) {
