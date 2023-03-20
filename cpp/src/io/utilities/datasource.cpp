@@ -56,8 +56,8 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    return !_kvikio_file.closed() ||
-           (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
+    if (size < _gds_read_preferred_threshold) { return false; }
+    return supports_device_read();
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -98,6 +98,8 @@ class file_source : public datasource {
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
+  // The read size above which GDS is faster then posix-read + h2d-copy
+  static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**
@@ -330,9 +332,15 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 {
+  return create(
+    cudf::host_span<std::byte const>{reinterpret_cast<std::byte const*>(buffer.data), buffer.size});
+}
+
+std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
+{
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
+    reinterpret_cast<const uint8_t*>(buffer.data()), buffer.size()));
 }
 
 std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)

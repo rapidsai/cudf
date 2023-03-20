@@ -112,10 +112,20 @@ class datasource {
   /**
    * @brief Creates a source from a host memory buffer.
    *
+   # @deprecated Since 23.04
+   *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
+
+  /**
+   * @brief Creates a source from a host memory buffer.
+   *
+   * @param[in] buffer Host buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(cudf::host_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a device memory buffer.
@@ -286,14 +296,14 @@ class datasource {
   /**
    * @brief Returns the size of the data in the source.
    *
-   * @return size_t The size of the source data in bytes
+   * @return The size of the source data in bytes
    */
   [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
-   * @return bool True if there is data, False otherwise
+   * @return True if there is data, False otherwise
    */
   [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ namespace cudf::lists {
  * @throws cudf::logic_error if @p sizes column is not of integer types.
  * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p sizes columns do not have the same size.
+ * @throws std::overflow_error if the output column would exceed the column size limit.
  *
  * @param starts First values in the result sequences.
  * @param sizes Numbers of values in the result sequences.
@@ -90,6 +91,7 @@ std::unique_ptr<column> sequences(
  * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p steps columns have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
+ * @throws std::overflow_error if the output column would exceed the column size limit.
  *
  * @param starts First values in the result sequences.
  * @param steps Increment values for the result sequences.

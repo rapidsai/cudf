@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
+from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -392,6 +392,7 @@ def test_index_copy_category(name, dtype, deep=True):
     with pytest.warns(FutureWarning):
         cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
+    assert_column_memory_ne(cidx._values, cidx_copy._values)
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -407,13 +408,27 @@ def test_index_copy_category(name, dtype, deep=True):
         cudf.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-def test_index_copy_deep(idx, deep):
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_index_copy_deep(idx, deep, copy_on_write):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    if not deep:
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", copy_on_write)
+    if (
+        isinstance(idx, cudf.StringIndex)
+        or not deep
+        or (cudf.get_option("copy_on_write") and not deep)
+    ):
+        # StringColumn is immutable hence, deep copies of a
+        # StringIndex will share the same StringColumn.
+
+        # When `copy_on_write` is turned on, Index objects will
+        # have unique column object but they all point to same
+        # data pointers.
         assert_column_memory_eq(idx._values, idx_copy._values)
     else:
         assert_column_memory_ne(idx._values, idx_copy._values)
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
@@ -796,17 +811,6 @@ def test_index_difference(data, other, sort):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if (
-        gd_data.dtype.kind == "f"
-        and gd_other.dtype.kind != "f"
-        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
-    ):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
-
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
@@ -865,15 +869,6 @@ def test_index_equals(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if (
-        gd_data.dtype.kind == "f" or gd_other.dtype.kind == "f"
-    ) and cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
-
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
     assert_eq(expected, actual)
@@ -919,17 +914,6 @@ def test_index_categories_equal(data, other):
 
     gd_data = cudf.core.index.as_index(data).astype("category")
     gd_other = cudf.core.index.as_index(other)
-
-    if (
-        gd_data.dtype.kind == "f"
-        and gd_other.dtype.kind != "f"
-        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
-    ):
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_110,
-            reason="Bug in Pandas: "
-            "https://github.com/pandas-dev/pandas/issues/35217",
-        )
 
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
@@ -2389,8 +2373,13 @@ def test_index_type_methods(data, func):
     pidx = pd.Index(data)
     gidx = cudf.from_pandas(pidx)
 
-    expected = getattr(pidx, func)()
-    actual = getattr(gidx, func)()
+    if PANDAS_GE_200:
+        with pytest.warns(FutureWarning):
+            expected = getattr(pidx, func)()
+    else:
+        expected = getattr(pidx, func)()
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
 
     if gidx.dtype == np.dtype("bool") and func == "is_object":
         assert_eq(False, actual)

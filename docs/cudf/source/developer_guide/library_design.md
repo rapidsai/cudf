@@ -229,6 +229,7 @@ Additionally, parameters are:
     of `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
     *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
 
+(Buffer-design)=
 #### Design
 
 Spilling consists of two components:
@@ -314,3 +315,188 @@ The pandas API also includes a number of helper objects, such as `GroupBy`, `Rol
 cuDF implements corresponding objects with the same APIs.
 Internally, these objects typically interact with cuDF objects at the Frame layer via composition.
 However, for performance reasons they frequently access internal attributes and methods of `Frame` and its subclasses.
+
+
+(copy-on-write-dev-doc)=
+
+## Copy-on-write
+
+This section describes the internal implementation details of the copy-on-write feature.
+It is recommended that developers familiarize themselves with [the user-facing documentation](copy-on-write-user-doc) of this functionality before reading through the internals
+below.
+
+The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class.
+When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`.
+This subclass of `cudf.Buffer` contains all the mechanisms to enable copy-on-write behavior.
+The class stores [weak references](https://docs.python.org/3/library/weakref.html) to every existing `CopyOnWriteBuffer` in `CopyOnWriteBuffer._instances`, a mapping from `ptr` keys to `WeakSet`s containing references to `CopyOnWriteBuffer` objects.
+This means that all `CopyOnWriteBuffer`s that point to the same device memory are contained in the same `WeakSet` (corresponding to the same `ptr` key) in `CopyOnWriteBuffer._instances`.
+This data structure is then used to determine whether or not to make a copy when a write operation is performed on a `Column` (see below).
+If multiple buffers point to the same underlying memory, then a copy must be made whenever a modification is attempted.
+
+
+### Eager copies when exposing to third-party libraries
+
+If a `Column`/`CopyOnWriteBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred. Hence whenever
+someone accesses data through the `__cuda_array_interface__`, we eagerly trigger the copy by calling
+`_unlink_shared_buffers` which ensures a true copy of underlying device data is made and
+unlinks the buffer from any shared "weak" references. Any future copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object). To handle this we also mark the `Column`/`CopyOnWriteBuffer` as
+`obj._zero_copied=True` thus indicating that any future shallow-copy requests will trigger a true physical copy
+rather than a copy-on-write shallow copy with weak references.
+
+### Obtaining a read-only object
+
+A read-only object can be quite useful for operations that will not
+mutate the data. This can be achieved by calling `._get_cuda_array_interface(readonly=True)`, and creating a `SimpleNameSpace` object around it.
+This will not trigger a deep copy even if the `CopyOnWriteBuffer`
+has weak references. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
+copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
+
+
+### Internal access to raw data pointers
+
+Since it is unsafe to access the raw pointer associated with a buffer when
+copy-on-write is enabled, in addition to the readonly proxy object described above,
+access to the pointer is gated through `Buffer.get_ptr`. This method accepts a mode
+argument through which the caller indicates how they will access the data associated
+with the buffer. If only read-only access is required (`mode="read"`), this indicates
+that the caller has no intention of modifying the buffer through this pointer.
+In this case, any shallow copies are not unlinked. In contrast, if modification is
+required one may pass `mode="write"`, provoking unlinking of any shallow copies.
+
+
+### Variable width data types
+Weak references are implemented only for fixed-width data types as these are only column
+types that can be mutated in place.
+Requests for deep copies of variable width data types always return shallow copies of the Columns, because these
+types don't support real in-place mutation of the data.
+Internally, we mimic in-place mutations using `_mimic_inplace`, but the resulting data is always a deep copy of the underlying data.
+
+
+### Examples
+
+When copy-on-write is enabled, taking a shallow copy of a `Series` or a `DataFrame` does not
+eagerly create a copy of the data. Instead, it produces a view that will be lazily
+copied when a write operation is performed on any of its copies.
+
+Let's create a series:
+
+```python
+>>> import cudf
+>>> cudf.set_option("copy_on_write", True)
+>>> s1 = cudf.Series([1, 2, 3, 4])
+```
+
+Make a copy of `s1`:
+```python
+>>> s2 = s1.copy(deep=False)
+```
+
+Make another copy, but of `s2`:
+```python
+>>> s3 = s2.copy(deep=False)
+```
+
+Viewing the data and memory addresses show that they all point to the same device memory:
+```python
+>>> s1
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s2
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+
+>>> s1.data._ptr
+139796315897856
+>>> s2.data._ptr
+139796315897856
+>>> s3.data._ptr
+139796315897856
+```
+
+Now, when we perform a write operation on one of them, say on `s2`, a new copy is created
+for `s2` on device and then modified:
+
+```python
+>>> s2[0:2] = 10
+>>> s2
+0    10
+1    10
+2     3
+3     4
+dtype: int64
+>>> s1
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+```
+
+If we inspect the memory address of the data, `s1` and `s3` still share the same address but `s2` has a new one:
+
+```python
+>>> s1.data._ptr
+139796315897856
+>>> s3.data._ptr
+139796315897856
+>>> s2.data._ptr
+139796315899392
+```
+
+Now, performing write operation on `s1` will trigger a new copy on device memory as there
+is a weak reference being shared in `s3`:
+
+```python
+>>> s1[0:2] = 11
+>>> s1
+0    11
+1    11
+2     3
+3     4
+dtype: int64
+>>> s2
+0    10
+1    10
+2     3
+3     4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+```
+
+If we inspect the memory address of the data, the addresses of `s2` and `s3` remain unchanged, but `s1`'s memory address has changed because of a copy operation performed during the writing:
+
+```python
+>>> s2.data._ptr
+139796315899392
+>>> s3.data._ptr
+139796315897856
+>>> s1.data._ptr
+139796315879723
+```
+
+cuDF's copy-on-write implementation is motivated by the pandas proposals documented here:
+1. [Google doc](https://docs.google.com/document/d/1ZCQ9mx3LBMy-nhwRl33_jgcvWo9IWdEfxDNQ2thyTb0/edit#heading=h.iexejdstiz8u)
+2. [Github issue](https://github.com/pandas-dev/pandas/issues/36195)

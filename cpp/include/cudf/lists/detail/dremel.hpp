@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,16 +183,34 @@ struct dremel_data {
  *              - | - | -- | ---
  * ```
  *
- * @param col Column of LIST type
- * @param level_nullability Pre-determined nullability at each list level. Empty means infer from
- * `col`
+ * @param input Column of LIST type
+ * @param nullability Pre-determined nullability at each list level. Empty means infer from
+ * `input`
+ * @param output_as_byte_array if `true`, then any nested list level that has a child of type
+ * `uint8_t` will be considered as the last level
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
  * @return A struct containing dremel data
  */
-dremel_data get_dremel_data(column_view h_col,
+dremel_data get_dremel_data(column_view input,
                             std::vector<uint8_t> nullability,
                             bool output_as_byte_array,
                             rmm::cuda_stream_view stream);
 
+/**
+ * @brief Get Dremel offsets, repetition levels, and modified definition levels to be used for
+ *        lexicographical comparators. The modified definition levels are produced by treating
+ *        each nested column in the input as nullable
+ *
+ * @param input Column of LIST type
+ * @param nullability Pre-determined nullability at each list level. Empty means infer from
+ * `input`
+ * @param output_as_byte_array if `true`, then any nested list level that has a child of type
+ * `uint8_t` will be considered as the last level
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return A struct containing dremel data
+ */
+dremel_data get_comparator_data(column_view input,
+                                std::vector<uint8_t> nullability,
+                                bool output_as_byte_array,
+                                rmm::cuda_stream_view stream);
 }  // namespace cudf::detail

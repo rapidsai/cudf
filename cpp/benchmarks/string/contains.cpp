@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/filling.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/findall.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -83,18 +84,19 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   auto input = cudf::strings_column_view(col->view());
 
   auto pattern = patterns[pattern_index];
+  auto program = cudf::strings::regex_program::create(pattern);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (ct) {
       case contains_type::contains:  // contains_re and matches_re use the same main logic
-        cudf::strings::contains_re(input, pattern);
+        cudf::strings::contains_re(input, *program);
         break;
       case contains_type::count:  // counts occurrences of matches
-        cudf::strings::count_re(input, pattern);
+        cudf::strings::count_re(input, *program);
         break;
       case contains_type::findall:  // returns occurrences of all matches
-        cudf::strings::findall(input, pattern);
+        cudf::strings::findall(input, *program);
         break;
     }
   }

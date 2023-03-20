@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cpython cimport pycapsule
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -70,7 +70,7 @@ def to_dlpack(list source_columns):
     )
 
 
-cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
+cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
