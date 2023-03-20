@@ -269,6 +269,8 @@ ConfigureBench(
   text/subword.cpp text/tokenize.cpp
 )
 
+ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
+
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
@@ -285,7 +287,6 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
-  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
