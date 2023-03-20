@@ -269,9 +269,7 @@ ConfigureBench(
   text/subword.cpp text/tokenize.cpp
 )
 
-ConfigureNVBench(
-  TEXT_NVBENCH text/minhash.cpp
-)
+ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
