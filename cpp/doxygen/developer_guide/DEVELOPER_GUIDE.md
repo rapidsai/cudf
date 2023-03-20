@@ -475,14 +475,6 @@ asynchrony if and when we add an asynchronous API to libcudf.
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
- ### NVTX Ranges
-
-In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()`
-that will automatically annotate the lifetime of the enclosing function and use the function's name
-as the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
-
  ### Stream Creation
 
 There may be times in implementing libcudf features where it would be advantageous to use streams
@@ -616,6 +608,14 @@ rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
 // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
+
+## NVTX Ranges
+
+In order to aid in performance optimization and debugging, all compute intensive libcudf functions
+should have a corresponding NVTX range. In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()`
+that will automatically annotate the lifetime of the enclosing function and use the function's name
+as the name of the NVTX range. For more information about NVTX, see
+[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 
