@@ -473,25 +473,22 @@ transform_lists_of_structs(table_view const& lhs,
 {
   std::vector<column_view> transformed_lhs_cols;
   std::vector<column_view> transformed_rhs_cols;
-  std::vector<std::unique_ptr<column>> lhs_aux_cols;
-  std::vector<std::unique_ptr<column>> rhs_aux_cols;
+  std::vector<std::unique_ptr<column>> ranks_cols_lhs;
+  std::vector<std::unique_ptr<column>> ranks_cols_rhs;
   for (size_type child_idx = 0; child_idx < lhs.num_columns(); ++child_idx) {
-    auto const& col = lhs.column(child_idx);
-    auto [transformed_lhs, transformed_rhs_opt, lhs_aux_data, rhs_aux_data] =
-      transform_lists_of_structs(
-        col,
-        rhs ? std::optional<column_view>{rhs.value().column(child_idx)} : std::nullopt,
-        stream);
+    auto const& col                                                   = lhs.column(child_idx);
+    auto [transformed_lhs, transformed_rhs_opt, ranks_lhs, ranks_rhs] = transform_lists_of_structs(
+      col, rhs ? std::optional<column_view>{rhs.value().column(child_idx)} : std::nullopt, stream);
     transformed_lhs_cols.push_back(transformed_lhs);
     if (rhs) { transformed_rhs_cols.push_back(transformed_rhs_opt.value()); }
-    if (lhs_aux_data) { lhs_aux_cols.emplace_back(std::move(lhs_aux_data)); }
-    if (rhs_aux_data) { rhs_aux_cols.emplace_back(std::move(rhs_aux_data)); }
+    if (ranks_lhs) { ranks_cols_lhs.emplace_back(std::move(ranks_lhs)); }
+    if (ranks_rhs) { ranks_cols_rhs.emplace_back(std::move(ranks_rhs)); }
   }
 
   return {table_view{transformed_lhs_cols},
           rhs ? std::optional<table_view>{table_view{transformed_rhs_cols}} : std::nullopt,
-          std::move(lhs_aux_cols),
-          std::move(rhs_aux_cols)};
+          std::move(ranks_cols_lhs),
+          std::move(ranks_cols_rhs)};
 }
 
 /**
