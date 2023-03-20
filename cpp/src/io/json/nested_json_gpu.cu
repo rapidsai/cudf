@@ -1169,7 +1169,7 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                      rmm::mr::device_memory_resource* mr)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
