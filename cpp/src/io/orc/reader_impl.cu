@@ -576,8 +576,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
       prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
     }
   }
-  auto const d_prefix_sums_to_update =
-    cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
+  auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
+    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
 
   thrust::for_each(rmm::exec_policy(stream),
                    d_prefix_sums_to_update.begin(),
@@ -1038,7 +1038,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                       selected_columns.levels[level].size(),
                       [&]() {
                         return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-                          total_num_stripes, stream);
+                          total_num_stripes, stream, rmm::mr::get_current_device_resource());
                       });
 
       // Tracker for eventually deallocating compressed and uncompressed data
@@ -1270,7 +1270,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             });
 
           if (buff_data.size()) {
-            auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
+            auto const dev_buff_data = cudf::detail::make_device_uvector_async(
+              buff_data, stream, rmm::mr::get_current_device_resource());
             generate_offsets_for_list(dev_buff_data, stream);
           }
         }

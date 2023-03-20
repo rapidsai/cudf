@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ struct scan_result_functor final : store_result_functor {
     if (grouped_values)
       return grouped_values->view();
     else
-      return (grouped_values = helper.grouped_values(values, stream))->view();
+      return (grouped_values = helper.grouped_values(values, stream, mr))->view();
   };
 };
 
