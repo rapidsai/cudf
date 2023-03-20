@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #include "timezone.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -461,9 +463,11 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
                         .count();
   }
 
-  rmm::device_uvector<int64_t> d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
-  rmm::device_uvector<int32_t> d_offsets = cudf::detail::make_device_uvector_async(offsets, stream);
-  auto const gmt_offset                  = get_gmt_offset(ttimes, offsets, orc_utc_offset);
+  rmm::device_uvector<int64_t> d_ttimes =
+    cudf::detail::make_device_uvector_async(ttimes, stream, rmm::mr::get_current_device_resource());
+  rmm::device_uvector<int32_t> d_offsets = cudf::detail::make_device_uvector_async(
+    offsets, stream, rmm::mr::get_current_device_resource());
+  auto const gmt_offset = get_gmt_offset(ttimes, offsets, orc_utc_offset);
   stream.synchronize();
 
   return {gmt_offset, std::move(d_ttimes), std::move(d_offsets)};
