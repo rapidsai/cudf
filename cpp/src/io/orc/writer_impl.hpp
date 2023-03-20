@@ -304,7 +304,7 @@ class writer::impl {
 
  private:
   /**
-   * @brief Write the intermediate data into the data sink.
+   * @brief Write the intermediate ORC data into the data sink.
    *
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
    * by `process_for_write` called in the `write()` function.
@@ -320,27 +320,27 @@ class writer::impl {
    * @param intermediate_stats Statistics data stored between calls to write
    * @param stream_output Temporary host output buffer
    */
-  void write_data_internal(orc_streams& streams,
-                           hostdevice_vector<compression_result> const& comp_results,
-                           hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-                           encoded_data const& enc_data,
-                           file_segmentation const& segmentation,
-                           std::vector<StripeInformation>& stripes,
-                           orc_table_view const& orc_table,
-                           rmm::device_buffer const& compressed_data,
-                           intermediate_statistics& intermediate_stats,
-                           uint8_t* stream_output);
+  void write_orc_data_to_sink(orc_streams& streams,
+                              hostdevice_vector<compression_result> const& comp_results,
+                              hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
+                              encoded_data const& enc_data,
+                              file_segmentation const& segmentation,
+                              std::vector<StripeInformation>& stripes,
+                              orc_table_view const& orc_table,
+                              rmm::device_buffer const& compressed_data,
+                              intermediate_statistics& intermediate_stats,
+                              uint8_t* stream_output);
 
   /**
-   * @brief Update the processed table data into the internal file footer.
+   * @brief Add the processed table data into the internal file footer.
    *
    * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
    * @param stripes List of stripe description
    * @param num_rows Number of rows in the input table
    */
-  void update_table_to_footer(orc_table_view const& orc_table,
-                              std::vector<StripeInformation>& stripes,
-                              size_type num_rows);
+  void add_table_to_footer_data(orc_table_view const& orc_table,
+                                std::vector<StripeInformation>& stripes,
+                                size_type num_rows);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
