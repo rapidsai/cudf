@@ -552,14 +552,16 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
 {
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
-  auto d_chars = cudf::detail::make_device_uvector_async(host_chars, stream);
+  auto d_chars = cudf::detail::make_device_uvector_async(
+    host_chars, stream, rmm::mr::get_current_device_resource());
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
   std::transform_inclusive_scan(host_strings.begin(),
                                 host_strings.end(),
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream);
+  auto d_offsets =
+    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     host_strings.size(), std::move(d_offsets), std::move(d_chars), {}, 0);
 }
