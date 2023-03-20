@@ -2456,17 +2456,26 @@ void writer::impl::write(table_view const& input)
         orc_table,
         compressed_data,
         intermediate_stats,
-        stream_output] = convert_table_to_orc_data(input,
-                                                   *table_meta,
-                                                   max_stripe_size,
-                                                   row_index_stride,
-                                                   enable_dictionary_,
-                                                   compression_kind_,
-                                                   compression_blocksize_,
-                                                   stats_freq_,
-                                                   single_write_mode,
-                                                   *out_sink_,
-                                                   stream);
+        stream_output] = [&] {
+    try {
+      return convert_table_to_orc_data(input,
+                                       *table_meta,
+                                       max_stripe_size,
+                                       row_index_stride,
+                                       enable_dictionary_,
+                                       compression_kind_,
+                                       compression_blocksize_,
+                                       stats_freq_,
+                                       single_write_mode,
+                                       *out_sink_,
+                                       stream);
+    } catch (...) {  // catch any exception type
+      CUDF_LOG_ERROR(
+        "ORC writer encountered exception during processing. "
+        "No data has been written to the sink.");
+      throw;  // this throws the same exception
+    }
+  }();
 
   // Compression/encoding were all successful. Now write the intermediate results.
   auto const num_rows = input.num_rows();
