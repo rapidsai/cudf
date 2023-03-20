@@ -893,7 +893,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     // Parse the JSON and get the token stream
     const auto [tokens_gpu, token_indices_gpu] = get_token_stream(d_input, options, stream);
     // gpu tree generation
-    return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+    return get_tree_representation(
+      tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
@@ -913,8 +914,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     return h_node_categories[0] == NC_LIST and h_node_categories[1] == NC_LIST;
   }();
 
-  auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(
-    d_input, gpu_tree, is_array_of_arrays, options.is_enabled_lines(), stream);
+  auto [gpu_col_id, gpu_row_offsets] =
+    records_orient_tree_traversal(d_input,
+                                  gpu_tree,
+                                  is_array_of_arrays,
+                                  options.is_enabled_lines(),
+                                  stream,
+                                  rmm::mr::get_current_device_resource());
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
