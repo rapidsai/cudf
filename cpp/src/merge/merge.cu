@@ -241,7 +241,7 @@ struct column_merger {
     column_view const& lcol,
     column_view const& rcol,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+    rmm::mr::device_memory_resource* mr) const
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
