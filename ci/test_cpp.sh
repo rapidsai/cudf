@@ -25,8 +25,9 @@ ctest -E SPAN_TEST -j20 --output-on-failure
 
 # This one test is specifically designed to test using a thrust device vector,
 # so we expect and allow it to include default stream usage.
-GTEST_FILTER="SpanTest.CanConstructFromDeviceContainers" ctest -R SPAN_TEST -VV
-LD_PRELOAD= ctest -R SPAN_TEST --output-on-failure
+_allowlist_filter="SpanTest.CanConstructFromDeviceContainers"
+GTEST_FILTER="-${_allowlist_filter}" ctest -R SPAN_TEST -VV
+GTEST_FILTER="${_allowlist_filter}" LD_PRELOAD= ctest -R SPAN_TEST -VV
 
 SUITEERROR=$?
 
