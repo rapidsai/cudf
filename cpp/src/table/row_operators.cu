@@ -362,7 +362,7 @@ namespace {
  * @param
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new column_view representing the transformed input and the generated rank
- *         (integer) column which needs to be kept alive
+ *         (size_type) column which needs to be kept alive
  */
 std::
   tuple<column_view, std::optional<column_view>, std::unique_ptr<column>, std::unique_ptr<column>>
@@ -393,8 +393,6 @@ std::
       if (rhs) {
         auto child_lhs_rhs = cudf::detail::concatenate(
           std::vector<column_view>{child_lhs, child_rhs.value()}, stream, default_mr);
-        // Dense ranks should be used because we are ranking two separate columns concatenating
-        // together.
         auto const ranks        = cudf::detail::rank(child_lhs_rhs->view(),
                                               rank_method::DENSE,
                                               order::ASCENDING,
@@ -414,13 +412,13 @@ std::
         return {
           transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
       } else {
-        // Dense ranks can accurately reflect the order of structs: structs compared equal will have
-        // the same rank values.
-        // However, first ranks are computed faster and are good enough for ordering them within one
-        // column. Structs compared equal always have consecutive rank values (in stable order) thus
-        // they are still sorted correctly by their ranks.
+        // Dense ranks should be used instead of first rank.
+        // Consider this example: input = [ [{0, "a"}, {3, "c"}], [{0, "a"}, {2, "b"}] ].
+        // If first rank is used, transformed_input = [ [0, 3], [1, 2] ]. Comparing them will lead
+        // to the result row(0) < row(1) which is incorrect. With dense rank, transformed_input = [
+        // [0, 2], [0, 1] ], producing correct comparison.
         auto child_lhs_ranks = cudf::detail::rank(child_lhs,
-                                                  rank_method::FIRST,
+                                                  rank_method::DENSE,
                                                   order::ASCENDING,
                                                   null_policy::EXCLUDE,
                                                   null_order::BEFORE,
@@ -443,7 +441,11 @@ std::
       }
     }
   } else if (lhs.type().id() == type_id::STRUCT) {
-    CUDF_UNREACHABLE("Structs columns should be flattened before calling this function.");
+      std::all_of(input.child_begin(),
+                  input.child_end(),
+                  [](auto const& child) {
+      return child.type().id() != type_id::LIST; }),
+      "Structs columns containing lists should be flattened before reaching this function.");
   }
 
   return {lhs, rhs, nullptr, nullptr};
@@ -547,7 +549,7 @@ flatten_nested_structs_of_lists(table_view const& input,
 std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
   table_view const& input,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& transformed_aux_data,
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
   bool safe_for_two_table_comparator,
@@ -576,7 +578,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(flattened_input_aux_data),
-                             std::move(transformed_aux_data),
+                             std::move(structs_ranked_columns),
                              safe_for_two_table_comparator));
   } else {
     return std::shared_ptr<preprocessed_table>(
@@ -585,7 +587,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(flattened_input_aux_data),
-                             std::move(transformed_aux_data),
+                             std::move(structs_ranked_columns),
                              safe_for_two_table_comparator));
   }
 }
@@ -601,16 +603,16 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     flatten_nested_structs_of_lists(t, column_order, null_precedence, stream);
 
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
-  [[maybe_unused]] auto [transformed_t, unused_0, transformed_aux_data, unused_1] =
+  [[maybe_unused]] auto [transformed_t, unused_0, structs_ranked_columns, unused_1] =
     transform_lists_of_structs(flattened_t, std::nullopt, stream);
 
   // Since the preprocessed_table is created alone, it is safe for two-table comparator
   // only if not any transformation for lists-of-structs was performed.
-  bool const safe_for_two_table_comparator = transformed_aux_data.size() == 0;
+  bool const safe_for_two_table_comparator = structs_ranked_columns.size() == 0;
 
   return create_preprocessed_table(transformed_t,
                                    std::move(flattened_t_aux_data),
-                                   std::move(transformed_aux_data),
+                                   std::move(structs_ranked_columns),
                                    column_order,
                                    null_precedence,
                                    safe_for_two_table_comparator,
@@ -631,20 +633,22 @@ preprocessed_table::create(table_view const& lhs,
     flatten_nested_structs_of_lists(rhs, column_order, null_precedence, stream);
 
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
-  auto [transformed_lhs, transformed_rhs_opt, transformed_aux_lhs, transformed_aux_rhs] =
+  auto [transformed_lhs,
+        transformed_rhs_opt,
+        structs_ranked_columns_lhs,
+        structs_ranked_columns_rhs] =
     transform_lists_of_structs(flattened_lhs, flattened_rhs, stream);
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(flattened_lhs_aux_data),
-                                    std::move(transformed_aux_lhs),
+                                    std::move(structs_ranked_columns_lhs),
                                     column_order,
                                     null_precedence,
-                                    true /*safe_for_two_table_comparator*/
-                                    ,
+                                    true /*safe_for_two_table_comparator*/,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(flattened_rhs_aux_data),
-                                    std::move(transformed_aux_rhs),
+                                    std::move(structs_ranked_columns_rhs),
                                     column_order,
                                     null_precedence,
                                     true /*safe_for_two_table_comparator*/,
@@ -659,7 +663,7 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   bool safe_for_two_table_comparator)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
@@ -668,7 +672,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _transformed_structs_aux_data(std::move(transformed_structs_columns)),
+    _structs_ranked_columns(std::move(structs_ranked_columns)),
     _safe_for_two_table_comparator(safe_for_two_table_comparator)
 {
 }
@@ -679,7 +683,7 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   bool safe_for_two_table_comparator)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
@@ -688,7 +692,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data{},
     _dremel_device_views{},
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _transformed_structs_aux_data(std::move(transformed_structs_columns)),
+    _structs_ranked_columns(std::move(structs_ranked_columns)),
     _safe_for_two_table_comparator(safe_for_two_table_comparator)
 {
 }

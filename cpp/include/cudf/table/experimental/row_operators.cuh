@@ -779,11 +779,11 @@ struct preprocessed_table {
    * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
    * of list columns).
    * @param flattened_input_aux_data The data structure generated from
-   * `cudf::structs::detail::flatten_nested_columns` that contains additional information used for
-   * row comparisons.
-   * @param transformed_structs_columns The intermediate columns resulted from transforming child
-   * of lists-of-structs columns into lists-of-integers columns and will be used for row
-   * comparison.
+   * `cudf::structs::detail::flatten_nested_columns` containing the input flattened table along
+   * with its corresponding flattened column orders and null orders.
+   * @param structs_ranked_columns Store the intermediate results from transforming the child
+   * columns of lists-of-structs columns into integer columns using `cudf::rank()` and will be used
+   * for row comparison.
    * @param safe_for_two_table_comparator Flat indicating if the preprocessed table is safe to use
    * for two-table comparator.
    */
@@ -795,7 +795,7 @@ struct preprocessed_table {
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
     bool safe_for_two_table_comparator);
 
   preprocessed_table(
@@ -804,7 +804,7 @@ struct preprocessed_table {
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& transformed_structs_columns,
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
     bool safe_for_two_table_comparator);
 
   /**
@@ -875,9 +875,9 @@ struct preprocessed_table {
   // that needs to be kept alive.
   std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
 
-  // Auxiliary data generated from transforming lists-of-structs into lists-of-integer
-  // that needs to be kept alive.
-  std::vector<std::unique_ptr<column>> _transformed_structs_aux_data;
+  // Intermediate columns generated from transforming the child columns of lists-of-structs columns
+  // into integer columns using `cudf::rank()`, also need to be kept alive.
+  std::vector<std::unique_ptr<column>> _structs_ranked_columns;
 
   // A flag indicating if the preprocessed table is safe to use for two-table comparator.
   bool const _safe_for_two_table_comparator;
@@ -959,8 +959,14 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
+
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -978,9 +984,14 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
+
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,

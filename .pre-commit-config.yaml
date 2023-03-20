@@ -161,7 +161,7 @@ repos:
                     ^CHANGELOG.md$
                   )
       - repo: https://github.com/rapidsai/dependency-file-generator
-        rev: v1.4.0
+        rev: v1.5.1
         hooks:
             - id: rapids-dependency-file-generator
               args: ["--clean"]

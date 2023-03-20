@@ -608,6 +608,177 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     aggregate = agg
 
+    def _head_tail(self, n, *, take_head: bool, preserve_order: bool):
+        """Return the head or tail of each group
+
+        Parameters
+        ----------
+        n
+           Number of entries to include (if negative, number of
+           entries to exclude)
+        take_head
+           Do we want the head or the tail of the group
+        preserve_order
+            If True, return the n rows from each group in original
+            dataframe order (this mimics pandas behavior though is
+            more expensive).
+
+        Returns
+        -------
+        New DataFrame or Series
+
+        Notes
+        -----
+        Unlike pandas, this returns an object in group order, not
+        original order, unless ``preserve_order`` is ``True``.
+        """
+        # A more memory-efficient implementation would merge the take
+        # into the grouping, but that probably requires a new
+        # aggregation scheme in libcudf. This is probably "fast
+        # enough" for most reasonable input sizes.
+        _, offsets, _, group_values = self._grouped()
+        group_offsets = np.asarray(offsets, dtype=np.int32)
+        size_per_group = np.diff(group_offsets)
+        # "Out of bounds" n for the group size either means no entries
+        # (negative) or all the entries (positive)
+        if n < 0:
+            size_per_group = np.maximum(
+                size_per_group + n, 0, out=size_per_group
+            )
+        else:
+            size_per_group = np.minimum(size_per_group, n, out=size_per_group)
+        if take_head:
+            group_offsets = group_offsets[:-1]
+        else:
+            group_offsets = group_offsets[1:] - size_per_group
+        to_take = np.arange(size_per_group.sum(), dtype=np.int32)
+        fixup = np.empty_like(size_per_group)
+        fixup[0] = 0
+        np.cumsum(size_per_group[:-1], out=fixup[1:])
+        to_take += np.repeat(group_offsets - fixup, size_per_group)
+        to_take = as_column(to_take)
+        result = group_values.iloc[to_take]
+        if preserve_order:
+            # Can't use _mimic_pandas_order because we need to
+            # subsample the gather map from the full input ordering,
+            # rather than permuting the gather map of the output.
+            _, (ordering,), _ = self._groupby.groups(
+                [arange(0, self.obj._data.nrows)]
+            )
+            # Invert permutation from original order to groups on the
+            # subset of entries we want.
+            gather_map = ordering.take(to_take).argsort()
+            return result.take(gather_map)
+        else:
+            return result
+
+    @_cudf_nvtx_annotate
+    def head(self, n: int = 5, *, preserve_order: bool = True):
+        """Return first n rows of each group
+
+        Parameters
+        ----------
+        n
+            If positive: number of entries to include from start of group
+            If negative: number of entries to exclude from end of group
+
+        preserve_order
+            If True (default), return the n rows from each group in
+            original dataframe order (this mimics pandas behavior
+            though is more expensive). If you don't need rows in
+            original dataframe order you will see a performance
+            improvement by setting ``preserve_order=False``. In both
+            cases, the original index is preserved, so ``.loc``-based
+            indexing will work identically.
+
+        Returns
+        -------
+        Series or DataFrame
+            Subset of the original grouped object as determined by n
+
+        See Also
+        --------
+        .tail
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+        ...     {
+        ...         "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+        ...         "b": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ...     }
+        ... )
+        >>> df.groupby("a").head(1)
+           a  b
+        0  1  0
+        1  0  1
+        3  2  3
+        6  3  6
+        >>> df.groupby("a").head(-2)
+           a  b
+        0  1  0
+        3  2  3
+        6  3  6
+        8  3  8
+        """
+        return self._head_tail(
+            n, take_head=True, preserve_order=preserve_order
+        )
+
+    @_cudf_nvtx_annotate
+    def tail(self, n: int = 5, *, preserve_order: bool = True):
+        """Return last n rows of each group
+
+        Parameters
+        ----------
+        n
+            If positive: number of entries to include from end of group
+            If negative: number of entries to exclude from start of group
+
+        preserve_order
+            If True (default), return the n rows from each group in
+            original dataframe order (this mimics pandas behavior
+            though is more expensive). If you don't need rows in
+            original dataframe order you will see a performance
+            improvement by setting ``preserve_order=False``. In both
+            cases, the original index is preserved, so ``.loc``-based
+            indexing will work identically.
+
+        Returns
+        -------
+        Series or DataFrame
+            Subset of the original grouped object as determined by n
+
+
+        See Also
+        --------
+        .head
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+        ...     {
+        ...         "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+        ...         "b": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ...     }
+        ... )
+        >>> df.groupby("a").tail(1)
+            a   b
+        1   0   1
+        5   1   5
+        7   2   7
+        10  3  10
+        >>> df.groupby("a").tail(-2)
+            a   b
+        5   1   5
+        7   2   7
+        9   3   9
+        10  3  10
+        """
+        return self._head_tail(
+            n, take_head=False, preserve_order=preserve_order
+        )
+
     def nth(self, n):
         """
         Return the nth row from each group.
