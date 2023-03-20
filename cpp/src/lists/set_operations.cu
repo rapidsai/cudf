@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,12 +73,14 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence reults
   //   computed in the previous step.
 
-  auto const lhs_child  = lhs.get_sliced_child(stream);
-  auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
-  auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
-  auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const lhs_labels =
+    generate_labels(lhs, lhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const rhs_labels =
+    generate_labels(rhs, rhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
+  auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   // Check existence for each row of the rhs_table in lhs_table.
   auto const contained =
@@ -140,12 +142,14 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
   // - Extract rows of the rhs table using the existence results computed in the previous step.
   // - Remove duplicate rows, and build the output lists.
 
-  auto const lhs_child  = lhs.get_sliced_child(stream);
-  auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
-  auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
-  auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const lhs_labels =
+    generate_labels(lhs, lhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const rhs_labels =
+    generate_labels(rhs, rhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
+  auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   auto const contained =
     cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
@@ -215,12 +219,14 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
   // - Extract rows of the lhs table using that difference results.
   // - Remove duplicate rows, and build the output lists.
 
-  auto const lhs_child  = lhs.get_sliced_child(stream);
-  auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
-  auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
-  auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const lhs_labels =
+    generate_labels(lhs, lhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const rhs_labels =
+    generate_labels(rhs, rhs_child.size(), stream, rmm::mr::get_current_device_resource());
+  auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
+  auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   auto const contained =
     cudf::detail::contains(rhs_table, lhs_table, nulls_equal, nans_equal, stream);

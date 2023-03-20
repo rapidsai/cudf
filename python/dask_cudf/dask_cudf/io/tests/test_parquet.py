@@ -508,13 +508,14 @@ def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
 
-    df = pd.DataFrame({"id": [0, 1, None], "x": [1, 2, 3]})
+    ids = pd.Series([0, 1, None], dtype="Int64")
+    df = pd.DataFrame({"id": ids, "x": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1).to_backend("cudf")
     ddf.to_parquet(str(tmpdir), partition_on="id")
     fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
     assert len(fns) == 3
 
-    partitioning = HivePartitioning(pa.schema([("id", pa.float64())]))
+    partitioning = HivePartitioning(pa.schema([("id", pa.int64())]))
     ddf_read = dask_cudf.read_parquet(
         str(tmpdir),
         dataset={"partitioning": partitioning},
