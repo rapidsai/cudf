@@ -349,10 +349,20 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
-struct ListLowerBound : public cudf::test::BaseFixture {
+auto search_bounds(cudf::table_view const& t,
+                   cudf::table_view const& values,
+                   std::vector<cudf::order> const& column_order,
+                   std::vector<cudf::null_order> const& null_precedence)
+{
+  auto result_lower_bound = cudf::lower_bound(t, values, column_order, null_precedence);
+  auto result_upper_bound = cudf::upper_bound(t, values, column_order, null_precedence);
+  return std::pair(std::move(result_lower_bound), std::move(result_upper_bound));
+}
+
+struct ListBinarySearch : public cudf::test::BaseFixture {
 };
 
-TEST_F(ListLowerBound, ListWithNulls)
+TEST_F(ListBinarySearch, ListWithNulls)
 {
   {
     using lcw           = cudf::test::lists_column_wrapper<double>;
@@ -363,29 +373,30 @@ TEST_F(ListLowerBound, ListWithNulls)
     };
 
     auto const needles = lcw{
-      lcw{{0, 4.22671e+32}, null_at(0)},
+      lcw{{null, 4.22671e+32}, null_at(0)},
     };
 
-    auto const expect = int32s_col{0};
-    auto const result = cudf::lower_bound(cudf::table_view{{haystack}},
-                                          cudf::table_view{{needles}},
-                                          {cudf::order::ASCENDING},
-                                          {cudf::null_order::BEFORE});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+    auto const expect  = int32s_col{0};
+    auto const results = search_bounds(cudf::table_view{{haystack}},
+                                       cudf::table_view{{needles}},
+                                       {cudf::order::ASCENDING},
+                                       {cudf::null_order::BEFORE});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, results.first->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, results.second->view());
   }
 
   {
     using lcw       = cudf::test::lists_column_wrapper<int32_t, int32_t>;
     auto const col1 = lcw{
-      lcw{{0}, null_at(0)},  // 0
-      lcw{-80},              // 1
-      lcw{-17},              // 2
+      lcw{{null}, null_at(0)},  // 0
+      lcw{-80},                 // 1
+      lcw{-17},                 // 2
     };
 
     auto const col2 = lcw{
-      lcw{27},               // 0
-      lcw{{0}, null_at(0)},  // 1
-      lcw{},                 // 2
+      lcw{27},                  // 0
+      lcw{{null}, null_at(0)},  // 1
+      lcw{},                    // 2
     };
 
     auto const val1 = lcw{
@@ -402,8 +413,10 @@ TEST_F(ListLowerBound, ListWithNulls)
     std::vector<cudf::null_order> null_order_flags{cudf::null_order::BEFORE,
                                                    cudf::null_order::BEFORE};
 
-    auto const expect = int32s_col{3};
-    auto const result = cudf::lower_bound(input, values, column_order, null_order_flags);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+    auto const expected = int32s_col{3};
+    auto const results  = search_bounds(
+      cudf::table_view{{input}}, cudf::table_view{{values}}, column_order, null_order_flags);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.first->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.second->view());
   }
 }
