@@ -77,11 +77,11 @@ Dataframe creation from in-memory formats
 If you already have a dataframe in memory and want to convert it to a
 cuDF-backend one, there are two options depending on whether the
 dataframe is already a Dask one or not. If you have a Dask dataframe,
-then :func:`dask_cudf.from_dask_dataframe` will convert for you; if
-you have a pandas dataframe then you can either call
-:func:`dask.dataframe.from_pandas` followed by
-:func:`~dask_cudf.from_dask_dataframe` or first convert the dataframe
-with :func:`cudf.from_pandas` and then parallelise this with
+then you can call :func:`dask.dataframe.to_backend` passing ``"cudf"``
+as the backend; if you have a pandas dataframe then you can either
+call :func:`dask.dataframe.from_pandas` followed by
+:func:`~dask.dataframe.to_backend` or first convert the dataframe with
+:func:`cudf.from_pandas` and then parallelise this with
 :func:`dask_cudf.from_cudf`.
 
 API Reference
