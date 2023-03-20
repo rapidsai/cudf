@@ -33,7 +33,7 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 constexpr int32_t null{0};       // Mark for null child elements at the current level
 constexpr int32_t XXX{0};        // Mark for null elements at all levels
 constexpr int32_t dont_care{0};  // Mark for elements that will be sliced off
@@ -352,7 +352,8 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
 auto search_bounds(cudf::table_view const& t,
                    cudf::table_view const& values,
                    std::vector<cudf::order> const& column_order,
-                   std::vector<cudf::null_order> const& null_precedence)
+                   std::vector<cudf::null_order> const& null_precedence = {
+                     cudf::null_order::BEFORE})
 {
   auto result_lower_bound = cudf::lower_bound(t, values, column_order, null_precedence);
   auto result_upper_bound = cudf::upper_bound(t, values, column_order, null_precedence);
@@ -419,4 +420,60 @@ TEST_F(ListBinarySearch, ListWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.first->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.second->view());
   }
+}
+
+TEST_F(ListBinarySearch, ListsOfStructs)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const haystack = [] {
+    auto offsets = int32s_col{0, 2, 3, 5, 8, 10};
+    // clang-format off
+    auto data1 = tdata_col{1, 2,     //
+      3,        //
+      4, 5,     //
+      1, 3, 4,  //
+      0, 1      //
+    };
+    auto data2 = tdata_col{1, 3,     //
+      2,        //
+      1, 1,     //
+      1, 2, 0,  //
+      1, 2      //
+    };
+    // clang-format on
+    auto child = structs_col{{data1, data2}};
+    return cudf::make_lists_column(5, offsets.release(), child.release(), 0, {});
+  }();
+
+  auto const needles = [] {
+    auto offsets = int32s_col{0, 3, 4, 6, 9, 11, 13};
+    // clang-format off
+    auto data1 = tdata_col{1, 2, 1,  //
+      1,        //
+      4, 1,     //
+      0, 1,     //
+      1, 0,     //
+      1, 3, 5,  //
+      0, 0      //
+    };
+    auto data2 = tdata_col{1, 3, 0,  //
+      2,        //
+      1, 2,     //
+      1, 1,     //
+      1, 2,     //
+      0, 2, 2,  //
+      1, 3      //
+    };
+    // clang-format on
+    auto child = structs_col{{data1, data2}};
+    return cudf::make_lists_column(6, offsets.release(), child.release(), 0, {});
+  }();
+
+  auto const results = search_bounds(
+    cudf::table_view{{*haystack}}, cudf::table_view{{*needles}}, {cudf::order::ASCENDING});
+  auto const expected_lower_bound = int32s_col{1, 1, 2, 0, 2};
+  auto const expected_upper_bound = int32s_col{1, 2, 0, 0, 2};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
 }
