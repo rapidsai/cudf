@@ -350,19 +350,19 @@ namespace lexicographic {
 namespace {
 
 /**
- * @brief Transform a lists-of-structs column into lists-of-integers column.
+ * @brief Transform any nested lists-of-structs column into lists-of-integers column.
  *
- * For lists-of-structs column at any nested level, the child structs column will be replaced by an
- * integer column of its ranks generated using `cudf::rank()`.
+ * For a lists-of-structs column at any nested level, its child structs column will be replaced by a
+ * size_type column generated using `cudf::rank()`.
  *
  * If the input column is not lists-of-structs, or does not contain lists-of-structs at any nested
- * level, the input will be passed through.
+ * level, the input will be passed through without any changes.
  *
- * @param input The input column to transform
- * @param
+ * @param lhs The input lhs column to transform
+ * @param rhs The input rhs column to transform (if available)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new column_view representing the transformed input and the generated rank
- *         (size_type) column which needs to be kept alive
+ *         (size_type) column(s) which need to be kept alive
  */
 std::
   tuple<column_view, std::optional<column_view>, std::unique_ptr<column>, std::unique_ptr<column>>
@@ -441,10 +441,10 @@ std::
       }
     }
   } else if (lhs.type().id() == type_id::STRUCT) {
-      std::all_of(input.child_begin(),
-                  input.child_end(),
-                  [](auto const& child) {
-      return child.type().id() != type_id::LIST; }),
+    CUDF_EXPECTS(
+      std::all_of(lhs.child_begin(),
+                  lhs.child_end(),
+                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
       "Structs columns containing lists should be flattened before reaching this function.");
   }
 
@@ -452,16 +452,16 @@ std::
 }
 
 /**
- * @brief Transform any lists-of-structs column in a given table into lists-of-integers column.
+ * @brief Transform any lists-of-structs column in the given table(s) into lists-of-integers column.
  *
- * If the rhs table is specified, its shape should be pre-checked to match with lhs through
- * `check_shape_compatibility`.
+ * If the rhs table is specified, its shape should be pre-checked to match with lhs table using
+ * `check_shape_compatibility` before being passed into this function.
  *
- * @param input The input table to transform
- * @param tba
+ * @param lhs The input lhs table to transform
+ * @param rhs The input rhs table to transform (if available)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of new table_view representing the transformed input and the generated rank
- *         (integer) column which needs to be kept alive
+ *         (size_type) column(s) which need to be kept alive
  */
 std::tuple<table_view,
            std::optional<table_view>,
