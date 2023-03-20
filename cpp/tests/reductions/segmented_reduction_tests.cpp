@@ -931,9 +931,9 @@ TEST_F(SegmentedReductionTestUntyped, NUnique)
 {
   auto const input =
     cudf::test::fixed_width_column_wrapper<int32_t>({10, 15, 20, 30, 60, 60, 70, 70, 80});
-  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
-  auto const d_offsets =
-    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const offsets   = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const agg         = cudf::make_nunique_aggregation<cudf::segmented_reduce_aggregation>();
   auto const output_type = cudf::data_type{cudf::type_id::INT32};
 
@@ -951,9 +951,9 @@ TEST_F(SegmentedReductionTestUntyped, NUniqueNulls)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
     {10, 0, 20, 30, 60, 60, 70, 70, 0}, {1, 0, 1, 1, 1, 1, 1, 1, 0});
-  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
-  auto const d_offsets =
-    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const offsets   = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const agg         = cudf::make_nunique_aggregation<cudf::segmented_reduce_aggregation>();
   auto const output_type = cudf::data_type{cudf::type_id::INT32};
 
