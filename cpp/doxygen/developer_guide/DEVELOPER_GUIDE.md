@@ -535,7 +535,7 @@ rmm::device_buffer some_function(
 ### Memory Management
 
 libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
-use `device_memory_resource`(*)s for device memory allocation with automated lifetime management.
+use `device_memory_resource`s for device memory allocation with automated lifetime management.
 
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
