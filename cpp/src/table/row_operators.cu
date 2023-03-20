@@ -268,7 +268,8 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       dremel_device_views.push_back(dremel_data.back());
     }
   }
-  auto d_dremel_device_views = detail::make_device_uvector_sync(dremel_device_views, stream);
+  auto d_dremel_device_views = detail::make_device_uvector_sync(
+    dremel_device_views, stream, rmm::mr::get_current_device_resource());
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
 }
 
@@ -355,10 +356,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(t, column_order, null_precedence);
 
-  auto d_t               = table_device_view::create(verticalized_lhs, stream);
-  auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
-  auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
-  auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+  auto d_t            = table_device_view::create(verticalized_lhs, stream);
+  auto d_column_order = detail::make_device_uvector_async(
+    new_column_order, stream, rmm::mr::get_current_device_resource());
+  auto d_null_precedence = detail::make_device_uvector_async(
+    new_null_precedence, stream, rmm::mr::get_current_device_resource());
+  auto d_depths = detail::make_device_uvector_async(
+    verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
   if (detail::has_nested_columns(t)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
