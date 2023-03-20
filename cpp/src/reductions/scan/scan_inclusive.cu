@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -246,12 +246,11 @@ struct scan_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<column> scan_inclusive(
-  column_view const& input,
-  scan_aggregation const& agg,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scan_inclusive(column_view const& input,
+                                       scan_aggregation const& agg,
+                                       null_policy null_handling,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
