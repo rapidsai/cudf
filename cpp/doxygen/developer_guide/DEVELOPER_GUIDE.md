@@ -609,6 +609,22 @@ rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
 
+## Default Parameters
+
+While public libcudf APIs are free to include default function parameters, detail functions should not.
+Default memory resource parameters make it easy for developers to accidentally allocate memory using the incorrect resource.
+Avoiding default memory resources forces developers to consider each memory allocation carefully.
+
+While streams are not currently exposed in libcudf's API, we plan to do so eventually.
+As a result, the same arguments for memory resources also apply to streams.
+Public APIs will default to using `cudf::get_default_stream()`.
+However, including the same default in detail APIs opens the door for developers to forget to pass in a user-provided stream if one is passed to a public API.
+Forcing every API to explicitly pass the stream is intended to prevent such mistakes.
+
+The memory resources -- and eventually, the stream -- are the final parameters for essentially all public APIs.
+For API consistency, the same is true throughout libcudf's internals.
+Therefore, a consequence of not allowing default streams or mrs is that no parameters in detail APIs may have defaults.
+
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
