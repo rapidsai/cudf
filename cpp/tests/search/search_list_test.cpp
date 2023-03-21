@@ -426,54 +426,67 @@ TEST_F(ListBinarySearch, ListsOfStructs)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<int32_t>;
 
+  // Haystack must be pre-sorted.
   auto const haystack = [] {
-    auto offsets = int32s_col{0, 2, 3, 5, 8, 10};
+    auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
     // clang-format off
-    auto data1 = tdata_col{1, 2,     //
-      3,        //
-      4, 5,     //
-      1, 3, 4,  //
-      0, 1      //
+    auto data1 = tdata_col{1, 2,
+                           3,
+                           3,
+                           3,
+                           4, 5,
+                           4, 5, 4,
+                           4, 5, 4,
+                           4, 5, 4,
+                           4, 6
     };
-    auto data2 = tdata_col{1, 3,     //
-      2,        //
-      1, 1,     //
-      1, 2, 0,  //
-      1, 2      //
+    auto data2 = tdata_col{1, 2,
+                           3,
+                           3,
+                           3,
+                           4, 5,
+                           4, 5, 4,
+                           4, 5, 4,
+                           4, 5, 4,
+                           5, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
-    return cudf::make_lists_column(5, offsets.release(), child.release(), 0, {});
+    return cudf::make_lists_column(9, offsets.release(), child.release(), 0, {});
   }();
 
   auto const needles = [] {
-    auto offsets = int32s_col{0, 3, 4, 6, 9, 11, 13};
+    auto offsets = int32s_col{0, 3, 4, 6, 8, 10, 13, 14, 15, 17};
     // clang-format off
-    auto data1 = tdata_col{1, 2, 1,  //
-      1,        //
-      4, 1,     //
-      0, 1,     //
-      1, 0,     //
-      1, 3, 5,  //
-      0, 0      //
+    auto data1 = tdata_col{1, 2, 1,
+                           3,
+                           4, 1,
+                           0, 1,
+                           1, 0,
+                           1, 3, 5,
+                           3,
+                           3,
+                           0, 0
     };
-    auto data2 = tdata_col{1, 3, 0,  //
-      2,        //
-      1, 2,     //
-      1, 1,     //
-      1, 2,     //
-      0, 2, 2,  //
-      1, 3      //
+    auto data2 = tdata_col{1, 3, 0,
+                           3,
+                           1, 2,
+                           1, 1,
+                           1, 2,
+                           0, 2, 2,
+                           3,
+                           3,
+                           1, 3
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
-    return cudf::make_lists_column(6, offsets.release(), child.release(), 0, {});
+    return cudf::make_lists_column(9, offsets.release(), child.release(), 0, {});
   }();
 
   auto const results = search_bounds(
     cudf::table_view{{*haystack}}, cudf::table_view{{*needles}}, {cudf::order::ASCENDING});
-  auto const expected_lower_bound = int32s_col{1, 1, 2, 0, 2};
-  auto const expected_upper_bound = int32s_col{1, 2, 0, 0, 2};
+  auto const expected_lower_bound = int32s_col{1, 1, 4, 0, 0, 0, 1, 1, 0};
+  auto const expected_upper_bound = int32s_col{1, 4, 4, 0, 0, 0, 4, 4, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
 }
