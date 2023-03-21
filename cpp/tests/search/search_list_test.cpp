@@ -424,31 +424,29 @@ TEST_F(ListBinarySearch, ListWithNulls)
 
 TEST_F(ListBinarySearch, ListsOfStructs)
 {
-  using tdata_col = cudf::test::fixed_width_column_wrapper<int32_t>;
-
   // Haystack must be pre-sorted.
   auto const haystack = [] {
     auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
     // clang-format off
-    auto data1 = tdata_col{1, 2,
-                           3,
-                           3,
-                           3,
-                           4, 5,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 6
+    auto data1 = int32s_col{1, 2,
+                            3,
+                            3,
+                            3,
+                            4, 5,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 6
     };
-    auto data2 = tdata_col{1, 2,
-                           3,
-                           3,
-                           3,
-                           4, 5,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 5, 4,
-                           5, 1
+    auto data2 = int32s_col{1, 2,
+                            3,
+                            3,
+                            3,
+                            4, 5,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 5, 4,
+                            5, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -458,23 +456,23 @@ TEST_F(ListBinarySearch, ListsOfStructs)
   auto const needles = [] {
     auto offsets = int32s_col{0, 3, 4, 6, 8, 10, 13, 14, 15};
     // clang-format off
-    auto data1 = tdata_col{1, 2, 1,
-                           3,
-                           4, 1,
-                           0, 1,
-                           1, 0,
-                           1, 3, 5,
-                           3,
-                           3
+    auto data1 = int32s_col{1, 2, 1,
+                            3,
+                            4, 1,
+                            0, 1,
+                            1, 0,
+                            1, 3, 5,
+                            3,
+                            3
     };
-    auto data2 = tdata_col{1, 3, 0,
-                           3,
-                           1, 2,
-                           1, 1,
-                           1, 2,
-                           0, 2, 2,
-                           3,
-                           3
+    auto data2 = int32s_col{1, 3, 0,
+                            3,
+                            1, 2,
+                            1, 1,
+                            1, 2,
+                            0, 2, 2,
+                            3,
+                            3
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -491,31 +489,29 @@ TEST_F(ListBinarySearch, ListsOfStructs)
 
 TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
 {
-  using tdata_col = cudf::test::fixed_width_column_wrapper<int32_t>;
-
   // Haystack must be pre-sorted.
   auto const haystack = [] {
     auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
     // clang-format off
-    auto data1 = tdata_col{1, 2,
-                           3,
-                           3,
-                           3,
-                           4, 5,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 6
+    auto data1 = int32s_col{1, 2,
+                            3,
+                            3,
+                            3,
+                            4, 5,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 6
     };
-    auto data2 = tdata_col{1, 2,
-                           3,
-                           3,
-                           3,
-                           4, 5,
-                           4, 5, 4,
-                           4, 5, 4,
-                           4, 5, 4,
-                           5, 1
+    auto data2 = int32s_col{1, 2,
+                            3,
+                            3,
+                            3,
+                            4, 5,
+                            4, 5, 4,
+                            4, 5, 4,
+                            4, 5, 4,
+                            5, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -525,25 +521,25 @@ TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
   auto const needles = [] {
     auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
     // clang-format off
-    auto data1 = tdata_col{1, 2,
-                           3,
-                           4,
-                           5,
-                           4, 5,
-                           5, 5, 4,
-                           4, 5, 4,
-                           4, 4,
-                           4, 6
+    auto data1 = int32s_col{1, 2,
+                            3,
+                            4,
+                            5,
+                            4, 5,
+                            5, 5, 4,
+                            4, 5, 4,
+                            4, 4,
+                            4, 6
     };
-    auto data2 = tdata_col{1, 2,
-                           3,
-                           4,
-                           5,
-                           4, 5,
-                           5, 5, 4,
-                           4, 5, 4,
-                           4, 4,
-                           5, 1
+    auto data2 = int32s_col{1, 2,
+                            3,
+                            4,
+                            5,
+                            4, 5,
+                            5, 5, 4,
+                            4, 5, 4,
+                            4, 4,
+                            5, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
