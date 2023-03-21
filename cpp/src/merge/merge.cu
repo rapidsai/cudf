@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,8 +170,8 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     bool nullable                = true,
-                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
+                                     bool nullable,
+                                     rmm::cuda_stream_view stream)
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
@@ -187,10 +187,12 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto lhs_device_view = table_device_view::create(left_table, stream);
   auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto d_column_order = cudf::detail::make_device_uvector_async(column_order, stream);
+  auto d_column_order = cudf::detail::make_device_uvector_async(
+    column_order, stream, rmm::mr::get_current_device_resource());
 
   if (nullable) {
-    auto d_null_precedence = cudf::detail::make_device_uvector_async(null_precedence, stream);
+    auto d_null_precedence = cudf::detail::make_device_uvector_async(
+      null_precedence, stream, rmm::mr::get_current_device_resource());
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
@@ -241,7 +243,7 @@ struct column_merger {
     column_view const& lcol,
     column_view const& rcol,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+    rmm::mr::device_memory_resource* mr) const
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -410,7 +412,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
   // extract merged row order according to indices:
   //
   auto const merged_indices = generate_merged_indices(
-    index_left_view, index_right_view, column_order, null_precedence, nullable);
+    index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
 
   // create merged table:
   //

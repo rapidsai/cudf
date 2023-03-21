@@ -28,8 +28,7 @@ template <cudf::rank_method method>
 static void nvbench_groupby_rank(nvbench::state& state,
                                  nvbench::type_list<nvbench::enum_type<method>>)
 {
-  using namespace cudf;
-  constexpr auto dtype = type_to_id<int64_t>();
+  constexpr auto dtype = cudf::type_to_id<int64_t>();
 
   bool const is_sorted              = state.get_int64("is_sorted");
   cudf::size_type const column_size = state.get_int64("data_size");
@@ -43,16 +42,17 @@ static void nvbench_groupby_rank(nvbench::state& state,
   // values to be pre-sorted too for groupby rank
   if (is_sorted) source_table = cudf::sort(*source_table);
 
-  table_view keys{{source_table->view().column(0)}};
-  column_view order_by{source_table->view().column(1)};
+  cudf::table_view keys{{source_table->view().column(0)}};
+  cudf::column_view order_by{source_table->view().column(1)};
 
-  auto agg = cudf::make_rank_aggregation<groupby_scan_aggregation>(method);
-  std::vector<groupby::scan_request> requests;
-  requests.emplace_back(groupby::scan_request());
+  auto agg = cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(method);
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = order_by;
   requests[0].aggregations.push_back(std::move(agg));
 
-  groupby::groupby gb_obj(keys, null_policy::EXCLUDE, is_sorted ? sorted::YES : sorted::NO);
+  cudf::groupby::groupby gb_obj(
+    keys, cudf::null_policy::EXCLUDE, is_sorted ? cudf::sorted::YES : cudf::sorted::NO);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};

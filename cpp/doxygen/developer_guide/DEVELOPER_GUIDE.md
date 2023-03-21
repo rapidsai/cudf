@@ -269,6 +269,13 @@ An *immutable*, non-owning view of a table.
 
 A *mutable*, non-owning view of a table.
 
+## cudf::size_type
+
+The `cudf::size_type` is the type used for the number of elements in a column, offsets to elements within a column, indices to address specific elements, segments for subsets of column elements, etc.
+It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647.
+Some APIs also accept negative index values and those functions support a minimum value of -2147483648.
+This fundamental type also influences output values not just for column size limits but for counting elements as well.
+
 ## Spans
 
 libcudf provides `span` classes that mimic C++20 `std::span`, which is a lightweight
@@ -370,16 +377,16 @@ libcudf APIs should still perform any validation that does not require introspec
 To give some idea of what should or should not be validated, here are (non-exhaustive) lists of examples.
 
 **Things that libcudf should validate**:
-- Input column/table sizes or dtypes
+- Input column/table sizes or data types
 
 **Things that libcudf should not validate**:
 - Integer overflow
-- Ensuring that outputs will not exceed the 2GB size limit for a given set of inputs
+- Ensuring that outputs will not exceed the [2GB size](#cudfsize_type) limit for a given set of inputs
 
 
 ## libcudf expects nested types to have sanitized null masks
 
-Various libcudf APIs accepting columns of nested dtypes (such as `LIST` or `STRUCT`) may assume that these columns have been sanitized.
+Various libcudf APIs accepting columns of nested data types (such as `LIST` or `STRUCT`) may assume that these columns have been sanitized.
 In this context, sanitization refers to ensuring that the null elements in a column with a nested dtype are compatible with the elements of nested columns.
 Specifically:
 - Null elements of list columns should also be empty. The starting offset of a null element should be equal to the ending offset.
@@ -746,8 +753,8 @@ where compile time was a problem is in types used to store indices, which can be
 The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
 used for index types (integers) without requiring a type-specific instance. It can be used for any
 iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`,
-`int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always return a
-`cudf::size_type` integer.
+`int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always returns a
+[`cudf::size_type`](#cudfsize_type) integer.
 
 Use the `indexalator_factory` to create an appropriate input iterator from a column_view. Example
 input iterator usage:
@@ -900,6 +907,46 @@ void trivial_types_only(T t){
 ...
 }
 ```
+
+# Logging
+
+libcudf includes logging utilities (built on top of [spdlog](https://github.com/gabime/spdlog)
+library), which should be used to log important events (e.g. user warnings). This utility can also
+be used to log debug information, as long as the correct logging level is used. There are six macros
+that should be used for logging at different levels:
+
+* `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers)
+* `CUDF_LOG_DEBUG` - debug messages (targeted at developers)
+* `CUDF_LOG_INFO` - information about rare events (e.g. once per run) that occur during normal
+execution
+* `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior or deprecations
+* `CUDF_LOG_ERROR` - recoverable errors
+* `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
+
+By default, `TRACE`, `DEBUG` and `INFO` messages are excluded from the log. In addition, in public
+builds, the code that logs at `TRACE` and `DEBUG` levels is compiled out. This prevents logging of
+potentially sensitive data that might be done for debug purposes. Also, this allows developers to
+include expensive computation in the trace/debug logs, as the overhead will not be present in the
+public builds.
+The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
+
+* CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum level of logging that
+will be compiled in the build.
+Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
+* Environment variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum logging level during
+initialization. If this setting is higher than the compile-time CMake variable, any logging levels
+in between the two settings will be excluded from the written log. The available levels are the same
+as for the CMake variable.
+* Global logger object exposed via `cudf::logger()` - sets the minimum logging level at runtime.
+For example, calling `cudf::logger().set_level(spdlog::level::err)`, will exclude any messages that
+are not errors or critical errors. This API should not be used within libcudf to manipulate logging,
+its purpose is to allow upstream users to configure libcudf logging to fit their application.
+
+By default, logging messages are output to stderr.
+Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
+specified path (can be relative to the current directory).
+Upstream users can also manipulate `cudf::logger().sinks()` to add sinks or divert the log to
+standard output or even a custom spdlog sink.
 
 # Data Types
 
@@ -1064,7 +1111,7 @@ For list columns, the parent column's type is `LIST` and contains no data, but i
 the number of lists in the column, and its null mask represents the validity of each list element.
 The parent has two children.
 
-1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each list
+1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each list
    in a dense column of elements.
 2. A column containing the actual data and optional null mask for all elements of all the lists
    packed together.
@@ -1112,7 +1159,7 @@ a non-nullable column of `INT8` data. The parent column's type is `STRING` and c
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
-1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each
+1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
    string in a dense column of all characters.
 2. A non-nullable column of `INT8` elements of all the characters across all the strings packed
    together.
@@ -1224,7 +1271,7 @@ libcudf provides view types for nested column types as well as for the data elem
 `cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of
 any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore
 `cudf::string_view` is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
-data type for a `cudf::column` of type `INT32`. As it's name implies, this is a read-only object
+data type for a `cudf::column` of type [`size_type`](#cudfsize_type). As its name implies, this is a read-only object
 instance that points to device memory inside the strings column. It's lifespan is the same (or less)
 as the column it views.
 

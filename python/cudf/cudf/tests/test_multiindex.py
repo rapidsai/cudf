@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -319,6 +319,9 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
         (("a", "store"), slice(None)),
         # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
         ("a",),
+        "a",
+        "b",
+        "c",
         (("a",), slice(None)),
         # return 1 row, 0 remaining keys = dataframe with entire index
         ("a", "store", "storm", "smoke"),
@@ -1102,7 +1105,6 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):

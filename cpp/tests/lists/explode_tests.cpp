@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,8 +469,8 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   cudf::test::strings_column_wrapper string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
   auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
-  auto a          = cudf::make_lists_column(
-    5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
+  auto a =
+    cudf::make_lists_column(5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), 0, {});
 
   FCW b{100, 200, 300, 400, 500};
 
@@ -1118,8 +1118,8 @@ TYPED_TEST(ExplodeOuterTypedTest, ListOfStructs)
   cudf::test::strings_column_wrapper string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
   auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
-  auto a          = cudf::make_lists_column(
-    5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
+  auto a =
+    cudf::make_lists_column(5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), 0, {});
 
   FCW b{100, 200, 300, 400, 500};
 

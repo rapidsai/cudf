@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ enum class out_of_bounds_policy : bool {
  * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
  * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
- * @return std::unique_ptr<table> Result of the gather
+ * @return Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
@@ -211,7 +211,7 @@ enum class mask_allocation_policy {
  * @brief Initializes and returns an empty column of the same type as the `input`.
  *
  * @param[in] input Immutable view of input column to emulate
- * @return std::unique_ptr<column> An empty column of same type as `input`
+ * @return An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view const& input);
 
@@ -219,7 +219,7 @@ std::unique_ptr<column> empty_like(column_view const& input);
  * @brief Initializes and returns an empty column of the same type as the `input`.
  *
  * @param[in] input Scalar to emulate
- * @return std::unique_ptr<column> An empty column of same type as `input`
+ * @return An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(scalar const& input);
 
@@ -264,7 +264,7 @@ std::unique_ptr<column> allocate_like(
  * memory for the column's data or bitmask.
  *
  * @param[in] input_table Immutable view of input table to emulate
- * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in
+ * @return A table of empty columns with the same types as the columns in
  * `input_table`
  */
 std::unique_ptr<table> empty_like(table_view const& input_table);
@@ -333,7 +333,7 @@ void copy_range_in_place(column_view const& source,
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result target column
+ * @return The result target column
  */
 std::unique_ptr<column> copy_range(
   column_view const& source,
@@ -920,7 +920,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return std::unique_ptr<scalar> Scalar containing the single value
+ * @return Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
   column_view const& input,
@@ -960,7 +960,7 @@ enum class sample_with_replacement : bool {
  * @param seed Seed value to initiate random number generator
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
- * @return std::unique_ptr<table> Table containing samples from `input`
+ * @return Table containing samples from `input`
  */
 std::unique_ptr<table> sample(
   table_view const& input,

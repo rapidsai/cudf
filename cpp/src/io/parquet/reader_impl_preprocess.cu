@@ -468,10 +468,12 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
     host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
                                                              codec.num_pages};
-    auto const d_comp_in = cudf::detail::make_device_uvector_async(comp_in_view, stream);
+    auto const d_comp_in = cudf::detail::make_device_uvector_async(
+      comp_in_view, stream, rmm::mr::get_current_device_resource());
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
-    auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, stream);
+    auto const d_comp_out = cudf::detail::make_device_uvector_async(
+      comp_out_view, stream, rmm::mr::get_current_device_resource());
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
@@ -523,8 +525,10 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, stream);
-    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, stream);
+    auto const d_copy_in = cudf::detail::make_device_uvector_async(
+      copy_in, stream, rmm::mr::get_current_device_resource());
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(
+      copy_out, stream, rmm::mr::get_current_device_resource());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
     stream.synchronize();
@@ -834,13 +838,15 @@ void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view 
     // skip dictionary pages
     if (p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     printf(
-      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d)\n",
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
+      "str_bytes(%d)\n",
       idx,
       p.src_col_schema,
       p.chunk_row,
       p.num_rows,
       p.skipped_values,
-      p.skipped_leaf_values);
+      p.skipped_leaf_values,
+      p.str_bytes);
   }
 }
 
@@ -1487,8 +1493,8 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // Build index for string dictionaries since they can't be indexed
     // directly due to variable-sized elements
     _chunk_itm_data.str_dict_index =
-      cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(total_str_dict_indexes,
-                                                                        _stream);
+      cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+        total_str_dict_indexes, _stream, rmm::mr::get_current_device_resource());
 
     // Update chunks with pointers to string dict indices
     for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
