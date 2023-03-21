@@ -16,9 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
-// #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>

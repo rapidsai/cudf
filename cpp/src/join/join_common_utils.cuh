@@ -138,10 +138,9 @@ class pair_equality {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(
-  table_view const& left,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+get_trivial_left_join_indices(table_view const& left,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Builds the hash table based on the given `build_table`.

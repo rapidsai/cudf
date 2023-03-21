@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,7 +169,8 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                    prog->set_working_memory(d_buffer, size);
                    return *prog;
                  });
-  auto d_progs = cudf::detail::make_device_uvector_async(progs, stream);
+  auto d_progs =
+    cudf::detail::make_device_uvector_async(progs, stream, rmm::mr::get_current_device_resource());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);

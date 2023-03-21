@@ -523,13 +523,13 @@ void infer_column_types(parse_options const& parse_opts,
     });
   if (num_inferred_columns == 0) { return; }
 
-  auto const column_stats =
-    cudf::io::csv::gpu::detect_column_types(parse_opts.view(),
-                                            data,
-                                            make_device_uvector_async(column_flags, stream),
-                                            row_offsets,
-                                            num_inferred_columns,
-                                            stream);
+  auto const column_stats = cudf::io::csv::gpu::detect_column_types(
+    parse_opts.view(),
+    data,
+    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    row_offsets,
+    num_inferred_columns,
+    stream);
   stream.synchronize();
 
   auto inf_col_idx = 0;
@@ -595,14 +595,15 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     h_valid[i] = out_buffers[i].null_mask();
   }
 
-  cudf::io::csv::gpu::decode_row_column_data(parse_opts.view(),
-                                             data,
-                                             make_device_uvector_async(column_flags, stream),
-                                             row_offsets,
-                                             make_device_uvector_async(column_types, stream),
-                                             make_device_uvector_async(h_data, stream),
-                                             make_device_uvector_async(h_valid, stream),
-                                             stream);
+  cudf::io::csv::gpu::decode_row_column_data(
+    parse_opts.view(),
+    data,
+    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    row_offsets,
+    make_device_uvector_async(column_types, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(h_data, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(h_valid, stream, rmm::mr::get_current_device_resource()),
+    stream);
 
   return out_buffers;
 }

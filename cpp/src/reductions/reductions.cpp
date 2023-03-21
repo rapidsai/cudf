@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,13 +142,12 @@ struct reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<scalar> reduce(
-  column_view const& col,
-  reduce_aggregation const& agg,
-  data_type output_dtype,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<scalar> reduce(column_view const& col,
+                               reduce_aggregation const& agg,
+                               data_type output_dtype,
+                               std::optional<std::reference_wrapper<scalar const>> init,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
                "column and initial value must be the same type");

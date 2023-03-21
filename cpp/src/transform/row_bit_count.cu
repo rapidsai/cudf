@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -500,7 +500,8 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
+  rmm::device_uvector<column_info> d_info =
+    cudf::detail::make_device_uvector_async(info, stream, rmm::mr::get_current_device_resource());
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer

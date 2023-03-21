@@ -6,14 +6,9 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
-
-install_requires = ["cudf", "cython"]
-
-extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
@@ -85,24 +80,8 @@ extensions = [
     )
 ]
 
+packages = find_packages(include=["cudf_kafka*"])
 setup(
-    name="cudf_kafka",
-    version=versioneer.get_version(),
-    description="cuDF Kafka Datasource",
-    url="https://github.com/rapidsai/cudf",
-    author="NVIDIA Corporation",
-    license="Apache 2.0",
-    classifiers=[
-        "Intended Audience :: Developers",
-        "Topic :: Streaming",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Apache Kafka",
-        "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-    ],
     # Include the separately-compiled shared library
     ext_modules=cythonize(
         extensions,
@@ -111,13 +90,7 @@ setup(
             profile=False, language_level=3, embedsignature=True
         ),
     ),
-    packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
-    package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]),
-        ["*.pxd"],
-    ),
-    cmdclass=versioneer.get_cmdclass(),
-    install_requires=install_requires,
-    extras_require=extras_require,
+    packages=packages,
+    package_data={key: ["*.pxd"] for key in packages},
     zip_safe=False,
 )

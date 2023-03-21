@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ FilesToCheck = [
 ]
 ExemptFiles = [
     re.compile(r"cpp/include/cudf_test/cxxopts.hpp"),
-    re.compile(r"versioneer[.]py"),
 ]
 
 # this will break starting at year 10000, which is probably OK :)
