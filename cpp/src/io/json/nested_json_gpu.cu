@@ -1169,7 +1169,7 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                      rmm::mr::device_memory_resource* mr)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
@@ -1597,9 +1597,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
-        cudf::detail::make_device_uvector_async(json_col.string_offsets, stream);
+        cudf::detail::make_device_uvector_async(
+          json_col.string_offsets, stream, rmm::mr::get_current_device_resource());
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
-        cudf::detail::make_device_uvector_async(json_col.string_lengths, stream);
+        cudf::detail::make_device_uvector_async(
+          json_col.string_lengths, stream, rmm::mr::get_current_device_resource());
 
       // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =

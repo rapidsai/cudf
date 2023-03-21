@@ -80,6 +80,7 @@ extensions = [
     )
 ]
 
+packages = find_packages(include=["cudf_kafka*"])
 setup(
     # Include the separately-compiled shared library
     ext_modules=cythonize(
@@ -89,10 +90,7 @@ setup(
             profile=False, language_level=3, embedsignature=True
         ),
     ),
-    packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
-    package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]),
-        ["*.pxd"],
-    ),
+    packages=packages,
+    package_data={key: ["*.pxd"] for key in packages},
     zip_safe=False,
 )

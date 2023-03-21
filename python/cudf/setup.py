@@ -3,8 +3,9 @@
 from setuptools import find_packages
 from skbuild import setup
 
+packages = find_packages(include=["cudf*", "udf_cpp*"])
 setup(
-    include_package_data=True,
-    packages=find_packages(include=["cudf", "cudf.*"]),
+    packages=packages,
+    package_data={key: ["*.pxd", "*.hpp", "*.cuh"] for key in packages},
     zip_safe=False,
 )
