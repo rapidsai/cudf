@@ -48,8 +48,8 @@ bool is_sorted(cudf::table_view const& in,
 
     auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
     thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(in.num_rows()),
+                      thrust::counting_iterator<size_type>(0),
+                      thrust::counting_iterator<size_type>(in.num_rows()),
                       d_results.begin(),
                       [device_comparator] __device__(auto idx) -> bool {
                         return (idx == 0) || device_comparator(idx - 1, idx);
@@ -60,8 +60,8 @@ bool is_sorted(cudf::table_view const& in,
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
     return thrust::is_sorted(rmm::exec_policy(stream),
-                             thrust::make_counting_iterator(0),
-                             thrust::make_counting_iterator(in.num_rows()),
+                             thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator<size_type>(in.num_rows()),
                              device_comparator);
   }
 }
