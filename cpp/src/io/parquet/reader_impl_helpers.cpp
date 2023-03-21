@@ -675,13 +675,13 @@ void aggregate_reader_metadata::populate_column_metadata(
 
             if (len > 0) {
               ColumnChunkSize colsize;
-              const auto ci_buf = source->host_read(offset, len);
-              cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+              const auto sz_buf = source->host_read(offset, len);
+              cudf::io::parquet::CompactProtocolReader cp(sz_buf->data(), sz_buf->size());
               bool res = cp.read(&colsize);
               if (res) {
                 metadata.column_sizes.push_back(colsize);
               } else {
-                metadata.column_sizes.push_back(ColumnChunkSize{0});
+                metadata.column_sizes.push_back({0});
               }
             }
           }
@@ -694,7 +694,7 @@ void aggregate_reader_metadata::populate_column_metadata(
             if (res) {
               metadata.column_indexes.push_back(colidx);
             } else {
-              metadata.column_indexes.push_back(ColumnIndex{});
+              metadata.column_indexes.push_back({});
             }
           }
 
@@ -706,7 +706,7 @@ void aggregate_reader_metadata::populate_column_metadata(
             if (res) {
               metadata.offset_indexes.push_back(offidx);
             } else {
-              metadata.offset_indexes.push_back(OffsetIndex{});
+              metadata.offset_indexes.push_back({});
             }
           }
         }
