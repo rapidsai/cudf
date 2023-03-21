@@ -333,47 +333,6 @@ size_type orc_table_view::num_rows() const noexcept
   return columns.empty() ? 0 : columns.front().size();
 }
 
-orc_streams::orc_stream_offsets orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const
-{
-  std::vector<size_t> strm_offsets(streams.size());
-  size_t non_rle_data_size = 0;
-  size_t rle_data_size     = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    const auto& stream = streams[i];
-
-    auto const is_rle_data = [&]() {
-      // First stream is an index stream, don't check types, etc.
-      if (!stream.column_index().has_value()) return true;
-
-      auto const& column = columns[stream.column_index().value()];
-      // Dictionary encoded string column - dictionary characters or
-      // directly encoded string - column characters
-      if (column.orc_kind() == TypeKind::STRING &&
-          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
-        return false;
-      // Decimal data
-      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
-
-      // Everything else uses RLE
-      return true;
-    }();
-    // non-RLE and RLE streams are separated in the buffer that stores encoded data
-    // The computed offsets do not take the streams of the other type into account
-    if (is_rle_data) {
-      strm_offsets[i] = rle_data_size;
-      rle_data_size += (stream.length + 7) & ~7;
-    } else {
-      strm_offsets[i] = non_rle_data_size;
-      non_rle_data_size += stream.length;
-    }
-  }
-  non_rle_data_size = (non_rle_data_size + 7) & ~7;
-
-  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
-}
-
 namespace {
 struct string_length_functor {
   __device__ inline size_type operator()(int const i) const
@@ -1223,7 +1182,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
  */
-std::vector<StripeInformation> writer::impl::gather_stripes(
+std::vector<StripeInformation> gather_stripes(
   size_t num_index_streams,
   file_segmentation const& segmentation,
   encoded_data* enc_data,
