@@ -553,7 +553,7 @@ struct column_comparator_impl {
                          corresponding_rows_not_equivalent<decltype(device_comparator)>>;
 
     auto differences = rmm::device_uvector<int>(
-      lhs.size(), cudf::get_default_stream());  // worst case: everything different
+      lhs_row_indices.size(), cudf::get_default_stream());  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
 
     thrust::transform(
