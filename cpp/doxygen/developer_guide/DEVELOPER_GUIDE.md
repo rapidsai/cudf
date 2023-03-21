@@ -507,6 +507,12 @@ std::unique_ptr<column> returns_output_memory(
 void does_not_allocate_output_memory(...);
 ```
 
+This rule automatically applies to all detail APIs that allocates memory. Any detail API may be
+called by any public API, and therefore could be allocating memory that is returned to the user.
+To support such uses cases, all detail APIs allocating memory resources should accept an `mr`
+parameter. Callers are responsible for either passing through a provided `mr` or
+`rmm::mr::get_current_device_resource()` as needed.
+
 ### Temporary Memory
 
 Not all memory allocated within a libcudf API is returned to the caller. Often algorithms must
