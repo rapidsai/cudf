@@ -2903,3 +2903,5 @@ class TestIndexScalarGetItem:
         index = cudf.Index(index_values)
 
         assert not isinstance(index[i], cudf.Index)
+        assert index[i] == index_values[i]
+        assert_eq(index, index.to_pandas())
