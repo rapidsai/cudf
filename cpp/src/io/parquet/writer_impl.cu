@@ -853,7 +853,8 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-  _d_nullability = cudf::detail::make_device_uvector_async(_nullability, stream);
+  _d_nullability = cudf::detail::make_device_uvector_async(
+    _nullability, stream, rmm::mr::get_current_device_resource());
 
   _is_list = (_max_rep_level > 0);
 
@@ -928,7 +929,8 @@ void writer::impl::init_row_group_fragments(
   device_span<int const> part_frag_offset,
   uint32_t fragment_size)
 {
-  auto d_partitions = cudf::detail::make_device_uvector_async(partitions, stream);
+  auto d_partitions = cudf::detail::make_device_uvector_async(
+    partitions, stream, rmm::mr::get_current_device_resource());
   gpu::InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream, true);
 }
@@ -936,7 +938,8 @@ void writer::impl::init_row_group_fragments(
 void writer::impl::calculate_page_fragments(device_span<gpu::PageFragment> frag,
                                             host_span<size_type const> frag_sizes)
 {
-  auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
+  auto d_frag_sz = cudf::detail::make_device_uvector_async(
+    frag_sizes, stream, rmm::mr::get_current_device_resource());
   gpu::CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
@@ -1507,7 +1510,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
-  auto d_part_frag_offset = cudf::detail::make_device_uvector_async(part_frag_offset, stream);
+  auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
+    part_frag_offset, stream, rmm::mr::get_current_device_resource());
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 

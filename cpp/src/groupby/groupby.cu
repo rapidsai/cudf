@@ -37,6 +37,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -305,7 +306,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     thrust::make_counting_iterator(values.num_columns()),
     std::back_inserter(results),
     [&](size_type i) {
-      auto grouped_values = helper().grouped_values(values.column(i), stream);
+      auto grouped_values =
+        helper().grouped_values(values.column(i), stream, rmm::mr::get_current_device_resource());
       return cudf::detail::segmented_shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });

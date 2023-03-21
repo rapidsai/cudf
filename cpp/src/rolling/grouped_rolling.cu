@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -467,8 +467,10 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
       cudf::device_span<cudf::size_type const>(group_offsets.data(), num_groups);
 
     // When there are no nulls, just copy the input group offsets to the output.
-    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets_span, stream),
-                           cudf::detail::make_device_uvector_async(group_offsets_span, stream));
+    return std::make_tuple(cudf::detail::make_device_uvector_async(
+                             group_offsets_span, stream, rmm::mr::get_current_device_resource()),
+                           cudf::detail::make_device_uvector_async(
+                             group_offsets_span, stream, rmm::mr::get_current_device_resource()));
   }
 }
 

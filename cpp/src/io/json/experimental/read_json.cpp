@@ -80,7 +80,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
     auto const uncomp_data = decompress(compression, buffer);
     return cudf::detail::make_device_uvector_sync(
       host_span<char const>{reinterpret_cast<char const*>(uncomp_data.data()), uncomp_data.size()},
-      stream);
+      stream,
+      rmm::mr::get_current_device_resource());
   }
 }
 

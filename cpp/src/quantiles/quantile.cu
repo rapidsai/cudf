@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ struct quantile_functor {
     auto d_input  = column_device_view::create(input, stream);
     auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
-    auto q_device = cudf::detail::make_device_uvector_sync(q, stream);
+    auto q_device =
+      cudf::detail::make_device_uvector_sync(q, stream, rmm::mr::get_current_device_resource());
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
