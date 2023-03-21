@@ -1403,7 +1403,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @_cudf_nvtx_annotate
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
-        if not isinstance(index, int):
+        if isinstance(res, ColumnBase):
             res = as_index(res)
             res.name = self.name
         return res
