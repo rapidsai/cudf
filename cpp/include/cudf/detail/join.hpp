@@ -18,7 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
+// #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -37,6 +37,10 @@
 // Forward declaration
 template <typename T>
 class default_allocator;
+
+namespace cudf::experimental::row::equality {
+class preprocessed_table;
+}
 
 namespace cudf {
 namespace detail {
@@ -152,19 +156,18 @@ struct hash_join {
    *
    * @throw cudf::logic_error if build table is empty and `JoinKind == INNER_JOIN`.
    *
-   * @tparam JoinKind The type of join to be performed.
-   *
    * @param probe_table Table of probe side columns to join.
+   * @param JoinKind The type of join to be performed.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned vectors.
    *
    * @return Join output indices vector pair.
    */
-  template <cudf::detail::join_kind JoinKind>
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   probe_join_indices(cudf::table_view const& probe_table,
+                     join_kind JoinKind,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const;
@@ -177,10 +180,10 @@ struct hash_join {
    * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
    * @throw cudf::logic_error if the column data types in build table and probe table do not match.
    */
-  template <cudf::detail::join_kind JoinKind>
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   compute_hash_join(cudf::table_view const& probe,
+                    join_kind JoinKind,
                     std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
