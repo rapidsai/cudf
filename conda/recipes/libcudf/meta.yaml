@@ -68,6 +68,8 @@ requirements:
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - spdlog {{ spdlog_version }}
+    - gtest {{ gtest_version }}
+    - gmock {{ gtest_version }}
 
 outputs:
   - name: libcudf
@@ -98,6 +100,8 @@ outputs:
         - librmm ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
@@ -432,8 +436,6 @@ outputs:
         - libcufile-dev
         - libcufile-static
         {% endif %}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
