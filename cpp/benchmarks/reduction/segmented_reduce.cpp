@@ -44,7 +44,7 @@ bool constexpr is_float_output_agg(cudf::segmented_reduce_aggregation::Kind kind
 }
 
 template <cudf::segmented_reduce_aggregation::Kind kind>
-std::unique_ptr<cudf::segmented_reduce_aggregation> make_simple_aggregation()
+std::unique_ptr<cudf::segmented_reduce_aggregation> make_reduce_aggregation()
 {
   switch (kind) {
     case cudf::segmented_reduce_aggregation::SUM:
@@ -69,7 +69,7 @@ std::unique_ptr<cudf::segmented_reduce_aggregation> make_simple_aggregation()
       return cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>();
     case cudf::segmented_reduce_aggregation::NUNIQUE:
       return cudf::make_nunique_aggregation<cudf::segmented_reduce_aggregation>();
-    default: CUDF_FAIL("Unsupported simple segmented aggregation");
+    default: CUDF_FAIL("Unsupported segmented reduce aggregation in this benchmark");
   }
 }
 
@@ -94,14 +94,14 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> make_tes
 }
 
 template <typename DataType, cudf::aggregation::Kind kind>
-void BM_Simple_Segmented_Reduction(nvbench::state& state,
-                                   nvbench::type_list<DataType, nvbench::enum_type<kind>>)
+void BM_Segmented_Reduction(nvbench::state& state,
+                            nvbench::type_list<DataType, nvbench::enum_type<kind>>)
 {
   auto const column_size{cudf::size_type(state.get_int64("column_size"))};
   auto const num_segments{cudf::size_type(state.get_int64("num_segments"))};
 
   auto [input, offsets] = make_test_data<DataType>(state);
-  auto agg              = make_simple_aggregation<kind>();
+  auto agg              = make_reduce_aggregation<kind>();
 
   auto output_type = cudf::data_type{cudf::type_to_id<DataType>()};
   if (is_boolean_output_agg(kind))
@@ -133,6 +133,7 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
 
 using Types = nvbench::type_list<bool, int32_t, float, double>;
 // Skip benchmarking MAX/ANY since they are covered by MIN/ALL respectively.
+// Also VARIANCE includes STD calculation.
 using AggKinds = nvbench::enum_type_list<cudf::aggregation::SUM,
                                          cudf::aggregation::PRODUCT,
                                          cudf::aggregation::MIN,
@@ -141,7 +142,7 @@ using AggKinds = nvbench::enum_type_list<cudf::aggregation::SUM,
                                          cudf::aggregation::VARIANCE,
                                          cudf::aggregation::NUNIQUE>;
 
-NVBENCH_BENCH_TYPES(BM_Simple_Segmented_Reduction, NVBENCH_TYPE_AXES(Types, AggKinds))
+NVBENCH_BENCH_TYPES(BM_Segmented_Reduction, NVBENCH_TYPE_AXES(Types, AggKinds))
   .set_name("segmented_reduction")
   .set_type_axes_names({"DataType", "AggregationKinds"})
   .add_int64_axis("column_size", {100'000, 1'000'000, 10'000'000, 100'000'000})

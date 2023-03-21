@@ -44,7 +44,7 @@ struct is_unique_fn {
   __device__ size_type operator()(size_type idx) const
   {
     if (null_handling == null_policy::EXCLUDE && d_col.is_null(idx)) { return 0; }
-    return static_cast<size_type>(offsets[labels[idx]] == idx || (not row_equal(idx, idx - 1)));
+    return static_cast<size_type>(offsets[labels[idx]] == idx || (!row_equal(idx, idx - 1)));
   }
 };
 }  // namespace
@@ -55,8 +55,6 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  // assume sorted already
-
   // only support non-nested types
   CUDF_EXPECTS(!cudf::is_nested(col.type()),
                "segmented reduce nunique only supports non-nested column types");
@@ -90,7 +88,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                           stream,
                                           mr);
 
-  // Sum the unique identifiers
+  // Sum the unique identifiers within each segment
   auto add_op = cudf::reduction::op::sum{};
   cudf::reduction::detail::segmented_reduce(identifiers.begin(),
                                             offsets.begin(),
