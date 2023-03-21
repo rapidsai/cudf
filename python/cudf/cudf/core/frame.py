@@ -496,8 +496,8 @@ class Frame(BinaryOperand, Scannable):
                     ),
                 ):
                     raise NotImplementedError(
-                        f"{dtype} is not yet supported via "
-                        "`__cuda_array_interface__`"
+                        f"{dtype} is not yet supported to be exported to"
+                        "a cupy array"
                     )
             dtype = find_common_type(dtypes)
 
