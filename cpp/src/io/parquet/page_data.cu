@@ -2102,7 +2102,9 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
 }
 
 // kind of like an inclusive scan for strings. takes prefix_len bytes from preceding
-// string and prepends to the suffix we've already copied into place.
+// string and prepends to the suffix we've already copied into place. called from
+// within loop over values_in_mb, so this only needs to handle a single warp worth of data
+// at a time.
 __device__ void StringScan(delta_byte_array_state_s* dba,
                            uint8_t* strings_out,
                            uint8_t const* last_string,
@@ -2113,19 +2115,19 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
   // a warp will take 32 iterations.
   // exceptions:
-  // 1) all prefix_lens are 0. all data is in the suffix, done in one copy.
-  // 2) all prefix_lens are equal.  copy suffixes in parallel and all threads copy
-  //    last_string[0:prefix_len].
+  // 1) all prefix_lens are 0. all data is in the suffix, already done.
+  // 2) all prefix_lens are equal. all threads copy last_string[0:prefix_len].
   // 2a) all prefix_n-1 > prefix_n, can still go to last_string
   // 2b) all prefix_lens are != 0, so there's a chance to copy the first
   //     min(prefix_len) bytes from last_string, but this optimization probably
   //     isn't worth the effort
-  // if neither 1 nor 2, then do a loop like
+  //
+  // check for 1) and then loop
   // for i = 0 -> 31:
+  //   check for 2) and return if possible
   //   copy prefix_i bytes from string i-1 (last_string if i==0), update prefix_lens
   //   check for cases where prefix_i < prefix_i+1, copy left->right, update prefix_lens
   //   if all prefix_len == 0 break
-  //   if case 2 is now true, finish up and break
   // worst case for above is O(n) iterations, but hopefully will average out to O(log(n))
   //
   __shared__ __align__(8) uint8_t const* last_ptr;
@@ -2167,6 +2169,14 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
       if (lane_id > i) {
         // copy data from the nearest prefix_len==0 neighbor to the left (if any),
         // but do nothing if we hit a neighbor with a prefix_len < ours.
+        // this may be a bit of premature optimization, intended for cases like:
+        //  0  1  2  3  4
+        //  X  X  X  X  X
+        //  X     X     X
+        //  X     X
+        // without the following loop, we'll fill in C1 when i==1, continue when i==2,
+        // and then fill in 3 & 4 when the __all_sync() above finally returns true. with this
+        // optimization, we'll fill in C1, C3, and C4 when i==0.
         int l = lane_id - 1;
         while (l > i && prefix_lens[l] != 0 && prefix_len <= prefix_lens[l]) {
           l--;
@@ -2203,6 +2213,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
                                       uint32_t start_idx,
                                       uint32_t lane_id)
 {
+  using cudf::detail::warp_size;
   __shared__ __align__(8) uint64_t strings_offset;
 
   auto* const prefix_db = &dba->prefixes;
@@ -2211,7 +2222,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
   if (start_idx >= suffix_db->value_count) { return; }
   uint32_t const end_idx = start_idx + suffix_db->values_per_mb;
 
-  for (int idx = start_idx; idx < end_idx; idx += cudf::detail::warp_size) {
+  for (int idx = start_idx; idx < end_idx; idx += warp_size) {
     uint32_t const ln_idx = idx + lane_id;
 
     // calculate offsets into suffix data
