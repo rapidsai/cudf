@@ -110,7 +110,7 @@ class hostdevice_span {
    *
    * @return The number of elements in the view
    */
-  [[nodiscard]] size_t size() const noexcept { return _size; }
+  [[nodiscard]] std::size_t size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
