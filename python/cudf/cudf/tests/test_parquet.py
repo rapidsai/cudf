@@ -2778,36 +2778,33 @@ def test_parquet_reader_unsupported_page_encoding(datadir):
 
 
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
-@pytest.mark.parametrize("nullability", [True, False, None])
-def test_parquet_writer_schema_nullability(data, nullability):
+@pytest.mark.parametrize("force_nullable_schema", [True, False])
+def test_parquet_writer_schema_nullability(data, force_nullable_schema):
     df = cudf.DataFrame(data)
     file_obj = BytesIO()
-    if df.isnull().any().any() and nullability is False:
-        with pytest.warns(UserWarning):
-            df.to_parquet(file_obj, nullability=nullability)
-    else:
-        df.to_parquet(file_obj, nullability=nullability)
+
+    df.to_parquet(file_obj, force_nullable_schema=force_nullable_schema)
 
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
-        nullability or df.isnull().any().any()
+        force_nullable_schema or df.isnull().any().any()
     )
 
 
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
-@pytest.mark.parametrize("nullability", [True, False, None])
-def test_parquet_chunked_writer_schema_nullability(data, nullability):
+@pytest.mark.parametrize("force_nullable_schema", [True, False, None])
+def test_parquet_chunked_writer_schema_nullability(
+    data, force_nullable_schema
+):
     df = cudf.DataFrame(data)
     file_obj = BytesIO()
 
-    writer = ParquetWriter(file_obj, nullability=nullability)
+    writer = ParquetWriter(
+        file_obj, force_nullable_schema=force_nullable_schema
+    )
 
-    if df.isnull().any().any() and nullability is False:
-        with pytest.warns(UserWarning):
-            writer.write_table(df)
-    else:
-        writer.write_table(df)
+    writer.write_table(df)
 
     writer.close()
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
-        (nullability in {None, True}) or df.isnull().any().any()
+        (force_nullable_schema in {None, True}) or df.isnull().any().any()
     )
