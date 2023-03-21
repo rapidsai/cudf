@@ -602,8 +602,10 @@ void make_device_json_column(device_span<SymbolT const> input,
                                             col.validity.data()};
   }
 
-  auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
-  auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
+  auto d_ignore_vals = cudf::detail::make_device_uvector_async(
+    ignore_vals, stream, rmm::mr::get_current_device_resource());
+  auto d_columns_data = cudf::detail::make_device_uvector_async(
+    columns_data, stream, rmm::mr::get_current_device_resource());
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
@@ -891,7 +893,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
-    const auto [tokens_gpu, token_indices_gpu] = get_token_stream(d_input, options, stream);
+    const auto [tokens_gpu, token_indices_gpu] =
+      get_token_stream(d_input, options, stream, rmm::mr::get_current_device_resource());
     // gpu tree generation
     return get_tree_representation(
       tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());

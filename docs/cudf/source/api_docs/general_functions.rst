@@ -27,6 +27,7 @@ Top-level conversions
 
     cudf.to_numeric
     cudf.from_dlpack
+    cudf.from_pandas
 
 Top-level dealing with datetimelike
 -----------------------------------
