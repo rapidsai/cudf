@@ -17,6 +17,7 @@
 #pragma once
 
 #include "config_utils.hpp"
+#include "hostdevice_span.hpp"
 
 #include <cudf/detail/utilities/pinned_allocator.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -63,22 +64,41 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    if (hostdevice_vector_uses_pageable_buffer()) {
-      h_data_owner = thrust::host_vector<T>();
-    } else {
-      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
-    }
+    setup_host_data(initial_size, max_size);
+    d_data.resize(max_size, stream);
+  }
 
+  explicit hostdevice_vector(std::vector<T>&& initial_data, rmm::cuda_stream_view stream)
+    : h_data_owner(thrust::host_vector<T>(initial_data)), d_data(0, stream)
+  {
     std::visit(
       [&](auto&& v) {
-        v.reserve(max_size);
-        v.resize(initial_size);
-        host_data = v.data();
+        host_data    = v.data();
+        current_size = v.size();
+        d_data.resize(v.size(), stream);
       },
       h_data_owner);
+  }
 
-    current_size = initial_size;
-    d_data.resize(max_size, stream);
+  explicit hostdevice_vector(
+    std::variant<thrust::host_vector<T>,
+                 thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>&& initial_data,
+    rmm::cuda_stream_view stream)
+    : h_data_owner(initial_data), d_data(0, stream)
+  {
+    std::visit(
+      [&](auto&& v) {
+        host_data    = v.data();
+        current_size = v.size();
+        d_data.resize(v.size(), stream);
+      },
+      h_data_owner);
+  }
+
+  explicit hostdevice_vector(rmm::device_uvector<T>&& initial_data)
+    : d_data(std::move(initial_data))
+  {
+    setup_host_data(d_data.size(), d_data.size());
   }
 
   void push_back(const T& data)
@@ -148,6 +168,60 @@ class hostdevice_vector {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(host_ptr(), device_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
     if (synchronize) { stream.synchronize(); }
+  }
+
+  std::pair<
+    std::variant<thrust::host_vector<T>, thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>,
+    rmm::device_uvector<T>>
+  release()
+  {
+    return std::make_pair<std::variant<thrust::host_vector<T>,
+                                       thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>,
+                          rmm::device_uvector<T>>(std::move(h_data_owner), std::move(d_data));
+  }
+
+  /**
+   * @brief Converts a hostdevice_vector into a hostdevice_span.
+   *
+   * @return A typed hostdevice_span of the hostdevice_vector's host data.
+   */
+  [[nodiscard]] operator hostdevice_span<T>()
+  {
+    return hostdevice_span<T>{host_data, d_data.data(), size()};
+  }
+
+  /**
+   * @brief Converts a hostdevice_vector into a hostdevice_span.
+   *
+   * @return A typed hostdevice_span of the hostdevice_vector's host data.
+   */
+  [[nodiscard]] hostdevice_span<T> slice(size_t starting_idx, size_t ending_idx)
+  {
+    T* d = d_data.data();
+    return hostdevice_span<T>{
+      host_data + starting_idx, d + starting_idx, ending_idx - starting_idx};
+  }
+
+ private:
+  void setup_host_data(size_t initial_size, size_t max_size)
+  {
+    auto const use_pageable_buffer =
+      cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
+    if (use_pageable_buffer) {
+      h_data_owner = thrust::host_vector<T>();
+    } else {
+      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
+    }
+
+    std::visit(
+      [&](auto&& v) {
+        v.reserve(max_size);
+        v.resize(initial_size);
+        host_data = v.data();
+      },
+      h_data_owner);
+
+    current_size = initial_size;
   }
 
  private:
