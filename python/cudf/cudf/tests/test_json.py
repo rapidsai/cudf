@@ -13,7 +13,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -165,18 +164,7 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        try:
-            # xref 'https://github.com/pandas-dev/pandas/pull/33373'
-            expect_series = pd.read_json(pdf_series_fname, typ="series")
-        except TypeError as e:
-            if (
-                not PANDAS_GE_110
-                and str(e) == "<class 'bool'> is not convertible to datetime"
-            ):
-                continue
-            else:
-                raise e
-
+        expect_series = pd.read_json(pdf_series_fname, typ="series")
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
@@ -187,14 +175,23 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(pdf_string, gdf_string)
 
 
-def test_cudf_json_writer(pdf):
+@pytest.mark.parametrize(
+    "lines", [True, False], ids=["lines=True", "lines=False"]
+)
+def test_cudf_json_writer(pdf, lines):
     # removing datetime column because pandas doesn't support it
     for col_name in pdf.columns:
         if "datetime" in col_name:
             pdf.drop(col_name, axis=1, inplace=True)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_string = pdf.to_json(orient="records", lines=True)
-    gdf_string = gdf.to_json(orient="records", lines=True, engine="cudf")
+    pdf_string = pdf.to_json(orient="records", lines=lines)
+    gdf_string = gdf.to_json(orient="records", lines=lines, engine="cudf")
+
+    assert_eq(pdf_string, gdf_string)
+
+    gdf_string = gdf.to_json(
+        orient="records", lines=lines, engine="cudf", rows_per_chunk=8
+    )
 
     assert_eq(pdf_string, gdf_string)
 

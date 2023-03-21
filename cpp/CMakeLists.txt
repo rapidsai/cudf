@@ -71,6 +71,18 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+)
+mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
@@ -108,15 +120,16 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
-# Set RMM logging level
-set(RMM_LOGGING_LEVEL
+# Set logging level
+set(LIBCUDF_LOGGING_LEVEL
     "INFO"
     CACHE STRING "Choose the logging level."
 )
 set_property(
-  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+  CACHE LIBCUDF_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL"
+                                       "OFF"
 )
-message(VERBOSE "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
 
 if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
@@ -179,6 +192,10 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
+# find fmt
+include(cmake/thirdparty/get_fmt.cmake)
+# find spdlog
+include(cmake/thirdparty/get_spdlog.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -441,13 +458,19 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
-  src/reductions/segmented_all.cu
-  src/reductions/segmented_any.cu
-  src/reductions/segmented_max.cu
-  src/reductions/segmented_min.cu
-  src/reductions/segmented_product.cu
-  src/reductions/segmented_reductions.cpp
-  src/reductions/segmented_sum.cu
+  src/reductions/segmented/all.cu
+  src/reductions/segmented/any.cu
+  src/reductions/segmented/counts.cu
+  src/reductions/segmented/max.cu
+  src/reductions/segmented/mean.cu
+  src/reductions/segmented/min.cu
+  src/reductions/segmented/product.cu
+  src/reductions/segmented/reductions.cpp
+  src/reductions/segmented/std.cu
+  src/reductions/segmented/sum.cu
+  src/reductions/segmented/sum_of_squares.cu
+  src/reductions/segmented/update_validity.cu
+  src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
@@ -524,6 +547,7 @@ add_library(
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
+  src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
@@ -579,6 +603,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
@@ -659,8 +684,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Define RMM logging level
+target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
+
 # Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
+target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
@@ -713,6 +741,35 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
+    cudftest_default_stream
+    # When compiled as a dynamic library allows us to use LD_PRELOAD injection of symbols. We
+    # currently leverage this for stream-related library validation and may make use of it for
+    # other similar features in the future.
+    tests/utilities/default_stream.cpp
+  )
+  set_target_properties(
+    cudftest_default_stream
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(
+    cudftest_default_stream
+    PUBLIC cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
+
+  add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
+
+  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
+  # fPIC enabled and therefore can't be embedded into shared libraries.
+  add_library(
     cudftestutil STATIC
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
@@ -741,7 +798,7 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -749,10 +806,43 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
+
+# * build cudf_identify_stream_usage --------------------------------------------------------------
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  if(CUDA_STATIC_RUNTIME)
+    message(
+      FATAL_ERROR
+        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+    )
+  endif()
+
+  # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
+  # on and one with it set to off. Each test will then be configured to use the appropriate library
+  # depending via ctest and whether it has been updated to expose public stream APIs.
+  foreach(_mode cudf testing)
+    set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
+
+    set_target_properties(
+      ${_tgt}
+      PROPERTIES # set target compile options
+                 CXX_STANDARD 17
+                 CXX_STANDARD_REQUIRED ON
+                 POSITION_INDEPENDENT_CODE ON
+    )
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    add_library(cudf::${_tgt} ALIAS ${_tgt})
+
+    if("${_mode}" STREQUAL "testing")
+      target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
+    endif()
+  endforeach()
+endif()
+
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
 
@@ -779,12 +869,9 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
   rapids_cpm_gbench()
 
-  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
-  # do not support the latest version of fmt, which is automatically pulled into our conda
-  # environments by mamba.
-  set(CPM_DOWNLOAD_fmt TRUE)
-  include(${rapids-cmake-dir}/cpm/nvbench.cmake)
-  rapids_cpm_nvbench()
+  # Find or install nvbench
+  include(cmake/thirdparty/get_nvbench.cmake)
+
   add_subdirectory(benchmarks)
 endif()
 
@@ -803,29 +890,23 @@ install(
   EXPORT cudf-exports
 )
 
+set(_components_export_string)
+if(TARGET cudftestutil)
+  install(
+    TARGETS cudftest_default_stream cudftestutil
+    DESTINATION ${lib_dir}
+    EXPORT cudf-testing-exports
+  )
+  set(_components_export_string COMPONENTS testing COMPONENTS_EXPORT_SET cudf-testing-exports)
+endif()
+
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-if(CUDF_BUILD_TESTUTIL)
-  install(
-    TARGETS cudftestutil
-    DESTINATION ${lib_dir}
-    EXPORT cudf-testing-exports
-  )
-
-  install(
-    EXPORT cudf-testing-exports
-    FILE cudf-testing-targets.cmake
-    NAMESPACE cudf::
-    DESTINATION "${lib_dir}/cmake/cudf"
-  )
-
-  include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-  rapids_export_write_dependencies(
-    INSTALL cudf-testing-exports
-    "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
-  )
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
+  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
 endif()
 
 set(doc_string
@@ -884,12 +965,6 @@ string(
   [=[
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-  endif()
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-  endif()
 endif()
 ]=]
 )
@@ -897,8 +972,8 @@ string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
-  EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  EXPORT_SET cudf-exports ${_components_export_string}
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK install_code_string
@@ -921,23 +996,13 @@ string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf
-  EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  EXPORT_SET cudf-exports ${_components_export_string}
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
 )
 
-if(CUDF_BUILD_TESTUTIL)
-  export(
-    EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-    NAMESPACE cudf::
-  )
-  rapids_export_write_dependencies(
-    BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
-  )
-endif()
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
 

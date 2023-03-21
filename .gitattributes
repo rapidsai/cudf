@@ -1,5 +1,0 @@
-python/cudf/cudf/_version.py export-subst
-python/strings_udf/strings_udf/_version.py export-subst
-python/cudf_kafka/cudf_kafka/_version.py export-subst
-python/custreamz/custreamz/_version.py export-subst
-python/dask_cudf/dask_cudf/_version.py export-subst

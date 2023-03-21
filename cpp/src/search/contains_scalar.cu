@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,6 @@ struct contains_scalar_dispatch {
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
-    auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
 
     auto const begin = cudf::experimental::row::lhs_iterator(0);
     auto const end   = begin + haystack.size();
@@ -108,6 +107,7 @@ struct contains_scalar_dispatch {
     auto const check_nulls      = haystack.has_nulls();
     auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
 
+    auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
     return thrust::count_if(
              rmm::exec_policy(stream),
              begin,

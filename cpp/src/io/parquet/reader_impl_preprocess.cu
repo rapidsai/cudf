@@ -307,6 +307,18 @@ template <typename T = uint8_t>
   return total_pages;
 }
 
+// see setupLocalPageInfo() in page_data.cu for supported page encodings
+constexpr bool is_supported_encoding(Encoding enc)
+{
+  switch (enc) {
+    case Encoding::PLAIN:
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE:
+    case Encoding::RLE_DICTIONARY: return true;
+    default: return false;
+  }
+}
+
 /**
  * @brief Decode the page information from the given column chunks.
  *
@@ -329,6 +341,12 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   chunks.host_to_device(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
   pages.device_to_host(stream, true);
+
+  // validate page encodings
+  CUDF_EXPECTS(std::all_of(pages.begin(),
+                           pages.end(),
+                           [](auto const& page) { return is_supported_encoding(page.encoding); }),
+               "Unsupported page encoding detected");
 }
 
 /**
@@ -450,10 +468,12 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
     host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
                                                              codec.num_pages};
-    auto const d_comp_in = cudf::detail::make_device_uvector_async(comp_in_view, stream);
+    auto const d_comp_in = cudf::detail::make_device_uvector_async(
+      comp_in_view, stream, rmm::mr::get_current_device_resource());
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
-    auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, stream);
+    auto const d_comp_out = cudf::detail::make_device_uvector_async(
+      comp_out_view, stream, rmm::mr::get_current_device_resource());
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
@@ -505,8 +525,10 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, stream);
-    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, stream);
+    auto const d_copy_in = cudf::detail::make_device_uvector_async(
+      copy_in, stream, rmm::mr::get_current_device_resource());
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(
+      copy_out, stream, rmm::mr::get_current_device_resource());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
     stream.synchronize();
@@ -651,16 +673,11 @@ void reader::impl::allocate_nesting_info()
   page_nesting_decode_info.host_to_device(_stream);
 }
 
-void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
-                                            size_type num_rows)
+std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_column_chunks(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
 {
-  // This function should never be called if `num_rows == 0`.
-  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
-
-  auto& raw_page_data    = _file_itm_data.raw_page_data;
-  auto& decomp_page_data = _file_itm_data.decomp_page_data;
-  auto& chunks           = _file_itm_data.chunks;
-  auto& pages_info       = _file_itm_data.pages_info;
+  auto& raw_page_data = _file_itm_data.raw_page_data;
+  auto& chunks        = _file_itm_data.chunks;
 
   // Descriptors for all the chunks that make up the selected columns
   const auto num_input_columns = _input_columns.size();
@@ -685,7 +702,6 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
     auto const row_group_start  = rg.start_row;
     auto const row_group_source = rg.source_index;
     auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-    auto const io_chunk_idx     = chunks.size();
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -733,23 +749,41 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
     }
-    // Read compressed chunk data to device memory
-    read_rowgroup_tasks.push_back(read_column_chunks_async(_sources,
-                                                           raw_page_data,
-                                                           chunks,
-                                                           io_chunk_idx,
-                                                           chunks.size(),
-                                                           column_chunk_offsets,
-                                                           chunk_source_map,
-                                                           _stream));
-
-    remaining_rows -= row_group.num_rows;
+    remaining_rows -= row_group_rows;
   }
+
+  // Read compressed chunk data to device memory
+  read_rowgroup_tasks.push_back(read_column_chunks_async(_sources,
+                                                         raw_page_data,
+                                                         chunks,
+                                                         0,
+                                                         chunks.size(),
+                                                         column_chunk_offsets,
+                                                         chunk_source_map,
+                                                         _stream));
+
+  CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
+
+  return {total_decompressed_size > 0, std::move(read_rowgroup_tasks)};
+}
+
+void reader::impl::load_and_decompress_data(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
+{
+  // This function should never be called if `num_rows == 0`.
+  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
+
+  auto& raw_page_data    = _file_itm_data.raw_page_data;
+  auto& decomp_page_data = _file_itm_data.decomp_page_data;
+  auto& chunks           = _file_itm_data.chunks;
+  auto& pages_info       = _file_itm_data.pages_info;
+
+  auto const [has_compressed_data, read_rowgroup_tasks] =
+    create_and_read_column_chunks(row_groups_info, num_rows);
+
   for (auto& task : read_rowgroup_tasks) {
     task.wait();
   }
-
-  CUDF_EXPECTS(remaining_rows <= 0, "All rows data must be read.");
 
   // Process dataset chunk pages into output columns
   auto const total_pages = count_page_headers(chunks, _stream);
@@ -758,14 +792,11 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   if (total_pages > 0) {
     // decoding of column/page information
     decode_page_headers(chunks, pages_info, _stream);
-    if (total_decompressed_size > 0) {
+    if (has_compressed_data) {
       decomp_page_data = decompress_page_data(chunks, pages_info, _stream);
       // Free compressed data
       for (size_t c = 0; c < chunks.size(); c++) {
-        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
-          raw_page_data[c].reset();
-          // TODO: Check if this is called
-        }
+        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { raw_page_data[c].reset(); }
       }
     }
 
@@ -807,13 +838,15 @@ void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view 
     // skip dictionary pages
     if (p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     printf(
-      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d)\n",
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
+      "str_bytes(%d)\n",
       idx,
       p.src_col_schema,
       p.chunk_row,
       p.num_rows,
       p.skipped_values,
-      p.skipped_leaf_values);
+      p.skipped_leaf_values,
+      p.str_bytes);
   }
 }
 
@@ -1460,8 +1493,8 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // Build index for string dictionaries since they can't be indexed
     // directly due to variable-sized elements
     _chunk_itm_data.str_dict_index =
-      cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(total_str_dict_indexes,
-                                                                        _stream);
+      cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+        total_str_dict_indexes, _stream, rmm::mr::get_current_device_resource());
 
     // Update chunks with pointers to string dict indices
     for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {

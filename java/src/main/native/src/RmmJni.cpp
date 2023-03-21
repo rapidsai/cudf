@@ -549,10 +549,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(JNIEnv *env,
-                                                                           jclass clazz,
-                                                                           jlong child, jlong init,
+                                                                           jclass clazz, jlong init,
                                                                            jlong release) {
-  JNI_NULL_CHECK(env, child, "child is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto ret = new rmm::mr::cuda_async_memory_resource(init, release);

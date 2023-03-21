@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,11 +86,12 @@ enum class Encoding : uint8_t {
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
   RLE                     = 3,
-  BIT_PACKED              = 4,
+  BIT_PACKED              = 4,  // Deprecated by parquet-format in 2013, superseded by RLE
   DELTA_BINARY_PACKED     = 5,
   DELTA_LENGTH_BYTE_ARRAY = 6,
   DELTA_BYTE_ARRAY        = 7,
   RLE_DICTIONARY          = 8,
+  BYTE_STREAM_SPLIT       = 9,
 };
 
 /**

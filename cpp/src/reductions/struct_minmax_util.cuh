@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  */
 class comparison_binop_generator {
  private:
-  cudf::structs::detail::flattened_table const flattened_input;
+  std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
   std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> const
     d_flattened_input_ptr;
   bool const is_min_op;
@@ -98,14 +98,19 @@ class comparison_binop_generator {
 
   comparison_binop_generator(column_view const& input, rmm::cuda_stream_view stream, bool is_min_op)
     : flattened_input{cudf::structs::detail::flatten_nested_columns(
-        table_view{{input}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER})},
-      d_flattened_input_ptr{table_device_view::create(flattened_input, stream)},
+        table_view{{input}},
+        {},
+        std::vector<null_order>{DEFAULT_NULL_ORDER},
+        cudf::structs::detail::column_nullability::MATCH_INCOMING,
+        stream)},
+      d_flattened_input_ptr{
+        table_device_view::create(flattened_input->flattened_columns(), stream)},
       is_min_op(is_min_op),
       has_nulls{has_nested_nulls(table_view{{input}})},
       null_orders_dvec(0, stream)
   {
     if (is_min_op) {
-      null_orders = flattened_input.null_orders();
+      null_orders = flattened_input->null_orders();
       // If the input column has nulls (at the top level), null structs are excluded from the
       // operations, and that is equivalent to considering top-level nulls as larger than all other
       // non-null STRUCT elements (if finding for ARGMIN), or smaller than all other non-null STRUCT
@@ -113,7 +118,8 @@ class comparison_binop_generator {
       // level structs column (which is stored at the first position in the null_orders array) to
       // achieve this purpose.
       if (input.has_nulls()) { null_orders.front() = cudf::null_order::AFTER; }
-      null_orders_dvec = cudf::detail::make_device_uvector_async(null_orders, stream);
+      null_orders_dvec = cudf::detail::make_device_uvector_async(
+        null_orders, stream, rmm::mr::get_current_device_resource());
     }
     // else: Don't need to generate nulls order to copy to device memory if we have all null orders
     // are BEFORE (that happens when we have is_min_op == false).

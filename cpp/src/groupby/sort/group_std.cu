@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,9 +99,6 @@ struct var_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-// Running this in debug build causes a runtime error:
-// `reduce_by_key failed on 2nd step: invalid device function`
-#if !defined(__CUDACC_DEBUG__)
     using ResultType = cudf::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
 
     std::unique_ptr<column> result = make_numeric_column(data_type(type_to_id<ResultType>()),
@@ -141,9 +138,6 @@ struct var_functor {
                        });
 
     return result;
-#else
-    CUDF_FAIL("Groupby std/var supported in debug build");
-#endif
   }
 
   template <typename T, typename... Args>

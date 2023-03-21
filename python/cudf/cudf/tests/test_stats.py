@@ -531,7 +531,6 @@ def test_nans_stats(data, ops, skipna):
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    psr = _create_pandas_series(data)
     gsr = cudf.Series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only

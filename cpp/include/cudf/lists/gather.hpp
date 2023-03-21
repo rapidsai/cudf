@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ namespace lists {
  * @endcode
  *
  * @throws cudf::logic_error if `gather_map_list` size is not same as `source_column` size.
- * @throws cudf::logic_error if gather_map contains null values.
+ * @throws std::invalid_argument if gather_map contains null values.
  * @throws cudf::logic_error if gather_map is not list column of an index type.
  *
  * If indices in `gather_map_list` are outside the range `[-n, n)`, where `n` is the number of
