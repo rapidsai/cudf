@@ -232,7 +232,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // test for the former.
   if (_chunk_read_limit > 0) {
     _metadata->populate_column_metadata(_input_columns, _sources);
-    _meta_chunk_read_info = _metadata->compute_splits(_chunk_read_limit, _stream);
+    _meta_chunk_read_info = _metadata->compute_splits(_chunk_read_limit, _stream, _mr);
     if (not _meta_chunk_read_info.empty()) {
       _chunk_read_limit = 0;  // don't need this since we already have splits
     }

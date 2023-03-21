@@ -716,7 +716,7 @@ void aggregate_reader_metadata::populate_column_metadata(
 }
 
 std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(
-  size_t chunk_read_limit, rmm::cuda_stream_view stream)
+  size_t chunk_read_limit, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   if (per_file_metadata[0].column_sizes.empty() or per_file_metadata[0].offset_indexes.empty()) {
     return {};
@@ -773,9 +773,9 @@ std::vector<gpu::chunk_read_info> aggregate_reader_metadata::compute_splits(
     });
 
   // now move to device and call parquet::compute_splits().
-  auto const d_page_keys  = cudf::detail::make_device_uvector_async(page_keys, stream);
-  auto const d_page_index = cudf::detail::make_device_uvector_async(page_index, stream);
-  auto const d_c_info     = cudf::detail::make_device_uvector_async(c_info, stream);
+  auto const d_page_keys  = cudf::detail::make_device_uvector_async(page_keys, stream, mr);
+  auto const d_page_index = cudf::detail::make_device_uvector_async(page_index, stream, mr);
+  auto const d_c_info     = cudf::detail::make_device_uvector_async(c_info, stream, mr);
 
   return parquet::compute_splits(
     d_page_keys, d_page_index, d_c_info, num_rows, chunk_read_limit, stream);

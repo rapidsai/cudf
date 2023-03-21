@@ -222,10 +222,11 @@ class aggregate_reader_metadata {
    *
    * @param chunk_read_limit Size to limit reads to.
    * @param stream CUDA stream to use
+   * @param mr CUDA memory resource to use
    * @return List of {skip_rows, num_rows} pairs
    */
-  [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(size_t chunk_read_limit,
-                                                                 rmm::cuda_stream_view stream);
+  [[nodiscard]] std::vector<gpu::chunk_read_info> compute_splits(
+    size_t chunk_read_limit, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 };
 
 /**
