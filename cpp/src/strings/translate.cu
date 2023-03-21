@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
   });
   // copy translate table to device memory
   rmm::device_uvector<translate_table> table =
-    cudf::detail::make_device_uvector_async(htable, stream);
+    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
