@@ -259,9 +259,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 if isinstance(arg, tuple):
-                    return columns_df.index._get_row_major(columns_df, arg[0])
+                    row_arg = arg[0]
+                elif is_scalar(arg):
+                    row_arg = (arg,)
                 else:
-                    return columns_df.index._get_row_major(columns_df, arg)
+                    row_arg = arg
+                return columns_df.index._get_row_major(columns_df, row_arg)
         else:
             if isinstance(arg[0], slice):
                 out = _get_label_range_or_mask(
