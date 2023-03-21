@@ -64,12 +64,12 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
     });
   }
 
-  auto d_expected_src =
-    cudf::detail::make_device_uvector_async(h_expected_src, cudf::get_default_stream());
-  auto d_expected_mean =
-    cudf::detail::make_device_uvector_async(h_expected_mean, cudf::get_default_stream());
-  auto d_expected_weight =
-    cudf::detail::make_device_uvector_async(h_expected_weight, cudf::get_default_stream());
+  auto d_expected_src = cudf::detail::make_device_uvector_async(
+    h_expected_src, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_expected_mean = cudf::detail::make_device_uvector_async(
+    h_expected_mean, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_expected_weight = cudf::detail::make_device_uvector_async(
+    h_expected_weight, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(

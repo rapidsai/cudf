@@ -213,28 +213,26 @@ std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> 
 }  // namespace
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
-std::unique_ptr<column> clamp(
-  column_view const& input,
-  OptionalScalarIterator lo_itr,
-  ReplaceScalarIterator lo_replace_itr,
-  OptionalScalarIterator hi_itr,
-  ReplaceScalarIterator hi_replace_itr,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> clamp(column_view const& input,
+                              OptionalScalarIterator lo_itr,
+                              ReplaceScalarIterator lo_replace_itr,
+                              OptionalScalarIterator hi_itr,
+                              ReplaceScalarIterator hi_replace_itr,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
 }
 
 struct dispatch_clamp {
   template <typename T>
-  std::unique_ptr<column> operator()(
-    column_view const& input,
-    scalar const& lo,
-    scalar const& lo_replace,
-    scalar const& hi,
-    scalar const& hi_replace,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     scalar const& lo,
+                                     scalar const& lo_replace,
+                                     scalar const& hi,
+                                     scalar const& hi_replace,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
@@ -352,14 +350,13 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> clamp(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> clamp(column_view const& input,
+                              scalar const& lo,
+                              scalar const& lo_replace,
+                              scalar const& hi,
+                              scalar const& hi_replace,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");

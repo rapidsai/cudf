@@ -45,7 +45,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   cudf::table_view const& right_keys,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(0 != left_keys.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
