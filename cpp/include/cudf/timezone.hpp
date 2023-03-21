@@ -34,6 +34,11 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
  * @brief Creates a transition table to convert ORC timestamps to UTC.
  *
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
+ * The transition table starts with the entries from the TZif file. For timestamps after the file's
+ * last transition, the table includes entires that form a `solar_cycle_years`-year cycle (future
+ * entries). This portion of the table has `solar_cycle_entry_count` elements, as it assumes two
+ * transitions per year from Daylight Saving Time. If the timezone does not have DST, the table will
+ * still include the future entries, which will all have the same offset.
  *
  * @param tzif_dir The directory where the TZif files are located
  * @param timezone_name standard timezone name (for example, "America/Los_Angeles")
