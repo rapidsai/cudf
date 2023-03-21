@@ -496,7 +496,7 @@ class Frame(BinaryOperand, Scannable):
                     ),
                 ):
                     raise NotImplementedError(
-                        f"{dtype} are not yet supported via "
+                        f"{dtype} is not yet supported via "
                         "`__cuda_array_interface__`"
                     )
             dtype = find_common_type(dtypes)
