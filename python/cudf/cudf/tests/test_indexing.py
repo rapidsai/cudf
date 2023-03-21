@@ -1446,6 +1446,8 @@ def test_loc_zero_dim_array():
                 reason="https://github.com/pandas-dev/pandas/issues/46704"
             ),
         ),
+        1,
+        2,
     ],
 )
 def test_loc_series_multiindex(arg):

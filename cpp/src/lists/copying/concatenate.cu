@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,10 +91,9 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
 /**
  * @copydoc cudf::lists::detail::concatenate
  */
-std::unique_ptr<column> concatenate(
-  host_span<column_view const> columns,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   std::vector<lists_column_view> lists_columns;
   lists_columns.reserve(columns.size());

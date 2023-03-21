@@ -104,7 +104,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                                                     keep,
                                                     nulls_equal,
                                                     nans_equal,
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {

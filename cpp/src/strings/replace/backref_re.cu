@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,9 +118,9 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
-  auto const parse_result = parse_backrefs(replacement, group_count);
-  rmm::device_uvector<backref_type> backrefs =
-    cudf::detail::make_device_uvector_async(parse_result.second, stream);
+  auto const parse_result                    = parse_backrefs(replacement, group_count);
+  rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
+    parse_result.second, stream, rmm::mr::get_current_device_resource());
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value();
 

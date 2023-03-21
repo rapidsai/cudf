@@ -73,7 +73,7 @@ option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compila
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
-if(${CUDA_STATIC_RUNTIME})
+if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
   set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 endif()
 option(
@@ -547,6 +547,7 @@ add_library(
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
+  src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
@@ -740,15 +741,39 @@ add_library(cudf::cudf ALIAS cudf)
 
 if(CUDF_BUILD_TESTUTIL)
   add_library(
-    # This library must also be compiled as a dynamic library to support
-    # LD_PRELOAD injection of symbols. We currently leverage this for
-    # stream-related library validation and may make use of it for other
-    # similar features in the future.
-    cudftestutil SHARED
+    cudftest_default_stream
+    # When compiled as a dynamic library allows us to use LD_PRELOAD injection of symbols. We
+    # currently leverage this for stream-related library validation and may make use of it for
+    # other similar features in the future.
+    tests/utilities/default_stream.cpp
+  )
+  set_target_properties(
+    cudftest_default_stream
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(
+    cudftest_default_stream
+    PUBLIC cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
+
+  add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
+
+  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
+  # fPIC enabled and therefore can't be embedded into shared libraries.
+  add_library(
+    cudftestutil STATIC
     tests/io/metadata_utilities.cpp
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
-    tests/utilities/default_stream.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -773,7 +798,7 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -865,30 +890,19 @@ install(
   EXPORT cudf-exports
 )
 
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-if(CUDF_BUILD_TESTUTIL)
+set(_components_export_string)
+if(TARGET cudftestutil)
   install(
-    TARGETS cudftestutil
+    TARGETS cudftest_default_stream cudftestutil
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
-
-  install(
-    EXPORT cudf-testing-exports
-    FILE cudf-testing-targets.cmake
-    NAMESPACE cudf::
-    DESTINATION "${lib_dir}/cmake/cudf"
-  )
-
-  include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-  rapids_export_write_dependencies(
-    INSTALL cudf-testing-exports
-    "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
-  )
+  set(_components_export_string COMPONENTS testing COMPONENTS_EXPORT_SET cudf-testing-exports)
 endif()
+
+install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
@@ -951,12 +965,6 @@ string(
   [=[
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
-  endif()
-  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
-  endif()
 endif()
 ]=]
 )
@@ -964,8 +972,8 @@ string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
-  EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  EXPORT_SET cudf-exports ${_components_export_string}
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK install_code_string
@@ -988,23 +996,13 @@ string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
   BUILD cudf
-  EXPORT_SET cudf-exports
-  GLOBAL_TARGETS cudf
+  EXPORT_SET cudf-exports ${_components_export_string}
+  GLOBAL_TARGETS cudf cudftestutil
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
 )
 
-if(CUDF_BUILD_TESTUTIL)
-  export(
-    EXPORT cudf-testing-exports
-    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-    NAMESPACE cudf::
-  )
-  rapids_export_write_dependencies(
-    BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
-  )
-endif()
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
 

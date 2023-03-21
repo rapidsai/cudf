@@ -470,7 +470,9 @@ TEST_P(JsonParserTest, ExtractColumn)
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   auto const d_input      = cudf::detail::make_device_uvector_async(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    cudf::host_span<char const>{input.c_str(), input.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
@@ -508,7 +510,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
   auto const d_ascii_pass      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()}, stream);
+    cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
 
   CUDF_EXPECT_NO_THROW(json_parser(d_ascii_pass, default_options, stream, mr));
 
@@ -521,7 +525,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
   auto const d_utf_failed      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()}, stream);
+    cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
@@ -534,7 +540,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
   auto const d_utf_pass      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()}, stream);
+    cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_pass, default_options, stream, mr));
 }
 
@@ -555,7 +563,9 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   auto const d_input      = cudf::detail::make_device_uvector_async(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    cudf::host_span<char const>{input.c_str(), input.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, options, stream, mr);
 
@@ -599,14 +609,18 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
   // libcudf does not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
     auto const d_input = cudf::detail::make_device_uvector_async(
-      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+      cudf::host_span<char const>{input.c_str(), input.size()},
+      stream,
+      rmm::mr::get_current_device_resource());
     EXPECT_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr),
                  cudf::logic_error);
   }
 
   for (auto const& input : inputs_succeed) {
     auto const d_input = cudf::detail::make_device_uvector_async(
-      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+      cudf::host_span<char const>{input.c_str(), input.size()},
+      stream,
+      rmm::mr::get_current_device_resource());
     CUDF_EXPECT_NO_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr));
   }
 }
@@ -626,8 +640,10 @@ TEST_P(JsonParserTest, EmptyString)
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"([])";
-  auto const d_input      = cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+  auto const d_input =
+    cudf::detail::make_device_uvector_sync(cudf::host_span<char const>{input.c_str(), input.size()},
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
