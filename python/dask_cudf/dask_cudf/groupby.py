@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from functools import wraps
 from typing import Set
@@ -433,22 +433,55 @@ def groupby_agg(
 ):
     """Optimized groupby aggregation for Dask-CuDF.
 
-    This aggregation algorithm only supports the following options:
+    Parameters
+    ----------
+    ddf : DataFrame
+        DataFrame object to perform grouping on.
+    gb_cols : str or list[str]
+        Column names to group by.
+    aggs_in : str, list, or dict
+        Aggregations to perform.
+    split_every : int (optional)
+        How to group intermediate aggregates.
+    dropna : bool
+        Drop grouping key values corresponding to NA values.
+    as_index : bool
+        Currently ignored.
+    sort : bool
+        Sort the group keys, better performance is obtained when
+        not sorting.
+    shuffle : str (optional)
+        Control how shuffling of the DataFrame is performed.
+    sep : str
+        Internal usage.
 
-    - "count"
-    - "mean"
-    - "std"
-    - "var"
-    - "sum"
-    - "min"
-    - "max"
-    - "collect"
-    - "first"
-    - "last"
 
-    This "optimized" approach is more performant than the algorithm
-    in `dask.dataframe`, because it allows the cudf backend to
-    perform multiple aggregations at once.
+    Notes
+    -----
+    This "optimized" approach is more performant than the algorithm in
+    implemented in :meth:`DataFrame.apply` because it allows the cuDF
+    backend to perform multiple aggregations at once.
+
+    This aggregation algorithm only supports the following options
+
+    * "collect"
+    * "count"
+    * "first"
+    * "last"
+    * "max"
+    * "mean"
+    * "min"
+    * "std"
+    * "sum"
+    * "var"
+
+
+    See Also
+    --------
+    DataFrame.groupby : generic groupby of a DataFrame
+    dask.dataframe.apply_concat_apply : for more description of the
+        split_every argument.
+
     """
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)

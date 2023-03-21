@@ -250,7 +250,11 @@ class _SeriesLocIndexer(_FrameIndexer):
         if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
             arg, cudf.MultiIndex
         ):
-            result = self._frame.index._get_row_major(self._frame, arg)
+            if is_scalar(arg):
+                row_arg = (arg,)
+            else:
+                row_arg = arg
+            result = self._frame.index._get_row_major(self._frame, row_arg)
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
