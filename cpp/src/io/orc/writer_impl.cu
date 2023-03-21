@@ -594,8 +594,6 @@ void build_dictionaries(orc_table_view& orc_table,
                         bool enable_dictionary,
                         rmm::cuda_stream_view stream)
 {
-  const auto num_rowgroups = dict.size().first;
-
   for (size_t dict_idx = 0; dict_idx < orc_table.num_string_columns(); ++dict_idx) {
     auto& str_column = orc_table.string_column(dict_idx);
     str_column.attach_stripe_dict(stripe_dict.base_host_ptr(), stripe_dict.base_device_ptr());
@@ -2208,6 +2206,7 @@ std::tuple<orc_streams,
            file_segmentation,
            std::vector<StripeInformation>,
            orc_table_view,
+           pushdown_null_masks,
            rmm::device_buffer,
            intermediate_statistics,
            pinned_buffer<uint8_t>>
@@ -2227,7 +2226,7 @@ convert_table_to_orc_data(table_view const& input,
 
   auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
 
-  auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
+  auto pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
 
@@ -2299,6 +2298,7 @@ convert_table_to_orc_data(table_view const& input,
             std::move(segmentation),
             std::move(stripes),
             std::move(orc_table),
+            std::move(pd_masks),
             rmm::device_buffer{},  // compressed_data
             intermediate_statistics{stream},
             pinned_buffer<uint8_t>{nullptr, cudaFreeHost}};
@@ -2384,6 +2384,7 @@ convert_table_to_orc_data(table_view const& input,
           std::move(segmentation),
           std::move(stripes),
           std::move(orc_table),
+          std::move(pd_masks),
           std::move(compressed_data),
           std::move(intermediate_stats),
           std::move(stream_output)};
@@ -2454,16 +2455,17 @@ void writer::impl::write(table_view const& input)
   // is still intact.
   // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
   // writing anything to it.
-  auto [streams,
-        comp_results,
-        strm_descs,
-        enc_data,
-        segmentation,
-        stripes,
-        orc_table,
-        compressed_data,
-        intermediate_stats,
-        stream_output] = [&] {
+  [[maybe_unused]] auto [streams,
+                         comp_results,
+                         strm_descs,
+                         enc_data,
+                         segmentation,
+                         stripes,
+                         orc_table,
+                         pd_masks, /* unused, but needs to be kept alive */
+                         compressed_data,
+                         intermediate_stats,
+                         stream_output] = [&] {
     try {
       return convert_table_to_orc_data(input,
                                        *table_meta,
