@@ -27,7 +27,8 @@ ctest -E SPAN_TEST -j20 --output-on-failure
 # so we expect and allow it to include default stream usage.
 _allowlist_filter="SpanTest.CanConstructFromDeviceContainers"
 GTEST_FILTER="-${_allowlist_filter}" ctest -R SPAN_TEST -VV
-GTEST_FILTER="${_allowlist_filter}" LD_PRELOAD= ctest -R SPAN_TEST -VV
+export LD_PRELOAD=
+GTEST_FILTER="${_allowlist_filter}" ctest -R SPAN_TEST -VV
 
 SUITEERROR=$?
 
