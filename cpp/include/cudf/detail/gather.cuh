@@ -583,10 +583,12 @@ void gather_bitmask(table_view const& source,
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
-  auto d_target_masks = make_device_uvector_async(target_masks, stream);
+  auto d_target_masks =
+    make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
 
   auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
+    target.size(), stream, rmm::mr::get_current_device_resource());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {

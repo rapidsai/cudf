@@ -85,10 +85,9 @@ struct sort_groupby_helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column
    */
-  std::unique_ptr<column> sorted_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> sorted_values(column_view const& values,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -100,28 +99,25 @@ struct sort_groupby_helper {
    * @param values The value column to group
    * @return the grouped column
    */
-  std::unique_ptr<column> grouped_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> grouped_values(column_view const& values,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get a table of sorted unique keys
    *
    * @return a new table in which each row is a unique row in the sorted key table.
    */
-  std::unique_ptr<table> unique_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> unique_keys(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get a table of sorted keys
    *
    * @return a new table containing the sorted keys.
    */
-  std::unique_ptr<table> sorted_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> sorted_keys(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Get the number of groups in `keys`

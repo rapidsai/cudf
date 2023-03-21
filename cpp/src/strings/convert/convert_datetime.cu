@@ -160,7 +160,8 @@ struct format_compiler {
     }
 
     // copy format_items to device memory
-    d_items = cudf::detail::make_device_uvector_async(items, stream);
+    d_items = cudf::detail::make_device_uvector_async(
+      items, stream, rmm::mr::get_current_device_resource());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
