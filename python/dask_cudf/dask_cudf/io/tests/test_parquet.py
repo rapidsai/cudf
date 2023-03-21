@@ -518,6 +518,12 @@ def test_null_partition(tmpdir):
     partitioning = HivePartitioning(pa.schema([("id", pa.int64())]))
     ddf_read = dask_cudf.read_parquet(
         str(tmpdir),
+        # dataset={
+        #     "partitioning": {
+        #         "flavor": "hive",
+        #         "schema": pa.schema([("id", pa.int64())]),
+        #     }
+        # }
         dataset={"partitioning": partitioning},
     )
     dd.assert_eq(
