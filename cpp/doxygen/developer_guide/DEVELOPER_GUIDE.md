@@ -641,22 +641,22 @@ using the incorrect resource. Avoiding default memory resources forces developer
 memory allocation carefully.
 
 While streams are not currently exposed in libcudf's API, we plan to do so eventually. As a result,
-the same arguments for memory resources also apply to streams. Public APIs will default to using
+the same reasons for memory resources also apply to streams. Public APIs default to using
 `cudf::get_default_stream()`. However, including the same default in detail APIs opens the door for
 developers to forget to pass in a user-provided stream if one is passed to a public API. Forcing
-every API to explicitly pass the stream is intended to prevent such mistakes.
+every detail API call to explicitly pass a stream is intended to prevent such mistakes.
 
-The memory resources -- and eventually, the stream -- are the final parameters for essentially all
+The memory resources (and eventually, the stream) are the final parameters for essentially all
 public APIs. For API consistency, the same is true throughout libcudf's internals. Therefore, a
-consequence of not allowing default streams or mrs is that no parameters in detail APIs may have
+consequence of not allowing default streams or MRs is that no parameters in detail APIs may have
 defaults.
 
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()`
-that will automatically annotate the lifetime of the enclosing function and use the function's name
-as the name of the NVTX range. For more information about NVTX, see
+should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
+will automatically annotates the lifetime of the enclosing function and uses the function's name as
+the name of the NVTX range. For more information about NVTX, see
 [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
