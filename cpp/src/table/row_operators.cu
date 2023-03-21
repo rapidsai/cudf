@@ -334,7 +334,7 @@ void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
   CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
                "Cannot compare tables with different number of columns");
   for (size_type i = 0; i < lhs.num_columns(); ++i) {
-    CUDF_EXPECTS(column_types_equal(lhs.column(i), rhs.column(i)),
+    CUDF_EXPECTS(column_types_equivalent(lhs.column(i), rhs.column(i)),
                  "Cannot compare tables with different column types");
   }
 }

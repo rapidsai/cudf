@@ -46,6 +46,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/reduce.h>
+#include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -537,28 +538,6 @@ struct column_comparator_impl {
     auto d_lhs = cudf::column_device_view::create(lhs);
     auto d_rhs = cudf::column_device_view::create(rhs);
 
-    auto differences = rmm::device_uvector<int>(
-      lhs.size(), cudf::get_default_stream());  // worst case: everything different
-    auto input_iter = thrust::make_counting_iterator(0);
-
-    auto const comparator_helper = [&](auto const device_comparator) {
-      using ComparatorType =
-        std::conditional_t<check_exact_equality,
-                           corresponding_rows_unequal<decltype(device_comparator)>,
-                           corresponding_rows_not_equivalent<decltype(device_comparator)>>;
-
-      auto diff_iter = thrust::copy_if(
-        rmm::exec_policy(cudf::get_default_stream()),
-        input_iter,
-        input_iter + lhs_row_indices.size(),
-        differences.begin(),
-        ComparatorType(
-          *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator, *d_lhs, *d_rhs));
-
-      differences.resize(thrust::distance(differences.begin(), diff_iter),
-                         cudf::get_default_stream());  // shrink back down
-    };
-
     auto lhs_tview = table_view{{lhs}};
     auto rhs_tview = table_view{{rhs}};
 
@@ -567,7 +546,31 @@ struct column_comparator_impl {
     auto const has_nulls = cudf::has_nested_nulls(lhs_tview) or cudf::has_nested_nulls(rhs_tview);
 
     auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
-    comparator_helper(device_comparator);
+
+    using ComparatorType =
+      std::conditional_t<check_exact_equality,
+                         corresponding_rows_unequal<decltype(device_comparator)>,
+                         corresponding_rows_not_equivalent<decltype(device_comparator)>>;
+
+    auto differences = rmm::device_uvector<int>(
+      lhs.size(), cudf::get_default_stream());  // worst case: everything different
+    auto input_iter = thrust::make_counting_iterator(0);
+
+    thrust::transform(
+      rmm::exec_policy(cudf::get_default_stream()),
+      input_iter,
+      input_iter + lhs_row_indices.size(),
+      differences.begin(),
+      ComparatorType(
+        *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator, *d_lhs, *d_rhs));
+
+    auto diff_iter = thrust::remove(rmm::exec_policy(cudf::get_default_stream()),
+                                    differences.begin(),
+                                    differences.end(),
+                                    0);  // remove the zero entries
+
+    differences.resize(thrust::distance(differences.begin(), diff_iter),
+                       cudf::get_default_stream());  // shrink back down
 
     if (not differences.is_empty()) {
       if (verbosity != debug_output_level::QUIET) {
