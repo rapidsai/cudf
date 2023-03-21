@@ -655,7 +655,7 @@ defaults.
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
 should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
-will automatically annotates the lifetime of the enclosing function and uses the function's name as
+automatically annotates the lifetime of the enclosing function and uses the function's name as
 the name of the NVTX range. For more information about NVTX, see
 [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
