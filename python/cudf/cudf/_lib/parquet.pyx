@@ -472,9 +472,8 @@ cdef class ParquetWriter:
         By default, 20000 will be used.
     force_nullable_schema : bool, default False.
         If True, writes all columns as `null` in schema.
-        If False, writes all columns as `not null` in schema,
-        however if a column contains null values, this parameter
-        is ignored.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
 
     See Also
     --------
@@ -693,11 +692,7 @@ cdef _set_col_metadata(
     column_in_metadata& col_meta,
     object force_nullable_schema
 ):
-    if col.nullable and force_nullable_schema is False:
-        # Column contains null values, ignoring force_nullable_schema
-        col_meta.set_nullability(True)
-    elif force_nullable_schema is not None:
-        col_meta.set_nullability(force_nullable_schema)
+    col_meta.set_nullability(force_nullable_schema or col.nullable)
 
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
