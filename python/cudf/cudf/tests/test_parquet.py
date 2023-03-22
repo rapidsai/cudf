@@ -2791,7 +2791,7 @@ def test_parquet_writer_schema_nullability(data, force_nullable_schema):
 
 
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
-@pytest.mark.parametrize("force_nullable_schema", [True, False, None])
+@pytest.mark.parametrize("force_nullable_schema", [True, False])
 def test_parquet_chunked_writer_schema_nullability(
     data, force_nullable_schema
 ):
@@ -2806,5 +2806,5 @@ def test_parquet_chunked_writer_schema_nullability(
 
     writer.close()
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
-        (force_nullable_schema in {None, True}) or df.isnull().any().any()
+        force_nullable_schema or df.isnull().any().any()
     )

@@ -470,7 +470,7 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-    force_nullable_schema : bool, default False.
+    force_nullable_schema : bool, default True.
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
@@ -491,7 +491,7 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
-    cdef object force_nullable_schema
+    cdef bool force_nullable_schema
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
@@ -499,7 +499,7 @@ cdef class ParquetWriter:
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
                   int max_page_size_rows=20000,
-                  object force_nullable_schema=False):
+                  bool force_nullable_schema=True):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -690,7 +690,7 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
 cdef _set_col_metadata(
     Column col,
     column_in_metadata& col_meta,
-    object force_nullable_schema
+    bool force_nullable_schema
 ):
     col_meta.set_nullability(force_nullable_schema or col.nullable)
 

@@ -191,9 +191,8 @@ def write_to_dataset(
         Please see ``fsspec`` and ``urllib`` for more details.
     force_nullable_schema : bool, default False.
         If True, writes all columns as `null` in schema.
-        If False, writes all columns as `not null` in schema,
-        however if a column contains null values, this parameter
-        is ignored.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
