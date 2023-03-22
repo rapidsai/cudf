@@ -125,10 +125,7 @@ def bench_groupby_sample(
         ).astype(int)
         kwargs = {"n": target_size, "replace": replace}
 
-    def _():
-        return grouper.sample(**kwargs)
-
-    benchmark(_)
+    benchmark(grouper.sample, **kwargs)
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")

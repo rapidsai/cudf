@@ -4,6 +4,7 @@ import collections
 import datetime
 import itertools
 import operator
+import string
 import textwrap
 from decimal import Decimal
 
@@ -2974,7 +2975,7 @@ class TestSample:
                 [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
             )
         elif request.param == "strindex":
-            return cudf.StringIndex(list(chr(ord("a") + i) for i in range(n)))
+            return cudf.StringIndex(string.ascii_lowercase[:n])
         elif request.param == "default":
             return None
 
@@ -3011,7 +3012,7 @@ class TestSample:
                 )
             )
         else:
-            raise AssertionError("Invalid usage")
+            raise ValueError("Must provide either n or frac")
         values = cudf.Series(sorted(values), dtype=df.a.dtype)
         return cudf.DataFrame({"a": values, "b": values, "v": values})
 

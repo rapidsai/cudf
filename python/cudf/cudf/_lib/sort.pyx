@@ -186,10 +186,7 @@ def segmented_sort_by_key(
     column_order = column_order or [True] * ncol,
     null_precedence = null_precedence or ["first"] * ncol,
     for asc, null in zip(column_order, null_precedence):
-        if asc:
-            c_column_order.push_back(order.ASCENDING)
-        else:
-            c_column_order.push_back(order.DESCENDING)
+        c_column_order.push_back(order.ASCENDING if asc else order.DESCENDING)
         if asc ^ (null == "first"):
             c_null_precedence.push_back(null_order.AFTER)
         elif asc ^ (null == "last"):
