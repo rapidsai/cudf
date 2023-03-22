@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,12 @@ bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
 bool column_types_equal(column_view const& lhs, column_view const& rhs)
 {
   if (lhs.type() != rhs.type()) { return false; }
+  return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
+}
+
+bool column_types_equivalent(column_view const& lhs, column_view const& rhs)
+{
+  if (lhs.type().id() != rhs.type().id()) { return false; }
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
