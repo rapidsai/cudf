@@ -379,9 +379,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-  auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
-  auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
-  auto tile_offsets     = scan_tile_state<output_offset>(num_tile_states, stream);
+  auto num_tile_states = std::max(32, TILES_PER_CHUNK * concurrency + 32);
+  auto tile_multistates =
+    scan_tile_state<multistate>(num_tile_states, stream, rmm::mr::get_current_device_resource());
+  auto tile_offsets =
+    scan_tile_state<output_offset>(num_tile_states, stream, rmm::mr::get_current_device_resource());
 
   multibyte_split_init_kernel<<<TILES_PER_CHUNK,
                                 THREADS_PER_TILE,
