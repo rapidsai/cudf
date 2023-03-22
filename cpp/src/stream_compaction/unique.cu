@@ -69,6 +69,9 @@ std::unique_ptr<table> unique(table_view const& input,
 
   size_type const unique_size = [&] {
     if (cudf::detail::has_nested_columns(keys_view)) {
+      // Using a temporary buffer for intermediate transform results from the functor containing
+      // the comparator speeds up compile-time significantly without much degradation in
+      // runtime performance over using the comparator directly in thrust::unique_copy.
       auto row_equal =
         comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
       auto d_results = rmm::device_uvector<bool>(num_rows, stream);
@@ -87,6 +90,8 @@ std::unique_ptr<table> unique(table_view const& input,
                                         thrust::identity<bool>{});
       return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
     } else {
+      // Using thrust::unique_copy with the comparator directly will compile more slowly but
+      // improves runtime by up to 2x over the transform/copy_if approach above.
       auto row_equal =
         comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
       auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),

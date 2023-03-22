@@ -77,7 +77,9 @@ cudf::size_type unique_count(table_view const& keys,
   if (cudf::detail::has_nested_columns(keys)) {
     auto const comp =
       row_comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
-
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly without much degradation in
+    // runtime performance over using the comparator directly in thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(keys.num_rows(), stream);
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
@@ -90,6 +92,8 @@ cudf::size_type unique_count(table_view const& keys,
   } else {
     auto const comp =
       row_comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
+    // Using thrust::copy_if with the comparator directly will compile more slowly but
+    // improves runtime by up to 2x over the transform/count approach above.
     return thrust::count_if(
       rmm::exec_policy(stream),
       thrust::counting_iterator<cudf::size_type>(0),

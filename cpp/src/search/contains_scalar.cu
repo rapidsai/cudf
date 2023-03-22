@@ -110,6 +110,9 @@ struct contains_scalar_dispatch {
 
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
 
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly without much degradation in
+    // runtime performance over using the comparator in a transform iterator with thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
     thrust::transform(
       rmm::exec_policy(stream),

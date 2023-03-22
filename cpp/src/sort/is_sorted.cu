@@ -46,6 +46,9 @@ bool is_sorted(cudf::table_view const& in,
   if (cudf::detail::has_nested_columns(in)) {
     auto const device_comparator = comparator.less<true>(has_nested_nulls(in));
 
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly over using the comparator directly
+    // in thrust::is_sorted.
     auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
     thrust::transform(rmm::exec_policy(stream),
                       thrust::counting_iterator<size_type>(0),

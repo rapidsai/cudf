@@ -67,8 +67,9 @@ void compute_m2_fn(column_device_view const& values,
   auto m2_fn = m2_transform<ResultType, decltype(values_iter)>{
     values, values_iter, d_means, group_labels.data()};
   auto const itr = thrust::counting_iterator<size_type>(0);
-  // using a temporary buffer for the transform instead of a transform-iterator
-  // improves compile-time significantly
+  // Using a temporary buffer for intermediate transform results instead of
+  // using the transform-iterator directly in thrust::reduce_by_key
+  // improves compile-time significantly.
   auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
   thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
