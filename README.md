@@ -2,6 +2,8 @@
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/main/README.md) ensure you are on the `main` branch.
 
+FAKE
+
 ## Resources
 
 - [cuDF Reference Documentation](https://docs.rapids.ai/api/cudf/stable/): Python API reference, tutorials, and topic guides.
