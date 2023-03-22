@@ -45,9 +45,9 @@ requirements:
     - cuda-cudart-static ={{ cuda_version }}
     - cuda-cupti ={{ cuda_version }}
     - cuda-driver-dev {{ cuda_driver_version }}
-    - libcufile
-    - libcufile-dev
-    - libcufile-static
+    - libcufile         # [linux64]
+    - libcufile-dev     # [linux64]
+    - libcufile-static  # [linux64]
     {% endif %}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
@@ -433,9 +433,9 @@ outputs:
         - cuda-cudart-dev {{ cuda_spec }}
         - cuda-cudart-static {{ cuda_spec }}
         - cuda-cupti {{ cuda_spec }}
-        - libcufile
-        - libcufile-dev
-        - libcufile-static
+        - libcufile         # [linux64]
+        - libcufile-dev     # [linux64]
+        - libcufile-static  # [linux64]
         {% endif %}
     about:
       home: https://rapids.ai/
