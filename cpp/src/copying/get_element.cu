@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,11 +37,10 @@ namespace {
 
 struct get_element_functor {
   template <typename T, std::enable_if_t<is_fixed_width<T>() && !is_fixed_point<T>()>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
@@ -61,11 +60,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -86,11 +84,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, dictionary32>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
@@ -122,11 +119,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     bool valid               = is_element_valid_sync(input, index, stream);
     auto const child_col_idx = lists_column_view::child_column_index;
@@ -147,11 +143,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     using Type = typename T::rep;
 
@@ -178,11 +173,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =

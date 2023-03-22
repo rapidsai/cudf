@@ -369,7 +369,7 @@ add_library(
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
   src/io/orc/stripe_init.cu
-  src/io/orc/timezone.cpp
+  src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
