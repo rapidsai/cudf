@@ -266,7 +266,8 @@ dremel_data get_encoding(column_view h_col,
     max_vals_size += column_ends[l] - column_offsets[l];
   }
 
-  auto d_nullability = cudf::detail::make_device_uvector_async(nullability, stream);
+  auto d_nullability = cudf::detail::make_device_uvector_async(
+    nullability, stream, rmm::mr::get_current_device_resource());
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);

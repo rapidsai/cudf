@@ -51,6 +51,8 @@ requirements:
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - spdlog {{ spdlog_version }}
+    - gtest {{ gtest_version }}
+    - gmock {{ gtest_version }}
 
 outputs:
   - name: libcudf
@@ -71,6 +73,8 @@ outputs:
         - librmm ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
@@ -88,6 +92,7 @@ outputs:
         - test -f $PREFIX/include/cudf/concatenate.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
+        - test -f $PREFIX/include/cudf/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
@@ -124,6 +129,8 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
+        - test -f $PREFIX/include/cudf/detail/timezone.cuh
+        - test -f $PREFIX/include/cudf/detail/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/transform.hpp
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
@@ -379,8 +386,6 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
