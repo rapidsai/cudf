@@ -945,7 +945,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         size_per_group = np.diff(group_offsets)
         if n is not None:
             samples_per_group = np.broadcast_to(
-                size_type_dtype(n), size_per_group.shape
+                size_type_dtype.type(n), size_per_group.shape
             )
             if not replace and (minsize := size_per_group.min()) < n:
                 raise ValueError(
