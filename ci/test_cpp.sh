@@ -16,28 +16,26 @@ echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB_MODE_CUDF}"
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 rapids-logger "Run gtests"
 
-# TODO: exit code handling is too verbose. Find a cleaner solution.
+cd $CONDA_PREFIX/bin/gtests/libcudf/
+export GTEST_CUDF_STREAM_MODE="new_cudf_default"
+export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
+export LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_CUDF}
 
-for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
-    test_name=$(basename ${gt})
-    echo "Running gtest $test_name"
+ctest -E SPAN_TEST -j20 --output-on-failure
 
-    # TODO: This strategy for using the stream lib will need to change when we
-    # switch to invoking ctest. For one, we will want to set the test
-    # properties to use the lib (which means that the decision will be made at
-    # CMake-configure time instead of runtime). We may also need to leverage
-    # something like gtest_discover_tests to be able to filter on the
-    # underlying test names.
-    if [[ ${test_name} == "SPAN_TEST" ]]; then
-        # This one test is specifically designed to test using a thrust device
-        # vector, so we expect and allow it to include default stream usage.
-        gtest_filter="SpanTest.CanConstructFromDeviceContainers"
-        GTEST_CUDF_STREAM_MODE="new_cudf_default" LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_CUDF} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR} --gtest_filter="-${gtest_filter}" && \
-            ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR} --gtest_filter="${gtest_filter}"
-    else
-        GTEST_CUDF_STREAM_MODE="new_cudf_default" LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_CUDF} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
-    fi
-done
+# This one test is specifically designed to test using a thrust device vector,
+# so we expect and allow it to include default stream usage.
+_allowlist_filter="SpanTest.CanConstructFromDeviceContainers"
+GTEST_FILTER="-${_allowlist_filter}" ctest -R SPAN_TEST -VV
+LD_PRELOAD= GTEST_CUDF_STREAM_MODE=default GTEST_FILTER="${_allowlist_filter}" ctest -R SPAN_TEST -VV
+
+SUITEERROR=$?
+
+if (( ${SUITEERROR} == 0 )); then
+    cd $CONDA_PREFIX/bin/gtests/libcudf_kafka/
+    ctest -j20 --output-on-failure
+    SUITEERROR=$?
+fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

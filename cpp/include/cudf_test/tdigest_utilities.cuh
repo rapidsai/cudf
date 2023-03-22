@@ -169,7 +169,8 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
   // verify min/max
   thrust::host_vector<device_span<T const>> h_spans;
   h_spans.push_back({input_values.begin<T>(), static_cast<size_t>(input_values.size())});
-  auto spans = cudf::detail::make_device_uvector_async(h_spans, cudf::get_default_stream());
+  auto spans = cudf::detail::make_device_uvector_async(
+    h_spans, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto expected_min = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
