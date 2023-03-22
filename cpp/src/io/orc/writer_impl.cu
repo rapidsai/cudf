@@ -2227,7 +2227,7 @@ convert_table_to_orc_data(table_view const& input,
   auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
 
   // This is unused but it holds memory buffers for later access thus needs to be kept alive.
-  [[maybe_unused]] auto pd_masks = init_pushdown_null_masks(orc_table, stream);
+  [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
 
