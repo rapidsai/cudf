@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,6 +147,7 @@ TEST_F(ColumnTypeCheckTest, DifferentFixedWidth)
   fixed_point_column_wrapper<int32_t> rhs5({10000}, numeric::scale_type{0});
 
   EXPECT_FALSE(column_types_equal(lhs5, rhs5));
+  EXPECT_TRUE(column_types_equivalent(lhs5, rhs5));
 
   // Different rep, same scale
   fixed_point_column_wrapper<int32_t> lhs6({10000}, numeric::scale_type{-1});

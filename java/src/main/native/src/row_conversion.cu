@@ -1257,7 +1257,7 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
 
   // Allocate and set the offsets row for the byte array
   std::unique_ptr<column> offsets =
-      cudf::detail::sequence(num_rows + 1, zero, scalar_size_per_row, stream);
+      cudf::detail::sequence(num_rows + 1, zero, scalar_size_per_row, stream, mr);
 
   std::unique_ptr<column> data =
       make_numeric_column(data_type(type_id::INT8), static_cast<size_type>(total_allocation),
