@@ -83,8 +83,8 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
   // Check existence for each row of the rhs_table in lhs_table.
-  auto const contained =
-    cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
+  auto const contained = cudf::detail::contains(
+    lhs_table, rhs_table, nulls_equal, nans_equal, stream, rmm::mr::get_current_device_resource());
 
   auto const num_rows = lhs.size();
 
@@ -151,8 +151,8 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
   auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
-  auto const contained =
-    cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
+  auto const contained = cudf::detail::contains(
+    lhs_table, rhs_table, nulls_equal, nans_equal, stream, rmm::mr::get_current_device_resource());
 
   auto const intersect_table = cudf::detail::copy_if(
     rhs_table,
@@ -231,8 +231,8 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
   auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
 
-  auto const contained =
-    cudf::detail::contains(rhs_table, lhs_table, nulls_equal, nans_equal, stream);
+  auto const contained = cudf::detail::contains(
+    rhs_table, lhs_table, nulls_equal, nans_equal, stream, rmm::mr::get_current_device_resource());
 
   auto const difference_table = cudf::detail::copy_if(
     lhs_table,
