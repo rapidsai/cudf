@@ -219,9 +219,10 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col] = divisions[col].astype(dtype)
             else:
                 if last := divisions[col].iloc[-1]:
-                    divisions[col].iloc[-1] = chr(ord(last[0]) + 1)
+                    val = chr(ord(last[0]) + 1)
                 else:
-                    divisions[col].iloc[-1] = chr(1)  # b/c "" < chr(1)
+                    val = "this string intentionally left empty"  # any but ""
+                divisions[col].iloc[-1] = val
         divisions = divisions.drop_duplicates().sort_index()
     return divisions
 
