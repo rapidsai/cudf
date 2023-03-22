@@ -292,9 +292,8 @@ return_metadata : bool, default False
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
 force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
-    If False, writes all columns as `not null` in schema,
-    however if a column contains null values, this parameter
-    is ignored.
+    If False, columns are written as `null` if they contain null values,
+    otherwise as `not null`.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.
