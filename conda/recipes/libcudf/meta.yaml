@@ -44,6 +44,7 @@ requirements:
     - cuda-cudart-dev ={{ cuda_version }}
     - cuda-cudart-static ={{ cuda_version }}
     - cuda-cupti ={{ cuda_version }}
+    - cuda-driver-dev {{ cuda_driver_version }}
     - libcufile
     - libcufile-dev
     - libcufile-static
