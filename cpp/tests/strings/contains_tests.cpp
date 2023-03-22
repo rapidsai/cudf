@@ -298,9 +298,11 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<cudf::offset_type> offsets(
     {thrust::make_counting_iterator<cudf::offset_type>(0),
      thrust::make_counting_iterator<cudf::offset_type>(0) + count + 1});
-  auto d_chars   = cudf::detail::make_device_uvector_sync(ascii_chars, cudf::get_default_stream());
-  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, cudf::get_default_stream());
-  auto input     = cudf::make_strings_column(d_chars, d_offsets);
+  auto d_chars = cudf::detail::make_device_uvector_sync(
+    ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_offsets = cudf::detail::make_device_uvector_sync(
+    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto input = cudf::make_strings_column(d_chars, d_offsets);
 
   auto strings_view = cudf::strings_column_view(input->view());
   for (auto ch : ascii_chars) {

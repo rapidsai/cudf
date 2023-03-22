@@ -481,7 +481,8 @@ void compute_single_pass_aggs(table_view const& keys,
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
-  auto const d_aggs   = cudf::detail::make_device_uvector_async(agg_kinds, stream);
+  auto const d_aggs   = cudf::detail::make_device_uvector_async(
+    agg_kinds, stream, rmm::mr::get_current_device_resource());
   auto const skip_key_rows_with_nulls =
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
