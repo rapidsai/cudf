@@ -1182,12 +1182,11 @@ encoded_data encode_columns(orc_table_view const& orc_table,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
  */
-std::vector<StripeInformation> gather_stripes(
-  size_t num_index_streams,
-  file_segmentation const& segmentation,
-  encoded_data* enc_data,
-  hostdevice_2dvector<gpu::StripeStream>* strm_desc,
-  rmm::cuda_stream_view stream)
+std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
+                                              file_segmentation const& segmentation,
+                                              encoded_data* enc_data,
+                                              hostdevice_2dvector<gpu::StripeStream>* strm_desc,
+                                              rmm::cuda_stream_view stream)
 {
   if (segmentation.num_stripes() == 0) { return {}; }
 
@@ -2281,8 +2280,7 @@ convert_table_to_orc_data(table_view const& input,
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
-  auto stripes =
-    gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
+  auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
 
   if (num_rows == 0) {
     return {std::move(streams),
