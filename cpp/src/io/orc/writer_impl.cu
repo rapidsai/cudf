@@ -2204,14 +2204,13 @@ std::tuple<orc_streams,
            hostdevice_2dvector<gpu::StripeStream>,
            encoded_data,
            file_segmentation,
+           hostdevice_2dvector<gpu::StripeDictionary>,
            std::vector<StripeInformation>,
            orc_table_view,
-           pushdown_null_masks,
            rmm::device_buffer,
            intermediate_statistics,
            pinned_buffer<uint8_t>>
 convert_table_to_orc_data(table_view const& input,
-                          table_device_view const& d_table,
                           table_input_metadata const& table_meta,
                           stripe_size_limits max_stripe_size,
                           size_type row_index_stride,
@@ -2223,7 +2222,9 @@ convert_table_to_orc_data(table_view const& input,
                           data_sink const& out_sink,
                           rmm::cuda_stream_view stream)
 {
-  auto orc_table = make_orc_table_view(input, d_table, table_meta, stream);
+  auto const input_tview = table_device_view::create(input, stream);
+
+  auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
 
   // This is unused but it holds memory buffers for later access thus needs to be kept alive.
   [[maybe_unused]] auto pd_masks = init_pushdown_null_masks(orc_table, stream);
@@ -2296,9 +2297,9 @@ convert_table_to_orc_data(table_view const& input,
             std::move(strm_descs),
             std::move(enc_data),
             std::move(segmentation),
+            std::move(stripe_dict),
             std::move(stripes),
             std::move(orc_table),
-            std::move(pd_masks),
             rmm::device_buffer{},  // compressed_data
             intermediate_statistics{stream},
             pinned_buffer<uint8_t>{nullptr, cudaFreeHost}};
@@ -2382,9 +2383,9 @@ convert_table_to_orc_data(table_view const& input,
           std::move(strm_descs),
           std::move(enc_data),
           std::move(segmentation),
+          std::move(stripe_dict),
           std::move(stripes),
           std::move(orc_table),
-          std::move(pd_masks),
           std::move(compressed_data),
           std::move(intermediate_stats),
           std::move(stream_output)};
@@ -2450,8 +2451,6 @@ void writer::impl::write(table_view const& input)
 
   if (not table_meta) { table_meta = make_table_meta(input); }
 
-  auto const input_tview = table_device_view::create(input, stream);
-
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current writer
   // is still intact.
@@ -2462,15 +2461,14 @@ void writer::impl::write(table_view const& input)
                          strm_descs,
                          enc_data,
                          segmentation,
+                         stripe_dict, /* unused, but its data will be accessed via pointer later */
                          stripes,
                          orc_table,
-                         pd_masks, /* unused, but needs to be kept alive */
                          compressed_data,
                          intermediate_stats,
                          stream_output] = [&] {
     try {
       return convert_table_to_orc_data(input,
-                                       *input_tview,
                                        *table_meta,
                                        max_stripe_size,
                                        row_index_stride,
