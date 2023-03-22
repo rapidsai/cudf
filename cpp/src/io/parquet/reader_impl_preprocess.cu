@@ -1218,8 +1218,8 @@ struct input_col_info {
 
 /**
  * @brief Converts a 1-dimensional index into page, depth and column indices used in
- * allocate_columns to compute columns sizes. The input index will through pages, nesting depth and
- * columns in that order.
+ * allocate_columns to compute columns sizes. The input index will iterate through pages, nesting depth and
+ * column indices in that order.
  */
 struct get_indices {
   size_t page_idx;
