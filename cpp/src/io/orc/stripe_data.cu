@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,6 @@ constexpr int row_decoder_buffer_size = block_size + 128;
 inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode < DIRECT_V2; }
 
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
-
-static __device__ __constant__ int64_t kORCTimeToUTC =
-  1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 
 struct orc_bytestream_s {
   const uint8_t* base;
@@ -101,7 +98,7 @@ struct orc_datadec_state_s {
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
-  int64_t utc_epoch;        // kORCTimeToUTC - gmtOffset
+  duration_s tz_epoch;      // orc_ut_epoch - ut_offset
   RowGroup index;
 };
 
@@ -1374,7 +1371,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          device_2dspan<RowGroup> row_groups,
                          size_t first_row,
                          uint32_t rowidx_stride,
@@ -1446,7 +1443,8 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
+    static constexpr duration_s d_orc_utc_epoch = duration_s{orc_utc_epoch};
+    s->top.data.tz_epoch = d_orc_utc_epoch - get_ut_offset(tz_table, timestamp_s{d_orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1769,37 +1767,33 @@ __global__ void __launch_bounds__(block_size)
               break;
             }
             case TIMESTAMP: {
-              int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              int64_t nanos   = secondary_val;
-              nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-              if (!tz_table.ttimes.empty()) {
-                seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
-              }
+              auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
+              // Convert to UTC
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
+
+              duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
+                                              kTimestampNanoScale[secondary_val & 7]};
+
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
               // Comparing with 999999 instead of zero to match the apache writer.
-              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
-
-              duration_ns d_ns{nanos};
-              duration_s d_s{seconds};
+              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
                 switch (s->chunk.timestamp_type_id) {
                   case type_id::TIMESTAMP_SECONDS:
-                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                    return (seconds + duration_cast<duration_s>(nanos)).count();
                   case type_id::TIMESTAMP_MILLISECONDS:
-                    return duration_cast<duration_ms>(d_s).count() +
-                           duration_cast<duration_ms>(d_ns).count();
+                    return (seconds + duration_cast<duration_ms>(nanos)).count();
                   case type_id::TIMESTAMP_MICROSECONDS:
-                    return duration_cast<duration_us>(d_s).count() +
-                           duration_cast<duration_us>(d_ns).count();
+                    return (seconds + duration_cast<duration_us>(nanos)).count();
                   case type_id::TIMESTAMP_NANOSECONDS:
                   default:
-                    return duration_cast<duration_ns>(d_s).count() +
-                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
-                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                    // nanoseconds as output in case of `type_id::EMPTY` and
+                    // `type_id::TIMESTAMP_NANOSECONDS`
+                    return (seconds + nanos).count();
                 }
               }();
 
@@ -1887,7 +1881,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
                                   size_t first_row,
-                                  timezone_table_view tz_table,
+                                  table_device_view tz_table,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
