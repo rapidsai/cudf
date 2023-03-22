@@ -13,7 +13,7 @@
 # =============================================================================
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-  list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations -fsanitize=address)
+  list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
 endif()
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
@@ -24,7 +24,7 @@ if(CUDA_WARNINGS_AS_ERRORS)
 else()
   list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
 endif()
-list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations,-fsanitize=address)
+list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
 
 if(DISABLE_DEPRECATION_WARNINGS)
   list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
@@ -41,7 +41,7 @@ if(CUDA_ENABLE_LINEINFO)
 endif()
 
 # Debug options
-#if(CMAKE_BUILD_TYPE MATCHES Debug)
+if(CMAKE_BUILD_TYPE MATCHES Debug)
   message(VERBOSE "CUDF: Building with debugging flags")
   list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-rdynamic)
-#endif()
+endif()
