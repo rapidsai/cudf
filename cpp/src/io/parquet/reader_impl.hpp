@@ -25,6 +25,7 @@
 #include "reader_impl_helpers.hpp"
 
 #include <io/utilities/column_buffer.hpp>
+#include <io/utilities/hostdevice_span.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
@@ -116,6 +117,12 @@ class reader::impl {
   table_with_metadata read_chunk();
 
  private:
+  struct file_portion {
+    hostdevice_span<gpu::ColumnChunkDesc> chunks;
+    std::future<void> read_handle;
+    cudf::host_span<std::unique_ptr<datasource::buffer>> raw_page_data;
+  };
+
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
@@ -131,6 +138,17 @@ class reader::impl {
                     host_span<std::vector<size_type> const> row_group_indices);
 
   /**
+   * @brief Merge page arrays from the portions read back into a monolithic page array
+   *
+   * @param portions file read portions that contain chunks each portion read
+   * @param page_arrays page array for each portion read
+   * @return merges page array with updates chunk pointers into that data
+   */
+  hostdevice_vector<gpu::PageInfo> merge_page_arrays(
+    std::vector<file_portion>& portions,
+    std::vector<hostdevice_vector<gpu::PageInfo>>& page_arrays);
+
+  /**
    * @brief Create chunk information and start file reads
    *
    * @param row_groups_info vector of information about row groups to read
@@ -138,8 +156,11 @@ class reader::impl {
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> create_and_read_column_chunks(
-    cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows);
+  std::pair<bool, std::vector<file_portion>> create_and_read_column_chunks(
+    cudf::host_span<row_group_info const> const row_groups_info,
+    size_type num_rows,
+    size_t portion_size,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Load and decompress the input file(s) into memory.
