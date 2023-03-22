@@ -195,8 +195,11 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
 
   // Algorithm: `return distinct(concatenate_rows(lhs, rhs))`.
 
-  auto const union_col = lists::detail::concatenate_rows(
-    table_view{{lhs.parent(), rhs.parent()}}, concatenate_null_policy::NULLIFY_OUTPUT_ROW, stream);
+  auto const union_col =
+    lists::detail::concatenate_rows(table_view{{lhs.parent(), rhs.parent()}},
+                                    concatenate_null_policy::NULLIFY_OUTPUT_ROW,
+                                    stream,
+                                    rmm::mr::get_current_device_resource());
 
   return cudf::lists::detail::distinct(
     lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
