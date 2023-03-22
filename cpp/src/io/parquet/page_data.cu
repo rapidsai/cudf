@@ -2126,7 +2126,7 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   // for i = 0 -> 31:
   //   check for 2) and return if possible
   //   copy prefix_i bytes from string i-1 (last_string if i==0), update prefix_lens
-  //   check for cases where prefix_i < prefix_i+1, copy left->right, update prefix_lens
+  //   check lanes that can copy from the blocker to their left, update prefix_lens
   //   if all prefix_len == 0 break
   // worst case for above is O(n) iterations, but hopefully will average out to O(log(n))
   //
@@ -2150,6 +2150,13 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   if (lane_id == 0) { last_ptr = last_string; }
   __syncwarp();
 
+  // find a neighbor to the left that has a prefix length less than this lane. once that
+  // neighbor is complete, this lane can be completed.
+  int blocker = lane_id - 1;
+  while (blocker > 0 && prefix_lens[blocker] != 0 && prefix_len <= prefix_lens[blocker]) {
+    blocker--;
+  }
+
   for (uint32_t i = 0; i < warp_size && i + start_idx < value_count; i++) {
     // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
     // bytes from last_string and return.
@@ -2166,24 +2173,9 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
       }
       __syncwarp();
 
-      if (lane_id > i) {
-        // copy data from the nearest prefix_len==0 neighbor to the left (if any),
-        // but do nothing if we hit a neighbor with a prefix_len < ours.
-        // this may be a bit of premature optimization, intended for cases like:
-        //  0  1  2  3  4
-        //  X  X  X  X  X
-        //  X     X     X
-        //  X     X
-        // without the following loop, we'll fill in C1 when i==1, continue when i==2,
-        // and then fill in 3 & 4 when the __all_sync() above finally returns true. with this
-        // optimization, we'll fill in C1, C3, and C4 when i==0.
-        int l = lane_id - 1;
-        while (l > i && prefix_lens[l] != 0 && prefix_len <= prefix_lens[l]) {
-          l--;
-        }
-
-        if (prefix_lens[l] == 0 && lane_out != nullptr) {
-          memcpy(lane_out, offsets[l], prefix_len);
+      // check to see if any blockers have been filled
+      if (lane_id > i && prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
+          memcpy(lane_out, offsets[blocker], prefix_len);
           prefix_lens[lane_id] = prefix_len = 0;
         }
       }
