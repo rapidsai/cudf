@@ -2112,25 +2112,17 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
                            uint32_t lane_id)
 {
   using cudf::detail::warp_size;
-  // string_n is prefix(string_n-1) + suffix_n. in the worst case, copying
-  // a warp will take 32 iterations.
-  // exceptions:
-  // 1) all prefix_lens are 0. all data is in the suffix, already done.
-  // 2) all prefix_lens are equal. all threads copy last_string[0:prefix_len].
-  // 2a) all prefix_n-1 > prefix_n, can still go to last_string
-  // 2b) all prefix_lens are != 0, so there's a chance to copy the first
-  //     min(prefix_len) bytes from last_string, but this optimization probably
-  //     isn't worth the effort
+
+  // let p(n) === length(prefix(string_n))
   //
-  // check for 1) and then loop
-  // for i = 0 -> 31:
-  //   check for 2) and return if possible
-  //   copy prefix_i bytes from string i-1 (last_string if i==0), update prefix_lens
-  //   check lanes that can copy from the blocker to their left, update prefix_lens
-  //   if all prefix_len == 0 break
-  // worst case for above is O(n) iterations, but hopefully will average out to O(log(n))
+  // if p(n-1) > p(n), then string_n can be completed when string_n-2 is completed. likewise if
+  // p(m) > p(n), then string_n can be completed with string_m-1. however, if p(m) < p(n), then m
+  // is a "blocker" for string_n; string_n can be completed only after string_m is.
   //
-  __shared__ __align__(8) uint8_t const* last_ptr;
+  // we will calculate the nearest blocking position for each lane, and then fill in string_0. we
+  // then iterate, finding all lanes that have had their "blocker" filled in and completing them.
+  // when all lanes are filled in, we return. this will still hit the worst case if p(n-1) < p(n)
+  // for all n
   __shared__ __align__(8) int64_t prefix_lens[warp_size];
   __shared__ __align__(8) uint8_t const* offsets[warp_size];
 
@@ -2145,11 +2137,6 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   // if all prefix_len's are zero, then there's nothing to do
   if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
 
-  // initialize mask so lane 0 doesn't vote. will remove lane "i+1" at the end of each iteration
-  uint32_t mask = 0xffff'fffe;
-  if (lane_id == 0) { last_ptr = last_string; }
-  __syncwarp();
-
   // find a neighbor to the left that has a prefix length less than this lane. once that
   // neighbor is complete, this lane can be completed.
   int blocker = lane_id - 1;
@@ -2157,23 +2144,16 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
     blocker--;
   }
 
-  for (uint32_t i = 0; i < warp_size && i + start_idx < value_count; i++) {
-    // see if all prefixes are <= those of the neighbor to the left. if so, then copy prefix_len
-    // bytes from last_string and return.
-    if (__all_sync(mask, prefix_len <= prefix_lens[lane_id - 1])) {
-      if (lane_id >= i && lane_out != nullptr) { memcpy(lane_out, last_ptr, prefix_len); }
-      return;
-    }
+  // fill in lane 0 (if necessary)
+  if (lane_id == 0 && prefix_len > 0) {
+    memcpy(lane_out, last_string, prefix_len);
+    prefix_lens[0] = prefix_len = 0;
+  }
+  __syncwarp();
 
-    // current leader gets data from last_ptr
-    if (lane_id == i && prefix_len != 0) {
-      memcpy(lane_out, last_ptr, prefix_len);
-      prefix_lens[lane_id] = prefix_len = 0;
-    }
-    __syncwarp();
-
-    // check to see if any blockers have been filled
-    if (lane_id > i && prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
+  // now fill in blockers until done
+  for (uint32_t i = 1; i < warp_size && i + start_idx < value_count; i++) {
+    if (prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
       memcpy(lane_out, offsets[blocker], prefix_len);
       prefix_lens[lane_id] = prefix_len = 0;
     }
@@ -2181,13 +2161,6 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
 
     // check for finished
     if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
-
-    // current lane is done, make it last_ptr
-    if (lane_id == i) { last_ptr = lane_out; }
-    __syncwarp();
-
-    // remove next lane from mask
-    mask <<= 1;
   }
 }
 
