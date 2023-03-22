@@ -2165,24 +2165,22 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
       return;
     }
 
-    if (prefix_lens[i] != 0) {
-      // current leader gets data from last_ptr
-      if (lane_id == i) {
-        memcpy(lane_out, last_ptr, prefix_len);
-        prefix_lens[lane_id] = prefix_len = 0;
-      }
-      __syncwarp();
-
-      // check to see if any blockers have been filled
-      if (lane_id > i && prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
-        memcpy(lane_out, offsets[blocker], prefix_len);
-        prefix_lens[lane_id] = prefix_len = 0;
-      }
-      __syncwarp();
-
-      // check for finished
-      if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
+    // current leader gets data from last_ptr
+    if (lane_id == i && prefix_len != 0) {
+      memcpy(lane_out, last_ptr, prefix_len);
+      prefix_lens[lane_id] = prefix_len = 0;
     }
+    __syncwarp();
+
+    // check to see if any blockers have been filled
+    if (lane_id > i && prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
+      memcpy(lane_out, offsets[blocker], prefix_len);
+      prefix_lens[lane_id] = prefix_len = 0;
+    }
+    __syncwarp();
+
+    // check for finished
+    if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
 
     // current lane is done, make it last_ptr
     if (lane_id == i) { last_ptr = lane_out; }
