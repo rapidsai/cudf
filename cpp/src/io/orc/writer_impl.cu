@@ -2211,6 +2211,7 @@ std::tuple<orc_streams,
            intermediate_statistics,
            pinned_buffer<uint8_t>>
 convert_table_to_orc_data(table_view const& input,
+                          table_device_view const& d_table,
                           table_input_metadata const& table_meta,
                           stripe_size_limits max_stripe_size,
                           size_type row_index_stride,
@@ -2222,11 +2223,10 @@ convert_table_to_orc_data(table_view const& input,
                           data_sink const& out_sink,
                           rmm::cuda_stream_view stream)
 {
-  auto const input_tview = table_device_view::create(input, stream);
+  auto orc_table = make_orc_table_view(input, d_table, table_meta, stream);
 
-  auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
-
-  auto pd_masks = init_pushdown_null_masks(orc_table, stream);
+  // This is unused but it holds memory buffers for later access thus needs to be kept alive.
+  [[maybe_unused]] auto pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
 
@@ -2450,6 +2450,8 @@ void writer::impl::write(table_view const& input)
 
   if (not table_meta) { table_meta = make_table_meta(input); }
 
+  auto const input_tview = table_device_view::create(input, stream);
+
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current writer
   // is still intact.
@@ -2468,6 +2470,7 @@ void writer::impl::write(table_view const& input)
                          stream_output] = [&] {
     try {
       return convert_table_to_orc_data(input,
+                                       *input_tview,
                                        *table_meta,
                                        max_stripe_size,
                                        row_index_stride,
