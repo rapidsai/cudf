@@ -2921,12 +2921,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * corresponding entry in the repls column. All occurrences found in each string are replaced.
    * The repls argument can optionally contain a single string. In this case, all matching 
    * target substrings will be replaced by that single string.
+   *
    * Example:
    * cv = ["hello", "goodbye"]
    * targets = ["e","o"]
    * repls = ["EE","OO"]
    * r1 = cv.stringReplace(targets, repls)
    * r1 is now ["hEEllO", "gOOOOdbyEE"]
+   *
    * targets = ["e", "o"]
    * repls = ["_"]
    * r2 = cv.stringReplace(targets, repls)
@@ -4205,11 +4207,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Native method to replace target strings by corresponding repl strings.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param targets handle of column containing the strings being searched.
-   * @param repls handle of column containing the strings to replace (can optionally contain a single string)
+   * @param inputCV native handle of the cudf::column_view being operated on.
+   * @param targetsCV handle of column containing the strings being searched.
+   * @param replsCV handle of column containing the strings to replace (can optionally contain a single string)
    */
-  private static native long stringReplaceMulti(long columnView, long targets, long repls) throws CudfException;
+  private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
 
   /**
    * Native method for replacing each regular expression pattern match with the specified
