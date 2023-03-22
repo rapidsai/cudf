@@ -52,6 +52,6 @@ static void bench_minhash(nvbench::state& state)
 
 NVBENCH_BENCH(bench_minhash)
   .set_name("minhash")
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
-  .add_int64_axis("row_width", {8, 16, 32, 64, 128})
-  .add_int64_axis("hash_width", {5, 10, 25, 70, 100});
+  .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
+  .add_int64_axis("row_width", {128, 256, 512, 1024, 2048})
+  .add_int64_axis("hash_width", {5, 10, 25});

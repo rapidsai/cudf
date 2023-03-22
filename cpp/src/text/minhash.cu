@@ -46,14 +46,21 @@ struct minhash_fn {
   __device__ cudf::hash_value_type operator()(cudf::size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
-    auto const d_str = d_strings.element<cudf::string_view>(idx);
+    auto const d_str  = d_strings.element<cudf::string_view>(idx);
+    auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
+
+    if (d_str.length() <= width) return hasher(d_str);
+
+    auto const begin = d_str.begin();
+    auto const end   = d_str.end() - (width - 1);
 
     auto mh = cudf::hash_value_type{0};
-    for (cudf::size_type pos = 0; pos < d_str.length() - (width - 1); ++pos) {
-      auto const ss     = d_str.substr(pos, width);
-      auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
+    for (auto itr = begin; itr < end; ++itr) {
+      auto const offset = itr.byte_offset();
+      auto const ss =
+        cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
       auto const hvalue = hasher(ss);
-      // cudf::detail::hash_combine(seed, hasher(ss)); matches cudf::hash() result
+      // cudf::detail::hash_combine(seed, hasher(ss)); -- matches cudf::hash() result
 
       mh = mh > 0 ? cudf::detail::min(hvalue, mh) : hvalue;
     }

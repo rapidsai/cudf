@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,6 +118,13 @@ __device__ inline size_type string_view::length() const
 // this custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
   : p{str.data()}, bytes{str.size_bytes()}, char_pos{pos}, byte_pos{str.byte_offset(pos)}
+{
+}
+
+__device__ inline string_view::const_iterator::const_iterator(const string_view& str,
+                                                              size_type pos,
+                                                              size_type offset)
+  : p{str.data()}, bytes{str.size_bytes()}, char_pos{pos}, byte_pos{offset}
 {
 }
 
@@ -244,7 +251,7 @@ __device__ inline string_view::const_iterator string_view::begin() const
 
 __device__ inline string_view::const_iterator string_view::end() const
 {
-  return const_iterator(*this, length());
+  return const_iterator(*this, length(), size_bytes());
 }
 // @endcond
 
