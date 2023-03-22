@@ -2175,9 +2175,8 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
 
       // check to see if any blockers have been filled
       if (lane_id > i && prefix_len != 0 && prefix_lens[blocker] == 0 && lane_out != nullptr) {
-          memcpy(lane_out, offsets[blocker], prefix_len);
-          prefix_lens[lane_id] = prefix_len = 0;
-        }
+        memcpy(lane_out, offsets[blocker], prefix_len);
+        prefix_lens[lane_id] = prefix_len = 0;
       }
       __syncwarp();
 
