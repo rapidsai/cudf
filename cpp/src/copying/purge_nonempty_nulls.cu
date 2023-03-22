@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ bool type_may_have_nonempty_nulls(cudf::type_id const& type)
 bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   if (not input.has_nulls()) { return false; }  // No nulls => no dirty rows.
+
+  if ((input.size() == input.null_count()) && (input.num_children() == 0)) { return false; }
 
   // Cross-reference nullmask and offsets.
   auto const type         = input.type().id();

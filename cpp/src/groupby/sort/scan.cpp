@@ -129,8 +129,10 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
   auto const gather_map        = [&]() {
     if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
-      return cudf::detail::sequence(
-        group_labels.size(), *cudf::make_fixed_width_scalar(size_type{0}, stream), stream);
+      return cudf::detail::sequence(group_labels.size(),
+                                    *cudf::make_fixed_width_scalar(size_type{0}, stream),
+                                    stream,
+                                    rmm::mr::get_current_device_resource());
     } else {
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);
