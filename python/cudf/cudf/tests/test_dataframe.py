@@ -10030,6 +10030,7 @@ def test_dataframe_transpose_complex_types(data):
 
     assert_eq(expected, actual)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -10043,6 +10044,7 @@ def test_dataframe_values_complex_types(data):
     with pytest.raises(NotImplementedError):
         gdf.values
 
+
 def test_dataframe_from_arrow_slice():
     table = pa.Table.from_pandas(
         pd.DataFrame.from_dict(
@@ -10055,4 +10057,3 @@ def test_dataframe_from_arrow_slice():
     actual = cudf.DataFrame.from_arrow(table_slice)
 
     assert_eq(expected, actual)
-

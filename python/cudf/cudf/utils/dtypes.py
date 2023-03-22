@@ -580,7 +580,10 @@ def find_common_type(dtypes):
             # common dtype, for example:
             # ListDtype(int64) & ListDtype(int32) common
             # dtype could be ListDtype(int64).
-            return cudf.dtype("O")
+            raise NotImplementedError(
+                "Finding a common type for `ListDtype` is currently "
+                "not supported"
+            )
     if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
         if len(dtypes) == 1:
             return dtypes.get(0)
