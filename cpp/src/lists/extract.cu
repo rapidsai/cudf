@@ -101,8 +101,10 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
  */
 std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_stream_view stream)
 {
-  return cudf::detail::sequence(
-    num_lists + 1, cudf::scalar_type_t<size_type>(0, true, stream), stream);
+  return cudf::detail::sequence(num_lists + 1,
+                                cudf::scalar_type_t<size_type>(0, true, stream),
+                                stream,
+                                rmm::mr::get_current_device_resource());
 }
 
 }  // namespace
