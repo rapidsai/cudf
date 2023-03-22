@@ -496,8 +496,7 @@ class Frame(BinaryOperand, Scannable):
                     ),
                 ):
                     raise NotImplementedError(
-                        f"{dtype} is not yet supported to be exported to"
-                        "a cupy array"
+                        f"{dtype} cannot be exposed as a cupy array"
                     )
             dtype = find_common_type(dtypes)
 
