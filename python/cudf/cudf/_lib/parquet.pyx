@@ -475,6 +475,12 @@ cdef class ParquetWriter:
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
 
+    Notes
+    -----
+    `DataFrame.to_parquet` and `ParquetWriter` differ in the default
+    value for `force_nullable_schema` to enable all the chunks being
+    written by chunked parquet writer to be schema identical.
+
     See Also
     --------
     cudf.io.parquet.write_parquet
