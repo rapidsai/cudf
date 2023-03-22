@@ -698,7 +698,14 @@ cdef _set_col_metadata(
     column_in_metadata& col_meta,
     bool force_nullable_schema
 ):
-    col_meta.set_nullability(force_nullable_schema or col.nullable)
+    if force_nullable_schema or not col.nullable:
+        # only need to set/define `_nullable` in libcudf
+        # for two cases:
+        # 1. if `force_nullable_schema` is true.
+        # 2. if `force_nullable_schema` is false, and
+        # we want to enforce it to a column that has
+        # no-nulls. (A scenario for Chunked parquet writer).
+        col_meta.set_nullability(force_nullable_schema)
 
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
