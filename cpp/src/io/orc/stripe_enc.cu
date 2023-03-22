@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +48,6 @@ constexpr int scratch_buffer_size = 512 * 4;
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
 // Workaround replaces zero-length patch lists by a dummy zero patch
 constexpr bool zero_pll_war = true;
-
-static __device__ __constant__ int64_t kORCTimeToUTC =
-  1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 
 struct byterle_enc_state_s {
   uint32_t literal_run;
@@ -814,7 +811,7 @@ __global__ void __launch_bounds__(block_size)
             int32_t ts_scale    = powers_of_ten[9 - min(s->chunk.scale, 9)];
             int64_t seconds     = ts / ts_scale;
             int64_t nanos       = (ts - seconds * ts_scale);
-            s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
+            s->vals.i64[nz_idx] = seconds - orc_utc_epoch;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
