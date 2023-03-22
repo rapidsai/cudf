@@ -259,6 +259,14 @@ def to_cudf_compatible_scalar(val, dtype=None):
         (dtype is None) and isinstance(val, str)
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
+        if val.endswith("\x00"):
+            # Numpy string dtypes are fixed width and use NULL to
+            # indicate the end of the string, so they cannot
+            # distinguish between "abc\x00" and "abc".
+            # https://github.com/numpy/numpy/issues/20118
+            # In this case, don't try going through numpy and just use
+            # the string value directly (cudf.DeviceScalar will DTRT)
+            return val
 
     if isinstance(val, datetime.datetime):
         val = np.datetime64(val)

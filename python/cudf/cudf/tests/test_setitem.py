@@ -355,7 +355,6 @@ def test_scatter_by_slice_with_start_and_step():
     assert_eq(target, ctarget)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12990")
 @pytest.mark.parametrize("n", [1, 3])
 def test_setitem_str_trailing_null(n):
     trailing_nulls = "\x00" * n
