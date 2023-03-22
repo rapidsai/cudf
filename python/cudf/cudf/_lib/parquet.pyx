@@ -321,7 +321,8 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
-    object partitions_info=None
+    object partitions_info=None,
+    object force_nullable_schema=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -364,7 +365,9 @@ def write_parquet(
 
         tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
-            table[name]._column, tbl_meta.get().column_metadata[i]
+            table[name]._column,
+            tbl_meta.get().column_metadata[i],
+            force_nullable_schema
         )
 
     cdef map[string, string] tmp_user_data
@@ -467,6 +470,16 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
+    force_nullable_schema : bool, default True.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+
+    Notes
+    -----
+    `DataFrame.to_parquet` and `ParquetWriter` differ in the default
+    value for `force_nullable_schema` to enable all the chunks being
+    written by chunked parquet writer to be schema identical.
 
     See Also
     --------
@@ -484,13 +497,15 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
+    cdef bool force_nullable_schema
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000):
+                  int max_page_size_rows=20000,
+                  bool force_nullable_schema=True):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -505,6 +520,7 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
+        self.force_nullable_schema = force_nullable_schema
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -597,7 +613,9 @@ cdef class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
             _set_col_metadata(
-                table[name]._column, self.tbl_meta.get().column_metadata[i]
+                table[name]._column,
+                self.tbl_meta.get().column_metadata[i],
+                self.force_nullable_schema
             )
 
         index = (
@@ -675,15 +693,29 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
+cdef _set_col_metadata(
+    Column col,
+    column_in_metadata& col_meta,
+    bool force_nullable_schema
+):
+    col_meta.set_nullability(force_nullable_schema or col.nullable)
+
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_metadata(child_col, col_meta.child(i))
+            _set_col_metadata(
+                child_col,
+                col_meta.child(i),
+                force_nullable_schema
+            )
     elif is_list_dtype(col):
-        _set_col_metadata(col.children[1], col_meta.child(1))
+        _set_col_metadata(
+            col.children[1],
+            col_meta.child(1),
+            force_nullable_schema
+        )
     else:
         if is_decimal_dtype(col):
             col_meta.set_decimal_precision(col.dtype.precision)
