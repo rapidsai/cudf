@@ -594,8 +594,6 @@ void build_dictionaries(orc_table_view& orc_table,
                         bool enable_dictionary,
                         rmm::cuda_stream_view stream)
 {
-  const auto num_rowgroups = dict.size().first;
-
   for (size_t dict_idx = 0; dict_idx < orc_table.num_string_columns(); ++dict_idx) {
     auto& str_column = orc_table.string_column(dict_idx);
     str_column.attach_stripe_dict(stripe_dict.base_host_ptr(), stripe_dict.base_device_ptr());
@@ -2206,6 +2204,7 @@ std::tuple<orc_streams,
            hostdevice_2dvector<gpu::StripeStream>,
            encoded_data,
            file_segmentation,
+           hostdevice_2dvector<gpu::StripeDictionary>,
            std::vector<StripeInformation>,
            orc_table_view,
            rmm::device_buffer,
@@ -2227,7 +2226,8 @@ convert_table_to_orc_data(table_view const& input,
 
   auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
 
-  auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
+  // This is unused but it holds memory buffers for later access thus needs to be kept alive.
+  [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
 
@@ -2297,6 +2297,7 @@ convert_table_to_orc_data(table_view const& input,
             std::move(strm_descs),
             std::move(enc_data),
             std::move(segmentation),
+            std::move(stripe_dict),
             std::move(stripes),
             std::move(orc_table),
             rmm::device_buffer{},  // compressed_data
@@ -2382,6 +2383,7 @@ convert_table_to_orc_data(table_view const& input,
           std::move(strm_descs),
           std::move(enc_data),
           std::move(segmentation),
+          std::move(stripe_dict),
           std::move(stripes),
           std::move(orc_table),
           std::move(compressed_data),
@@ -2454,16 +2456,17 @@ void writer::impl::write(table_view const& input)
   // is still intact.
   // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
   // writing anything to it.
-  auto [streams,
-        comp_results,
-        strm_descs,
-        enc_data,
-        segmentation,
-        stripes,
-        orc_table,
-        compressed_data,
-        intermediate_stats,
-        stream_output] = [&] {
+  [[maybe_unused]] auto [streams,
+                         comp_results,
+                         strm_descs,
+                         enc_data,
+                         segmentation,
+                         stripe_dict, /* unused, but its data will be accessed via pointer later */
+                         stripes,
+                         orc_table,
+                         compressed_data,
+                         intermediate_stats,
+                         stream_output] = [&] {
     try {
       return convert_table_to_orc_data(input,
                                        *table_meta,

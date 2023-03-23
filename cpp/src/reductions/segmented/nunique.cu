@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/segmented_reduction.cuh>
-#include <cudf/detail/segmented_reduction_functions.hpp>
+#include <cudf/reduction/detail/segmented_reduction.cuh>
+#include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -32,6 +32,7 @@
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 namespace {
 template <typename ComparatorType>
 struct is_unique_fn {
@@ -89,7 +90,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                           mr);
 
   // Sum the unique identifiers within each segment
-  auto add_op = cudf::reduction::op::sum{};
+  auto add_op = op::sum{};
   cudf::reduction::detail::segmented_reduce(identifiers.begin(),
                                             offsets.begin(),
                                             offsets.end(),
@@ -104,6 +105,6 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
 
   return result;
 }
-
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
