@@ -580,6 +580,27 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
+    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            # TODO: As list dtypes allow casting
+            # to identical types, improve this logic of returning a
+            # common dtype, for example:
+            # ListDtype(int64) & ListDtype(int32) common
+            # dtype could be ListDtype(int64).
+            raise NotImplementedError(
+                "Finding a common type for `ListDtype` is currently "
+                "not supported"
+            )
+    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            raise NotImplementedError(
+                "Finding a common type for `StructDtype` is currently "
+                "not supported"
+            )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
