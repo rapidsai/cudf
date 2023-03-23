@@ -84,6 +84,13 @@ class datasource {
     virtual ~buffer() {}
 
     /**
+     * @brief Set the stream object
+     *
+     * @param stream
+     */
+    virtual void set_stream(rmm::cuda_stream_view stream) = 0;
+
+    /**
      * @brief Factory to construct a datasource buffer object from a container.
      *
      * @tparam Container Type of the container to construct the buffer from
@@ -336,6 +343,13 @@ class datasource {
      */
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
+    /**
+     * @brief Set the stream object
+     *
+     * @param stream
+     */
+    void set_stream(rmm::cuda_stream_view stream) {}
+
    private:
     uint8_t const* _data{nullptr};
     size_t _size{0};
@@ -391,6 +405,16 @@ class datasource {
       return static_cast<uint8_t const*>(_data_ptr);
     }
 
+    /**
+     * @brief Set the stream object
+     *
+     * @param stream
+     */
+    void set_stream(rmm::cuda_stream_view stream)
+    {
+      if constexpr (std::is_same_v<Container, rmm::device_buffer>) { _data.set_stream(stream); }
+    }
+
    private:
     Container _data;
     void const* _data_ptr;
@@ -416,6 +440,7 @@ class arrow_io_source : public datasource {
     }
     [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
     [[nodiscard]] uint8_t const* data() const override { return arrow_buffer->data(); }
+    void set_stream(rmm::cuda_stream_view stream) {}
   };
 
  public:

@@ -34,6 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <future>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -118,9 +119,12 @@ class reader::impl {
 
  private:
   struct file_portion {
-    hostdevice_span<gpu::ColumnChunkDesc> chunks;
+    hostdevice_vector<gpu::ColumnChunkDesc> chunks;
     std::future<void> read_handle;
-    cudf::host_span<std::unique_ptr<datasource::buffer>> raw_page_data;
+    std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+    std::vector<std::unique_ptr<datasource::buffer>> raw_compressed_page_data;
+    bool has_compressed_data;
+    rmm::cuda_stream_view stream;
   };
 
   /**
@@ -142,11 +146,10 @@ class reader::impl {
    *
    * @param portions file read portions that contain chunks each portion read
    * @param page_arrays page array for each portion read
-   * @return merges page array with updates chunk pointers into that data
    */
-  hostdevice_vector<gpu::PageInfo> merge_page_arrays(
-    std::vector<file_portion>& portions,
-    std::vector<hostdevice_vector<gpu::PageInfo>>& page_arrays);
+  void merge_arrays(std::vector<file_portion>& portions,
+                    std::vector<hostdevice_vector<gpu::PageInfo>>& page_arrays,
+                    rmm::cuda_stream_view stream);
 
   /**
    * @brief Create chunk information and start file reads
@@ -156,10 +159,9 @@ class reader::impl {
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<file_portion>> create_and_read_column_chunks(
+  file_portion create_and_read_column_chunks(
     cudf::host_span<row_group_info const> const row_groups_info,
-    size_type num_rows,
-    size_t portion_size,
+    size_type remaining_rows,
     rmm::cuda_stream_view stream);
 
   /**
