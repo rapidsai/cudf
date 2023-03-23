@@ -10058,3 +10058,18 @@ def test_dataframe_init_from_scalar_and_lists(data):
     expected = pd.DataFrame(data)
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_init_length_error():
+    assert_exceptions_equal(
+        lfunc=pd.DataFrame,
+        rfunc=cudf.DataFrame,
+        lfunc_args_and_kwargs=(
+            [],
+            {"data": {"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"data": {"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}},
+        ),
+    )
