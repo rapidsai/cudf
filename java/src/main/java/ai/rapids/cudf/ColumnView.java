@@ -2936,7 +2936,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * 
    * @param targets Strings to search for in each string.
    * @param repls Corresponding replacement strings for target strings.
-   * @return A new java column vector containing the replaced strings
+   * @return A new java column vector containing the replaced strings.
    */
   public final ColumnVector stringReplace(ColumnView targets, ColumnView repls) {
     assert type.equals(DType.STRING) : "column type must be a String";
@@ -4209,7 +4209,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method to replace target strings by corresponding repl strings.
    * @param inputCV native handle of the cudf::column_view being operated on.
    * @param targetsCV handle of column containing the strings being searched.
-   * @param replsCV handle of column containing the strings to replace (can optionally contain a single string)
+   * @param replsCV handle of column containing the strings to replace (can optionally contain a single string).
    */
   private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
 
