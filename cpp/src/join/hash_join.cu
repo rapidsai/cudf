@@ -101,7 +101,7 @@ std::size_t compute_join_output_size(
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
 
-    auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
     if (join == join_kind::LEFT_JOIN) {
       return hash_table.pair_count_outer(
         iter, iter + probe_table_num_rows, equality, stream.value());

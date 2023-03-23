@@ -18,7 +18,6 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/table/experimental/row_operators.cuh>
-
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
