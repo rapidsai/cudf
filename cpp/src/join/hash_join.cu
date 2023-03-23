@@ -47,14 +47,13 @@ namespace {
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
  *
- * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
- *
- * @tparam JoinKind The type of join to be performed
+ * @throw cudf::logic_error if join is not INNER_JOIN or LEFT_JOIN
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
+ * @param join The type of join to be performed
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
@@ -66,7 +65,7 @@ std::size_t compute_join_output_size(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_build,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
   cudf::detail::multimap_type const& hash_table,
-  join_kind JoinKind,
+  join_kind join,
   bool const has_nulls,
   cudf::null_equality const nulls_equal,
   rmm::cuda_stream_view stream)
@@ -77,7 +76,7 @@ std::size_t compute_join_output_size(
   // If the build table is empty, we know exactly how large the output
   // will be for the different types of joins and can return immediately
   if (0 == build_table_num_rows) {
-    switch (JoinKind) {
+    switch (join) {
       // Inner join with an empty table will have no output
       case join_kind::INNER_JOIN: return 0;
 
@@ -103,7 +102,7 @@ std::size_t compute_join_output_size(
     pair_equality equality{device_comparator};
 
     auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
-    if (JoinKind == join_kind::LEFT_JOIN) {
+    if (join == join_kind::LEFT_JOIN) {
       return hash_table.pair_count_outer(
         iter, iter + probe_table_num_rows, equality, stream.value());
     } else {
@@ -125,11 +124,10 @@ std::size_t compute_join_output_size(
  * and returns the output indices of `build_table` and `probe_table` as a combined table.
  * Behavior is undefined if the provided `output_size` is smaller than the actual output size.
  *
- * @tparam JoinKind The type of join to be performed.
- *
  * @param build_table Table of build side columns to join.
  * @param probe_table Table of probe side columns to join.
  * @param hash_table Hash table built from `build_table`.
+ * @param join The type of join to be performed
  * @param compare_nulls Controls whether null join-key values should match or not.
  * @param output_size Optional value which allows users to specify the exact output size.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -145,7 +143,7 @@ probe_join_hash_table(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_build,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
   cudf::detail::multimap_type const& hash_table,
-  join_kind JoinKind,
+  join_kind join,
   bool has_nulls,
   null_equality compare_nulls,
   std::optional<std::size_t> output_size,
@@ -153,9 +151,8 @@ probe_join_hash_table(
   rmm::mr::device_memory_resource* mr)
 {
   // Use the output size directly if provided. Otherwise, compute the exact output size
-  cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
-                                            ? cudf::detail::join_kind::LEFT_JOIN
-                                            : JoinKind;
+  auto const probe_join_type =
+    (join == cudf::detail::join_kind::FULL_JOIN) ? cudf::detail::join_kind::LEFT_JOIN : join;
 
   std::size_t const join_size = output_size ? *output_size
                                             : compute_join_output_size(build_table,
@@ -163,7 +160,7 @@ probe_join_hash_table(
                                                                        preprocessed_build,
                                                                        preprocessed_probe,
                                                                        hash_table,
-                                                                       ProbeJoinKind,
+                                                                       probe_join_type,
                                                                        has_nulls,
                                                                        compare_nulls,
                                                                        stream);
@@ -197,8 +194,7 @@ probe_join_hash_table(
     auto out2_zip_begin = thrust::make_zip_iterator(
       thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
-    if (JoinKind == cudf::detail::join_kind::FULL_JOIN or
-        JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
+    if (join == cudf::detail::join_kind::FULL_JOIN or join == cudf::detail::join_kind::LEFT_JOIN) {
       [[maybe_unused]] auto [out1_zip_end, out2_zip_end] =
         hash_table.pair_retrieve_outer(iter,
                                        iter + probe_table_num_rows,
@@ -207,7 +203,7 @@ probe_join_hash_table(
                                        equality,
                                        stream.value());
 
-      if (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+      if (join == cudf::detail::join_kind::FULL_JOIN) {
         auto const actual_size = out1_zip_end - out1_zip_begin;
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
@@ -494,13 +490,13 @@ template <typename Hasher>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
-                                      cudf::detail::join_kind JoinKind,
+                                      cudf::detail::join_kind join,
                                       std::optional<std::size_t> output_size,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
-  if (_is_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
+  if (_is_empty and join != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe_table, stream, mr);
   }
 
@@ -514,14 +510,14 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
     _preprocessed_build,
     preprocessed_probe,
     _hash_table,
-    JoinKind,
+    join,
     cudf::has_nested_nulls(probe_table) | cudf::has_nested_nulls(_build),
     _nulls_equal,
     output_size,
     stream,
     mr);
 
-  if (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+  if (join == cudf::detail::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
       join_indices.second, probe_table.num_rows(), _build.num_rows(), stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
@@ -533,7 +529,7 @@ template <typename Hasher>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
-                                     cudf::detail::join_kind JoinKind,
+                                     cudf::detail::join_kind join,
                                      std::optional<std::size_t> output_size,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -545,7 +541,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
   CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
                "Mismatch in number of columns to be joined on");
 
-  if (is_trivial_join(probe, _build, JoinKind)) {
+  if (is_trivial_join(probe, _build, join)) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
@@ -557,7 +553,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                           [](const auto& b, const auto& p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  return probe_join_indices(probe, JoinKind, output_size, stream, mr);
+  return probe_join_indices(probe, join, output_size, stream, mr);
 }
 }  // namespace detail
 
