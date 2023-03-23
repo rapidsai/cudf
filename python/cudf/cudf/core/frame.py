@@ -485,9 +485,20 @@ class Frame(BinaryOperand, Scannable):
             )
 
         if dtype is None:
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
-            )
+            dtypes = [col.dtype for col in self._data.values()]
+            for dtype in dtypes:
+                if isinstance(
+                    dtype,
+                    (
+                        cudf.ListDtype,
+                        cudf.core.dtypes.DecimalDtype,
+                        cudf.StructDtype,
+                    ),
+                ):
+                    raise NotImplementedError(
+                        f"{dtype} cannot be exposed as a cupy array"
+                    )
+            dtype = find_common_type(dtypes)
 
         matrix = make_empty_matrix(
             shape=(len(self), ncol), dtype=dtype, order="F"

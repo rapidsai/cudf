@@ -139,7 +139,8 @@ mixed_join(
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask  = cudf::detail::bitmask_and(build, stream).first;
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   auto preprocessed_build = experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
                         preprocessed_build,
@@ -392,7 +393,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask  = cudf::detail::bitmask_and(build, stream).first;
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   auto preprocessed_build = experimental::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
                         preprocessed_build,

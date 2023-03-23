@@ -1865,8 +1865,8 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
 
   // Note: Join result might not have nulls pushed down, since it's an output of gather().
   // Must superimpose parent nulls before comparisons.
-  auto [superimposed_results, _] =
-    cudf::structs::detail::push_down_nulls(*result, cudf::get_default_stream());
+  auto [superimposed_results, _] = cudf::structs::detail::push_down_nulls(
+    *result, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto const expected = [] {
     auto fact_ints    = ints{0};
