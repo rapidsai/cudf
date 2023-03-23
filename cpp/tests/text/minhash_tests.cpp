@@ -29,15 +29,22 @@ struct MinHashTest : public cudf::test::BaseFixture {
 
 TEST_F(MinHashTest, Basic)
 {
-  auto input = cudf::test::strings_column_wrapper({"doc 1", "", "this is doc 2", "", "doc 3", "d"},
-                                                  {1, 0, 1, 1, 1, 1});
+  auto input =
+    cudf::test::strings_column_wrapper({"doc 1",
+                                        "",
+                                        "this is doc 2",
+                                        "",
+                                        "doc 3",
+                                        "d",
+                                        "The quick brown fox jumpéd over the lazy brown dog."},
+                                       {1, 0, 1, 1, 1, 1, 1});
 
   auto view = cudf::strings_column_view(input);
 
   auto results = nvtext::minhash(view);
 
   auto expected = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>(
-    {1207251914u, 0u, 21141582u, 0u, 1207251914u, 655955059u}, {1, 0, 1, 1, 1, 1});
+    {1207251914u, 0u, 21141582u, 0u, 1207251914u, 655955059u, 86520422u}, {1, 0, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

@@ -22,6 +22,7 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -34,40 +35,54 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <cub/warp/warp_reduce.cuh>
+
+#include <limits>
+
 namespace nvtext {
 namespace detail {
 namespace {
 
-struct minhash_fn {
-  cudf::column_device_view d_strings;
-  cudf::size_type width;
-  cudf::hash_value_type seed;
+__global__ void minhash_fn(cudf::column_device_view d_strings,
+                           cudf::size_type width,
+                           cudf::hash_value_type seed,
+                           cudf::hash_value_type* d_hashes)
+{
+  cudf::size_type const idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  using warp_reduce         = cub::WarpReduce<cudf::hash_value_type>;
+  __shared__ typename warp_reduce::TempStorage temp_storage;
 
-  __device__ cudf::hash_value_type operator()(cudf::size_type idx) const
-  {
-    if (d_strings.is_null(idx)) return 0;
-    auto const d_str  = d_strings.element<cudf::string_view>(idx);
-    auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-    if (d_str.length() <= width) return hasher(d_str);
-
-    auto const begin = d_str.begin();
-    auto const end   = d_str.end() - (width - 1);
-
-    auto mh = cudf::hash_value_type{0};
-    for (auto itr = begin; itr < end; ++itr) {
-      auto const offset = itr.byte_offset();
-      auto const ss =
-        cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
-      auto const hvalue = hasher(ss);
-      // cudf::detail::hash_combine(seed, hasher(ss)); -- matches cudf::hash() result
-
-      mh = mh > 0 ? cudf::detail::min(hvalue, mh) : hvalue;
-    }
-
-    return mh;
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
+  if (d_strings.is_null(str_idx)) {
+    d_hashes[str_idx] = 0;
+    return;
   }
-};
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (d_str.empty()) {
+    d_hashes[str_idx] = 0;
+    return;
+  }
+
+  auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
+  auto const begin  = d_str.begin() + lane_idx;
+  auto const end    = (d_str.length() <= width) ? d_str.end() : d_str.end() - (width - 1);
+
+  auto mh = std::numeric_limits<cudf::hash_value_type>::max();
+  for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
+    auto const offset = itr.byte_offset();
+    auto const ss = cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
+    auto const hvalue = hasher(ss);
+    // cudf::detail::hash_combine(seed, hasher(ss)); -- matches cudf::hash() result
+
+    mh = cudf::detail::min(hvalue, mh);
+  }
+
+  auto const mhash = warp_reduce(temp_storage).Reduce(mh, thrust::minimum<cudf::hash_value_type>{});
+  if (lane_idx == 0) { d_hashes[str_idx] = mhash; }
+}
 
 }  // namespace
 
@@ -88,9 +103,10 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
     cudf::make_numeric_column(output_type, input.size(), cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
-  auto const itr = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto const fn  = minhash_fn{*d_strings, width, seed};
-  thrust::transform(rmm::exec_policy(stream), itr, itr + input.size(), d_hashes, fn);
+  constexpr int block_size = 256;
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  minhash_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    *d_strings, width, seed, d_hashes);
 
   hashes->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr), input.null_count());
 
