@@ -10031,6 +10031,20 @@ def test_dataframe_transpose_complex_types(data):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_values_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    with pytest.raises(NotImplementedError):
+        gdf.values
+
+
 def test_dataframe_from_arrow_slice():
     table = pa.Table.from_pandas(
         pd.DataFrame.from_dict(

@@ -195,7 +195,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(build, stream);
+    auto const [row_bitmask, _] =
+      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
@@ -433,7 +434,8 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(build, stream);
+    auto const [row_bitmask, _] =
+      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows

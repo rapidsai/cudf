@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -328,7 +328,7 @@ struct dispatch_unary_cast_to {
       auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
                                              size,
                                              rmm::device_buffer{size * cudf::size_of(type), stream},
-                                             copy_bitmask(input, stream),
+                                             copy_bitmask(input, stream, mr),
                                              input.null_count());
 
       mutable_column_view output_mutable = *output;
