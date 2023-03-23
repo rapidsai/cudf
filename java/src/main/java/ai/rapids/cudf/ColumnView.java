@@ -2933,7 +2933,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * repls = ["_"]
    * r2 = cv.stringReplace(targets, repls)
    * r2 is now ["h_ll_", "g__dby_"]
-   * 
+   *
    * @param targets Strings to search for in each string.
    * @param repls Corresponding replacement strings for target strings.
    * @return A new java column vector containing the replaced strings.
