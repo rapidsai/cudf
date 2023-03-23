@@ -27,6 +27,7 @@
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 /**
  * @brief Computes sum of elements in input column
  *
@@ -323,5 +324,6 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
