@@ -175,7 +175,7 @@ class flattened_table {
   std::vector<null_order> const& null_precedence,
   column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.
@@ -222,9 +222,7 @@ class flattened_table {
  *         to be kept alive.
  */
 [[nodiscard]] std::pair<column_view, temporary_nullable_data> push_down_nulls(
-  column_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Push down nulls from columns of the input table into their children columns, using
@@ -251,9 +249,7 @@ class flattened_table {
  *         to be kept alive.
  */
 [[nodiscard]] std::pair<table_view, temporary_nullable_data> push_down_nulls(
-  table_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  table_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Checks if a column or any of its children is a struct column with structs that are null.

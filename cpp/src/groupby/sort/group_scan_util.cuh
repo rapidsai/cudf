@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
         make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
         thrust::identity<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
-      result->set_null_mask(cudf::detail::copy_bitmask(values, stream));
+      result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr));
     } else {
       auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
                                                    thrust::identity<ResultDeviceType>{});
@@ -175,7 +175,7 @@ struct group_scan_functor<K,
     // turn the string_view vector into a strings column
     auto results = make_strings_column(results_vector, string_view{}, stream, mr);
     if (values.has_nulls())
-      results->set_null_mask(cudf::detail::copy_bitmask(values, stream), values.null_count());
+      results->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     return results;
   }
 };

@@ -6,7 +6,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 import cupy as cp
 import numpy as np
@@ -16,6 +16,8 @@ import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
+from cudf._lib.sort import segmented_sort_by_key
+from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -637,7 +639,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # aggregation scheme in libcudf. This is probably "fast
         # enough" for most reasonable input sizes.
         _, offsets, _, group_values = self._grouped()
-        group_offsets = np.asarray(offsets, dtype=np.int32)
+        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
         size_per_group = np.diff(group_offsets)
         # "Out of bounds" n for the group size either means no entries
         # (negative) or all the entries (positive)
@@ -651,7 +653,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             group_offsets = group_offsets[:-1]
         else:
             group_offsets = group_offsets[1:] - size_per_group
-        to_take = np.arange(size_per_group.sum(), dtype=np.int32)
+        to_take = np.arange(size_per_group.sum(), dtype=size_type_dtype)
         fixup = np.empty_like(size_per_group)
         fixup[0] = 0
         np.cumsum(size_per_group[:-1], out=fixup[1:])
@@ -869,6 +871,134 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         group_ids._index = index
         return self._broadcast(group_ids)
+
+    def sample(
+        self,
+        n: Optional[int] = None,
+        frac: Optional[float] = None,
+        replace: bool = False,
+        weights: Union[abc.Sequence, "cudf.Series", None] = None,
+        random_state: Union[np.random.RandomState, int, None] = None,
+    ):
+        """Return a random sample of items in each group.
+
+        Parameters
+        ----------
+        n
+            Number of items to return for each group, if sampling
+            without replacement must be at most the size of the
+            smallest group. Cannot be used with frac. Default is
+            ``n=1`` if frac is None.
+        frac
+            Fraction of items to return. Cannot be used with n.
+        replace
+            Should sampling occur with or without replacement?
+        weights
+            Sampling probability for each element. Must be the same
+            length as the grouped frame. Not currently supported.
+        random_state
+            Seed for random number generation.
+
+        Returns
+        -------
+        New dataframe or series with samples of appropriate size drawn
+        from each group.
+
+        """
+        if weights is not None:
+            # To implement this case again needs different algorithms
+            # in both cases.
+            #
+            # Without replacement, use the weighted reservoir sampling
+            # approach of Efraimidas and Spirakis (2006)
+            # https://doi.org/10.1016/j.ipl.2005.11.003, essentially,
+            # do a segmented argsort sorting on weight-scaled
+            # logarithmic deviates. See
+            # https://timvieira.github.io/blog/post/
+            # 2019/09/16/algorithms-for-sampling-without-replacement/
+            #
+            # With replacement is trickier, one might be able to use
+            # the alias method, otherwise we're back to bucketed
+            # rejection sampling.
+            raise NotImplementedError("Sampling with weights is not supported")
+        if frac is not None and n is not None:
+            raise ValueError("Cannot supply both of frac and n")
+        elif n is None and frac is None:
+            n = 1
+        elif frac is not None and not (0 <= frac <= 1):
+            raise ValueError(
+                "Sampling with fraction must provide fraction in "
+                f"[0, 1], got {frac=}"
+            )
+        # TODO: handle random states properly.
+        if random_state is not None and not isinstance(random_state, int):
+            raise NotImplementedError(
+                "Only integer seeds are supported for random_state "
+                "in this case"
+            )
+        # Get the groups
+        # TODO: convince Cython to convert the std::vector offsets
+        # into a numpy array directly, rather than a list.
+        # TODO: this uses the sort-based groupby, could one use hash-based?
+        _, offsets, _, group_values = self._grouped()
+        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
+        size_per_group = np.diff(group_offsets)
+        if n is not None:
+            samples_per_group = np.broadcast_to(
+                size_type_dtype.type(n), size_per_group.shape
+            )
+            if not replace and (minsize := size_per_group.min()) < n:
+                raise ValueError(
+                    f"Cannot sample {n=} without replacement, "
+                    f"smallest group is {minsize}"
+                )
+        else:
+            # Pandas uses round-to-nearest, ties to even to
+            # pick sample sizes for the fractional case (unlike IEEE
+            # which is round-to-nearest, ties to sgn(x) * inf).
+            samples_per_group = np.round(
+                size_per_group * frac, decimals=0
+            ).astype(size_type_dtype)
+        if replace:
+            # We would prefer to use cupy here, but their rng.integers
+            # interface doesn't take array-based low and high
+            # arguments.
+            low = 0
+            high = np.repeat(size_per_group, samples_per_group)
+            rng = np.random.default_rng(seed=random_state)
+            indices = rng.integers(low, high, dtype=size_type_dtype)
+            indices += np.repeat(group_offsets[:-1], samples_per_group)
+        else:
+            # Approach: do a segmented argsort of the index array and take
+            # the first samples_per_group entries from sorted array.
+            # We will shuffle the group indices and then pick them out
+            # from the grouped dataframe index.
+            nrows = len(group_values)
+            indices = cp.arange(nrows, dtype=size_type_dtype)
+            if len(size_per_group) < 500:
+                # Empirically shuffling with cupy is faster at this scale
+                rs = cp.random.get_random_state()
+                rs.seed(seed=random_state)
+                for off, size in zip(group_offsets, size_per_group):
+                    rs.shuffle(indices[off : off + size])
+            else:
+                rng = cp.random.default_rng(seed=random_state)
+                (indices,) = segmented_sort_by_key(
+                    [as_column(indices)],
+                    [as_column(rng.random(size=nrows))],
+                    as_column(group_offsets),
+                    [],
+                    [],
+                )
+                indices = cp.asarray(indices.data_array_view(mode="read"))
+            # Which indices are we going to want?
+            want = np.arange(samples_per_group.sum(), dtype=size_type_dtype)
+            scan = np.empty_like(samples_per_group)
+            scan[0] = 0
+            np.cumsum(samples_per_group[:-1], out=scan[1:])
+            want += np.repeat(group_offsets[:-1] - scan, samples_per_group)
+            indices = indices[want]
+        return group_values.iloc[indices]
 
     def serialize(self):
         header = {}

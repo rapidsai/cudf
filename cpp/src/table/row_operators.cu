@@ -25,6 +25,8 @@
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -401,9 +403,10 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 {
   check_eq_compatibility(t);
 
-  auto [null_pushed_table, nullable_data] = structs::detail::push_down_nulls(t, stream);
-  auto struct_offset_removed_table        = remove_struct_child_offsets(null_pushed_table);
-  auto verticalized_t = std::get<0>(decompose_structs(struct_offset_removed_table));
+  auto [null_pushed_table, nullable_data] =
+    structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
+  auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
+  auto verticalized_t              = std::get<0>(decompose_structs(struct_offset_removed_table));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
