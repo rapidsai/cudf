@@ -16,10 +16,11 @@
 
 #include "simple.cuh"
 
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::column> segmented_max(
   column_view const& col,
@@ -32,16 +33,10 @@ std::unique_ptr<cudf::column> segmented_max(
 {
   CUDF_EXPECTS(col.type() == output_dtype,
                "segmented_max() operation requires matching output type");
+  using reducer = simple::detail::same_column_type_dispatcher<op::max>;
   return cudf::type_dispatcher(
-    col.type(),
-    simple::detail::same_column_type_dispatcher<cudf::reduction::op::max>{},
-    col,
-    offsets,
-    null_handling,
-    init,
-    stream,
-    mr);
+    col.type(), reducer{}, col, offsets, null_handling, init, stream, mr);
 }
-
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
