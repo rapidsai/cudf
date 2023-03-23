@@ -21,7 +21,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.cuh>
-#include <cudf/detail/segmented_reduction.cuh>
+#include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
