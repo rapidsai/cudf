@@ -10043,3 +10043,18 @@ def test_dataframe_from_arrow_slice():
     actual = cudf.DataFrame.from_arrow(table_slice)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": 4},
+        {"c": 4, "a": [1, 2, 3], "b": ["x", "y", "z"]},
+        {"a": [1, 2, 3], "c": 4},
+    ],
+)
+def test_dataframe_init_from_scalar_and_lists(data):
+    actual = cudf.DataFrame(data)
+    expected = pd.DataFrame(data)
+
+    assert_eq(expected, actual)
