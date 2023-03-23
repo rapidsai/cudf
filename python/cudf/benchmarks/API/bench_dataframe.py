@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 """Benchmarks of DataFrame methods."""
 
@@ -102,6 +102,30 @@ def bench_groupby(benchmark, dataframe, num_key_cols):
 def bench_groupby_agg(benchmark, dataframe, agg, num_key_cols, as_index, sort):
     by = list(dataframe.columns[:num_key_cols])
     benchmark(dataframe.groupby(by=by, as_index=as_index, sort=sort).agg, agg)
+
+
+@benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
+@pytest.mark.parametrize(
+    "num_key_cols",
+    [2, 3, 4],
+)
+@pytest.mark.parametrize("use_frac", [True, False])
+@pytest.mark.parametrize("replace", [True, False])
+@pytest.mark.parametrize("target_sample_frac", [0.1, 0.5, 1])
+def bench_groupby_sample(
+    benchmark, dataframe, num_key_cols, use_frac, replace, target_sample_frac
+):
+    grouper = dataframe.groupby(by=list(dataframe.columns[:num_key_cols]))
+    if use_frac:
+        kwargs = {"frac": target_sample_frac, "replace": replace}
+    else:
+        minsize = grouper.size().min()
+        target_size = numpy.round(
+            target_sample_frac * minsize, decimals=0
+        ).astype(int)
+        kwargs = {"n": target_size, "replace": replace}
+
+    benchmark(grouper.sample, **kwargs)
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")
