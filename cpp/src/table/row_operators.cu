@@ -180,8 +180,9 @@ auto decompose_structs(table_view table,
               c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
           } else if (c->type().id() == type_id::STRUCT) {
             for (size_t child_idx = 0; child_idx < c->children.size(); ++child_idx) {
-              if (child_idx > 0) {
-                verticalized_col_depths.push_back(depth + 1);
+              if (child_idx > 0 ||
+                  (child_idx == 0 && c->children[0]->type().id() == type_id::LIST)) {
+                verticalized_col_depths.push_back(child_idx == 0 ? depth : depth + 1);
                 branch = &flattened.emplace_back();
               }
               recursive_child(c->children[child_idx].get(), branch, depth + 1);
@@ -194,6 +195,18 @@ auto decompose_structs(table_view table,
 
       for (auto const& branch : flattened) {
         column_view temp_col = *branch.back();
+
+        if (temp_col.type().id() == type_id::STRUCT &&
+            (temp_col.num_children() > 0 && temp_col.child(0).type().id() == type_id::LIST)) {
+          temp_col = column_view(temp_col.type(),
+                                 temp_col.size(),
+                                 temp_col.head(),
+                                 temp_col.null_mask(),
+                                 UNKNOWN_NULL_COUNT,
+                                 temp_col.offset(),
+                                 {});
+        }
+
         for (auto it = branch.crbegin() + 1; it < branch.crend(); ++it) {
           auto const& prev_col = *(*it);
           auto children =
@@ -260,7 +273,7 @@ auto decompose_structs(table_view table,
  * This helper function generates dremel data for any list-type columns in a
  * table. This data is necessary for lexicographic comparisons.
  */
-auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
+auto list_lex_preprocess(table_view const& table, rmm::cuda_stream_view stream)
 {
   std::vector<detail::dremel_data> dremel_data;
   std::vector<detail::dremel_device_view> dremel_device_views;
@@ -268,6 +281,22 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
     if (col.type().id() == type_id::LIST) {
       dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
       dremel_device_views.push_back(dremel_data.back());
+    } else if (col.type().id() == type_id::STRUCT) {
+      if (col.num_children() == 0) { continue; }
+      CUDF_EXPECTS(col.num_children() == 1,
+                   "Structs column should be processed to have either 0 or 1 child");
+
+      auto child = col.child(0);
+      while (child.type().id() == type_id::STRUCT) {
+        if (child.num_children() == 0) { break; }
+        CUDF_EXPECTS(child.num_children() == 1,
+                     "Structs column should be processed to have either 0 or 1 child");
+        child = child.child(0);
+      }
+      if (child.type().id() == type_id::LIST) {
+        dremel_data.push_back(detail::get_comparator_data(child, {}, false, stream));
+        dremel_device_views.push_back(dremel_data.back());
+      }
     }
   }
   auto d_dremel_device_views = detail::make_device_uvector_sync(
@@ -293,8 +322,6 @@ void check_lex_compatibility(table_view const& input)
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
-        CUDF_EXPECTS(child->type().id() != type_id::LIST,
-                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }

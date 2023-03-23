@@ -330,8 +330,8 @@ class device_row_comparator {
                                   null_order null_precedence                = null_order::BEFORE,
                                   int depth                                 = 0,
                                   PhysicalElementComparator comparator      = {},
-                                  optional_dremel_view l_dremel_device_view = {},
-                                  optional_dremel_view r_dremel_device_view = {})
+                                  optional_dremel_view l_dremel_device_view = thrust::nullopt,
+                                  optional_dremel_view r_dremel_device_view = thrust::nullopt)
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
@@ -408,7 +408,14 @@ class device_row_comparator {
 
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(),
-        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _comparator},
+        element_comparator{_check_nulls,
+                           lcol,
+                           rcol,
+                           _null_precedence,
+                           depth,
+                           _comparator,
+                           _l_dremel_device_view,
+                           _r_dremel_device_view},
         lhs_element_index,
         rhs_element_index);
     }
@@ -561,9 +568,21 @@ class device_row_comparator {
           auto idx = list_column_index++;
           return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
                                  optional_dremel_view(_r_dremel[idx]));
-        } else {
-          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+        } else if (_lhs.column(i).type().id() == type_id::STRUCT &&
+                   _lhs.column(i).num_child_columns() > 0) {
+          // Any structs column has already been processed to have only 1 child.
+          auto child = _lhs.column(i).child(0);
+          while (child.type().id() == type_id::STRUCT && child.num_child_columns() > 0) {
+            child = child.child(0);
+          }
+          if (child.type().id() == type_id::LIST) {
+            auto idx = list_column_index++;
+
+            return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
+                                   optional_dremel_view(_r_dremel[idx]));
+          }
         }
+        return std::make_tuple(thrust::nullopt, thrust::nullopt);
       }();
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
