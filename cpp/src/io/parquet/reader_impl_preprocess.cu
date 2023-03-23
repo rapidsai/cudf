@@ -915,7 +915,7 @@ void reader::impl::load_and_decompress_data(
   std::mutex queue_mutex;
   std::deque<file_portion> file_portions;
   std::condition_variable portion_added;
-  constexpr size_t portion_size = 64 * 1024 * 1024;
+  constexpr size_t portion_size = 512 * 1024 * 1024;
 
   auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
     CUDF_FUNC_RANGE();
