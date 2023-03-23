@@ -151,7 +151,8 @@ cudf::size_type distinct_count(table_view const& keys,
     // when nulls are equal, insert non-null rows only to improve efficiency
     if (nulls_equal == null_equality::EQUAL and has_nulls) {
       thrust::counting_iterator<size_type> stencil(0);
-      auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
+      auto const [row_bitmask, null_count] =
+        cudf::detail::bitmask_or(keys, stream, rmm::mr::get_current_device_resource());
       row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
       key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
