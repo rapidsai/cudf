@@ -1548,7 +1548,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceMulti(JNIEnv *env, jclass,
                                                                           jlong inputs_cv,
-                                                                          jlong targets_cv, jlong repls_cv) {
+                                                                          jlong targets_cv,
+                                                                          jlong repls_cv) {
   JNI_NULL_CHECK(env, inputs_cv, "column is null", 0);
   JNI_NULL_CHECK(env, targets_cv, "targets string column view is null", 0);
   JNI_NULL_CHECK(env, repls_cv, "repls string column view is null", 0);

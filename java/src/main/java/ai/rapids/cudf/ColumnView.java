@@ -2915,11 +2915,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new strings column where target strings with each string are replaced with 
-   * corresponding replacement strings. For each string in the column, the list of targets 
+   * Returns a new strings column where target strings with each string are replaced with
+   * corresponding replacement strings. For each string in the column, the list of targets
    * is searched within that string. If a target string is found, it is replaced by the
    * corresponding entry in the repls column. All occurrences found in each string are replaced.
-   * The repls argument can optionally contain a single string. In this case, all matching 
+   * The repls argument can optionally contain a single string. In this case, all matching
    * target substrings will be replaced by that single string.
    *
    * Example:
