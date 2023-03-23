@@ -208,7 +208,7 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - librmm==23.4.*
+          - librmm==23.6.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
@@ -239,7 +239,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - scikit-build>=0.13.1
-          - rmm==23.4.*
+          - rmm==23.6.*
       - output_types: conda
         packages:
           - &protobuf protobuf>=4.21.6,<4.22
@@ -343,7 +343,7 @@ dependencies:
           - numba>=0.56.2
           - nvtx>=0.2.1
           - packaging
-          - rmm==23.4.*
+          - rmm==23.6.*
           - typing_extensions
           - *protobuf
       - output_types: conda
@@ -386,7 +386,7 @@ dependencies:
           - distributed>=2023.1.1
       - output_types: pyproject
         packages:
-          - &cudf cudf==23.4.*
+          - &cudf cudf==23.6.*
           - *cupy_pip
   run_cudf_kafka:
     common:
@@ -405,7 +405,7 @@ dependencies:
       - output_types: [requirements, pyproject]
         packages:
           - *cudf
-          - cudf_kafka==23.4.*
+          - cudf_kafka==23.6.*
   test_cpp:
     common:
       - output_types: conda
@@ -492,5 +492,5 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==23.4.*
+          - dask-cuda==23.6.*
           - numba>=0.56.2
