@@ -2126,13 +2126,14 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
   __shared__ __align__(8) int64_t prefix_lens[warp_size];
   __shared__ __align__(8) uint8_t const* offsets[warp_size];
 
-  uint32_t value_count    = dba->prefixes.value_count;
-  uint32_t const ln_idx   = start_idx + lane_id;
-  uint32_t const src_idx  = rolling_index(ln_idx);
-  uint64_t prefix_len     = ln_idx < value_count ? dba->prefixes.value[src_idx] : 0;
-  uint8_t* const lane_out = ln_idx < value_count ? strings_out + dba->offset[src_idx] : nullptr;
-  prefix_lens[lane_id]    = prefix_len;
-  offsets[lane_id]        = lane_out;
+  uint32_t const value_count = dba->prefixes.value_count;
+  uint32_t const ln_idx      = start_idx + lane_id;
+  uint32_t const src_idx     = rolling_index(ln_idx);
+  uint64_t prefix_len        = ln_idx < value_count ? dba->prefixes.value[src_idx] : 0;
+  uint8_t* const lane_out    = ln_idx < value_count ? strings_out + dba->offset[src_idx] : nullptr;
+
+  prefix_lens[lane_id] = prefix_len;
+  offsets[lane_id]     = lane_out;
 
   // if all prefix_len's are zero, then there's nothing to do
   if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
@@ -2302,18 +2303,59 @@ __global__ void __launch_bounds__(64) gpuComputePageStringSizes(
   if (t == 0) { page->page_strings_size = total_bytes; }
 }
 
+// if we are using the nesting decode cache, copy null count back
+__device__ void restore_decode_cache(page_state_s* s)
+{
+  if (s->nesting_info == s->nesting_decode_cache) {
+    int depth = 0;
+    while (depth < s->page.num_output_nesting_levels) {
+      int const thread_depth = depth + threadIdx.x;
+      if (thread_depth < s->page.num_output_nesting_levels) {
+        s->page.nesting_decode[thread_depth].null_count =
+          s->nesting_decode_cache[thread_depth].null_count;
+      }
+      depth += blockDim.x;
+    }
+  }
+}
+
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
 // only used for int32 and int64 physical types (and appears to only be used
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
-__device__ void DecodeDeltaBinary(page_state_s* const s)
+// this kernel only needs 96 threads (3 warps)(for now).
+__global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_binary_state_s db_state;
+  __shared__ __align__(16) page_state_s state_g;
 
-  uint32_t const t       = threadIdx.x;
-  uint32_t const lane_id = t & 0x1f;
-  auto* const db         = &db_state;
+  page_state_s* const s   = &state_g;
+  uint32_t const page_idx = blockIdx.x;
+  uint32_t const t        = threadIdx.x;
+  uint32_t const lane_id  = t & 0x1f;
+  auto* const db          = &db_state;
+
+  // this kernel only handles one encoding type
+  if (pages[page_idx].encoding != Encoding::DELTA_BINARY_PACKED) { return; }
+
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
+                                               is_page_contained(s, min_row, num_rows)))) {
+    return;
+  }
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -2351,7 +2393,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
     // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs values
-    // into the proper location in the output.  warp 3 makes tea.
+    // into the proper location in the output.
     if (t < 32) {
       // warp 0
       // decode repetition and definition levels.
@@ -2395,6 +2437,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     }
     __syncthreads();
   }
+
+  restore_decode_cache(s);
 }
 
 // Decode page data that is DELTA_BYTE_ARRAY packed. This encoding consists of a DELTA_BINARY_PACKED
@@ -2404,21 +2448,45 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 // the prefix lengths to do the final decode for each value. Because the lengths of the prefixes and
 // suffixes are not encoded in the header, we're going to have to first do a quick pass through them
 // to find the start/end of each structure.
-__device__ void DecodeDeltaByteArray(page_state_s* const s)
+__global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_byte_array_state_s db_state;
   __shared__ __align__(8) uint8_t const* suffix_data;
   __shared__ __align__(8) uint8_t const* last_string;
+  __shared__ __align__(16) page_state_s state_g;
 
-  uint32_t const t       = threadIdx.x;
-  uint32_t const lane_id = t & 0x1f;
-  auto* const prefix_db  = &db_state.prefixes;
-  auto* const suffix_db  = &db_state.suffixes;
-  auto* const dba        = &db_state;
+  page_state_s* const s   = &state_g;
+  uint32_t const page_idx = blockIdx.x;
+  uint32_t const t        = threadIdx.x;
+  uint32_t const lane_id  = t & 0x1f;
+  auto* const prefix_db   = &db_state.prefixes;
+  auto* const suffix_db   = &db_state.suffixes;
+  auto* const dba         = &db_state;
 
-  // TODO(ets) assert string_data != nullptr
+  // this kernel only handles one encoding type
+  if (pages[page_idx].encoding != Encoding::DELTA_BYTE_ARRAY) { return; }
+
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
+                                               is_page_contained(s, min_row, num_rows)))) {
+    return;
+  }
+
+  // TODO(ets) assert string_data != nullptr
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -2523,22 +2591,8 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
     __syncthreads();
   }
-}
 
-// if we are using the nesting decode cache, copy null count back
-__device__ void restore_decode_cache(page_state_s* s)
-{
-  if (s->nesting_info == s->nesting_decode_cache) {
-    int depth = 0;
-    while (depth < s->page.num_output_nesting_levels) {
-      int const thread_depth = depth + threadIdx.x;
-      if (thread_depth < s->page.num_output_nesting_levels) {
-        s->page.nesting_decode[thread_depth].null_count =
-          s->nesting_decode_cache[thread_depth].null_count;
-      }
-      depth += blockDim.x;
-    }
-  }
+  restore_decode_cache(s);
 }
 
 /**
@@ -2564,6 +2618,12 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   int t                 = threadIdx.x;
   int out_thread0;
 
+  // these encodings handled by different kernels
+  if (pages[page_idx].encoding == Encoding::DELTA_BINARY_PACKED ||
+      pages[page_idx].encoding == Encoding::DELTA_BYTE_ARRAY) {
+    return;
+  }
+
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
@@ -2580,16 +2640,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
-    return;
-  }
-
-  if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
-    DecodeDeltaBinary(s);
-    restore_decode_cache(s);
-    return;
-  } else if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
-    DecodeDeltaByteArray(s);
-    restore_decode_cache(s);
     return;
   }
 
@@ -2783,6 +2833,42 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
+    pages.device_ptr(), chunks, min_row, num_rows);
+}
+
+/**
+ * @copydoc cudf::io::parquet::gpu::DecodeDeltaBinary
+ */
+void __host__ DecodeDeltaBinary(hostdevice_vector<PageInfo>& pages,
+                                hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                size_t num_rows,
+                                size_t min_row,
+                                rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
+
+  dim3 dim_block(96, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  gpuDecodeDeltaBinary<<<dim_grid, dim_block, 0, stream.value()>>>(
+    pages.device_ptr(), chunks, min_row, num_rows);
+}
+
+/**
+ * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
+ */
+void __host__ DecodeDeltaByteArray(hostdevice_vector<PageInfo>& pages,
+                                   hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                   size_t num_rows,
+                                   size_t min_row,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
+
+  dim3 dim_block(block_size, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  gpuDecodeDeltaByteArray<<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(), chunks, min_row, num_rows);
 }
 
