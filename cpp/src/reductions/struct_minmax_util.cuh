@@ -17,10 +17,10 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/reduction_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -134,10 +134,10 @@ class comparison_binop_generator {
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
-    return comparison_binop_generator(
-      input,
-      stream,
-      std::is_same_v<BinOp, cudf::reduction::op::min> || std::is_same_v<BinOp, cudf::DeviceMin>);
+    return comparison_binop_generator(input,
+                                      stream,
+                                      std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
+                                        std::is_same_v<BinOp, cudf::DeviceMin>);
   }
 
   template <cudf::aggregation::Kind K>
