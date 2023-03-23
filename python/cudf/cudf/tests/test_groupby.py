@@ -2975,7 +2975,7 @@ class TestSample:
                 [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
             )
         elif request.param == "strindex":
-            return cudf.StringIndex(string.ascii_lowercase[:n])
+            return cudf.StringIndex(list(string.ascii_lowercase[:n]))
         elif request.param == "default":
             return None
 
