@@ -920,7 +920,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         data[key] = value
 
                 if len(lengths - {1}) > 1:
-                    raise ValueError("Length mismatch")
+                    raise ValueError("All arrays must be of the same length")
                 else:
                     num_rows = (
                         1 if lengths == {1} else next(iter(lengths - {1}))
