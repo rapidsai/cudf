@@ -66,7 +66,7 @@ option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
-       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" ON
+       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
@@ -115,7 +115,7 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
   )
 endif()
 
-set(CUDF_CXX_FLAGS "-g")
+set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")

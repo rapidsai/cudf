@@ -696,6 +696,361 @@ void reader::impl::allocate_nesting_info()
 }
 
 namespace {
+void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
+{
+  cudaEvent_t event;
+  cudaEventCreate(&event);
+  cudaEventRecord(event, stream);
+  for (uint32_t i = 0; i < streams.size(); i++) {
+    cudaStreamWaitEvent(streams[i], event, 0);
+  }
+  cudaEventDestroy(event);
+}
+
+void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
+{
+  cudaEvent_t event;
+  cudaEventCreate(&event);
+  for (uint32_t i = 0; i < streams.size(); i++) {
+    cudaEventRecord(event, streams[i]);
+    cudaStreamWaitEvent(stream, event, 0);
+  }
+  cudaEventDestroy(event);
+}
+
+std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
+{
+  auto streams = std::vector<rmm::cuda_stream_view>();
+  for (int32_t i = 0; i < count; i++) {
+    streams.emplace_back(stream_pool.get_stream());
+  }
+  return streams;
+}
+
+}  // anonymous namespace
+
+void reader::impl::merge_arrays(std::vector<file_portion>& portions,
+                                std::vector<hostdevice_vector<gpu::PageInfo>>& page_arrays,
+                                rmm::cuda_stream_view stream)
+{
+  auto const total_pages =
+    std::accumulate(page_arrays.begin(), page_arrays.end(), 0, [](int total, auto const& pages) {
+      return total + pages.size();
+    });
+
+  // page data is currently up to date on the host. We could memcpy from the hostdevice_vectors and
+  // build this all now into a hostdevice_vector, but in doing so we would double allocate the page
+  // information for the duration of this function making the high water mark for memory very high.
+  // Instead, we are going to pull apart the hostdevice_vector and free the GPU portion of it
+  // entirely. Then copy the CPU portion over and discard the original CPU portion. The tricky part
+  // is that the chunks array has pointers into the GPU data. So we need to store off the base
+  // pointer for the GPU page data so we can go through the chunks and update the GPU pointer to the
+  // new location once we know it.
+  std::vector<gpu::PageInfo const*> page_bases;
+  page_bases.reserve(page_arrays.size());
+
+  std::vector<gpu::PageInfo> pages;
+  pages.reserve(total_pages);
+
+  std::vector<size_t> page_array_sizes;
+  page_array_sizes.reserve(page_arrays.size());
+
+  //  for (size_t i=0; i<page_arrays.size(); ++i) {
+  //    page_arrays[i].device_to_host(_stream);
+  //  }
+  //  _file_itm_data.chunks.device_to_host(_stream, true);
+
+  size_t chunks_so_far = 0;
+  for (size_t i = 0; i < page_arrays.size(); ++i) {
+    auto& portion_pages = page_arrays[i];
+    page_array_sizes.push_back(portion_pages.size());
+    auto [cpu, gpu] = portion_pages.release();
+    page_bases.push_back(gpu.data());
+    gpu.release();
+    std::visit(
+      [&](auto&& v) {
+        // fixup chunk index in pages
+        if (chunks_so_far > 0) {
+          std::for_each(v.begin(), v.end(), [chunks_so_far, &i](auto& page) {
+            page.chunk_idx += chunks_so_far;
+          });
+        }
+        pages.insert(pages.end(), v.begin(), v.end());
+      },
+      cpu);
+    chunks_so_far += portions[i].chunks.size();
+    _file_itm_data.raw_page_data.insert(_file_itm_data.raw_page_data.end(),
+                                        std::make_move_iterator(portions[i].raw_page_data.begin()),
+                                        std::make_move_iterator(portions[i].raw_page_data.end()));
+  }
+
+  CUDF_EXPECTS(pages.size() == (size_t)total_pages, "didn't get expected pages!");
+
+  // build the hostdevice_vector from the cpu data
+  _file_itm_data.pages_info    = hostdevice_vector<gpu::PageInfo>(std::move(pages), stream);
+  gpu::PageInfo* new_page_base = _file_itm_data.pages_info.device_ptr();
+
+  std::vector<gpu::ColumnChunkDesc> chunks;
+  for (size_t i = 0; i < portions.size(); ++i) {
+    // fixup pointers in chunks
+    std::for_each(portions[i].chunks.begin(), portions[i].chunks.end(), [&](auto& chunk) {
+      chunk.page_info = chunk.page_info - page_bases[i] + new_page_base;
+    });
+    new_page_base += page_array_sizes[i];
+    chunks.insert(chunks.end(), portions[i].chunks.begin(), portions[i].chunks.end());
+  }
+
+  CUDF_EXPECTS(
+    new_page_base = _file_itm_data.pages_info.device_ptr() + _file_itm_data.pages_info.size(),
+    "lengths don't match");
+
+  _file_itm_data.chunks = hostdevice_vector<gpu::ColumnChunkDesc>(std::move(chunks), stream);
+  _file_itm_data.chunks.host_to_device(stream);
+  _file_itm_data.pages_info.host_to_device(stream);
+}
+
+reader::impl::file_portion reader::impl::create_and_read_column_chunks(
+  cudf::host_span<row_group_info const> const row_groups_info,
+  size_type remaining_rows,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  // Descriptors for all the chunks that make up the selected columns
+  const auto num_input_columns = _input_columns.size();
+  std::vector<gpu::ColumnChunkDesc> chunks;
+
+  // Association between each column chunk and its source
+  std::vector<size_type> chunk_source_map;
+
+  // Tracker for eventually deallocating compressed and uncompressed data
+  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  std::vector<std::unique_ptr<datasource::buffer>> raw_compressed_page_data;
+
+  // Keep track of column chunk file offsets
+  std::vector<size_t> column_chunk_offsets;
+
+  // Initialize column chunk information
+  size_t total_decompressed_size = 0;
+  for (const auto& rg : row_groups_info) {
+    const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
+    auto const row_group_start  = rg.start_row;
+    auto const row_group_source = rg.source_index;
+    auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
+
+    // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
+    for (size_t i = 0; i < num_input_columns; ++i) {
+      auto col = _input_columns[i];
+      // look up metadata
+      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
+      auto& schema   = _metadata->get_schema(col.schema_idx);
+
+      auto [type_width, clock_rate, converted_type] =
+        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
+                        _timestamp_type.id(),
+                        schema.type,
+                        schema.converted_type,
+                        schema.type_length);
+
+      column_chunk_offsets.push_back(
+        (col_meta.dictionary_page_offset != 0)
+          ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
+          : col_meta.data_page_offset);
+
+      chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
+                                            nullptr,
+                                            col_meta.num_values,
+                                            schema.type,
+                                            type_width,
+                                            row_group_start,
+                                            row_group_rows,
+                                            schema.max_definition_level,
+                                            schema.max_repetition_level,
+                                            _metadata->get_output_nesting_depth(col.schema_idx),
+                                            required_bits(schema.max_definition_level),
+                                            required_bits(schema.max_repetition_level),
+                                            col_meta.codec,
+                                            converted_type,
+                                            schema.logical_type,
+                                            schema.decimal_precision,
+                                            clock_rate,
+                                            i,
+                                            col.schema_idx));
+
+      // Map each column chunk to its column index and its source index
+      chunk_source_map.push_back(row_group_source);
+
+      if (col_meta.codec != Compression::UNCOMPRESSED) {
+        total_decompressed_size += col_meta.total_uncompressed_size;
+      }
+    }
+    remaining_rows -= row_group_rows;
+  }
+
+  // Read compressed chunk data to device memory
+  auto read_handle = read_column_chunks_async(_sources,
+                                              raw_page_data,
+                                              raw_compressed_page_data,
+                                              chunks,
+                                              0,
+                                              chunks.size(),
+                                              column_chunk_offsets,
+                                              chunk_source_map,
+                                              stream);
+  return file_portion{hostdevice_vector<gpu::ColumnChunkDesc>(std::move(chunks), stream),
+                      std::move(read_handle),
+                      std::move(raw_page_data),
+                      std::move(raw_compressed_page_data),
+                      total_decompressed_size > 0,
+                      stream};
+}
+
+void reader::impl::load_and_decompress_data(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
+{
+  CUDF_FUNC_RANGE();
+  // This function should never be called if `num_rows == 0`.
+  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
+
+  std::mutex queue_mutex;
+  std::deque<file_portion> file_portions;
+  std::condition_variable portion_added;
+  constexpr size_t portion_size = 64 * 1024 * 1024;
+
+  auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
+    CUDF_FUNC_RANGE();
+    size_t this_portion_size      = 0;
+    size_t portion_number         = 0;
+    size_t starting_rowgroup      = 0;
+    size_t portion_rowgroup_count = 0;
+    auto remaining_rows           = num_rows;
+    for (const auto& rg : row_groups_info) {
+      const auto& row_group = _metadata->get_row_group(rg.index, rg.source_index);
+
+      if (this_portion_size > 0 && this_portion_size + row_group.total_byte_size > portion_size) {
+        // too big, wrap it up and add it to the list
+        auto portion = create_and_read_column_chunks(
+          row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
+          remaining_rows,
+          streams[portion_number % streams.size()]);
+        {
+          const std::scoped_lock lock(queue_mutex);
+          file_portions.emplace_back(std::move(portion));
+          portion_added.notify_one();
+        }
+
+        this_portion_size = row_group.total_byte_size;
+        starting_rowgroup += portion_rowgroup_count;
+        portion_rowgroup_count = 1;
+        portion_number++;
+      } else {
+        this_portion_size += row_group.total_byte_size;
+        portion_rowgroup_count++;
+      }
+      remaining_rows -= std::min<int>(remaining_rows, row_group.num_rows);
+    }
+    auto portion = create_and_read_column_chunks(
+      row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
+      remaining_rows,
+      streams[portion_number % streams.size()]);
+    {
+      const std::scoped_lock lock(queue_mutex);
+      file_portions.emplace_back(std::move(portion));
+      portion_added.notify_one();
+    }
+
+    CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
+    return true;
+  };
+
+  constexpr auto num_streams = 2;
+
+  auto stream_pool = rmm::cuda_stream_pool(num_streams);
+  auto streams     = get_streams(num_streams, stream_pool);
+  fork_stream(streams, _stream);
+
+  // spawn a thread to queue all the file reads
+  auto read_task = std::async(std::launch::async, spawn_reads, streams);
+
+  std::vector<hostdevice_vector<gpu::PageInfo>> pages_vector;
+  std::vector<file_portion> completed_portions;
+
+  while (read_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
+         !file_portions.empty()) {
+    auto next_portion = [&]() -> std::optional<file_portion> {
+      std::unique_lock lk(queue_mutex);
+      if (file_portions.empty()) { portion_added.wait(lk); }
+      if (!file_portions.empty()) {
+        auto d = std::move(file_portions.front());
+        file_portions.pop_front();
+        return std::optional<file_portion>(std::move(d));
+      }
+      return std::nullopt;
+    }();
+
+    if (next_portion) {
+      // wait for read to complete
+      nvtxRangePushA("read wait");
+      next_portion->read_handle.wait();
+      nvtxRangePop();
+
+      // Process dataset chunk pages into output columns
+      auto const portion_pages = count_page_headers(next_portion->chunks, next_portion->stream);
+      auto pages_info =
+        hostdevice_vector<gpu::PageInfo>(portion_pages, portion_pages, next_portion->stream);
+
+      if (portion_pages > 0) {
+        // decoding of column/page information
+        decode_page_headers(next_portion->chunks, pages_info, next_portion->stream);
+        if (next_portion->has_compressed_data) {
+          _file_itm_data.decomp_page_data.emplace_back(
+            decompress_page_data(next_portion->chunks, pages_info, next_portion->stream));
+          // Free compressed data
+          for (auto& rpd : next_portion->raw_compressed_page_data) {
+            rpd.reset();
+          }
+        }
+        pages_vector.push_back(std::move(pages_info));
+      }
+      completed_portions.emplace_back(std::move(*next_portion));
+    }
+  }
+
+  join_stream(streams, _stream);
+
+  // merge page and chunk arrays into single hostdevice_vectors for further processing
+  merge_arrays(completed_portions, pages_vector, _stream);
+
+  // update streams
+  for (auto& buf : _file_itm_data.decomp_page_data) {
+    buf.set_stream(_stream);
+  }
+
+  for (auto& rpd : _file_itm_data.raw_page_data) {
+    rpd->set_stream(_stream);
+  }
+
+  // build output column info
+  // walk the schema, building out_buffers that mirror what our final cudf columns will look
+  // like. important : there is not necessarily a 1:1 mapping between input columns and output
+  // columns. For example, parquet does not explicitly store a ColumnChunkDesc for struct
+  // columns. The "structiness" is simply implied by the schema.  For example, this schema:
+  //  required group field_id=1 name {
+  //    required binary field_id=2 firstname (String);
+  //    required binary field_id=3 middlename (String);
+  //    required binary field_id=4 lastname (String);
+  // }
+  // will only contain 3 columns of data (firstname, middlename, lastname).  But of course
+  // "name" is a struct column that we want to return, so we have to make sure that we
+  // create it ourselves.
+  // std::vector<output_column_info> output_info = build_output_column_info();
+
+  // nesting information (sizes, etc) stored -per page-
+  // note : even for flat schemas, we allocate 1 level of "nesting" info
+  allocate_nesting_info();
+}
+
+namespace {
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
@@ -1270,359 +1625,7 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
   }
 }
 
-void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  cudaEventCreate(&event);
-  cudaEventRecord(event, stream);
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    cudaStreamWaitEvent(streams[i], event, 0);
-  }
-  cudaEventDestroy(event);
-}
-
-void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  cudaEventCreate(&event);
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    cudaEventRecord(event, streams[i]);
-    cudaStreamWaitEvent(stream, event, 0);
-  }
-  cudaEventDestroy(event);
-}
-
-std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
-{
-  auto streams = std::vector<rmm::cuda_stream_view>();
-  for (int32_t i = 0; i < count; i++) {
-    streams.emplace_back(stream_pool.get_stream());
-  }
-  return streams;
-}
-
 }  // anonymous namespace
-
-void reader::impl::merge_arrays(std::vector<file_portion>& portions,
-                                std::vector<hostdevice_vector<gpu::PageInfo>>& page_arrays,
-                                rmm::cuda_stream_view stream)
-{
-  auto const total_pages =
-    std::accumulate(page_arrays.begin(), page_arrays.end(), 0, [](int total, auto const& pages) {
-      return total + pages.size();
-    });
-
-  // page data is currently up to date on the host. We could memcpy from the hostdevice_vectors and
-  // build this all now into a hostdevice_vector, but in doing so we would double allocate the page
-  // information for the duration of this function making the high water mark for memory very high.
-  // Instead, we are going to pull apart the hostdevice_vector and free the GPU portion of it
-  // entirely. Then copy the CPU portion over and discard the original CPU portion. The tricky part
-  // is that the chunks array has pointers into the GPU data. So we need to store off the base
-  // pointer for the GPU page data so we can go through the chunks and update the GPU pointer to the
-  // new location once we know it.
-  std::vector<gpu::PageInfo const*> page_bases;
-  page_bases.reserve(page_arrays.size());
-
-  std::vector<gpu::PageInfo> pages;
-  pages.reserve(total_pages);
-
-  std::vector<size_t> page_array_sizes;
-  page_array_sizes.reserve(page_arrays.size());
-
-  //  for (size_t i=0; i<page_arrays.size(); ++i) {
-  //    page_arrays[i].device_to_host(_stream);
-  //  }
-  //  _file_itm_data.chunks.device_to_host(_stream, true);
-
-  size_t chunks_so_far = 0;
-  for (size_t i = 0; i < page_arrays.size(); ++i) {
-    auto& portion_pages = page_arrays[i];
-    page_array_sizes.push_back(portion_pages.size());
-    auto [cpu, gpu] = portion_pages.release();
-    page_bases.push_back(gpu.data());
-    gpu.release();
-    std::visit(
-      [&](auto&& v) {
-        // fixup chunk index in pages
-        if (chunks_so_far > 0) {
-          std::for_each(v.begin(), v.end(), [chunks_so_far, &i](auto& page) {
-            page.chunk_idx += chunks_so_far;
-          });
-        }
-        pages.insert(pages.end(), v.begin(), v.end());
-      },
-      cpu);
-    chunks_so_far += portions[i].chunks.size();
-    _file_itm_data.raw_page_data.insert(_file_itm_data.raw_page_data.end(),
-                                        std::make_move_iterator(portions[i].raw_page_data.begin()),
-                                        std::make_move_iterator(portions[i].raw_page_data.end()));
-  }
-
-  CUDF_EXPECTS(pages.size() == (size_t)total_pages, "didn't get expected pages!");
-
-  // build the hostdevice_vector from the cpu data
-  _file_itm_data.pages_info    = hostdevice_vector<gpu::PageInfo>(std::move(pages), stream);
-  gpu::PageInfo* new_page_base = _file_itm_data.pages_info.device_ptr();
-
-  std::vector<gpu::ColumnChunkDesc> chunks;
-  for (size_t i = 0; i < portions.size(); ++i) {
-    // fixup pointers in chunks
-    std::for_each(portions[i].chunks.begin(), portions[i].chunks.end(), [&](auto& chunk) {
-      chunk.page_info = chunk.page_info - page_bases[i] + new_page_base;
-    });
-    new_page_base += page_array_sizes[i];
-    chunks.insert(chunks.end(), portions[i].chunks.begin(), portions[i].chunks.end());
-  }
-
-  CUDF_EXPECTS(
-    new_page_base = _file_itm_data.pages_info.device_ptr() + _file_itm_data.pages_info.size(),
-    "lengths don't match");
-
-  _file_itm_data.chunks = hostdevice_vector<gpu::ColumnChunkDesc>(std::move(chunks), stream);
-  _file_itm_data.chunks.host_to_device(stream);
-  _file_itm_data.pages_info.host_to_device(stream);
-}
-
-reader::impl::file_portion reader::impl::create_and_read_column_chunks(
-  cudf::host_span<row_group_info const> const row_groups_info,
-  size_type remaining_rows,
-  rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-
-  // Descriptors for all the chunks that make up the selected columns
-  const auto num_input_columns = _input_columns.size();
-  std::vector<gpu::ColumnChunkDesc> chunks;
-
-  // Association between each column chunk and its source
-  std::vector<size_type> chunk_source_map;
-
-  // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
-  std::vector<std::unique_ptr<datasource::buffer>> raw_compressed_page_data;
-
-  // Keep track of column chunk file offsets
-  std::vector<size_t> column_chunk_offsets;
-
-  // Initialize column chunk information
-  size_t total_decompressed_size = 0;
-  for (const auto& rg : row_groups_info) {
-    const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
-    auto const row_group_start  = rg.start_row;
-    auto const row_group_source = rg.source_index;
-    auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-
-    // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
-    for (size_t i = 0; i < num_input_columns; ++i) {
-      auto col = _input_columns[i];
-      // look up metadata
-      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(col.schema_idx);
-
-      auto [type_width, clock_rate, converted_type] =
-        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
-                        _timestamp_type.id(),
-                        schema.type,
-                        schema.converted_type,
-                        schema.type_length);
-
-      column_chunk_offsets.push_back(
-        (col_meta.dictionary_page_offset != 0)
-          ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
-          : col_meta.data_page_offset);
-
-      chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
-                                            nullptr,
-                                            col_meta.num_values,
-                                            schema.type,
-                                            type_width,
-                                            row_group_start,
-                                            row_group_rows,
-                                            schema.max_definition_level,
-                                            schema.max_repetition_level,
-                                            _metadata->get_output_nesting_depth(col.schema_idx),
-                                            required_bits(schema.max_definition_level),
-                                            required_bits(schema.max_repetition_level),
-                                            col_meta.codec,
-                                            converted_type,
-                                            schema.logical_type,
-                                            schema.decimal_precision,
-                                            clock_rate,
-                                            i,
-                                            col.schema_idx));
-
-      // Map each column chunk to its column index and its source index
-      chunk_source_map.push_back(row_group_source);
-
-      if (col_meta.codec != Compression::UNCOMPRESSED) {
-        total_decompressed_size += col_meta.total_uncompressed_size;
-      }
-    }
-    remaining_rows -= row_group_rows;
-  }
-
-  // Read compressed chunk data to device memory
-  auto read_handle = read_column_chunks_async(_sources,
-                                              raw_page_data,
-                                              raw_compressed_page_data,
-                                              chunks,
-                                              0,
-                                              chunks.size(),
-                                              column_chunk_offsets,
-                                              chunk_source_map,
-                                              stream);
-  return file_portion{hostdevice_vector<gpu::ColumnChunkDesc>(std::move(chunks), stream),
-                      std::move(read_handle),
-                      std::move(raw_page_data),
-                      std::move(raw_compressed_page_data),
-                      total_decompressed_size > 0,
-                      stream};
-}
-
-void reader::impl::load_and_decompress_data(
-  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
-{
-  CUDF_FUNC_RANGE();
-  // This function should never be called if `num_rows == 0`.
-  CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
-
-  std::mutex queue_mutex;
-  std::deque<file_portion> file_portions;
-  std::condition_variable portion_added;
-  constexpr size_t portion_size = 64 * 1024 * 1024;
-
-  auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
-    CUDF_FUNC_RANGE();
-    size_t this_portion_size      = 0;
-    size_t portion_number         = 0;
-    size_t starting_rowgroup      = 0;
-    size_t portion_rowgroup_count = 0;
-    auto remaining_rows           = num_rows;
-    for (const auto& rg : row_groups_info) {
-      const auto& row_group = _metadata->get_row_group(rg.index, rg.source_index);
-
-      if (this_portion_size > 0 && this_portion_size + row_group.total_byte_size > portion_size) {
-        // too big, wrap it up and add it to the list
-        auto portion = create_and_read_column_chunks(
-          row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
-          remaining_rows,
-          streams[portion_number % streams.size()]);
-        {
-          const std::scoped_lock lock(queue_mutex);
-          file_portions.emplace_back(std::move(portion));
-          portion_added.notify_one();
-        }
-
-        this_portion_size = row_group.total_byte_size;
-        starting_rowgroup += portion_rowgroup_count;
-        portion_rowgroup_count = 1;
-        portion_number++;
-      } else {
-        this_portion_size += row_group.total_byte_size;
-        portion_rowgroup_count++;
-      }
-      remaining_rows -= std::min<int>(remaining_rows, row_group.num_rows);
-    }
-    auto portion = create_and_read_column_chunks(
-      row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
-      remaining_rows,
-      streams[portion_number % streams.size()]);
-    {
-      const std::scoped_lock lock(queue_mutex);
-      file_portions.emplace_back(std::move(portion));
-      portion_added.notify_one();
-    }
-
-    CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
-    return true;
-  };
-
-  constexpr auto num_streams = 2;
-
-  auto stream_pool = rmm::cuda_stream_pool(num_streams);
-  auto streams     = get_streams(num_streams, stream_pool);
-  fork_stream(streams, _stream);
-
-  // spawn a thread to queue all the file reads
-  auto read_task = std::async(std::launch::async, spawn_reads, streams);
-
-  std::vector<hostdevice_vector<gpu::PageInfo>> pages_vector;
-  std::vector<file_portion> completed_portions;
-
-  while (read_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
-         !file_portions.empty()) {
-    auto next_portion = [&]() -> std::optional<file_portion> {
-      std::unique_lock lk(queue_mutex);
-      if (file_portions.empty()) { portion_added.wait(lk); }
-      if (!file_portions.empty()) {
-        auto d = std::move(file_portions.front());
-        file_portions.pop_front();
-        return std::optional<file_portion>(std::move(d));
-      }
-      return std::nullopt;
-    }();
-
-    if (next_portion) {
-      // wait for read to complete
-      nvtxRangePushA("read wait");
-      next_portion->read_handle.wait();
-      nvtxRangePop();
-
-      // Process dataset chunk pages into output columns
-      auto const portion_pages = count_page_headers(next_portion->chunks, next_portion->stream);
-      auto pages_info =
-        hostdevice_vector<gpu::PageInfo>(portion_pages, portion_pages, next_portion->stream);
-
-      if (portion_pages > 0) {
-        // decoding of column/page information
-        decode_page_headers(next_portion->chunks, pages_info, next_portion->stream);
-        if (next_portion->has_compressed_data) {
-          _file_itm_data.decomp_page_data.emplace_back(
-            decompress_page_data(next_portion->chunks, pages_info, next_portion->stream));
-          // Free compressed data
-          for (auto& rpd : next_portion->raw_compressed_page_data) {
-            rpd.reset();
-          }
-        }
-        pages_vector.push_back(std::move(pages_info));
-      }
-      completed_portions.emplace_back(std::move(*next_portion));
-    }
-  }
-
-  join_stream(streams, _stream);
-
-  // merge page and chunk arrays into single hostdevice_vectors for further processing
-  merge_arrays(completed_portions, pages_vector, _stream);
-
-  // update streams
-  for (auto& buf : _file_itm_data.decomp_page_data) {
-    buf.set_stream(_stream);
-  }
-
-  for (auto& rpd : _file_itm_data.raw_page_data) {
-    rpd->set_stream(_stream);
-  }
-
-  // build output column info
-  // walk the schema, building out_buffers that mirror what our final cudf columns will look
-  // like. important : there is not necessarily a 1:1 mapping between input columns and output
-  // columns. For example, parquet does not explicitly store a ColumnChunkDesc for struct
-  // columns. The "structiness" is simply implied by the schema.  For example, this schema:
-  //  required group field_id=1 name {
-  //    required binary field_id=2 firstname (String);
-  //    required binary field_id=3 middlename (String);
-  //    required binary field_id=4 lastname (String);
-  // }
-  // will only contain 3 columns of data (firstname, middlename, lastname).  But of course
-  // "name" is a struct column that we want to return, so we have to make sure that we
-  // create it ourselves.
-  // std::vector<output_column_info> output_info = build_output_column_info();
-
-  // nesting information (sizes, etc) stored -per page-
-  // note : even for flat schemas, we allocate 1 level of "nesting" info
-  allocate_nesting_info();
-}
 
 void reader::impl::preprocess_pages(size_t skip_rows,
                                     size_t num_rows,
