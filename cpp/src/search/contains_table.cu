@@ -125,7 +125,10 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
-    auto row_bitmask = cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first;
+    auto row_bitmask =
+      cudf::detail::bitmask_and(
+        table_view{nullable_columns}, stream, rmm::mr::get_current_device_resource())
+        .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
   }
@@ -322,13 +325,13 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
   // Flatten the input tables.
-  auto const flatten_nullability = has_any_nulls
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const haystack_flattened_tables =
-    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability, stream);
-  auto const needles_flattened_tables =
-    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability, stream);
+  auto const flatten_nullability       = has_any_nulls
+                                           ? structs::detail::column_nullability::FORCE
+                                           : structs::detail::column_nullability::MATCH_INCOMING;
+  auto const haystack_flattened_tables = structs::detail::flatten_nested_columns(
+    haystack, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
+  auto const needles_flattened_tables = structs::detail::flatten_nested_columns(
+    needles, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
   auto const haystack_flattened = haystack_flattened_tables->flattened_columns();
   auto const needles_flattened  = needles_flattened_tables->flattened_columns();
   auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
