@@ -397,6 +397,9 @@ outputs:
         - {{ compiler('cuda11') }} {{ cuda_version }}
         {% else %}
         - {{ compiler('cuda') }} {{ cuda_version }}
+        - cuda-cudart ={{ cuda_version }}
+        - cuda-cudart-dev ={{ cuda_version }}
+        - cuda-cudart-static ={{ cuda_version }}
         {% endif %}
         - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
