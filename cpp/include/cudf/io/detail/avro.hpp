@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,10 @@ namespace avro {
  *
  * @return The set of columns along with table metadata
  */
-table_with_metadata read_avro(
-  std::unique_ptr<cudf::io::datasource>&& source,
-  avro_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
+                              avro_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace avro
 }  // namespace detail

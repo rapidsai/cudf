@@ -103,13 +103,14 @@ void BM_Segmented_Reduction(nvbench::state& state,
   auto [input, offsets] = make_test_data<DataType>(state);
   auto agg              = make_reduce_aggregation<kind>();
 
-  auto output_type = cudf::data_type{cudf::type_to_id<DataType>()};
-  if (is_boolean_output_agg(kind))
-    output_type = cudf::data_type{cudf::type_id::BOOL8};
-  else if (is_float_output_agg(kind))
-    output_type = cudf::data_type{cudf::type_id::FLOAT64};
-  else if (kind == cudf::segmented_reduce_aggregation::NUNIQUE)
-    output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+  auto const output_type = [] {
+    if (is_boolean_output_agg(kind)) { return cudf::data_type{cudf::type_id::BOOL8}; }
+    if (is_float_output_agg(kind)) { return cudf::data_type{cudf::type_id::FLOAT64}; }
+    if (kind == cudf::segmented_reduce_aggregation::NUNIQUE) {
+      return cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+    }
+    return cudf::data_type{cudf::type_to_id<DataType>()};
+  }();
 
   state.add_element_count(column_size);
   state.add_global_memory_reads<DataType>(column_size);
