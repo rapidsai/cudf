@@ -114,13 +114,12 @@ __global__ void offset_bitmask_binop(Binop op,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <typename Binop>
-std::pair<rmm::device_buffer, size_type> bitmask_binop(
-  Binop op,
-  host_span<bitmask_type const* const> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::pair<rmm::device_buffer, size_type> bitmask_binop(Binop op,
+                                                       host_span<bitmask_type const* const> masks,
+                                                       host_span<size_type const> masks_begin_bits,
+                                                       size_type mask_size_bits,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
   auto null_count =

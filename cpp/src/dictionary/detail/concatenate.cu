@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -220,7 +221,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, stream, rmm::mr::get_current_device_resource());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
