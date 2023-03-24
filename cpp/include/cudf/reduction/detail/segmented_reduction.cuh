@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/reduction_operators.cuh>
+#include "reduction_operators.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
