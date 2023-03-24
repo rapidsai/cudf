@@ -47,7 +47,7 @@ static void bench_minhash(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);  // all bytes are written
 
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto result = nvtext::minhash(input, hash_width); });
+             [&](nvbench::launch& launch) { auto result = nvtext::minhash(input, 0, hash_width); });
 }
 
 NVBENCH_BENCH(bench_minhash)
