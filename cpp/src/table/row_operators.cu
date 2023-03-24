@@ -85,12 +85,16 @@ table_view remove_struct_child_offsets(table_view table)
 /**
  * @brief Decompose all struct columns in a table
  *
- * If a struct column is a tree with N leaves, then this function decomposes the tree into
+ * If a structs column is a tree with N leaves, then this function decomposes the tree into
  * N "linear trees" (branch factor == 1) and prunes common parents. Also returns a vector of
  * per-column `depth`s.
  *
  * A `depth` value is the number of nested levels as parent of the column in the original,
  * non-decomposed table, which are pruned during decomposition.
+ *
+ * Special handling is needed in the cases of structs column having lists as its first child. In
+ * such situations, the function decomposes the tree of N leaves into N+1 linear trees in which the
+ * second tree is also leaf of the first tree extracted out.
  *
  * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
  *
@@ -113,7 +117,7 @@ table_view remove_struct_child_offsets(table_view table)
  * The depth of the first column is 0 because it contains all its parent levels, while the depth
  * of the second column is 2 because two of its parent struct levels were pruned.
  *
- * Similarly, a struct column of type Struct<int, Struct<float, decimal>> is decomposed as follows
+ * Similarly, a struct column of type `Struct<int, Struct<float, decimal>>` is decomposed as follows
  *
  *     S1
  *    / \
@@ -147,6 +151,10 @@ table_view remove_struct_child_offsets(table_view table)
  *
  * The list parents are still needed to define the range of elements in the leaf that belong to the
  * same row.
+ *
+ * In the case of structs column having its first child is a lists column such as
+ * `Struct<List<int>, int>`, after decomposition we get three columns `Struct<Struct<>>`,
+ * `List<int>`, and `int`.
  *
  * @param table The table whose struct columns to decompose.
  * @param column_order The per-column order if using output with lexicographic comparison
