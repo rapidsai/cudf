@@ -24,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -44,6 +45,7 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+#if 0
 __global__ void minhash_fn(cudf::column_device_view d_strings,
                            cudf::device_span<cudf::hash_value_type const> seeds,
                            cudf::size_type width,
@@ -84,6 +86,45 @@ __global__ void minhash_fn(cudf::column_device_view d_strings,
     auto const mhash =
       warp_reduce(temp_storage).Reduce(mh, thrust::minimum<cudf::hash_value_type>{});
     if (lane_idx == 0) { d_hashes[output_idx] = mhash; }
+  }
+}
+#endif
+
+__global__ void minhash_fn(cudf::column_device_view d_strings,
+                           cudf::device_span<cudf::hash_value_type const> seeds,
+                           cudf::size_type width,
+                           cudf::hash_value_type* d_hashes)
+{
+  cudf::size_type const idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
+
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
+
+  if (d_strings.is_null(str_idx)) { return; }
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
+    auto const output_idx = str_idx * seeds.size() + seed_idx;
+    d_hashes[output_idx]  = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
+  }
+  auto const begin = d_str.begin() + lane_idx;
+  auto const end   = (d_str.length() <= width) ? d_str.end() : d_str.end() - (width - 1);
+
+  for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
+    auto const offset = itr.byte_offset();
+    auto const ss = cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
+
+    for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
+      auto const output_idx = str_idx * seeds.size() + seed_idx;
+
+      auto const seed   = seeds[seed_idx];
+      auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
+
+      auto const hvalue = hasher(ss);
+      // cudf::detail::hash_combine(seed, hasher(ss)); <-- matches cudf::hash() result
+      atomicMin(d_hashes + output_idx, hvalue);
+    }
   }
 }
 
