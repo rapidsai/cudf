@@ -154,8 +154,8 @@ table_view remove_struct_child_offsets(table_view table)
  * same row.
  *
  * In the case of structs column having its first child is a lists column such as
- * `Struct<List<int>, int>`, after decomposition we get three columns `Struct<Struct<>>`,
- * `List<int>`, and `int`.
+ * `Struct<List<int>, float>`, after decomposition we get three columns `Struct<>`,
+ * `List<int>`, and `float`.
  *
  * @param table The table whose struct columns to decompose.
  * @param column_order The per-column order if using output with lexicographic comparison
