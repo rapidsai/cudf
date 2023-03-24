@@ -1210,7 +1210,12 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
             [&](auto const& sum, auto const& strm) { return sum + strm.lengths[k]; });
 
           auto const& allocated_stripe_size = enc_data->data[stripe.id][stream_id].size();
-          CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size, "OOB memory access");
+          CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size,
+                       "Internal ORC writer error: insufficient allocation size for encoded data");
+          // Allocate buffers of the exact size as encoded data, smaller than the original buffers.
+          // Don't copying the data to exactly sized buffer when only one chunk is present to avoid
+          // performance overhead from the additional copy. When there are multiple chunks, they are
+          // copied anyway, to make them contiguous (i.e. gather them).
           if (stripe.size > 1 and allocated_stripe_size > actual_stripe_size) {
             gathered_stripes[stripe.id][stream_id] =
               rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
