@@ -61,12 +61,12 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                "segmented reduce nunique only supports non-nested column types");
 
   // compute the unique identifiers within each segment
-  auto identifiers = [&] {
+  auto const identifiers = [&] {
     auto const d_col = column_device_view::create(col, stream);
     auto const comparator =
       cudf::experimental::row::equality::self_comparator{table_view({col}), stream};
     auto const row_equal =
-      comparator.equal_to<false>(cudf::nullate::DYNAMIC{false}, null_equality::EQUAL);
+      comparator.equal_to<false>(cudf::nullate::DYNAMIC{col.has_nulls()}, null_equality::EQUAL);
 
     auto labels = rmm::device_uvector<size_type>(col.size(), stream);
     cudf::detail::label_segments(
