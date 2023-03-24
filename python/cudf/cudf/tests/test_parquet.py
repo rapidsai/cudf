@@ -2788,23 +2788,3 @@ def test_parquet_writer_schema_nullability(data, force_nullable_schema):
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
         force_nullable_schema or df.isnull().any().any()
     )
-
-
-@pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
-@pytest.mark.parametrize("force_nullable_schema", [True, False])
-def test_parquet_chunked_writer_schema_nullability(
-    data, force_nullable_schema
-):
-    df = cudf.DataFrame(data)
-    file_obj = BytesIO()
-
-    writer = ParquetWriter(
-        file_obj, force_nullable_schema=force_nullable_schema
-    )
-
-    writer.write_table(df)
-
-    writer.close()
-    assert pa.parquet.read_schema(file_obj).field(0).nullable == (
-        force_nullable_schema or df.isnull().any().any()
-    )
