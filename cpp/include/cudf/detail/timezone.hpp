@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,29 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/round.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/timezone.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-//! Inner interfaces and implementations
-namespace detail {
+namespace cudf::detail {
 
 /**
- * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
+ * @copydoc cudf::make_timezone_transition_table(std::optional<std::string_view>, std::string_view,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> round(column_view const& input,
-                              int32_t decimal_places,
-                              rounding_method method,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+std::unique_ptr<table> make_timezone_transition_table(
+  std::optional<std::string_view> tzif_dir,
+  std::string_view timezone_name,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

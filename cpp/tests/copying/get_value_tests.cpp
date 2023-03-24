@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -812,7 +812,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   // col fields
   cudf::test::fixed_width_column_wrapper<TypeParam> f1{1, 2, 3};
   cudf::test::strings_column_wrapper f2{"aa", "bbb", "c"};
-  cudf::test::dictionary_column_wrapper<TypeParam, uint32_t> f3{42, 42, 24};
+  cudf::test::dictionary_column_wrapper<TypeParam, int32_t> f3{42, 42, 24};
   LCW f4{LCW{8, 8, 8}, LCW{9, 9}, LCW{10}};
 
   cudf::test::structs_column_wrapper col{f1, f2, f3, f4};
@@ -824,7 +824,7 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   // expect fields
   cudf::test::fixed_width_column_wrapper<TypeParam> ef1{3};
   cudf::test::strings_column_wrapper ef2{"c"};
-  cudf::test::dictionary_column_wrapper<int32_t, TypeParam> ef3{24};
+  cudf::test::dictionary_column_wrapper<TypeParam, int32_t> ef3{24};
   LCW ef4{LCW{10}};
 
   cudf::table_view expect_data{{ef1, ef2, ef3, ef4}};

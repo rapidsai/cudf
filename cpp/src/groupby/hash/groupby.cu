@@ -487,7 +487,9 @@ void compute_single_pass_aggs(table_view const& keys,
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto row_bitmask =
-    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
+    skip_key_rows_with_nulls
+      ? cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first
+      : rmm::device_buffer{};
 
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
