@@ -33,11 +33,10 @@ namespace cudf::io::json::detail {
  *
  * @return cudf::table object that contains the array of cudf::column.
  */
-table_with_metadata read_json(
-  std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
-  json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
+                              json_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Write an entire dataset to JSON format.
@@ -52,5 +51,5 @@ void write_json(data_sink* sink,
                 table_view const& table,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                rmm::mr::device_memory_resource* mr);
 }  // namespace cudf::io::json::detail

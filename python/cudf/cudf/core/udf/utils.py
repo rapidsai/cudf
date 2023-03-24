@@ -245,7 +245,7 @@ def _mask_get(mask, pos):
     return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
 
 
-def _generate_cache_key(frame, func: Callable):
+def _generate_cache_key(frame, func: Callable, suffix="__APPLY_UDF"):
     """Create a cache key that uniquely identifies a compilation.
 
     A new compilation is needed any time any of the following things change:
@@ -259,6 +259,7 @@ def _generate_cache_key(frame, func: Callable):
         ),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
+        suffix,
     )
 
 
