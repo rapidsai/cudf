@@ -94,7 +94,8 @@ table_view remove_struct_child_offsets(table_view table)
  *
  * Special handling is needed in the cases of structs column having lists as its first child. In
  * such situations, the function decomposes the tree of N leaves into N+1 linear trees in which the
- * second tree is also leaf of the first tree extracted out.
+ * second tree is also leaf of the first tree extracted out. This is to make sure there is no
+ * structs column having child lists column in the output.
  *
  * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
  *
@@ -188,6 +189,13 @@ auto decompose_structs(table_view table,
               c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
           } else if (c->type().id() == type_id::STRUCT) {
             for (size_t child_idx = 0; child_idx < c->children.size(); ++child_idx) {
+              // When child_idx == 0, we also cut off the current branch if its first child is a
+              // lists column.
+              // In such cases, the last column of the current branch will be `Struct<List,...>` and
+              // it will be modified to empty struct type `Struct<>` later on.
+              // In addition, the new cut out branch will be set to have the same depth as the
+              // current branch instead of higher depth. By this way, we can avoid the new branch
+              // to be ignored in `device_row_comparator` when the current branch has zero child.
               if (child_idx > 0 ||
                   (child_idx == 0 && c->children[0]->type().id() == type_id::LIST)) {
                 verticalized_col_depths.push_back(child_idx == 0 ? depth : depth + 1);
@@ -204,6 +212,7 @@ auto decompose_structs(table_view table,
       for (auto const& branch : flattened) {
         column_view temp_col = *branch.back();
 
+        // Change `Struct<List,...>` into empty struct type `Struct<>`.
         if (temp_col.type().id() == type_id::STRUCT &&
             (temp_col.num_children() > 0 && temp_col.child(0).type().id() == type_id::LIST)) {
           temp_col = column_view(temp_col.type(),
