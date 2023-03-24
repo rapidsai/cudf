@@ -193,12 +193,9 @@ auto decompose_structs(table_view table,
               // lists column.
               // In such cases, the last column of the current branch will be `Struct<List,...>` and
               // it will be modified to empty struct type `Struct<>` later on.
-              // In addition, the new cut out branch will be set to have the same depth as the
-              // current branch instead of higher depth. By this way, we can avoid the new branch
-              // to be ignored in `device_row_comparator` when the current branch has zero child.
               if (child_idx > 0 ||
                   (child_idx == 0 && c->children[0]->type().id() == type_id::LIST)) {
-                verticalized_col_depths.push_back(child_idx == 0 ? depth : depth + 1);
+                verticalized_col_depths.push_back(depth + 1);
                 branch = &flattened.emplace_back();
               }
               recursive_child(c->children[child_idx].get(), branch, depth + 1);

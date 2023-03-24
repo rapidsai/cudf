@@ -91,7 +91,7 @@ TEST_F(NestedStructTest, StructsHaveListsNoNulls)
   }
 
   {
-    auto const expected_order = int32s_col{2, 0, 3, 4, 1, 5, 6};
+    auto const expected_order = int32s_col{2, 0, 3, 4, 6, 5, 1};
     auto const order =
       cudf::stable_sorted_order(cudf::table_view{{input}}, {cudf::order::DESCENDING});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
@@ -115,7 +115,7 @@ TEST_F(NestedStructTest, StructsHaveListsWithNulls)
   }
 
   {
-    auto const expected_order = int32s_col{3, 0, 4, 5, 1, 6, 7, 2};
+    auto const expected_order = int32s_col{3, 0, 4, 5, 7, 6, 1, 2};
     auto const order =
       cudf::stable_sorted_order(cudf::table_view{{input}}, {cudf::order::DESCENDING});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
