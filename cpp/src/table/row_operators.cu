@@ -281,18 +281,6 @@ auto list_lex_preprocess(table_view const& table, rmm::cuda_stream_view stream)
     if (col.type().id() == type_id::LIST) {
       dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
       dremel_device_views.push_back(dremel_data.back());
-    } else if (col.type().id() == type_id::STRUCT) {
-      auto col_iter = col;
-      while (col_iter.type().id() == type_id::STRUCT) {
-        if (col_iter.num_children() == 0) { break; }
-        CUDF_EXPECTS(col_iter.num_children() == 1,
-                     "Structs column should be processed to have either 0 or 1 child");
-        col_iter = col_iter.child(0);
-      }
-      if (col_iter.type().id() == type_id::LIST) {
-        dremel_data.push_back(detail::get_comparator_data(col_iter, {}, false, stream));
-        dremel_device_views.push_back(dremel_data.back());
-      }
     }
   }
   auto d_dremel_device_views = detail::make_device_uvector_sync(
