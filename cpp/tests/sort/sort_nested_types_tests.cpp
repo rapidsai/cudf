@@ -77,7 +77,7 @@ TEST_F(NestedStructTest, SimpleStructsOfListsWithNulls)
 
 TEST_F(NestedStructTest, StructsHaveListsNoNulls)
 {
-  // Input has equal elements, thus needs to tested by stable sort.
+  // Input has equal elements, thus needs to be tested by stable sort.
   auto const input = [] {
     auto child0 = int32s_lists{{4, 2, 0}, {}, {5}, {4, 1}, {4, 0}, {}, {}};
     auto child1 = int32s_col{1, 2, 5, 0, 3, 3, 4};
@@ -100,7 +100,7 @@ TEST_F(NestedStructTest, StructsHaveListsNoNulls)
 
 TEST_F(NestedStructTest, StructsHaveListsWithNulls)
 {
-  // Input has equal elements, thus needs to tested by stable sort.
+  // Input has equal elements, thus needs to be tested by stable sort.
   auto const input = [] {
     auto child0 =
       int32s_lists{{{4, 2, null}, null_at(2)}, {}, {} /*NULL*/, {5}, {4, 1}, {4, 0}, {}, {}};
@@ -124,7 +124,7 @@ TEST_F(NestedStructTest, StructsHaveListsWithNulls)
 
 TEST_F(NestedStructTest, StructsOfStructsHaveListsNoNulls)
 {
-  // Input has equal elements, thus needs to tested by stable sort.
+  // Input has equal elements, thus needs to be tested by stable sort.
   auto const input = [] {
     auto child0 = [] {
       auto child0 = int32s_lists{{4, 2, 0}, {}, {5}, {4, 1}, {4, 0}, {}, {}};
@@ -152,7 +152,7 @@ TEST_F(NestedStructTest, StructsOfStructsHaveListsNoNulls)
 
 TEST_F(NestedStructTest, StructsOfStructsHaveListsWithNulls)
 {
-  // Input has equal elements, thus needs to tested by stable sort.
+  // Input has equal elements, thus needs to be tested by stable sort.
   auto const input = [] {
     auto child0 = [] {
       auto child0 =
