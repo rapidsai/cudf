@@ -470,16 +470,6 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-    force_nullable_schema : bool, default True.
-        If True, writes all columns as `null` in schema.
-        If False, columns are written as `null` if they contain null values,
-        otherwise as `not null`.
-
-    Notes
-    -----
-    `DataFrame.to_parquet` and `ParquetWriter` differ in the default
-    value for `force_nullable_schema` to enable all the chunks being
-    written by chunked parquet writer to be schema identical.
 
     See Also
     --------
@@ -497,15 +487,13 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
-    cdef bool force_nullable_schema
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000,
-                  bool force_nullable_schema=True):
+                  int max_page_size_rows=20000):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -520,7 +508,6 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
-        self.force_nullable_schema = force_nullable_schema
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -615,7 +602,6 @@ cdef class ParquetWriter:
             _set_col_metadata(
                 table[name]._column,
                 self.tbl_meta.get().column_metadata[i],
-                self.force_nullable_schema
             )
 
         index = (
@@ -696,9 +682,12 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
 cdef _set_col_metadata(
     Column col,
     column_in_metadata& col_meta,
-    bool force_nullable_schema
+    bool force_nullable_schema=False,
 ):
-    col_meta.set_nullability(force_nullable_schema or col.nullable)
+    if force_nullable_schema:
+        # Only set nullability if `force_nullable_schema`
+        # is true.
+        col_meta.set_nullability(True)
 
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(

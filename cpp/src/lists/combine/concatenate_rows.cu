@@ -216,7 +216,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // concatenate the input table into one column.
   std::vector<column_view> cols(input.num_columns());
   std::copy(input.begin(), input.end(), cols.begin());
-  auto concat = cudf::detail::concatenate(cols, stream);
+  auto concat = cudf::detail::concatenate(cols, stream, rmm::mr::get_current_device_resource());
 
   // whether or not we should be generating a null mask at all
   auto const build_null_mask = concat->has_nulls();

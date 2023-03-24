@@ -5147,6 +5147,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void teststringReplaceMulti() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésssé", null, "", "ARé", "sssstrings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("Hello", "theSse", null, "", "ARe", "SStrings");
+         ColumnVector targets = ColumnVector.fromStrings("ss", "é");
+         ColumnVector repls = ColumnVector.fromStrings("S", "e");
+         ColumnVector replace_allParameters = v.stringReplace(targets, repls)) {
+      assertColumnsAreEqual(e_allParameters, replace_allParameters);
+    }
+  }
+
+  @Test
+  void teststringReplaceMultiThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           ColumnVector targets = ColumnVector.fromInts(0, 1);
+           ColumnVector repls = null;
+           ColumnVector result = testStrings.stringReplace(targets,repls)){}
+    });
+  }
+
+  @Test
   void testReplaceRegex() {
     try (ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
          Scalar repl = Scalar.fromString("Repl")) {
