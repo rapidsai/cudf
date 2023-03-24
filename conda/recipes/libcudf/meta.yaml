@@ -92,6 +92,7 @@ outputs:
         - test -f $PREFIX/include/cudf/concatenate.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
+        - test -f $PREFIX/include/cudf/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
@@ -113,7 +114,6 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
         - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
         - test -f $PREFIX/include/cudf/detail/quantiles.hpp
-        - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
         - test -f $PREFIX/include/cudf/detail/repeat.hpp
         - test -f $PREFIX/include/cudf/detail/replace.hpp
         - test -f $PREFIX/include/cudf/detail/reshape.hpp
@@ -122,12 +122,13 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/scan.hpp
         - test -f $PREFIX/include/cudf/detail/scatter.hpp
         - test -f $PREFIX/include/cudf/detail/search.hpp
-        - test -f $PREFIX/include/cudf/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/detail/sequence.hpp
         - test -f $PREFIX/include/cudf/detail/sorting.hpp
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
+        - test -f $PREFIX/include/cudf/detail/timezone.cuh
+        - test -f $PREFIX/include/cudf/detail/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/transform.hpp
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
@@ -215,6 +216,8 @@ outputs:
         - test -f $PREFIX/include/cudf/partitioning.hpp
         - test -f $PREFIX/include/cudf/quantiles.hpp
         - test -f $PREFIX/include/cudf/reduction.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/reduction_functions.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/replace.hpp
         - test -f $PREFIX/include/cudf/reshape.hpp
         - test -f $PREFIX/include/cudf/rolling.hpp

@@ -191,7 +191,7 @@ ConfigureBench(
 )
 ConfigureNVBench(
   REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
-  reduction/segment_reduce.cu
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################

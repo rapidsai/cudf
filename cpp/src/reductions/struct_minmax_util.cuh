@@ -17,10 +17,10 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/reduction_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -102,7 +102,8 @@ class comparison_binop_generator {
         {},
         std::vector<null_order>{DEFAULT_NULL_ORDER},
         cudf::structs::detail::column_nullability::MATCH_INCOMING,
-        stream)},
+        stream,
+        rmm::mr::get_current_device_resource())},
       d_flattened_input_ptr{
         table_device_view::create(flattened_input->flattened_columns(), stream)},
       is_min_op(is_min_op),
@@ -118,7 +119,8 @@ class comparison_binop_generator {
       // level structs column (which is stored at the first position in the null_orders array) to
       // achieve this purpose.
       if (input.has_nulls()) { null_orders.front() = cudf::null_order::AFTER; }
-      null_orders_dvec = cudf::detail::make_device_uvector_async(null_orders, stream);
+      null_orders_dvec = cudf::detail::make_device_uvector_async(
+        null_orders, stream, rmm::mr::get_current_device_resource());
     }
     // else: Don't need to generate nulls order to copy to device memory if we have all null orders
     // are BEFORE (that happens when we have is_min_op == false).
@@ -133,10 +135,10 @@ class comparison_binop_generator {
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
-    return comparison_binop_generator(
-      input,
-      stream,
-      std::is_same_v<BinOp, cudf::reduction::op::min> || std::is_same_v<BinOp, cudf::DeviceMin>);
+    return comparison_binop_generator(input,
+                                      stream,
+                                      std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
+                                        std::is_same_v<BinOp, cudf::DeviceMin>);
   }
 
   template <cudf::aggregation::Kind K>

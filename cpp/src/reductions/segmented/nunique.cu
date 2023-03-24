@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/segmented_reduction.cuh>
-#include <cudf/detail/segmented_reduction_functions.hpp>
+#include <cudf/reduction/detail/segmented_reduction.cuh>
+#include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -32,6 +32,7 @@
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 namespace {
 template <typename ComparatorType>
 struct is_unique_fn {
@@ -44,7 +45,7 @@ struct is_unique_fn {
   __device__ size_type operator()(size_type idx) const
   {
     if (null_handling == null_policy::EXCLUDE && d_col.is_null(idx)) { return 0; }
-    return static_cast<size_type>(offsets[labels[idx]] == idx || (not row_equal(idx, idx - 1)));
+    return static_cast<size_type>(offsets[labels[idx]] == idx || (!row_equal(idx, idx - 1)));
   }
 };
 }  // namespace
@@ -55,8 +56,6 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  // assume sorted already
-
   // only support non-nested types
   CUDF_EXPECTS(!cudf::is_nested(col.type()),
                "segmented reduce nunique only supports non-nested column types");
@@ -90,8 +89,8 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                           stream,
                                           mr);
 
-  // Sum the unique identifiers
-  auto add_op = cudf::reduction::op::sum{};
+  // Sum the unique identifiers within each segment
+  auto add_op = op::sum{};
   cudf::reduction::detail::segmented_reduce(identifiers.begin(),
                                             offsets.begin(),
                                             offsets.end(),
@@ -106,6 +105,6 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
 
   return result;
 }
-
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
