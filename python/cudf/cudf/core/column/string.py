@@ -5226,30 +5226,36 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance_matrix(self._column)
         )
 
-    def minhash(self, n: int = 4, seed: int = 0) -> SeriesOrIndex:
+    def minhash(self, seeds, n: int = 4) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
 
         Parameters
         ----------
+        seeds : Series
+            The seeds used for the hash algorithm.
+            Must be of type uint32.
         n : int
             The width of the substring to hash.
-            Default of 4 characters.
-        seed : int
-            The seed used for the hash algorithm.
-            Default is 0.
+            Default is 4 characters.
 
         Examples
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
-        >>> str_series.str.minhash()
-        0    2012639418
-        1    182731933
-        dtype: int32
+        >>> seeds = cudf.Series([0], dtype=np.uint32)
+        >>> str_series.str.minhash(seeds)
+        0     21141582
+        1    962346254
+        dtype: uint32
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        >>> str_series.str.minhash(seeds)
+        0    [21141582, 403093213, 1258052021]
+        1    [962346254, 677440381, 122618762]
+        dtype: list
         """
         return self._return_or_inplace(
-            libstrings.minhash(self._column, n, seed)
+            libstrings.minhash(self._column, seeds._column, n)
         )
 
 

@@ -2,7 +2,6 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -14,18 +13,18 @@ from cudf._lib.cpp.types cimport size_type
 
 
 @acquire_spill_lock()
-def minhash(Column strings, int width, int seed=0):
+def minhash(Column strings, Column seeds, int width):
 
     cdef column_view c_strings = strings.view()
     cdef size_type c_width = width
-    cdef uint32_t c_seed = seed
+    cdef column_view c_seeds = seeds.view()
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(
             cpp_minhash(
                 c_strings,
-                c_seed,
+                c_seeds,
                 c_width
             )
         )

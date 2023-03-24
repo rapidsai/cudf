@@ -12,6 +12,6 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] minhash(
         const column_view &strings,
-        size_type ngrams,
-        uint32_t seed
+        const column_view &seeds,
+        size_type width
     ) except +
