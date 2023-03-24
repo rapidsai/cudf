@@ -22,11 +22,11 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/segmented_reduction.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -133,8 +133,8 @@ std::unique_ptr<column> simple_segmented_reduction(
 
 template <typename InputType,
           typename Op,
-          CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
-                         std::is_same_v<Op, cudf::reduction::op::max>)>
+          CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::detail::op::min> ||
+                         std::is_same_v<Op, cudf::reduction::detail::op::max>)>
 std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                    device_span<size_type const> offsets,
                                                    null_policy null_handling,
@@ -147,7 +147,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto it                 = thrust::make_counting_iterator(0);
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
-  bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
+  bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;
   auto string_comparator =
     cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto constexpr identity =
@@ -178,8 +178,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
 template <typename InputType,
           typename Op,
-          CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
-                         !std::is_same_v<Op, cudf::reduction::op::max>())>
+          CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::detail::op::min>() &&
+                         !std::is_same_v<Op, cudf::reduction::detail::op::max>())>
 std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                    device_span<size_type const> offsets,
                                                    null_policy null_handling,
@@ -215,7 +215,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   auto result =
     simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
   auto const scale = [&] {
-    if constexpr (std::is_same_v<Op, cudf::reduction::op::product>) {
+    if constexpr (std::is_same_v<Op, cudf::reduction::detail::op::product>) {
       // The product aggregation requires updating the scale of the fixed-point output column.
       // The output scale needs to be the maximum count of all segments multiplied by
       // the input scale value.
@@ -245,7 +245,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
       return new_scale;
     }
 
-    if constexpr (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
+    if constexpr (std::is_same_v<Op, cudf::reduction::detail::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
 
