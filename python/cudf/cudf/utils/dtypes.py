@@ -260,6 +260,15 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
+        if isinstance(val, str) and val.endswith("\x00"):
+            # Numpy string dtypes are fixed width and use NULL to
+            # indicate the end of the string, so they cannot
+            # distinguish between "abc\x00" and "abc".
+            # https://github.com/numpy/numpy/issues/20118
+            # In this case, don't try going through numpy and just use
+            # the string value directly (cudf.DeviceScalar will DTRT)
+            return val
+
     if isinstance(val, datetime.datetime):
         val = np.datetime64(val)
     elif isinstance(val, datetime.timedelta):
@@ -571,6 +580,27 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
+    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            # TODO: As list dtypes allow casting
+            # to identical types, improve this logic of returning a
+            # common dtype, for example:
+            # ListDtype(int64) & ListDtype(int32) common
+            # dtype could be ListDtype(int64).
+            raise NotImplementedError(
+                "Finding a common type for `ListDtype` is currently "
+                "not supported"
+            )
+    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            raise NotImplementedError(
+                "Finding a common type for `StructDtype` is currently "
+                "not supported"
+            )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
