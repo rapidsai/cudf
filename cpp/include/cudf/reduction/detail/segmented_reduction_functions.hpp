@@ -332,10 +332,10 @@ std::unique_ptr<column> segmented_variance(column_view const& col,
  * are expected to be sorted before calling this function otherwise the results
  * are undefined.
  *
- * If input segment is empty, the segment result is null.
+ * If any input segment is empty, that segment's result is null.
  *
- * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
- * for the reduced value to be valid.
+ * If `null_handling==null_policy::INCLUDE`, the segment count is the number of
+ * unique values +1 which includes all the null entries in that segment.
  * If `null_handling==null_policy::EXCLUDE`, the segment count does not include nulls.
  *
  * @throw cudf::logic_error if input column type is a nested type

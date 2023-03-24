@@ -964,7 +964,7 @@ TEST_F(SegmentedReductionTestUntyped, NUniqueNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
   expected =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>{{1, 0, 0, 2, 0}, {1, 0, 0, 1, 0}};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{{1, 0, 0, 2, 3}, {1, 0, 0, 1, 1}};
   result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }

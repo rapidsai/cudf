@@ -99,9 +99,11 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                             0,
                                             stream);
 
-  // Compute the output null mask; empty segments are tagged as null
+  // Compute the output null mask
+  // - only empty segments are tagged as null
+  // - nulls are counted appropriately above per null_handling policy
   cudf::reduction::detail::segmented_update_validity(
-    *result, col, offsets, null_handling, std::nullopt, stream, mr);
+    *result, col, offsets, null_policy::EXCLUDE, std::nullopt, stream, mr);
 
   return result;
 }
