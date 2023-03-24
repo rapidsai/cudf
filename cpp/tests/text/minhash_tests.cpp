@@ -14,13 +14,19 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <nvtext/minhash.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <nvtext/minhash.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <vector>
 
@@ -48,6 +54,34 @@ TEST_F(MinHashTest, Basic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(MinHashTest, MultiSeed)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"doc 1",
+                                        "this is doc 2",
+                                        "doc 3",
+                                        "d",
+                                        "The quick brown fox jumpéd over the lazy brown dog."});
+
+  auto view = cudf::strings_column_view(input);
+
+  auto const seeds   = std::vector<cudf::hash_value_type>{0, 1, 2};
+  auto const d_seeds = cudf::detail::make_device_uvector_async(
+    seeds, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+
+  auto results = nvtext::minhash(view, d_seeds);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::hash_value_type>;
+  // clang-format off
+  LCW expected({LCW{1207251914u, 1677652962u, 1061355987u},
+                LCW{  21141582u,  580916568u, 1258052021u},
+                LCW{1207251914u,  943567174u, 1109272887u},
+                LCW{ 655955059u,  488346356u, 2394664816u},
+                LCW{  86520422u,  236622901u,  102546228u}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(MinHashTest, EmptyTest)
 {
   auto input   = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -59,5 +93,5 @@ TEST_F(MinHashTest, EmptyTest)
 TEST_F(MinHashTest, ErrorsTest)
 {
   auto input = cudf::test::strings_column_wrapper({"pup"});
-  EXPECT_THROW(nvtext::minhash(cudf::strings_column_view(input), 0), cudf::logic_error);
+  EXPECT_THROW(nvtext::minhash(cudf::strings_column_view(input), 0, 0), cudf::logic_error);
 }

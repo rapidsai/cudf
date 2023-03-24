@@ -25,8 +25,8 @@ def minhash(Column strings, int width, int seed=0):
         c_result = move(
             cpp_minhash(
                 c_strings,
-                c_width,
-                c_seed
+                c_seed,
+                c_width
             )
         )
 

@@ -17,7 +17,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace nvtext {
 /**
@@ -44,8 +46,30 @@ namespace nvtext {
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
+  cudf::numeric_scalar<cudf::hash_value_type> seed = cudf::numeric_scalar(cudf::DEFAULT_HASH_SEED),
+  cudf::size_type width                            = 4,
+  rmm::mr::device_memory_resource* mr              = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the minhash values for each string per seed
+ *
+ * Hash values are computed from substrings of each string and the
+ * minimum hash value is returned for each string.
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ *
+ * @param input Strings column to compute minhash
+ * @param seeds Seed values used for the MurmurHash3_32 algorithm
+ * @param width The character width used for apply substrings;
+ *              Any string smaller than this width will not be hashed.
+ *              Default is 4 characters.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of Minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash(
+  cudf::strings_column_view const& input,
+  cudf::device_span<cudf::hash_value_type const> seeds,
   cudf::size_type width               = 4,
-  cudf::hash_value_type seed          = cudf::DEFAULT_HASH_SEED,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
