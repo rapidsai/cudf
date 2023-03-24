@@ -60,15 +60,14 @@ __global__ void minhash_fn(cudf::column_device_view d_strings,
 
   if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  auto const begin = d_str.begin() + lane_idx;
+  auto const end   = (d_str.length() <= width) ? d_str.end() : d_str.end() - (width - 1);
 
   for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
     auto const output_idx = str_idx * seeds.size() + seed_idx;
 
     auto const seed   = seeds[seed_idx];
     auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
-
-    auto const begin = d_str.begin() + lane_idx;
-    auto const end   = (d_str.length() <= width) ? d_str.end() : d_str.end() - (width - 1);
 
     auto mh = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
