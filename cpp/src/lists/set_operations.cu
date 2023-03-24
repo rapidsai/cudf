@@ -157,7 +157,8 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
   auto const intersect_table = cudf::detail::copy_if(
     rhs_table,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());
 
   // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(intersect_table->view(),
@@ -237,7 +238,8 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
   auto const difference_table = cudf::detail::copy_if(
     lhs_table,
     [contained = contained.begin()] __device__(auto const idx) { return !contained[idx]; },
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());
 
   // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(difference_table->view(),

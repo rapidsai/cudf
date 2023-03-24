@@ -162,7 +162,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   // Returns default scalar if input column is empty or all null
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
-      return tdigest::detail::make_empty_tdigest_scalar(stream);
+      return tdigest::detail::make_empty_tdigest_scalar(stream, mr);
     }
 
     if (output_dtype.id() == type_id::LIST) {
