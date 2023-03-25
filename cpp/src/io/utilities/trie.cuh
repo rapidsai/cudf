@@ -83,8 +83,8 @@ trie create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stre
 __host__ __device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
                                                          device_span<char const> key)
 {
-  if (trie.empty()) {return false;}
-  if (key.empty()) {return trie.front().is_leaf;}
+  if (trie.empty()) { return false; }
+  if (key.empty()) { return trie.front().is_leaf; }
   auto curr_node = trie.begin() + 1;
   for (auto curr_key = key.begin(); curr_key < key.end(); ++curr_key) {
     // Don't jump away from root node
