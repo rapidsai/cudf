@@ -36,6 +36,13 @@ class hostdevice_span {
   }
 
   /**
+   * @brief Copy assignment operator.
+   *
+   * @return Reference to this hostdevice_span.
+   */
+  constexpr hostdevice_span& operator=(hostdevice_span const&) noexcept = default;
+
+  /**
    * @brief Converts a hostdevice view into a device span.
    *
    * @tparam T The device span type.
@@ -119,22 +126,35 @@ class hostdevice_span {
    */
   [[nodiscard]] bool is_empty() const noexcept { return size() == 0; }
 
-  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }
+  [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
 
   [[nodiscard]] T& operator[](size_t i) { return _host_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return _host_data[i]; }
 
+  /**
+   * @brief Obtains a hostdevice_span that is a view over the `count` elements of this
+   * hostdevice_span starting at offset
+   *
+   * @param offset The offset of the first element in the subspan
+   * @param count The number of elements in the subspan
+   * @return A subspan of the sequence, of requested count and offset
+   */
+  constexpr hostdevice_span<T> subspan(size_t offset, size_t count) const noexcept
+  {
+    return hostdevice_span<T>(_host_data + offset, _device_data + offset, count);
+  }
+
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
     CUDF_CUDA_TRY(
-      cudaMemcpyAsync(device_ptr(), host_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
+      cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
     CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_ptr(), device_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
+      cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
