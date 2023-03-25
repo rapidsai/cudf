@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ class hostdevice_span {
    *
    * @return The number of elements in the view
    */
-  [[nodiscard]] size_t size() const noexcept { return _size; }
+  [[nodiscard]] std::size_t size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
