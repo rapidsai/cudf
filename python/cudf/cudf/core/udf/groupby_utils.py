@@ -1,6 +1,5 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-import os
 
 import cupy as cp
 import numpy as np
@@ -20,17 +19,15 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    _generate_cache_key,
     _get_extensionty_size,
     _get_kernel,
-    _get_ptx_file,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
+    precompiled,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-
-dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
-cudf.core.udf.utils.ptx_files.append(dev_func_ptx)
 
 
 def _get_frame_groupby_type(dtype, index_dtype):
@@ -152,12 +149,19 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    kernel, return_type = _get_groupby_apply_kernel(
-        grouped_values, function, args
+    cache_key = _generate_cache_key(
+        grouped_values, function, suffix="__GROUPBY_APPLY_UDF"
     )
-    return_type = numpy_support.as_dtype(return_type)
 
+    if cache_key not in precompiled:
+        precompiled[cache_key] = _get_groupby_apply_kernel(
+            grouped_values, function, args
+        )
+    kernel, return_type = precompiled[cache_key]
+
+    return_type = numpy_support.as_dtype(return_type)
     output = cudf.core.column.column_empty(ngroups, dtype=return_type)
+
     launch_args = [
         offsets,
         output,

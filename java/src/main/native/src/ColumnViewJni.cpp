@@ -1546,6 +1546,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceMulti(JNIEnv *env, jclass,
+                                                                          jlong inputs_cv,
+                                                                          jlong targets_cv,
+                                                                          jlong repls_cv) {
+  JNI_NULL_CHECK(env, inputs_cv, "column is null", 0);
+  JNI_NULL_CHECK(env, targets_cv, "targets string column view is null", 0);
+  JNI_NULL_CHECK(env, repls_cv, "repls string column view is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(inputs_cv);
+    cudf::strings_column_view scv(*cv);
+    cudf::column_view *cvtargets = reinterpret_cast<cudf::column_view *>(targets_cv);
+    cudf::strings_column_view scvtargets(*cvtargets);
+    cudf::column_view *cvrepls = reinterpret_cast<cudf::column_view *>(repls_cv);
+    cudf::strings_column_view scvrepls(*cvrepls);
+    return release_as_jlong(cudf::strings::replace(scv, scvtargets, scvrepls));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookupForKeys(JNIEnv *env, jclass,
                                                                         jlong map_column_view,
                                                                         jlong lookup_keys) {
@@ -2453,6 +2473,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_applyBooleanMask(
         cudf::lists_column_view(*boolean_mask_list_column);
 
     return release_as_jlong(cudf::lists::apply_boolean_mask(list_view, boolean_mask_list_view));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_ai_rapids_cudf_ColumnView_hasNonEmptyNulls(JNIEnv *env, jclass, jlong column_view_handle) {
+  JNI_NULL_CHECK(env, column_view_handle, "column_view handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *cv = reinterpret_cast<cudf::column_view const *>(column_view_handle);
+    return cudf::has_nonempty_nulls(*cv);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_ColumnView_purgeNonEmptyNulls(JNIEnv *env, jclass, jlong column_view_handle) {
+  JNI_NULL_CHECK(env, column_view_handle, "column_view handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *cv = reinterpret_cast<cudf::column_view const *>(column_view_handle);
+    return release_as_jlong(cudf::purge_nonempty_nulls(*cv));
   }
   CATCH_STD(env, 0);
 }

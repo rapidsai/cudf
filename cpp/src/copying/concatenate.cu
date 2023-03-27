@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
 
-  auto d_views = make_device_uvector_async(device_views, stream);
+  auto d_views =
+    make_device_uvector_async(device_views, stream, rmm::mr::get_current_device_resource());
 
   // Compute the partition offsets
   auto offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -87,7 +88,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     thrust::plus{});
-  auto d_offsets         = make_device_uvector_async(offsets, stream);
+  auto d_offsets =
+    make_device_uvector_async(offsets, stream, rmm::mr::get_current_device_resource());
   auto const output_size = offsets.back();
 
   return std::make_tuple(
@@ -228,7 +230,8 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto const output_size  = std::get<3>(device_views);
 
   CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range");
+               "Total number of concatenated rows exceeds size_type range",
+               std::overflow_error);
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
@@ -398,7 +401,8 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
     });
   // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated chars exceeds size_type range");
+               "Total number of concatenated chars exceeds size_type range",
+               std::overflow_error);
 }
 
 template <>
@@ -469,7 +473,8 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
     });
   // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range");
+               "Total number of concatenated rows exceeds size_type range",
+               std::overflow_error);
 
   // traverse children
   cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);

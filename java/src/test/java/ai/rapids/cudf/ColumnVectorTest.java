@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1045,8 +1046,8 @@ public class ColumnVectorTest extends CudfTestBase {
     BigInteger bigInteger2 = new BigInteger("14");
     BigInteger bigInteger3 = new BigInteger("152345742357340573405745");
     final BigInteger[] bigInts = new BigInteger[] {bigInteger1, bigInteger2, bigInteger3};
-    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts)) {
-      HostColumnVector hostColumnVector = v.copyToHost();
+    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
       assertEquals(bigInteger1, hostColumnVector.getBigDecimal(0).unscaledValue());
       assertEquals(bigInteger2, hostColumnVector.getBigDecimal(1).unscaledValue());
       assertEquals(bigInteger3, hostColumnVector.getBigDecimal(2).unscaledValue());
@@ -5146,6 +5147,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void teststringReplaceMulti() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésssé", null, "", "ARé", "sssstrings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("Hello", "theSse", null, "", "ARe", "SStrings");
+         ColumnVector targets = ColumnVector.fromStrings("ss", "é");
+         ColumnVector repls = ColumnVector.fromStrings("S", "e");
+         ColumnVector replace_allParameters = v.stringReplace(targets, repls)) {
+      assertColumnsAreEqual(e_allParameters, replace_allParameters);
+    }
+  }
+
+  @Test
+  void teststringReplaceMultiThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           ColumnVector targets = ColumnVector.fromInts(0, 1);
+           ColumnVector repls = null;
+           ColumnVector result = testStrings.stringReplace(targets,repls)){}
+    });
+  }
+
+  @Test
   void testReplaceRegex() {
     try (ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
          Scalar repl = Scalar.fromString("Repl")) {
@@ -6689,6 +6711,67 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expectedCv = expectedStructCv.makeListFromOffsets(5, expectedOffsetsCv)
     ) {
       assertColumnsAreEqual(expectedCv, actualCv);
+    }
+  }
+
+  /**
+   * The caller needs to make sure to close the returned ColumnView
+   */
+  private ColumnView[] getColumnViewWithNonEmptyNulls() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> list2 = Arrays.asList(7, 8, 9);
+    List<Integer> list3 = null;
+    ColumnVector input = makeListsColumn(DType.INT32, list0, list1, list2, list3);
+    // Modify the validity buffer
+    BaseDeviceMemoryBuffer dmb = input.getDeviceBufferFor(BufferType.VALIDITY);
+    try (HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(64)) {
+      newValidity.copyFromDeviceBuffer(dmb);
+      BitVectorHelper.setNullAt(newValidity, 1);
+      dmb.copyFromHostBuffer(newValidity);
+    }
+    try (HostColumnVector hostColumnVector = input.copyToHost()) {
+      assert (hostColumnVector.isNull(1));
+      assert (hostColumnVector.isNull(3));
+    }
+    try (ColumnVector expectedOffsetsBeforePurge = ColumnVector.fromInts(0, 3, 6, 9, 9)) {
+      ColumnView offsetsCvBeforePurge = input.getListOffsetsView();
+      assertColumnsAreEqual(expectedOffsetsBeforePurge, offsetsCvBeforePurge);
+    }
+    ColumnView colWithNonEmptyNulls = new ColumnView(input.type, input.rows, Optional.of(2L), dmb,
+        input.getDeviceBufferFor(BufferType.OFFSET), input.getChildColumnViews());
+    assertEquals(2, colWithNonEmptyNulls.nullCount);
+    return new ColumnView[]{input, colWithNonEmptyNulls};
+  }
+
+  @Test
+  void testPurgeNonEmptyNullsList() {
+    ColumnView[] values = getColumnViewWithNonEmptyNulls();
+    try (ColumnView colWithNonEmptyNulls = values[1];
+         ColumnView input = values[0];
+         // purge non-empty nulls
+         ColumnView colWithEmptyNulls = colWithNonEmptyNulls.purgeNonEmptyNulls();
+         ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+         ColumnView offsetsCvAfterPurge = colWithEmptyNulls.getListOffsetsView()) {
+      assertTrue(colWithNonEmptyNulls.hasNonEmptyNulls());
+      assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+      assertFalse(colWithEmptyNulls.hasNonEmptyNulls());
+    }
+  }
+
+  @Test
+  void testPurgeNonEmptyNullsStruct() {
+    ColumnView[] values = getColumnViewWithNonEmptyNulls();
+    try (ColumnView listCol = values[1];
+         ColumnView input = values[0];
+         ColumnView stringsCol = ColumnVector.fromStrings("A", "col", "of", "Strings");
+         ColumnView structView = ColumnView.makeStructView(stringsCol, listCol);
+         ColumnView structWithEmptyNulls = structView.purgeNonEmptyNulls();
+         ColumnView newListChild = structWithEmptyNulls.getChildColumnView(1);
+         ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+         ColumnView offsetsCvAfterPurge = newListChild.getListOffsetsView()) {
+      assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+      assertFalse(newListChild.hasNonEmptyNulls());
     }
   }
 }

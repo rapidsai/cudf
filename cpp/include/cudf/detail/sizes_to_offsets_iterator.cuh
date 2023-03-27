@@ -27,6 +27,8 @@
 #include <thrust/distance.h>
 #include <thrust/scan.h>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 
@@ -242,7 +244,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *   auto const bytes = cudf::detail::sizes_to_offsets(
  *     d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
  *   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
- *               "Size of output exceeds column size limit");
+ *               "Size of output exceeds column size limit", std::overflow_error);
  * @endcode
  *
  * @tparam SizesIterator Iterator type for input of the scan using addition operation
@@ -282,8 +284,8 @@ auto sizes_to_offsets(SizesIterator begin,
  * The return also includes the total number of elements -- the last element value from the
  * scan.
  *
- * @throw cudf::logic_error if the total size of the scan (last element) greater than maximum value
- * of `size_type`
+ * @throw std::overflow_error if the total size of the scan (last element) greater than maximum
+ * value of `size_type`
  *
  * @tparam InputIterator Used as input to scan to set the offset values
  * @param begin The beginning of the input sequence
@@ -317,7 +319,8 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
   CUDF_EXPECTS(
     total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
-    "Size of output exceeds column size limit");
+    "Size of output exceeds column size limit",
+    std::overflow_error);
 
   offsets_column->set_null_count(0);
   return std::pair(std::move(offsets_column), static_cast<size_type>(total_elements));
