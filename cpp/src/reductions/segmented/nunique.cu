@@ -102,8 +102,9 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
   // Compute the output null mask
   // - only empty segments are tagged as null
   // - nulls are counted appropriately above per null_handling policy
+  auto const bitmask_col = null_handling == null_policy::EXCLUDE ? col : result->view();
   cudf::reduction::detail::segmented_update_validity(
-    *result, col, offsets, null_policy::EXCLUDE, std::nullopt, stream, mr);
+    *result, bitmask_col, offsets, null_policy::EXCLUDE, std::nullopt, stream, mr);
 
   return result;
 }
