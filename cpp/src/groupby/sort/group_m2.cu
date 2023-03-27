@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace groupby {
@@ -62,15 +64,19 @@ void compute_m2_fn(column_device_view const& values,
                    ResultType* d_result,
                    rmm::cuda_stream_view stream)
 {
-  auto const var_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0},
-    m2_transform<ResultType, decltype(values_iter)>{
-      values, values_iter, d_means, group_labels.data()});
+  auto m2_fn = m2_transform<ResultType, decltype(values_iter)>{
+    values, values_iter, d_means, group_labels.data()};
+  auto const itr = thrust::counting_iterator<size_type>(0);
+  // Using a temporary buffer for intermediate transform results instead of
+  // using the transform-iterator directly in thrust::reduce_by_key
+  // improves compile-time significantly.
+  auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
+  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
-                        var_iter,
+                        m2_vals.begin(),
                         thrust::make_discard_iterator(),
                         d_result);
 }
