@@ -28,8 +28,8 @@ from cudf.testing.dataset_generator import rand_dataframe
 def cudf_from_avro_util(
     schema: dict,
     records: list,
-    num_rows: Optional[int] = None,
     skip_rows: Optional[int] = None,
+    num_rows: Optional[int] = None,
 ) -> cudf.DataFrame:
     schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()
@@ -456,15 +456,7 @@ def test_alltypes_plain_avro():
 
 @pytest.mark.parametrize(
     "total_rows_and_num_rows",
-    [
-        (1, 1),
-        (10, 5),
-        (100, 10),
-        (10, 10),
-        (10, 0),
-        (10, 9),
-        (10, 1)
-    ],
+    [(1, 1), (10, 5), (100, 10), (10, 10), (10, 0), (10, 9), (10, 1)],
 )
 def test_avro_reader_num_rows(total_rows_and_num_rows):
     (total_rows, num_rows) = total_rows_and_num_rows
