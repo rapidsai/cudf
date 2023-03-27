@@ -52,7 +52,7 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm ={{ minor_version }}
+    - librmm ={{ minor_version }}=cuda{{ cuda_major }}*
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
     {% else %}
@@ -98,7 +98,7 @@ outputs:
         - cuda-cudart-dev {{ cuda_spec }}
         - cuda-cudart-static {{ cuda_spec }}
         {% endif %}
-        - librmm ={{ minor_version }}
+        - librmm ={{ minor_version }}=cuda{{ cuda_major }}*
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
