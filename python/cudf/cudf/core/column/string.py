@@ -5226,7 +5226,7 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance_matrix(self._column)
         )
 
-    def minhash(self, seeds, n: int = 4) -> SeriesOrIndex:
+    def minhash(self, seeds=None, n: int = 4) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
 
@@ -5254,8 +5254,12 @@ class StringMethods(ColumnMethods):
         1    [962346254, 677440381, 122618762]
         dtype: list
         """
+        if seeds is None:
+            seeds = column.as_column(0, dtype=np.uint32, length=1)
+        else:
+            seeds = seeds._column
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds._column, n)
+            libstrings.minhash(self._column, seeds, n)
         )
 
 
