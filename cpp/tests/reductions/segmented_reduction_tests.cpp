@@ -927,6 +927,48 @@ TEST_F(SegmentedReductionTestUntyped, VarianceNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
+TEST_F(SegmentedReductionTestUntyped, NUnique)
+{
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>({10, 15, 20, 30, 60, 60, 70, 70, 80});
+  auto const offsets   = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto const agg         = cudf::make_nunique_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::INT32};
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{{1, 0, 1, 2, 3}, {1, 0, 1, 1, 1}};
+  auto result =
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
+TEST_F(SegmentedReductionTestUntyped, NUniqueNulls)
+{
+  auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {10, 0, 20, 30, 60, 60, 70, 70, 0}, {1, 0, 1, 1, 1, 1, 1, 1, 0});
+  auto const offsets   = std::vector<cudf::size_type>{0, 1, 1, 2, 4, 9};
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto const agg         = cudf::make_nunique_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::INT32};
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{{1, 0, 0, 2, 2}, {1, 0, 0, 1, 1}};
+  auto result =
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+
+  expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{{1, 0, 1, 2, 3}, {1, 0, 1, 1, 1}};
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
 TEST_F(SegmentedReductionTestUntyped, Errors)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
