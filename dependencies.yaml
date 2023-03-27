@@ -392,11 +392,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka==1.7.0
+          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [requirements, pyproject]
         packages:
           - *cudf
-          - confluent-kafka==1.7.0
+          - confluent-kafka>=1.9.0,<1.10.0a0
   run_custreamz:
     common:
       - output_types: [conda, requirements, pyproject]
