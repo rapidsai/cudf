@@ -543,7 +543,7 @@ struct column_comparator_impl {
 
     auto const comparator = cudf::experimental::row::equality::two_table_comparator{
       lhs_tview, rhs_tview, cudf::get_default_stream()};
-    auto const has_nulls = cudf::has_nested_nulls(lhs_tview) or cudf::has_nested_nulls(rhs_tview);
+    auto const has_nulls = cudf::has_nulls(lhs_tview) or cudf::has_nulls(rhs_tview);
 
     auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
 
@@ -556,18 +556,22 @@ struct column_comparator_impl {
       lhs_row_indices.size(), cudf::get_default_stream());  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
 
+    auto diff_map = rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::get_default_stream());
+
     thrust::transform(
       rmm::exec_policy(cudf::get_default_stream()),
       input_iter,
       input_iter + lhs_row_indices.size(),
-      differences.begin(),
+      diff_map.begin(),
       ComparatorType(
         *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator, *d_lhs, *d_rhs));
 
-    auto diff_iter = thrust::remove(rmm::exec_policy(cudf::get_default_stream()),
-                                    differences.begin(),
-                                    differences.end(),
-                                    0);  // remove the zero entries
+    auto diff_iter = thrust::copy_if(rmm::exec_policy(cudf::get_default_stream()),
+                                     input_iter,
+                                     input_iter + lhs_row_indices.size(),
+                                     diff_map.begin(),
+                                     differences.begin(),
+                                     thrust::identity<bool>{});
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
                        cudf::get_default_stream());  // shrink back down
