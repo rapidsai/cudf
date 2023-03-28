@@ -87,7 +87,7 @@ rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fil
 {
   if (!fill_valid) {
     return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
-      size, cudf::get_default_stream());
+      size, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());
     CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(),

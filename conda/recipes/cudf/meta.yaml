@@ -52,7 +52,7 @@ requirements:
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1
     - setuptools
-    - numba >=0.56.2
+    - numba >=0.56.4,<0.57
     - dlpack >=0.5,<0.6.0a0
     - pyarrow =10
     - libcudf ={{ version }}
@@ -64,7 +64,7 @@ requirements:
     - typing_extensions
     - pandas >=1.3,<1.6.0dev0
     - cupy >=9.5.0,<12.0.0a0
-    - numba >=0.56.2
+    - numba >=0.56.4,<0.57
     - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - libcudf {{ version }}

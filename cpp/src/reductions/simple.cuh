@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <reductions/struct_minmax_util.cuh>
+#include "struct_minmax_util.cuh"
 
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/reduction.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -117,10 +117,10 @@ std::unique_ptr<scalar> fixed_point_reduction(
   auto result = simple_reduction<Type, Type, Op>(col, init, stream, mr);
 
   auto const scale = [&] {
-    if (std::is_same_v<Op, cudf::reduction::op::product>) {
+    if (std::is_same_v<Op, cudf::reduction::detail::op::product>) {
       auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
       return numeric::scale_type{col.type().scale() * (valid_count + (init.has_value() ? 1 : 0))};
-    } else if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
+    } else if (std::is_same_v<Op, cudf::reduction::detail::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
     return numeric::scale_type{col.type().scale()};
@@ -300,8 +300,8 @@ struct same_element_type_dispatcher {
  public:
   template <typename ElementType,
             std::enable_if_t<std::is_same_v<ElementType, cudf::struct_view> &&
-                             (std::is_same_v<Op, cudf::reduction::op::min> ||
-                              std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
+                             (std::is_same_v<Op, cudf::reduction::detail::op::min> ||
+                              std::is_same_v<Op, cudf::reduction::detail::op::max>)>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,

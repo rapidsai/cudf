@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,8 +238,8 @@ __global__ void simple_device_kernel(device_span<bool> result) { result[0] = tru
 
 TEST(SpanTest, CanUseDeviceSpan)
 {
-  auto d_message =
-    cudf::detail::make_zeroed_device_uvector_async<bool>(1, cudf::get_default_stream());
+  auto d_message = cudf::detail::make_zeroed_device_uvector_async<bool>(
+    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_span = device_span<bool>(d_message.data(), d_message.size());
 

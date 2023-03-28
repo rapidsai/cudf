@@ -23,13 +23,13 @@
 #include "orc_gpu.hpp"
 
 #include "reader_impl.hpp"
-#include "timezone.cuh"
 
 #include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -576,8 +576,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
       prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
     }
   }
-  auto const d_prefix_sums_to_update =
-    cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
+  auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
+    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
 
   thrust::for_each(rmm::exec_policy(stream),
                    d_prefix_sums_to_update.begin(),
@@ -603,7 +603,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
 void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                                       size_t num_dicts,
                                       size_t skip_rows,
-                                      timezone_table_view tz_table,
+                                      table_device_view tz_table,
                                       cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
                                       size_t row_index_stride,
                                       std::vector<column_buffer>& out_buffers,
@@ -915,11 +915,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   decimal128_columns = options.get_decimal128_columns();
 }
 
-timezone_table reader::impl::compute_timezone_table(
+std::unique_ptr<table> reader::impl::compute_timezone_table(
   const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
   rmm::cuda_stream_view stream)
 {
-  if (selected_stripes.empty()) return {};
+  if (selected_stripes.empty()) return std::make_unique<cudf::table>();
 
   auto const has_timestamp_column = std::any_of(
     selected_columns.levels.cbegin(), selected_columns.levels.cend(), [&](auto& col_lvl) {
@@ -927,10 +927,10 @@ timezone_table reader::impl::compute_timezone_table(
         return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
       });
     });
-  if (not has_timestamp_column) return {};
+  if (not has_timestamp_column) return std::make_unique<cudf::table>();
 
-  return build_timezone_transition_table(selected_stripes[0].stripe_info[0].second->writerTimezone,
-                                         stream);
+  return cudf::detail::make_timezone_transition_table(
+    {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1038,7 +1038,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                       selected_columns.levels[level].size(),
                       [&]() {
                         return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-                          total_num_stripes, stream);
+                          total_num_stripes, stream, rmm::mr::get_current_device_resource());
                       });
 
       // Tracker for eventually deallocating compressed and uncompressed data
@@ -1238,10 +1238,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
 
         if (not is_level_data_empty) {
+          auto const tz_table_dview = table_device_view::create(tz_table->view(), stream);
           decode_stream_data(chunks,
                              num_dict_entries,
                              skip_rows,
-                             tz_table.view(),
+                             *tz_table_dview,
                              row_groups,
                              _metadata.get_row_index_stride(),
                              out_buffers[level],
@@ -1270,7 +1271,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             });
 
           if (buff_data.size()) {
-            auto const dev_buff_data = cudf::detail::make_device_uvector_async(buff_data, stream);
+            auto const dev_buff_data = cudf::detail::make_device_uvector_async(
+              buff_data, stream, rmm::mr::get_current_device_resource());
             generate_offsets_for_list(dev_buff_data, stream);
           }
         }

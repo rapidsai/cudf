@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -54,8 +56,8 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto combined_keys =
-    cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
+  auto combined_keys = cudf::detail::concatenate(
+    std::vector<column_view>{old_keys, new_keys}, stream, rmm::mr::get_current_device_resource());
 
   // Drop duplicates from the combined keys, then sort the result.
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -114,7 +115,8 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    return cudf::detail::make_device_uvector_sync(offsets, stream);
+    return cudf::detail::make_device_uvector_sync(
+      offsets, stream, rmm::mr::get_current_device_resource());
   }
 
  private:
@@ -219,7 +221,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, stream, rmm::mr::get_current_device_resource());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
