@@ -6,6 +6,7 @@ files:
       cuda: ["11.8"]
       arch: [x86_64]
     includes:
+      - build_tools
       - build_all
       - build_cpp
       - build_wheels
@@ -43,6 +44,7 @@ files:
   test_java:
     output: none
     includes:
+      - build_tools
       - build_all
       - libarrow_run
       - cudatoolkit
@@ -69,6 +71,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_tools
       - build_all
       - build_python
       - build_python_common
@@ -160,6 +163,32 @@ files:
       key: test
     includes:
       - test_python_common
+  libcudf_recipe_build:
+    output: conda_meta
+    conda_meta_dir: conda/recipes/libcudf
+    extras:
+      section: build
+    includes:
+      - build_tools
+  libcudf_recipe_host:
+    output: conda_meta
+    matrix:
+      cuda: ["11.8"]
+    conda_meta_dir: conda/recipes/libcudf
+    extras:
+      section: host
+    includes:
+      - build_all
+      - build_cpp
+  libcudf_recipe_build:
+    output: conda_meta
+    matrix:
+      cuda: ["11.8"]
+    conda_meta_dir: conda/recipes/libcudf
+    extras:
+      section: build
+    includes:
+      - build_tools
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -168,16 +197,20 @@ channels:
   - conda-forge
   - nvidia
 dependencies:
-  build_all:
+  build_tools:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda, requirements, pyproject, conda_meta]
         packages:
           - &cmake_ver cmake>=3.23.1,!=3.25.0
           - ninja
+  build_all:
+    common:
       - output_types: conda
         packages:
           - c-compiler
           - cxx-compiler
+      - output_types: [conda, conda_meta]
+        packages:
           - dlpack>=0.5,<0.6.0a0
     specific:
       - output_types: conda
@@ -206,19 +239,32 @@ dependencies:
               - nvcc_linux-aarch64=11.8
   build_cpp:
     common:
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, conda_meta]
         packages:
           - librmm==23.6.*
-      - output_types: conda
+      - output_types: [conda, conda_meta]
         packages:
           - fmt>=9.1.0,<10
           - &gtest gtest==1.10.0.*
           - &gmock gmock==1.10.0.*
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
+          # Hard pin the patch version of arrow used during the build. This
+          # must be kept in sync with the version pinned in get_arrow.cmake.
           - libarrow==10.0.1.*
+          - libcurand-dev
           - librdkafka=1.7.0
           - spdlog>=1.11.0,<1.12
+    specific:
+      - output_types: conda_meta
+        matrices:
+          - matrix:
+              cuda: "11.8"
+            packages:
+              - cudatoolkit ==11.8.*
+              - cuda-nvrtc ==11.8.*
+              - cuda-nvrtc-dev ==11.8.*
+              - cuda-nvtx ==11.8.*
+          - matrix:
+            packages:
   build_wheels:
     common:
       - output_types: pyproject

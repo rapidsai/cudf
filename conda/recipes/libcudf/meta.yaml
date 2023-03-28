@@ -7,6 +7,9 @@
 {% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
+{% set host_118_data = load_file_data("conda/recipes/libcudf/meta_dependencies_host_cuda-118.yaml") %}
+{% set build_118_data = load_file_data("conda/recipes/libcudf/meta_dependencies_build.yaml") %}
+
 package:
   name: libcudf-split
 
@@ -33,26 +36,19 @@ build:
 
 requirements:
   build:
-    - cmake {{ cmake_version }}
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
-    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
+    {% for r in build_118_data.get("dependencies", {}) %}
+    - {{ r }}
+    {% endfor %}
   host:
-    - librmm ={{ minor_version }}
-    - cudatoolkit ={{ cuda_version }}
-    - cuda-nvrtc ={{ cuda_version }}
-    - cuda-nvrtc-dev ={{ cuda_version }}
-    - cuda-nvtx ={{ cuda_version }}
-    - libcurand-dev
-    - libarrow {{ libarrow_version }}
-    - dlpack {{ dlpack_version }}
-    - librdkafka {{ librdkafka_version }}
-    - fmt {{ fmt_version }}
-    - spdlog {{ spdlog_version }}
-    - gtest {{ gtest_version }}
-    - gmock {{ gtest_version }}
+    # Note: For variant (e.g. CUDA) builds we would need to read data from
+    # multiple files and insert the appropriate data here accordingly.
+    {% for r in host_118_data.get("dependencies", {}) %}
+    - {{ r }}
+    {% endfor %}
 
 outputs:
   - name: libcudf
