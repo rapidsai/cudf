@@ -204,6 +204,10 @@ dependencies:
               cuda: "11.8"
             packages:
               - nvcc_linux-aarch64=11.8
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-nvcc=12.0
   build_cpp:
     common:
       - output_types: [conda, requirements]
@@ -278,6 +282,12 @@ dependencies:
               cuda: "11.8"
             packages:
               - cudatoolkit=11.8
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-cudart=12.0
+              - cuda-cudart-dev=12.0
+              - cuda-cudart-static=12.0
   develop:
     common:
       - output_types: [conda, requirements]
@@ -339,7 +349,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - cuda-python>=11.7.1,<12.0
           - numba>=0.56.2
           - nvtx>=0.2.1
           - packaging
@@ -368,6 +377,15 @@ dependencies:
           - &cupy_pip cupy-cuda11x>=9.5.0,<12.0.0a0
           - ptxcompiler
     specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-python>=12.1,<13.0
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cuda-python>=11.7.1,<12.0
       - output_types: requirements
         matrices:
           - matrix:
@@ -421,6 +439,10 @@ dependencies:
             packages:
               - cuda-sanitizer-api=11.8.86
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-sanitizer-api=12.0.140
+          - matrix:
             packages:
   test_java:
     common:
@@ -440,6 +462,10 @@ dependencies:
               cuda: "11.8"
             packages:
               - cuda-nvtx=11.8
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-nvtx=12.0
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
