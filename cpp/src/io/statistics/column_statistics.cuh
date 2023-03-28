@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,13 @@ struct calculate_group_statistics_functor {
 
     chunk = block_reduce(chunk, storage);
 
-    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+    if (t == 0) {
+      // parquet wants total null count in stats, not just count of null leaf values
+      if constexpr (IO == detail::io_file_format::PARQUET) {
+        chunk.null_count += s.group.non_leaf_nulls;
+      }
+      s.ck = get_untyped_chunk(chunk);
+    }
   }
 
   template <typename T,

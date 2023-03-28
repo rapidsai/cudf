@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "dask_cudf"
-version = "23.04.00"
+version = "23.06.00"
 description = "Utilities for Dask and cuDF interactions"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
@@ -18,7 +18,7 @@ authors = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.8"
 dependencies = [
-    "cudf==23.4.*",
+    "cudf==23.6.*",
     "cupy-cuda11x>=9.5.0,<12.0.0a0",
     "dask>=2023.1.1",
     "distributed>=2023.1.1",
@@ -40,8 +40,8 @@ dynamic = ["entry-points"]
 
 [project.optional-dependencies]
 test = [
-    "dask-cuda==23.4.*",
-    "numba>=0.56.2",
+    "dask-cuda==23.6.*",
+    "numba>=0.56.4,<0.57",
     "pytest",
     "pytest-cov",
     "pytest-xdist",

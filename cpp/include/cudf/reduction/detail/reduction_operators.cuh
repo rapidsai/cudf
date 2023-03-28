@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -244,7 +245,7 @@ struct variance : public compound_op<variance> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::detail::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -270,7 +271,7 @@ struct standard_deviation : public compound_op<standard_deviation> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::detail::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -288,7 +289,7 @@ struct standard_deviation : public compound_op<standard_deviation> {
     };
   };
 };
-
 }  // namespace op
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

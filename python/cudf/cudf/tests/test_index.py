@@ -2864,3 +2864,22 @@ def test_index_to_pandas_nullable(data, expected_dtype):
     expected = pd.Index(data, dtype=expected_dtype)
 
     assert_eq(pi, expected)
+
+
+class TestIndexScalarGetItem:
+    @pytest.fixture(
+        params=[range(1, 10, 2), [1, 2, 3], ["a", "b", "c"], [1.5, 2.5, 3.5]]
+    )
+    def index_values(self, request):
+        return request.param
+
+    @pytest.fixture(params=[int, np.int8, np.int32, np.int64])
+    def i(self, request):
+        return request.param(1)
+
+    def test_scalar_getitem(self, index_values, i):
+        index = cudf.Index(index_values)
+
+        assert not isinstance(index[i], cudf.Index)
+        assert index[i] == index_values[i]
+        assert_eq(index, index.to_pandas())

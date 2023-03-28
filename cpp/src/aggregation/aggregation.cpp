@@ -605,6 +605,8 @@ template std::unique_ptr<groupby_aggregation> make_nunique_aggregation<groupby_a
   null_policy null_handling);
 template std::unique_ptr<reduce_aggregation> make_nunique_aggregation<reduce_aggregation>(
   null_policy null_handling);
+template std::unique_ptr<segmented_reduce_aggregation>
+make_nunique_aggregation<segmented_reduce_aggregation>(null_policy null_handling);
 
 /// Factory to create an NTH_ELEMENT aggregation
 template <typename Base>

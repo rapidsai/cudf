@@ -94,21 +94,20 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   auto const d_values_view = column_device_view::create(values, stream);
 
+  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream);
+
   auto const comparator_helper = [&](auto const d_equal) {
-    auto const is_unique_iterator =
-      thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0),
-                                      is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
-                                                            *d_values_view,
-                                                            d_equal,
-                                                            null_handling,
-                                                            group_offsets.data(),
-                                                            group_labels.data()});
-    thrust::reduce_by_key(rmm::exec_policy(stream),
-                          group_labels.begin(),
-                          group_labels.end(),
-                          is_unique_iterator,
-                          thrust::make_discard_iterator(),
-                          result->mutable_view().begin<size_type>());
+    auto fn = is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
+                                    *d_values_view,
+                                    d_equal,
+                                    null_handling,
+                                    group_offsets.data(),
+                                    group_labels.data()};
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(values.size()),
+                      d_result.begin(),
+                      fn);
   };
 
   if (cudf::detail::has_nested_columns(values_view)) {
@@ -120,6 +119,15 @@ std::unique_ptr<column> group_nunique(column_view const& values,
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
     comparator_helper(d_equal);
   }
+
+  // calling this with a vector instead of a transform iterator is 10x faster to compile;
+  // it also helps that we are only calling it once for both conditions
+  thrust::reduce_by_key(rmm::exec_policy(stream),
+                        group_labels.begin(),
+                        group_labels.end(),
+                        d_result.begin(),
+                        thrust::make_discard_iterator(),
+                        result->mutable_view().begin<size_type>());
 
   return result;
 }
