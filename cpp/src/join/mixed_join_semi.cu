@@ -62,20 +62,24 @@ struct make_pair_function_semi {
  */
 class double_row_equality {
  public:
-  double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
+  double_row_equality(row_equality_experimental equality_comparator,
+                      row_equality_experimental conditional_comparator)
     : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
   {
   }
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    return _equality_comparator(lhs_row_index, rhs_row_index) &&
-           _conditional_comparator(lhs_row_index, rhs_row_index);
+    using experimental::row::lhs_index_type;
+    using experimental::row::rhs_index_type;
+
+    return _equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
+           _conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
   }
 
  private:
-  row_equality _equality_comparator;
-  row_equality _conditional_comparator;
+  row_equality_experimental _equality_comparator;
+  row_equality_experimental _conditional_comparator;
 };
 
 }  // namespace
@@ -139,9 +143,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -151,15 +155,20 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto& probe                  = swap_tables ? right_equality : left_equality;
-  auto& build                  = swap_tables ? left_equality : right_equality;
-  auto probe_view              = table_device_view::create(probe, stream);
-  auto build_view              = table_device_view::create(build, stream);
-  auto left_conditional_view   = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view  = table_device_view::create(right_conditional, stream);
-  auto& build_conditional_view = swap_tables ? left_conditional_view : right_conditional_view;
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
+  auto& probe                 = swap_tables ? right_equality : left_equality;
+  auto& build                 = swap_tables ? left_equality : right_equality;
+  auto probe_view             = table_device_view::create(probe, stream);
+  auto build_view             = table_device_view::create(build, stream);
+  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
+  auto right_conditional_view = table_device_view::create(right_conditional, stream);
+
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
                            cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
@@ -171,8 +180,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
-  row_hash const hash_build{build_nulls, *build_view};
+  auto const build_nulls    = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
+  auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
+  auto const hash_build     = row_hash_build.device_hasher(build_nulls);
   // Since we may see multiple rows that are identical in the equality tables
   // but differ in the conditional tables, the equality comparator used for
   // insertion must account for both sets of tables. An alternative solution
@@ -182,9 +192,18 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // the columns of the conditional table that are used by the expression, but
   // that requires additional plumbing through the AST machinery and is out of
   // scope for now.
-  row_equality equality_build_equality{build_nulls, *build_view, *build_view, compare_nulls};
-  row_equality equality_build_conditional{
-    build_nulls, *build_conditional_view, *build_conditional_view, compare_nulls};
+  auto const row_comparator_build =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_build};
+  auto const equality_build_equality =
+    row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
+  auto const preprocessed_build_condtional =
+    experimental::row::equality::preprocessed_table::create(
+      swap_tables ? left_conditional : right_conditional, stream);
+  auto const row_comparator_conditional_build =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build_condtional,
+                                                            preprocessed_build_condtional};
+  auto const equality_build_conditional =
+    row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
   double_row_equality equality_build{equality_build_equality, equality_build_conditional};
   make_pair_function_semi pair_func_build{};
 
@@ -220,6 +239,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   std::optional<rmm::device_uvector<size_type>> matches_per_row{};
   device_span<size_type const> matches_per_row_span{};
 
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
     matches_per_row_span = output_size_data->second;
@@ -242,6 +264,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -256,6 +279,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -287,6 +311,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -301,6 +326,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -378,9 +404,9 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -390,15 +416,20 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto& probe                  = swap_tables ? right_equality : left_equality;
-  auto& build                  = swap_tables ? left_equality : right_equality;
-  auto probe_view              = table_device_view::create(probe, stream);
-  auto build_view              = table_device_view::create(build, stream);
-  auto left_conditional_view   = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view  = table_device_view::create(right_conditional, stream);
-  auto& build_conditional_view = swap_tables ? left_conditional_view : right_conditional_view;
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
+  auto& probe                 = swap_tables ? right_equality : left_equality;
+  auto& build                 = swap_tables ? left_equality : right_equality;
+  auto probe_view             = table_device_view::create(probe, stream);
+  auto build_view             = table_device_view::create(build, stream);
+  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
+  auto right_conditional_view = table_device_view::create(right_conditional, stream);
+
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
                            cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
@@ -410,8 +441,9 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
-  row_hash const hash_build{build_nulls, *build_view};
+  auto const build_nulls    = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
+  auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
+  auto const hash_build     = row_hash_build.device_hasher(build_nulls);
   // Since we may see multiple rows that are identical in the equality tables
   // but differ in the conditional tables, the equality comparator used for
   // insertion must account for both sets of tables. An alternative solution
@@ -421,9 +453,18 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // the columns of the conditional table that are used by the expression, but
   // that requires additional plumbing through the AST machinery and is out of
   // scope for now.
-  row_equality equality_build_equality{build_nulls, *build_view, *build_view, compare_nulls};
-  row_equality equality_build_conditional{
-    build_nulls, *build_conditional_view, *build_conditional_view, compare_nulls};
+  auto const row_comparator_build =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_build};
+  auto const equality_build_equality =
+    row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
+  auto const preprocessed_build_condtional =
+    experimental::row::equality::preprocessed_table::create(
+      swap_tables ? left_conditional : right_conditional, stream);
+  auto const row_comparator_conditional_build =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_build_condtional,
+                                                            preprocessed_build_condtional};
+  auto const equality_build_conditional =
+    row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
   double_row_equality equality_build{equality_build_equality, equality_build_conditional};
   make_pair_function_semi pair_func_build{};
 
@@ -453,6 +494,9 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
 
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   if (has_nulls) {
@@ -462,6 +506,7 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,
@@ -476,6 +521,7 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,

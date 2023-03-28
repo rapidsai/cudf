@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,8 @@ __launch_bounds__(block_size) __global__
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
-                       row_equality const equality_probe,
+                       row_hash_experimental const hash_probe,
+                       row_equality_experimental const equality_probe,
                        join_kind const join_type,
                        cudf::detail::semi_map_type::device_view hash_table_view,
                        size_type* join_output_l,
@@ -64,8 +65,6 @@ __launch_bounds__(block_size) __global__
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
-
   if (outer_row_index < outer_num_rows) {
     // Figure out the number of elements for this key.
     auto equality = single_expression_equality<has_nulls>{
@@ -83,7 +82,8 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_equality const equality_probe,
+  row_hash_experimental const hash_probe,
+  row_equality_experimental const equality_probe,
   join_kind const join_type,
   cudf::detail::semi_map_type::device_view hash_table_view,
   size_type* join_output_l,
@@ -96,7 +96,8 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_equality const equality_probe,
+  row_hash_experimental const hash_probe,
+  row_equality_experimental const equality_probe,
   join_kind const join_type,
   cudf::detail::semi_map_type::device_view hash_table_view,
   size_type* join_output_l,
