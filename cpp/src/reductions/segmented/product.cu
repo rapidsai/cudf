@@ -16,11 +16,11 @@
 
 #include "simple.cuh"
 
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
-
+namespace detail {
 std::unique_ptr<cudf::column> segmented_product(
   column_view const& col,
   device_span<size_type const> offsets,
@@ -30,17 +30,10 @@ std::unique_ptr<cudf::column> segmented_product(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  using reducer = simple::detail::column_type_dispatcher<op::product>;
   return cudf::type_dispatcher(
-    col.type(),
-    simple::detail::column_type_dispatcher<cudf::reduction::op::product>{},
-    col,
-    offsets,
-    output_dtype,
-    null_handling,
-    init,
-    stream,
-    mr);
+    col.type(), reducer{}, col, offsets, output_dtype, null_handling, init, stream, mr);
 }
-
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

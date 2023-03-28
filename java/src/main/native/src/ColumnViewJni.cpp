@@ -1546,6 +1546,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceMulti(JNIEnv *env, jclass,
+                                                                          jlong inputs_cv,
+                                                                          jlong targets_cv,
+                                                                          jlong repls_cv) {
+  JNI_NULL_CHECK(env, inputs_cv, "column is null", 0);
+  JNI_NULL_CHECK(env, targets_cv, "targets string column view is null", 0);
+  JNI_NULL_CHECK(env, repls_cv, "repls string column view is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(inputs_cv);
+    cudf::strings_column_view scv(*cv);
+    cudf::column_view *cvtargets = reinterpret_cast<cudf::column_view *>(targets_cv);
+    cudf::strings_column_view scvtargets(*cvtargets);
+    cudf::column_view *cvrepls = reinterpret_cast<cudf::column_view *>(repls_cv);
+    cudf::strings_column_view scvrepls(*cvrepls);
+    return release_as_jlong(cudf::strings::replace(scv, scvtargets, scvrepls));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookupForKeys(JNIEnv *env, jclass,
                                                                         jlong map_column_view,
                                                                         jlong lookup_keys) {

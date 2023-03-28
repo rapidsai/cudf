@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,15 +145,14 @@ __launch_bounds__(block_size) __global__
  *                    by `filter[i]`
  */
 template <typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(
-  bool nullable,
-  LeftIter lhs_begin,
-  LeftIter lhs_end,
-  RightIter rhs,
-  FilterFn filter,
-  cudf::data_type output_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> copy_if_else(bool nullable,
+                                     LeftIter lhs_begin,
+                                     LeftIter lhs_end,
+                                     RightIter rhs,
+                                     FilterFn filter,
+                                     cudf::data_type output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   // This is the type of the thrust::optional element in the passed iterators
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;

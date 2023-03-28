@@ -1,8 +1,10 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+import collections
 import datetime
 import itertools
 import operator
+import string
 import textwrap
 from decimal import Decimal
 
@@ -18,6 +20,7 @@ import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
+from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -530,6 +533,42 @@ def test_groupby_apply_jit_block_divergence():
         return 0
 
     run_groupby_apply_jit_test(df, diverging_block, ["a"])
+
+
+def test_groupby_apply_caching():
+    # Make sure similar functions that differ
+    # by simple things like constants actually
+    # recompile
+
+    # begin with a clear cache
+    precompiled.clear()
+    assert precompiled.currsize == 0
+
+    data = cudf.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 4, 5, 6]})
+
+    def f(group):
+        return group["b"].mean() * 2
+
+    # a single run should result in a cache size of 1
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # a second run with f should not increase the count
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # changing a constant value inside the UDF should miss
+    def f(group):
+        return group["b"].mean() * 3
+
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 2
+
+    # changing the dtypes of the columns should miss
+    data["b"] = data["b"].astype("float64")
+    run_groupby_apply_jit_test(data, f, ["a"])
+
+    assert precompiled.currsize == 3
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
@@ -2960,6 +2999,103 @@ def test_groupby_dtypes(groups):
     pdf = df.to_pandas()
 
     assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+
+
+@pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
+def test_groupby_by_index_names(index_names):
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4], "b": ["a", "b", "a", "a"], "c": [1, 1, 2, 1]}
+    ).set_index(index_names)
+    pdf = gdf.to_pandas()
+
+    assert_groupby_results_equal(
+        pdf.groupby(index_names).min(), gdf.groupby(index_names).min()
+    )
+
+
+class TestSample:
+    @pytest.fixture(params=["default", "rangeindex", "intindex", "strindex"])
+    def index(self, request):
+        n = 12
+        if request.param == "rangeindex":
+            return cudf.RangeIndex(2, n + 2)
+        elif request.param == "intindex":
+            return cudf.Index(
+                [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
+            )
+        elif request.param == "strindex":
+            return cudf.StringIndex(list(string.ascii_lowercase[:n]))
+        elif request.param == "default":
+            return None
+
+    @pytest.fixture(
+        params=[
+            ["a", "a", "b", "b", "c", "c", "c", "d", "d", "d", "d", "d"],
+            [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4],
+        ],
+        ids=["str-group", "int-group"],
+    )
+    def df(self, index, request):
+        return cudf.DataFrame(
+            {"a": request.param, "b": request.param, "v": request.param},
+            index=index,
+        )
+
+    @pytest.fixture(params=["a", ["a", "b"]], ids=["single-col", "two-col"])
+    def by(self, request):
+        return request.param
+
+    def expected(self, df, *, n=None, frac=None):
+        value_counts = collections.Counter(df.a.values_host)
+        if n is not None:
+            values = list(
+                itertools.chain.from_iterable(
+                    itertools.repeat(v, n) for v in value_counts.keys()
+                )
+            )
+        elif frac is not None:
+            values = list(
+                itertools.chain.from_iterable(
+                    itertools.repeat(v, round(count * frac))
+                    for v, count in value_counts.items()
+                )
+            )
+        else:
+            raise ValueError("Must provide either n or frac")
+        values = cudf.Series(sorted(values), dtype=df.a.dtype)
+        return cudf.DataFrame({"a": values, "b": values, "v": values})
+
+    @pytest.mark.parametrize("n", [None, 0, 1, 2])
+    def test_constant_n_no_replace(self, df, by, n):
+        result = df.groupby(by).sample(n=n).sort_values("a")
+        n = 1 if n is None else n
+        assert_eq(self.expected(df, n=n), result.reset_index(drop=True))
+
+    def test_constant_n_no_replace_too_large_raises(self, df):
+        with pytest.raises(ValueError):
+            df.groupby("a").sample(n=3)
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_constant_n_replace(self, df, by, n):
+        result = df.groupby(by).sample(n=n, replace=True).sort_values("a")
+        assert_eq(self.expected(df, n=n), result.reset_index(drop=True))
+
+    def test_invalid_arguments(self, df):
+        with pytest.raises(ValueError):
+            df.groupby("a").sample(n=1, frac=0.1)
+
+    def test_not_implemented_arguments(self, df):
+        with pytest.raises(NotImplementedError):
+            # These are valid weights, but we don't implement this yet.
+            df.groupby("a").sample(n=1, weights=[1 / len(df)] * len(df))
+
+    @pytest.mark.parametrize("frac", [0, 1 / 3, 1 / 2, 2 / 3, 1])
+    @pytest.mark.parametrize("replace", [False, True])
+    def test_fraction_rounding(self, df, by, frac, replace):
+        result = (
+            df.groupby(by).sample(frac=frac, replace=replace).sort_values("a")
+        )
+        assert_eq(self.expected(df, frac=frac), result.reset_index(drop=True))
 
 
 class TestHeadTail:

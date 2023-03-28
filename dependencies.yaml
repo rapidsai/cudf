@@ -349,7 +349,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - numba>=0.56.2
+          - &numba numba>=0.56.4,<0.57
           - nvtx>=0.2.1
           - packaging
           - rmm==23.4.*
@@ -519,4 +519,4 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==23.4.*
-          - numba>=0.56.2
+          - *numba
