@@ -167,7 +167,7 @@ mixed_join(
   device_span<size_type const> matches_per_row_span{};
 
   auto const preprocessed_probe =
-    experimental::row::equality::preprocessed_table::create(build, stream);
+    experimental::row::equality::preprocessed_table::create(probe, stream);
   auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe = row_hash.device_hasher(has_nulls);
   auto const row_comparator =
@@ -426,7 +426,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   rmm::device_scalar<std::size_t> size(0, stream, mr);
 
   auto const preprocessed_probe =
-    experimental::row::equality::preprocessed_table::create(build, stream);
+    experimental::row::equality::preprocessed_table::create(probe, stream);
   auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe = row_hash.device_hasher(has_nulls);
   auto const row_comparator =
