@@ -92,6 +92,10 @@ TEST_F(MinHashTest, EmptyTest)
 
 TEST_F(MinHashTest, ErrorsTest)
 {
-  auto input = cudf::test::strings_column_wrapper({"pup"});
-  EXPECT_THROW(nvtext::minhash(cudf::strings_column_view(input), 0, 0), cudf::logic_error);
+  auto input = cudf::test::strings_column_wrapper({"this string intentionally left blank"});
+  auto view  = cudf::strings_column_view(input);
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::hash_id::HASH_MURMUR3, 0), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::hash_id::HASH_MD5), std::invalid_argument);
+  auto seeds = cudf::device_span<cudf::hash_value_type const>{};
+  EXPECT_THROW(nvtext::minhash(view, seeds), std::invalid_argument);
 }

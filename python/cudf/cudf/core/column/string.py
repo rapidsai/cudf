@@ -5226,7 +5226,9 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance_matrix(self._column)
         )
 
-    def minhash(self, seeds=None, n: int = 4) -> SeriesOrIndex:
+    def minhash(
+        self, seeds=None, n: int = 4, method: str = "murmur3"
+    ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
 
@@ -5238,6 +5240,10 @@ class StringMethods(ColumnMethods):
         n : int
             The width of the substring to hash.
             Default is 4 characters.
+        method : str
+            Hash function to use.
+            Only 'murmur3' (MurmurHash3_32) is supported.
+            Default is 'murmur3'.
 
         Examples
         --------
@@ -5259,7 +5265,7 @@ class StringMethods(ColumnMethods):
         else:
             seeds = seeds._column
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds, n)
+            libstrings.minhash(self._column, seeds, method, n)
         )
 
 

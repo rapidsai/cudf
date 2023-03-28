@@ -85,11 +85,17 @@ struct minhash_fn {
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
+                                      cudf::hash_id h_id,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(width > 1, "Parameter width should be an integer value of 2 or greater");
+  CUDF_EXPECTS(!seeds.empty(), "Parameter seeds cannot be empty", std::invalid_argument);
+  CUDF_EXPECTS(
+    width > 1, "Parameter width should be an integer value of 2 or greater", std::invalid_argument);
+  CUDF_EXPECTS(h_id == cudf::hash_id::HASH_MURMUR3,
+               "Only murmur3 hash algorithm supported",
+               std::invalid_argument);
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
@@ -134,21 +140,23 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::numeric_scalar<cudf::hash_value_type> seed,
+                                      cudf::hash_id h_id,
                                       cudf::size_type width,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto seeds = cudf::device_span<cudf::hash_value_type const>{seed.data(), 1};
-  return detail::minhash(input, seeds, width, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, h_id, width, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
+                                      cudf::hash_id h_id,
                                       cudf::size_type width,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minhash(input, seeds, width, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, h_id, width, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext
