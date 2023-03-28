@@ -1179,7 +1179,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         chunk_results = [function(chk, *args) for chk in chunks]
         if not len(chunk_results):
             return self.obj.head(0)
-
         if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series._from_data(
                 {None: chunk_results}, index=group_names
@@ -1187,7 +1186,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
-        ):
+        ) and (chunk_results[0].to_pandas().index.values == self.obj.columns).all():
             result = cudf.concat(chunk_results, axis=1).T
             result.index.names = self.grouping.names
         else:

@@ -570,6 +570,18 @@ def test_groupby_apply_caching():
 
     assert precompiled.currsize == 3
 
+def test_groupby_apply_return_column():
+    df = cudf.datasets.randomdata()
+    pdf = df.to_pandas()
+
+    def func(df):
+        return df.x + df.y
+
+    expect = pdf.groupby("id").apply(func)
+    got = df.groupby("id").apply(func)
+
+    assert_groupby_results_equal(expect, got)
+
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
