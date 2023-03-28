@@ -1175,7 +1175,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
  *
  * @param[in] num_index_streams Total number of index streams
  * @param[in] segmentation stripe and rowgroup ranges
- * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
+ * @param[in,out] enc_data ORC per-chunk streams of encoded data
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
