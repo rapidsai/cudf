@@ -105,7 +105,10 @@ class row_is_valid {
 template <typename DeviceComparator>
 class pair_equality {
  public:
-  pair_equality(DeviceComparator check_row_equality) : _check_row_equality{check_row_equality} {}
+  pair_equality(DeviceComparator check_row_equality)
+    : _check_row_equality{std::move(check_row_equality)}
+  {
+  }
 
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept

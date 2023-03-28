@@ -51,11 +51,15 @@ namespace {
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * build_table
+ * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * probe_table
  * @param hash_table A hash table built on the build table that maps the index
- * of every row to the hash value of that row.
+ * of every row to the hash value of that row
  * @param join The type of join to be performed
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
- * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param nulls_equal Flag to denote nulls are equal or not
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The exact size of the output of the join operation
@@ -94,7 +98,8 @@ std::size_t compute_join_output_size(
   auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe         = row_hash.device_hasher(probe_nulls);
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  auto const iter               = cudf::detail::make_counting_transform_iterator(
+    0, make_pair_function{hash_probe, empty_key_sentinel});
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
@@ -102,7 +107,6 @@ std::size_t compute_join_output_size(
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
 
-    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
     if (join == join_kind::LEFT_JOIN) {
       return hash_table.pair_count_outer(
         iter, iter + probe_table_num_rows, equality, stream.value());
@@ -125,15 +129,19 @@ std::size_t compute_join_output_size(
  * and returns the output indices of `build_table` and `probe_table` as a combined table.
  * Behavior is undefined if the provided `output_size` is smaller than the actual output size.
  *
- * @param build_table Table of build side columns to join.
- * @param probe_table Table of probe side columns to join.
- * @param hash_table Hash table built from `build_table`.
+ * @param build_table Table of build side columns to join
+ * @param probe_table Table of probe side columns to join
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * build_table
+ * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * probe_table
+ * @param hash_table Hash table built from `build_table`
  * @param join The type of join to be performed
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param output_size Optional value which allows users to specify the exact output size.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned vectors.
+ * @param compare_nulls Controls whether null join-key values should match or not
+ * @param output_size Optional value which allows users to specify the exact output size
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vectors
  *
  * @return Join output indices vector pair.
  */
@@ -181,20 +189,20 @@ probe_join_hash_table(
   auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe         = row_hash.device_hasher(probe_nulls);
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  auto const iter               = cudf::detail::make_counting_transform_iterator(
+    0, make_pair_function{hash_probe, empty_key_sentinel});
+
+  cudf::size_type const probe_table_num_rows = probe_table.num_rows();
+
+  auto const out1_zip_begin = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+  auto const out2_zip_begin = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
-
-    const cudf::size_type probe_table_num_rows = probe_table.num_rows();
-
-    auto iter           = cudf::detail::make_counting_transform_iterator(0, pair_func);
-    auto out1_zip_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
-    auto out2_zip_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
     if (join == cudf::detail::join_kind::FULL_JOIN or join == cudf::detail::join_kind::LEFT_JOIN) {
       [[maybe_unused]] auto [out1_zip_end, out2_zip_end] =
@@ -237,13 +245,17 @@ probe_join_hash_table(
  * TODO: this is a temporary solution as part of `full_join_size`. To be refactored during
  * cuco integration.
  *
- * @param build_table Table of build side columns to join.
- * @param probe_table Table of probe side columns to join.
- * @param hash_table Hash table built from `build_table`.
+ * @param build_table Table of build side columns to join
+ * @param probe_table Table of probe side columns to join
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * build_table
+ * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ * probe_table
+ * @param hash_table Hash table built from `build_table`
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the intermediate vectors.
+ * @param compare_nulls Controls whether null join-key values should match or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the intermediate vectors
  *
  * @return Output size of full join.
  */
@@ -279,21 +291,20 @@ std::size_t get_full_join_size(
   auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe         = row_hash.device_hasher(probe_nulls);
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  auto const iter               = cudf::detail::make_counting_transform_iterator(
+    0, make_pair_function{hash_probe, empty_key_sentinel});
+
+  cudf::size_type const probe_table_num_rows = probe_table.num_rows();
+
+  auto const out1_zip_begin = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+  auto const out2_zip_begin = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
-
-    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
-
-    const cudf::size_type probe_table_num_rows = probe_table.num_rows();
-
-    auto out1_zip_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
-    auto out2_zip_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
     hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
@@ -360,16 +371,15 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
-                detail::hash_table_allocator_type{default_allocator<char>{}, stream}}
+                detail::hash_table_allocator_type{default_allocator<char>{}, stream}},
+    _build{build},
+    _preprocessed_build{
+      cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
   CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
-
-  _build = build;
-  _preprocessed_build =
-    cudf::experimental::row::equality::preprocessed_table::create(_build, stream);
 
   if (_is_empty) { return; }
 
@@ -426,7 +436,7 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   // Return directly if build table is empty
   if (_is_empty) { return 0; }
 
-  auto preprocessed_probe =
+  auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   return cudf::detail::compute_join_output_size(
@@ -436,7 +446,7 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
     preprocessed_probe,
     _hash_table,
     cudf::detail::join_kind::INNER_JOIN,
-    cudf::has_nested_nulls(probe) | cudf::has_nested_nulls(_build),
+    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
     _nulls_equal,
     stream);
 }
@@ -450,7 +460,7 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
-  auto preprocessed_probe =
+  auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   return cudf::detail::compute_join_output_size(
@@ -460,7 +470,7 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
     preprocessed_probe,
     _hash_table,
     cudf::detail::join_kind::LEFT_JOIN,
-    cudf::has_nested_nulls(probe) | cudf::has_nested_nulls(_build),
+    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
     _nulls_equal,
     stream);
 }
@@ -475,7 +485,7 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
-  auto preprocessed_probe =
+  auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   return cudf::detail::get_full_join_size(
@@ -484,7 +494,7 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
     _preprocessed_build,
     preprocessed_probe,
     _hash_table,
-    cudf::has_nested_nulls(probe) | cudf::has_nested_nulls(_build),
+    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
     _nulls_equal,
     stream,
     mr);
@@ -506,7 +516,7 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
 
   CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
-  auto preprocessed_probe =
+  auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
   auto join_indices = cudf::detail::probe_join_hash_table(
     _build,
@@ -515,7 +525,7 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
     preprocessed_probe,
     _hash_table,
     join,
-    cudf::has_nested_nulls(probe_table) | cudf::has_nested_nulls(_build),
+    cudf::has_nested_nulls(probe_table) || cudf::has_nested_nulls(_build),
     _nulls_equal,
     output_size,
     stream,
