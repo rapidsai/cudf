@@ -95,6 +95,8 @@ struct segmented_reduce_dispatch_functor {
         return segmented_standard_deviation(
           col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
       }
+      case segmented_reduce_aggregation::NUNIQUE:
+        return segmented_nunique(col, offsets, null_handling, stream, mr);
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }

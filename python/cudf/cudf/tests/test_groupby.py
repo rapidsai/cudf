@@ -20,6 +20,7 @@ import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
+from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -532,6 +533,42 @@ def test_groupby_apply_jit_block_divergence():
         return 0
 
     run_groupby_apply_jit_test(df, diverging_block, ["a"])
+
+
+def test_groupby_apply_caching():
+    # Make sure similar functions that differ
+    # by simple things like constants actually
+    # recompile
+
+    # begin with a clear cache
+    precompiled.clear()
+    assert precompiled.currsize == 0
+
+    data = cudf.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 4, 5, 6]})
+
+    def f(group):
+        return group["b"].mean() * 2
+
+    # a single run should result in a cache size of 1
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # a second run with f should not increase the count
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # changing a constant value inside the UDF should miss
+    def f(group):
+        return group["b"].mean() * 3
+
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 2
+
+    # changing the dtypes of the columns should miss
+    data["b"] = data["b"].astype("float64")
+    run_groupby_apply_jit_test(data, f, ["a"])
+
+    assert precompiled.currsize == 3
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
@@ -2962,6 +2999,18 @@ def test_groupby_dtypes(groups):
     pdf = df.to_pandas()
 
     assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+
+
+@pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
+def test_groupby_by_index_names(index_names):
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4], "b": ["a", "b", "a", "a"], "c": [1, 1, 2, 1]}
+    ).set_index(index_names)
+    pdf = gdf.to_pandas()
+
+    assert_groupby_results_equal(
+        pdf.groupby(index_names).min(), gdf.groupby(index_names).min()
+    )
 
 
 class TestSample:

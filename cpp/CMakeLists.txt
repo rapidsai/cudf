@@ -464,6 +464,7 @@ add_library(
   src/reductions/segmented/max.cu
   src/reductions/segmented/mean.cu
   src/reductions/segmented/min.cu
+  src/reductions/segmented/nunique.cu
   src/reductions/segmented/product.cu
   src/reductions/segmented/reductions.cpp
   src/reductions/segmented/std.cu

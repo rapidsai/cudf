@@ -471,13 +471,16 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
   int const delta = 1000;
 
-  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
   auto b = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_b).type(), tdigest_gen_grouped{}, keys, values_b, delta);
-  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
   auto d = cudf::type_dispatcher(
     static_cast<cudf::column_view>(values_d).type(), tdigest_gen_grouped{}, keys, values_d, delta);
-  auto e = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto e = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
 
   std::vector<cudf::column_view> cols;
   cols.push_back(*a);

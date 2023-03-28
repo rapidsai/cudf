@@ -1278,13 +1278,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
         between results of those reductions:
+
         >>> import cudf
         >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
         >>> df.groupby('a').apply(
-        ...     lambda group: group['b'].max() - group['b'].min(),
-        ...     engine='jit'
+        ...   lambda group: group['b'].max() - group['b'].min(),
+        ...   engine='jit'
         ... )
-        a  None
+           a  None
         0  1     1
         1  2     1
         2  3     1
@@ -2318,7 +2319,14 @@ class _Grouping(Serializable):
         self._handle_series(by)
 
     def _handle_label(self, by):
-        self._key_columns.append(self._obj._data[by])
+        try:
+            self._key_columns.append(self._obj._data[by])
+        except KeyError as e:
+            # `by` can be index name(label) too.
+            if by in self._obj._index.names:
+                self._key_columns.append(self._obj._index._data[by])
+            else:
+                raise e
         self.names.append(by)
         self._named_columns.append(by)
 
