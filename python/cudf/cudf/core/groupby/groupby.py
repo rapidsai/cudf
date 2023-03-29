@@ -2319,7 +2319,14 @@ class _Grouping(Serializable):
         self._handle_series(by)
 
     def _handle_label(self, by):
-        self._key_columns.append(self._obj._data[by])
+        try:
+            self._key_columns.append(self._obj._data[by])
+        except KeyError as e:
+            # `by` can be index name(label) too.
+            if by in self._obj._index.names:
+                self._key_columns.append(self._obj._index._data[by])
+            else:
+                raise e
         self.names.append(by)
         self._named_columns.append(by)
 
