@@ -3941,9 +3941,6 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
-        else:
-            with pytest.raises(NotImplementedError):
-                gdata.all(level="a")
 
     got = gdata.all()
     expected = pdata.all()
@@ -4002,9 +3999,6 @@ def test_any(data, axis):
             got = gdata.any(bool_only=True)
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
-        else:
-            with pytest.raises(NotImplementedError):
-                gdata.any(level="a")
 
         got = gdata.any(axis=axis)
         expected = pdata.any(axis=axis)
