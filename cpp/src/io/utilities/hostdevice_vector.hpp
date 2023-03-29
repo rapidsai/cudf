@@ -166,13 +166,11 @@ class hostdevice_vector {
    *
    * @return A typed hostdevice_span of the hostdevice_vector's data.
    */
-  [[nodiscard]] hostdevice_span<T> slice(size_t starting_idx, size_t ending_idx)
+  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
   {
-    CUDF_EXPECTS(ending_idx >= starting_idx,
-                 "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(ending_idx <= d_data.size(), "Slice range out of bounds.");
-    return hostdevice_span<T>{
-      host_data + starting_idx, d_data.data() + starting_idx, ending_idx - starting_idx};
+    CUDF_EXPECTS(count >= offset, "End index cannot be smaller than the starting index.");
+    CUDF_EXPECTS(count <= d_data.size(), "Slice range out of bounds.");
+    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count - offset};
   }
 
  private:

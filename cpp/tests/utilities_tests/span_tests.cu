@@ -333,13 +333,13 @@ auto get_test_hostdevice_vector()
   return v;
 }
 
-TEST(HostDeviceSpanTest, CanCreateFullSlice)
+TEST(HostDeviceSpanTest, CanCreateFullSubspan)
 {
   auto message = get_test_hostdevice_vector();
   auto const message_span =
     hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
 
-  expect_equivalent(message_span, message.slice(0, message_span.size()));
+  expect_equivalent(message_span, message.subspan(0, message_span.size()));
 }
 
 TEST(HostDeviceSpanTest, CanCreateHostSpan)
