@@ -2047,11 +2047,11 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   // need to do in multiple passes if values_per_mb != 32
   uint32_t const num_pass = db->values_per_mb / warp_size;
 
-  // position at end of the current mini-block since the following calculates
-  // negative indexes
   auto d_start = db->cur_mb_start;
 
   for (int i = 0; i < num_pass; i++) {
+    // position at end of the current mini-block since the following calculates
+    // negative indexes
     d_start += (warp_size * mb_bits) / 8;
 
     // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
@@ -2234,7 +2234,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
 /**
  * @brief Kernel for computing per-page size information for DELTA_BYTE_ARRAY encoded pages.
  */
-__global__ void __launch_bounds__(64) gpuComputePageStringSizes(
+__global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t num_rows, size_t min_row)
 {
   // using this to get atomicAdd happy
@@ -2732,16 +2732,16 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
+ * @copydoc cudf::io::parquet::gpu::ComputeDeltaPageStringSizes
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
-                            hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            size_t num_rows,
-                            size_t min_row,
-                            rmm::cuda_stream_view stream)
+void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
+                                 hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                 size_t num_rows,
+                                 size_t min_row,
+                                 rmm::cuda_stream_view stream)
 {
   // need 2 warps, one for prefixes and one for suffixes
-  gpuComputePageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(
+  gpuComputeDeltaPageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(
     pages.device_ptr(), chunks, num_rows, min_row);
 }
 

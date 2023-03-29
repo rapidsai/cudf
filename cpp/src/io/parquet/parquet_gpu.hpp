@@ -443,11 +443,11 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param[in] min_row crop all rows below min_row
  * @param[in] stream CUDA stream to use, default 0
  */
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
-                            hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            size_t num_rows,
-                            size_t min_row,
-                            rmm::cuda_stream_view stream);
+void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
+                                 hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                 size_t num_rows,
+                                 size_t min_row,
+                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
