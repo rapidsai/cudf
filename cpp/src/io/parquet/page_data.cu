@@ -2181,7 +2181,6 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
       memcpy(lane_out, offsets[blocker], prefix_len);
       prefix_lens[lane_id] = prefix_len = 0;
     }
-    __syncwarp();
 
     // check for finished
     if (__all_sync(0xffff'ffff, prefix_len == 0)) { return; }
@@ -2238,7 +2237,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
     dba->offset[src_idx] = string_off;
 
     // copy suffixes into string data
-    uint8_t* so_ptr = strings_out + string_off;
+    uint8_t* const so_ptr = strings_out + string_off;
     if (ln_idx < suffix_db->value_count) {
       memcpy(so_ptr + prefix_len, suffix_data + suffix_off, suffix_len);
     }
@@ -2282,8 +2281,8 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
   if (page->encoding != Encoding::DELTA_BYTE_ARRAY || page->num_input_values == 0) { return; }
 
   // check page bounds to see if we need sizes for this page
-  size_t page_start = col->start_row + page->chunk_row;
-  size_t page_end   = page_start + page->num_rows;
+  size_t const page_start = col->start_row + page->chunk_row;
+  size_t const page_end   = page_start + page->num_rows;
   if (page_start >= min_row + num_rows or page_end < min_row) { return; }
 
   // get pointers to start and end of encoded page data
