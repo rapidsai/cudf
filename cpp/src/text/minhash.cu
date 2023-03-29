@@ -60,7 +60,11 @@ struct minhash_fn {
       d_hashes[output_idx]  = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
     }
     auto const begin = d_str.begin() + lane_idx;
-    auto const end   = (d_str.length() <= width) ? d_str.end() : d_str.end() - (width - 1);
+    auto const end   = [d_str, width = width] {
+      auto const length = d_str.length();
+      if (length > width) { return (d_str.end() - (width - 1)); }
+      return d_str.begin() + static_cast<cudf::size_type>(length > 0);
+    }();
 
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
       auto const offset = itr.byte_offset();
