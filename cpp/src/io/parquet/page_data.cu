@@ -2263,10 +2263,9 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
 __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t num_rows, size_t min_row)
 {
-  // using this to get atomicAdd happy
-  using u64 = unsigned long long int;
   __shared__ __align__(16) delta_byte_array_state_s db_state;
-  __shared__ __align__(8) u64 total_bytes;
+  using WarpReduce = cub::WarpReduce<uint64_t>;
+  __shared__ typename WarpReduce::TempStorage temp_storage[2];
 
   uint32_t const t       = threadIdx.x;
   uint32_t const lane_id = t & 0x1f;
@@ -2296,37 +2295,37 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
     // initialize the prefixes and suffixes blocks
     auto const* const suffix_start = FindEndOfBlock(prefix_db, cur, end);
     FindEndOfBlock(suffix_db, suffix_start, end);
-
-    // initialize total_bytes
-    total_bytes = prefix_db->last_value + suffix_db->last_value;
   }
   __syncthreads();
 
-  // step through prefixes and suffixes to get total length
+  // initialize total_bytes
+  uint64_t total_bytes = prefix_db->last_value + suffix_db->last_value;
+
+  // step through prefixes and suffixes to get total length. warp 0 sums up prefix lengths
+  // and warp 1 sums up suffix lengths.
   while (prefix_db->current_value_idx < num_encoded_values(prefix_db, true)) {
     auto* const db = t < 32 ? prefix_db : suffix_db;
 
     for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
       CalcMiniBlockValues(db, lane_id);
 
-      uint32_t const idx = db->current_value_idx + i + lane_id;
-      u64 const my_len   = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
+      uint32_t const idx    = db->current_value_idx + i + lane_id;
+      uint64_t const my_len = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
 
-      // TODO: use cudf::detail::single_lane_block_sum_reduce instead of atomicAdd.
-      // then can stop using u64.
-      // get sum for warp
-      using WarpReduce = cub::WarpReduce<u64>;
-      __shared__ typename WarpReduce::TempStorage temp_storage[2];
-      // note: sum_len will only be valid on thread 0.
-      u64 const sum_len = WarpReduce(temp_storage[warp_id]).Sum(my_len);
+      // get sum for warp.
+      // note: sum_len will only be valid on lane 0.
+      auto const sum_len = WarpReduce(temp_storage[warp_id]).Sum(my_len);
 
-      if (lane_id == 0) { atomicAdd(&total_bytes, sum_len); }
+      if (lane_id == 0) { total_bytes += sum_len; }
       __syncwarp();
     }
 
     if (lane_id == 0) { SetupNextMiniBlock(db, true); }
   }
   __syncthreads();
+
+  // now sum up total_bytes from the two warps
+  total_bytes = cudf::detail::single_lane_block_sum_reduce<64, 0>(total_bytes);
 
   if (t == 0) { page->page_strings_size = total_bytes; }
 }
