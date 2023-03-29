@@ -2066,6 +2066,15 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
   using cudf::detail::warp_size;
   if (db->current_value_idx >= db->value_count) { return; }
 
+  // need to save first value from header on first pass
+  if (db->current_value_idx == 0) {
+    if (lane_id == 0) {
+      db->current_value_idx++;
+      db->value[0] = db->last_value;
+    }
+    __syncwarp();
+  }
+
   uint32_t const mb_bits = db->cur_bitwidths[db->cur_mb];
 
   // need to do in multiple passes if values_per_mb != 32
@@ -2097,7 +2106,6 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
         delta &= (1 << mb_bits) - 1;
       }
     }
-    __syncwarp();
 
     // add min delta to get true delta
     delta += db->cur_min_delta;
@@ -2106,22 +2114,14 @@ __device__ void CalcMiniBlockValues(delta_binary_state_s* db, int lane_id)
     __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage;
     cub::WarpScan<int64_t>(temp_storage).InclusiveSum(delta, delta);
 
-    // now add first_value to get true value
+    // now add first value from header or last value from previous block to get true value
     delta += db->last_value;
-
-    // need to save first value from header on first pass
-    if (db->current_value_idx == 0) {
-      if (lane_id == 0) {
-        db->current_value_idx++;
-        db->value[0] = db->last_value;
-      }
-    }
-    __syncwarp();
-
     db->value[rolling_index(db->current_value_idx + warp_size * i + lane_id)] = delta;
 
-    // save delta from last lane in warp
+    // save value from last lane in warp. this will become the 'first value' added to the
+    // deltas calculated in the next iteration (or invocation).
     if (lane_id == 31) { db->last_value = delta; }
+    __syncwarp();
   }
 }
 
