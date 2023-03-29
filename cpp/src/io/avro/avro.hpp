@@ -59,6 +59,24 @@ struct column_desc {
 
 /**
  * @brief AVRO file metadata struct
+ *
+ * `metadata_size` is the size in bytes of the avro file header.
+ *
+ * `total_data_size` is the size of all data minus `metadata_size`.
+ *
+ * `num_rows` is the number of rows that will be processed.  If the user has not
+ * requested the number of rows to be limited (i.e. via the `num_rows` param to
+ * `read_avro()`), this number will represent all rows in the file *after* the
+ * `skip_rows` parameter has been taken into consideration (assuming a request
+ * has been made to also skip rows).
+ *
+ * `total_num_rows` is the total number of rows present in the file, across all
+ * blocks.  This may be more than `num_rows` if the user has requested a limit
+ * on the number of rows to return, or if `skip_rows` is active.
+ *
+ * `skip_rows` is the number of rows to skip.
+ *
+ * `block_list` is a list of all blocks in the file.
  */
 struct file_metadata {
   std::map<std::string, std::string> user_data;

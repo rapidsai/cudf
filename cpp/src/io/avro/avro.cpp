@@ -69,6 +69,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
   uint32_t sig4, max_block_size;
   size_t total_object_count;
+  uint64_t sync_marker[2];
+  bool valid_sync_markers;
 
   sig4 = get_raw<uint8_t>();
   sig4 |= get_raw<uint8_t>() << 8;
@@ -92,6 +94,9 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
       }
     }
   }
+  // Save the first sync markers in the metadata; we compare them to other
+  // sync markers that should be present at the end of a block.  If they
+  // differ, the data should be interpreted as corrupted.
   md->sync_marker[0] = get_raw<uint64_t>();
   md->sync_marker[1] = get_raw<uint64_t>();
 
@@ -100,6 +105,16 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->total_num_rows = 0;
   max_block_size     = 0;
   total_object_count = 0;
+  // Enumerate the blocks in this file.  Each block starts with a count of
+  // objects (rows) in the block (uint64_t), and then the total size in bytes
+  // of the block (uint64_t).  We walk each block and do the following:
+  //    1. Capture the total number of rows present across all blocks.
+  //    2. Add each block to the metadata's list of blocks.
+  //    3. Handle the case where we've been asked to skip or limit rows.
+  //    4. Verify sync markers at the end of each block.
+  //
+  // N.B. "object" and "row" are used interchangeably here; "object" is
+  //      avro nomenclature, "row" is ours.
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
     auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
@@ -119,9 +134,19 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
       first_row -= object_count;
     }
     m_cur += block_size;
-    m_cur += 16;  // TODO: Validate sync marker
+    // Read the next sync markers and ensure they match the first ones we
+    // encountered.  If they don't, we have to assume the data is corrupted,
+    // and thus, we terminate processing immediately.
+    sync_marker[0] = get_raw<uint64_t>();
+    sync_marker[1] = get_raw<uint64_t>();
+    valid_sync_markers =
+      ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
+    if (!valid_sync_markers) { return false; }
   }
   md->max_block_size = max_block_size;
+  // N.B. `total_object_count` has skip_rows applied to it at this point, i.e.
+  //      it represents the number of rows that will be returned *after* rows
+  //      have been skipped (if requested).
   if ((max_num_rows <= 0) || (max_num_rows > total_object_count)) {
     md->num_rows = total_object_count;
   } else {
