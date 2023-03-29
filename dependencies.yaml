@@ -205,9 +205,15 @@ dependencies:
             packages:
               - nvcc_linux-aarch64=11.8
           - matrix:
+              arch: x86_64
               cuda: "12.0"
             packages:
-              - cuda-nvcc=12.0
+              - cuda-nvcc_linux-64=12.0
+          - matrix:
+              arch: aarch64
+              cuda: "12.0"
+            packages:
+              - cuda-nvcc_linux-aarch64=12.0
   build_cpp:
     common:
       - output_types: [conda, requirements]
