@@ -77,7 +77,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return NotImplemented
         lhs, rhs = (other, self) if reflect else (self, other)
 
-
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
