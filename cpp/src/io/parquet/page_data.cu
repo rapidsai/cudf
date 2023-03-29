@@ -1942,6 +1942,29 @@ __global__ void __launch_bounds__(block_size)
 
 // DELTA_XXX encoding support
 //
+// DELTA_BINARY_PACKED is used for INT32 and INT64 data types. Encoding begins with a header
+// containing a block size, number of mini-blocks in each block, total value count, and first
+// value. The first three are ULEB128 variable length ints, and the last is a zigzag ULEB128
+// varint.
+//   -- the block size is a multiple of 128
+//   -- the mini-block count is chosen so that each mini-block will contain a multiple of 32 values
+//   -- the value count includes the first value stored in the header
+//
+// It seems most Parquet encoders will stick with a block size of 128, and 4 mini-blocks of 32
+// elements each. arrow-rs will use a block size of 256 for 64-bit ints.
+//
+// Following the header are the data blocks. Each block is further divided into mini-blocks, with
+// each mini-block having its own encoding bitwidth. Each block begins with a header containing a
+// zigzag ULEB128 encoded minimum delta value, followed by an array of uint8 bitwidths, one entry
+// per mini-block. While encoding, the lowest delta value is subtracted from all the deltas in the
+// block to ensure that all encoded values are positive.
+//
+// DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
+// columns. For each element in a sequence of strings, a prefix length from the preceding string
+// and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
+// encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
+// lengths, followed by the concatenated suffix data.
+
 // returns the number of values encoded in the block data. when is_decode is true,
 // account for the first value in the header. otherwise just count the values encoded
 // in the mini-block data.
