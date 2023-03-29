@@ -2833,14 +2833,6 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
     });
 
   if (need_sizes) {
-    int count = thrust::transform_reduce(
-      rmm::exec_policy(stream),
-      pages.d_begin(),
-      pages.d_end(),
-      [] __device__(auto& page) { return page.page_strings_size > 0; },
-      0,
-      thrust::plus<int>{});
-
     int64_t total_size = thrust::transform_reduce(
       rmm::exec_policy(stream),
       pages.d_begin(),
@@ -2849,7 +2841,7 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
       0L,
       thrust::plus<int64_t>{});
 
-    rmm::device_uvector<int64_t> page_string_offsets(count, stream);
+    rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
     thrust::transform_exclusive_scan(
       rmm::exec_policy(stream),
       pages.d_begin(),
@@ -2859,7 +2851,7 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
       0L,
       thrust::plus<int64_t>{});
 
-    page_string_data.resize(total_size, stream);
+    page_string_data = rmm::device_buffer(total_size, stream);
 
     thrust::transform(rmm::exec_policy(stream),
                       pages.d_begin(),
