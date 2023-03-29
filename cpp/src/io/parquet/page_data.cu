@@ -2825,6 +2825,8 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
   gpuComputeDeltaPageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(
     pages.device_ptr(), chunks, num_rows, min_row);
 
+  // now allocate temp space to reconstruct strings into, and assign chunks to the
+  // appropriate pages.
   auto const need_sizes = thrust::any_of(
     rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), [] __device__(auto& page) {
       return page.page_strings_size != 0;
