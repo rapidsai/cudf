@@ -71,7 +71,7 @@ namespace gpu {
  */
 enum {
   PAGEINFO_FLAGS_DICTIONARY = (1 << 0),  // Indicates a dictionary page
-  PAGEINFO_FLAGS_V2 = (1 << 1),          // V2 page header
+  PAGEINFO_FLAGS_V2         = (1 << 1),  // V2 page header
 };
 
 /**
@@ -481,7 +481,8 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for reading the column data stored in the pages
+ * @brief Launches kernel for reading the plain or dictionary encoded column data stored in the
+ * pages
  *
  * The page data will be written to the output pointed to in the page's
  * associated column chunk.
@@ -497,6 +498,42 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void DecodeDeltaBinary(hostdevice_vector<PageInfo>& pages,
+                       hostdevice_vector<ColumnChunkDesc> const& chunks,
+                       size_t num_rows,
+                       size_t min_row,
+                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_BYTE_ARRAY column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void DecodeDeltaByteArray(hostdevice_vector<PageInfo>& pages,
+                          hostdevice_vector<ColumnChunkDesc> const& chunks,
+                          size_t num_rows,
+                          size_t min_row,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

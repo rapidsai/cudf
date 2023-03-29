@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from collections.abc import Iterator
 
@@ -218,9 +218,11 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] += 1
                 divisions[col] = divisions[col].astype(dtype)
             else:
-                divisions[col].iloc[-1] = chr(
-                    ord(divisions[col].iloc[-1][0]) + 1
-                )
+                if last := divisions[col].iloc[-1]:
+                    val = chr(ord(last[0]) + 1)
+                else:
+                    val = "this string intentionally left empty"  # any but ""
+                divisions[col].iloc[-1] = val
         divisions = divisions.drop_duplicates().sort_index()
     return divisions
 

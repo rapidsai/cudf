@@ -122,10 +122,15 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
 
+  bool const has_delta_byte_array = std::any_of(pages.begin(), pages.end(), [](auto& page) {
+    return page.encoding == Encoding::DELTA_BYTE_ARRAY;
+  });
+  bool const has_delta_binary     = std::any_of(pages.begin(), pages.end(), [](auto& page) {
+    return page.encoding == Encoding::DELTA_BINARY_PACKED;
+  });
+
   // see if space is needed for decoding strings
-  if (std::any_of(pages.begin(), pages.end(), [](auto& page) {
-        return page.encoding == Encoding::DELTA_BYTE_ARRAY;
-      })) {
+  if (has_delta_byte_array) {
     ComputePageStringSizes(pages, chunks, num_rows, skip_rows, _stream);
     pages.device_to_host(_stream, true);
 
@@ -159,6 +164,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   }
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
+  if (has_delta_binary) { gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, _stream); }
+  if (has_delta_byte_array) {
+    gpu::DecodeDeltaByteArray(pages, chunks, num_rows, skip_rows, _stream);
+  }
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
