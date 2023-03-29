@@ -1957,7 +1957,8 @@ __global__ void __launch_bounds__(block_size)
 // each mini-block having its own encoding bitwidth. Each block begins with a header containing a
 // zigzag ULEB128 encoded minimum delta value, followed by an array of uint8 bitwidths, one entry
 // per mini-block. While encoding, the lowest delta value is subtracted from all the deltas in the
-// block to ensure that all encoded values are positive.
+// block to ensure that all encoded values are positive. The deltas for each mini-block are bit
+// packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
 //
 // DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
 // columns. For each element in a sequence of strings, a prefix length from the preceding string
