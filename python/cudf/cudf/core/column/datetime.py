@@ -360,7 +360,7 @@ class DatetimeColumn(column.ColumnBase):
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
-        )
+        ).as_unit(self.time_unit)
 
     def std(
         self,
@@ -374,12 +374,12 @@ class DatetimeColumn(column.ColumnBase):
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
-        )
+        ).as_unit(self.time_unit)
 
     def median(self, skipna: bool = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
-        )
+        ).as_unit(self.time_unit)
 
     def quantile(
         self,
@@ -395,7 +395,9 @@ class DatetimeColumn(column.ColumnBase):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return pd.Timestamp(result, unit=self.time_unit)
+            return pd.Timestamp(result, unit=self.time_unit).as_unit(
+                self.time_unit
+            )
         return result.astype(self.dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

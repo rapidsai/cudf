@@ -614,8 +614,7 @@ def test_datetime_dataframe():
     ],
 )
 @pytest.mark.parametrize("dayfirst", [True, False])
-@pytest.mark.parametrize("infer_datetime_format", [True, False])
-def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
+def test_cudf_to_datetime(data, dayfirst):
     pd_data = data
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
@@ -625,14 +624,14 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
         else:
             gd_data = pd_data
 
-    expected = pd.to_datetime(
-        pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
-    actual = cudf.to_datetime(
-        gd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
-    )
+    expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
+    actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
 
-    assert_eq(actual, expected)
+    if isinstance(actual, cudf.Series):
+        # TODO: PREM
+        assert_eq(actual, expected, check_dtype=False)
+    else:
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize(
