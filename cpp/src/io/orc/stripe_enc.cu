@@ -43,7 +43,7 @@ namespace gpu {
 
 using cudf::detail::device_2dspan;
 
-constexpr int scratch_buffer_size = 512 * 4;
+constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
