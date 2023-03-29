@@ -44,6 +44,7 @@ namespace gpu {
 using cudf::detail::device_2dspan;
 
 constexpr int scratch_buffer_size = 512 * 4;
+constexpr int compact_streams_block_size = 1024;
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
 // Workaround replaces zero-length patch lists by a dummy zero patch
@@ -1082,8 +1083,8 @@ __global__ void __launch_bounds__(block_size)
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] streams List of encoder chunk streams [column][rowgroup]
  */
-// blockDim {1024,1,1}
-__global__ void __launch_bounds__(1024)
+// blockDim {compact_streams_block_size,1,1}
+__global__ void __launch_bounds__(compact_streams_block_size)
   gpuCompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1104,7 +1105,7 @@ __global__ void __launch_bounds__(1024)
     auto const len = streams[ss.column_id][group].lengths[cid];
     if (len > 0) {
       auto const src_ptr = streams[ss.column_id][group].data_ptrs[cid];
-      for (uint32_t i = t; i < len; i += 1024) {
+      for (uint32_t i = t; i < len; i += blockDim.x) {
         dst_ptr[i] = src_ptr[i];
       }
 
@@ -1285,7 +1286,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(1024, 1);
+  dim3 dim_block(compact_streams_block_size, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
 }
