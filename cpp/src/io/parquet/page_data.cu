@@ -2222,7 +2222,7 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
     uint64_t const prefix_len = ln_idx < suffix_db->value_count ? prefix_db->value[src_idx] : 0;
     uint64_t const string_len = prefix_len + suffix_len;
 
-    // string_off will be 0 when last_string is null, otherwise need to look back to get it.
+    // string_offsets will be 0 when last_string is null, otherwise need to look back to get it.
     uint64_t string_off = 0;
     cub::WarpScan<uint64_t>(temp_storage).ExclusiveSum(string_len, string_off);
     if (lane_id == 0) {
@@ -2247,6 +2247,8 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
     // copy prefixes into string data.
     StringScan(dba, strings_out, last_string, idx, lane_id);
 
+    // save the position of the last computed string. this will be used in
+    // the next iteration to reconstruct the string in lane 0.
     if (lane_id == 31) {
       last_string = strings_out + string_off;
       suffix_data += suffix_off + suffix_len;
