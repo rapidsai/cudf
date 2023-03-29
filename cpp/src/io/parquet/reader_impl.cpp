@@ -131,7 +131,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // see if space is needed for decoding strings
   if (has_delta_byte_array) {
-    ComputePageStringSizes(pages, chunks, num_rows, skip_rows, _stream);
+    ComputeDeltaPageStringSizes(pages, chunks, num_rows, skip_rows, _stream);
     pages.device_to_host(_stream, true);
 
     if (std::any_of(
