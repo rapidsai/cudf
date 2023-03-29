@@ -95,8 +95,7 @@ outputs:
         - cudatoolkit {{ cuda_spec }}
         {% else %}
         - cuda-cudart {{ cuda_spec }}
-        - cuda-cudart-dev {{ cuda_spec }}
-        - cuda-cudart-static {{ cuda_spec }}
+        - cuda-nvrtc {{ cuda_spec }}
         {% endif %}
         - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
         - libarrow {{ libarrow_version }}

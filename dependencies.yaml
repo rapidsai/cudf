@@ -288,6 +288,9 @@ dependencies:
               - cuda-cudart=12.0
               - cuda-cudart-dev=12.0
               - cuda-cudart-static=12.0
+              - cuda-nvrtc=12.0
+              - cuda-nvrtc-dev=12.0
+              - cuda-nvrtc-static=12.0
   develop:
     common:
       - output_types: [conda, requirements]
