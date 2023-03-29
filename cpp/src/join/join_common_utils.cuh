@@ -110,6 +110,11 @@ class pair_equality {
   {
   }
 
+  // The parameters are build/probe rather than left/right because the operator
+  // is called by cuco's kernels with parameters in this order (note that this
+  // is an implementation detail that we should eventually stop relying on by
+  // defining operators with suitable heterogeneous typing). Rather than
+  // converting to left/right semantics, we can operate directly on build/probe
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {

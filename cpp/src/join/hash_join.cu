@@ -103,7 +103,6 @@ std::size_t compute_join_output_size(
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
 
@@ -214,7 +213,7 @@ probe_join_hash_table(
                                        stream.value());
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
-        auto const actual_size = out1_zip_end - out1_zip_begin;
+        auto const actual_size = thrust::distance(out1_zip_end, out1_zip_begin);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
       }
@@ -305,7 +304,6 @@ std::size_t get_full_join_size(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
-
     hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   };
