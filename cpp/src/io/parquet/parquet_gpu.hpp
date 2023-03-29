@@ -437,14 +437,19 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
 /**
  * @brief Compute the amount of string data in DELTA_BYTE_ARRAY encoded pages.
  *
+ * This will also resize the passed in `page_string_data` buffer and populate the `page_string_data`
+ * field for pages that are DELTA_BYTE_ARRAY encoded.
+ *
  * @param[in,out] pages All pages to compute lengths for
  * @param[in] chunks Chunks that contain the pages
+ * @param[in,out] page_string_data Device buffer that will hold reconstructed strings
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row crop all rows below min_row
  * @param[in] stream CUDA stream to use, default 0
  */
 void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
                                  hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                 rmm::device_buffer& page_string_data,
                                  size_t num_rows,
                                  size_t min_row,
                                  rmm::cuda_stream_view stream);

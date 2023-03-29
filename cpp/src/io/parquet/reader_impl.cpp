@@ -16,8 +16,6 @@
 
 #include "reader_impl.hpp"
 
-#include <cudf/detail/utilities/vector_factories.hpp>
-
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
@@ -129,40 +127,14 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     return page.encoding == Encoding::DELTA_BINARY_PACKED;
   });
 
-  // see if space is needed for decoding strings
   if (has_delta_byte_array) {
-    ComputeDeltaPageStringSizes(pages, chunks, num_rows, skip_rows, _stream);
-    pages.device_to_host(_stream, true);
-
-    if (std::any_of(
-          pages.begin(), pages.end(), [](auto& page) { return page.page_strings_size != 0; })) {
-      std::vector<int64_t> page_string_offsets;
-      std::transform_exclusive_scan(pages.begin(),
-                                    pages.end() + 1,
-                                    std::back_inserter(page_string_offsets),
-                                    0L,
-                                    std::plus<int64_t>{},
-                                    [](auto& page) { return page.page_strings_size; });
-
-      auto total_size        = page_string_offsets.back();
-      delta_binary_page_data = rmm::device_buffer(total_size, _stream);
-
-      std::transform(pages.begin(),
-                     pages.end(),
-                     page_string_offsets.begin(),
-                     pages.begin(),
-                     [&delta_binary_page_data](auto& page, auto offset) {
-                       if (page.page_strings_size != 0) {
-                         page.page_string_data =
-                           static_cast<uint8_t*>(delta_binary_page_data.data()) + offset;
-                       }
-                       return page;
-                     });
-
-      pages.host_to_device(_stream);
-    }
+    // this call will initialize `delta_binary_page_data` and set the `page_string_data`
+    // pointers on the pages.
+    ComputeDeltaPageStringSizes(
+      pages, chunks, delta_binary_page_data, num_rows, skip_rows, _stream);
   }
 
+  // TODO: investigate running the following three kernels on separate streams
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
   if (has_delta_binary) { gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, _stream); }
   if (has_delta_byte_array) {

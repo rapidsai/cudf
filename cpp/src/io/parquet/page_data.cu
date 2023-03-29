@@ -27,6 +27,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
@@ -35,11 +36,13 @@
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 #include <thrust/tuple.h>
 
 namespace cudf {
@@ -2813,6 +2816,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
  */
 void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
                                  hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                 rmm::device_buffer& page_string_data,
                                  size_t num_rows,
                                  size_t min_row,
                                  rmm::cuda_stream_view stream)
@@ -2820,6 +2824,53 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
   // need 2 warps, one for prefixes and one for suffixes
   gpuComputeDeltaPageStringSizes<<<pages.size(), 64, 0, stream.value()>>>(
     pages.device_ptr(), chunks, num_rows, min_row);
+
+  auto const need_sizes = thrust::any_of(
+    rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), [] __device__(auto& page) {
+      return page.page_strings_size != 0;
+    });
+
+  if (need_sizes) {
+    int count = thrust::transform_reduce(
+      rmm::exec_policy(stream),
+      pages.d_begin(),
+      pages.d_end(),
+      [] __device__(auto& page) { return page.page_strings_size > 0; },
+      0,
+      thrust::plus<int>{});
+
+    int64_t total_size = thrust::transform_reduce(
+      rmm::exec_policy(stream),
+      pages.d_begin(),
+      pages.d_end(),
+      [] __device__(auto& page) { return page.page_strings_size; },
+      0L,
+      thrust::plus<int64_t>{});
+
+    rmm::device_uvector<int64_t> page_string_offsets(count, stream);
+    thrust::transform_exclusive_scan(
+      rmm::exec_policy(stream),
+      pages.d_begin(),
+      pages.d_end(),
+      page_string_offsets.begin(),
+      [] __device__(auto& page) { return page.page_strings_size; },
+      0L,
+      thrust::plus<int64_t>{});
+
+    page_string_data = rmm::device_buffer(total_size, stream);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      pages.d_begin(),
+                      pages.d_end(),
+                      page_string_offsets.begin(),
+                      pages.begin(),
+                      [data = page_string_data.data()] __device__(auto& page, auto offset) {
+                        if (page.page_strings_size != 0) {
+                          page.page_string_data = static_cast<uint8_t*>(data) + offset;
+                        }
+                        return page;
+                      });
+  }
 }
 
 /**
