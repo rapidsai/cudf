@@ -789,6 +789,13 @@ def test_is_vowel_consonant():
     assert_eq(expected, actual)
 
 
+def test_minhash():
+    strings = cudf.Series(["this is my", "favorite book", None, ""])
+    expected = cudf.Series([21141582, 962346254, None, 0], dtype=np.uint32)
+    actual = strings.str.minhash()
+    assert_eq(expected, actual)
+
+
 def test_read_text(datadir):
     chess_file = str(datadir) + "/chess.pgn"
     delimiter = "1."

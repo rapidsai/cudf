@@ -54,6 +54,16 @@ TEST_F(MinHashTest, Basic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(MinHashTest, LengthEqualsWidth)
+{
+  auto input   = cudf::test::strings_column_wrapper({"abcdé", "fghjk", "lmnop", "qrstu", "vwxyz"});
+  auto view    = cudf::strings_column_view(input);
+  auto results = nvtext::minhash(view, 0, cudf::hash_id::HASH_MURMUR3, 5);
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>(
+    {3825281041u, 2728681928u, 1984332911u, 3965004915u, 192452857u});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(MinHashTest, MultiSeed)
 {
   auto input =
