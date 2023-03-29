@@ -1163,7 +1163,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   }
   dictionaries.data.clear();
   dictionaries.index.clear();
-  chunk_streams.device_to_host(stream, true);
+  chunk_streams.device_to_host(stream, true /* device sync */);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
