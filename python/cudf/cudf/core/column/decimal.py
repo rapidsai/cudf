@@ -77,8 +77,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return NotImplemented
         lhs, rhs = (other, self) if reflect else (self, other)
 
-        # breakpoint()
-        # lhs, rhs = self._maybe_cast_up(lhs, rhs)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
@@ -104,14 +102,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
 
         return result
-
-    def _maybe_cast_up(self, lhs, rhs):
-        if lhs.dtype.itemsize == rhs.dtype.itemsize:
-            return lhs, rhs
-        elif lhs.dtype.itemsize > rhs.dtype.itemsize:
-            return lhs, rhs.astype(lhs.dtype)
-        else:
-            return lhs.astype(rhs.dtype), rhs
 
     def fillna(
         self, value: Any = None, method: str = None, dtype: Dtype = None
