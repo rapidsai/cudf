@@ -2301,14 +2301,14 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
   }
   __syncthreads();
 
-  // initialize total_bytes
-  uint64_t total_bytes = prefix_db->last_value + suffix_db->last_value;
-
   // step through prefixes and suffixes to get total length. warp 0 sums up prefix lengths
   // and warp 1 sums up suffix lengths.
-  while (prefix_db->current_value_idx < num_encoded_values(prefix_db, true)) {
-    auto* const db = t < 32 ? prefix_db : suffix_db;
+  auto* const db = t < 32 ? prefix_db : suffix_db;
 
+  // initialize total_bytes
+  uint64_t total_bytes = db->last_value;
+
+  while (db->current_value_idx < num_encoded_values(db, true)) {
     for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
       CalcMiniBlockValues(db, lane_id);
 
@@ -2328,9 +2328,9 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
   __syncthreads();
 
   // now sum up total_bytes from the two warps
-  total_bytes = cudf::detail::single_lane_block_sum_reduce<64, 0>(total_bytes);
+  auto const final_bytes = cudf::detail::single_lane_block_sum_reduce<64, 0>(total_bytes);
 
-  if (t == 0) { page->page_strings_size = total_bytes; }
+  if (t == 0) { page->page_strings_size = final_bytes; }
 }
 
 // if we are using the nesting decode cache, copy null count back
