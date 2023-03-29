@@ -1721,7 +1721,7 @@ def test_datetime_dateoffset_binaryop(
     date_col, n_periods, frequency, dtype, op
 ):
     gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()  # converts to nanos
+    psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 

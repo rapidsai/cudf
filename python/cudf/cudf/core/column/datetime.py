@@ -449,7 +449,11 @@ class DatetimeColumn(column.ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if out_dtype != cudf.dtype(np.bool_):
+            return result_col.astype(lhs.dtype)
+        else:
+            return result_col
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
