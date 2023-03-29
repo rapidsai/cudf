@@ -381,7 +381,7 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(
+    __device__ __noinline__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = _lhs;
@@ -415,8 +415,8 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
-                                                              size_type rhs_element_index)
+    __device__ __noinline__ cuda::std::pair<weak_ordering, int> operator()(
+      size_type lhs_element_index, size_type rhs_element_index)
     {
       // only order top-NULLs according to null_order
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
@@ -1294,8 +1294,8 @@ class device_row_comparator {
     }
 
     template <typename Element, CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>())>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+    __device__ __noinline__ bool operator()(size_type const lhs_element_index,
+                                            size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
@@ -1750,8 +1750,8 @@ class device_row_hasher {
     }
 
     template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
-    __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index) const noexcept
+    __device__ __noinline__ hash_value_type operator()(column_device_view const& col,
+                                                       size_type row_index) const noexcept
     {
       auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
