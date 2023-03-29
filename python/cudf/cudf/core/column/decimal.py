@@ -77,6 +77,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return NotImplemented
         lhs, rhs = (other, self) if reflect else (self, other)
 
+        # breakpoint()
+        # lhs, rhs = self._maybe_cast_up(lhs, rhs)
+
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
@@ -101,6 +104,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
 
         return result
+
+    def _maybe_cast_up(self, lhs, rhs):
+        if lhs.dtype.itemsize == rhs.dtype.itemsize:
+            return lhs, rhs
+        elif lhs.dtype.itemsize > rhs.dtype.itemsize:
+            return lhs, rhs.astype(lhs.dtype)
+        else:
+            return lhs.astype(rhs.dtype), rhs
 
     def fillna(
         self, value: Any = None, method: str = None, dtype: Dtype = None
@@ -144,12 +155,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
-                if (
-                    self.dtype.precision == other.dtype.precision
-                    and self.dtype.scale == other.dtype.scale
-                ):
+                if _same_precision_and_scale(self.dtype, other.dtype):
                     other = other.astype(self.dtype)
-
             return other
         if isinstance(other, cudf.Scalar) and isinstance(
             # TODO: Should it be possible to cast scalars of other numerical
@@ -157,9 +164,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
             other.dtype,
             cudf.core.dtypes.DecimalDtype,
         ):
+            if _same_precision_and_scale(self.dtype, other.dtype):
+                other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            return cudf.Scalar(Decimal(other))
+            return cudf.Scalar(Decimal(other), dtype=self.dtype)
         return NotImplemented
 
     def _decimal_quantile(
@@ -404,3 +413,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     )
     precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
     return cudf.Decimal128Dtype(precision=precision, scale=scale)
+
+
+def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
+    return lhs.precision == rhs.precision and lhs.scale == rhs.scale
