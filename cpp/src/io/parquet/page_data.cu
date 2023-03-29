@@ -2859,13 +2859,13 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
       0L,
       thrust::plus<int64_t>{});
 
-    page_string_data = rmm::device_buffer(total_size, stream);
+    page_string_data.resize(total_size, stream);
 
     thrust::transform(rmm::exec_policy(stream),
                       pages.d_begin(),
                       pages.d_end(),
                       page_string_offsets.begin(),
-                      pages.begin(),
+                      pages.d_begin(),
                       [data = page_string_data.data()] __device__(auto& page, auto offset) {
                         if (page.page_strings_size != 0) {
                           page.page_string_data = static_cast<uint8_t*>(data) + offset;
