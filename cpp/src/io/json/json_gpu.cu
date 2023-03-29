@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -578,7 +578,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
       return d_column_infos;
     } else {
       return cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(
-        num_columns, stream);
+        num_columns, stream, rmm::mr::get_current_device_resource());
     }
   }();
 

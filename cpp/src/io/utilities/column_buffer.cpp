@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -43,7 +45,8 @@ void column_buffer::create(size_type _size,
       // make_zeroed_device_uvector_async here and instead let it use the
       // default rmm memory resource.
       _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
-        cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(size, stream));
+        cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+          size, stream, rmm::mr::get_current_device_resource()));
       break;
 
     // list columns store a buffer of int32's as offsets to represent

@@ -319,6 +319,9 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
         (("a", "store"), slice(None)),
         # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
         ("a",),
+        "a",
+        "b",
+        "c",
         (("a",), slice(None)),
         # return 1 row, 0 remaining keys = dataframe with entire index
         ("a", "store", "storm", "smoke"),

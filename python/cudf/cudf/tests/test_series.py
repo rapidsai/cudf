@@ -468,29 +468,6 @@ def test_series_describe_other_types(ps):
         ["a", "b", "c", None, "z", "a"],
     ],
 )
-@pytest.mark.parametrize("na_sentinel", [99999, 11, -1, 0])
-def test_series_factorize(data, na_sentinel):
-    gsr = cudf.Series(data)
-    psr = gsr.to_pandas()
-
-    with pytest.warns(FutureWarning):
-        expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    with pytest.warns(FutureWarning):
-        actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
-
-    assert_eq(expected_labels, actual_labels.get())
-    assert_eq(expected_cats.values, actual_cats.to_pandas().values)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3, 2, 1],
-        [1, 2, None, 3, 1, 1],
-        [],
-        ["a", "b", "c", None, "z", "a"],
-    ],
-)
 @pytest.mark.parametrize("use_na_sentinel", [True, False])
 def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
     gsr = cudf.Series(data)

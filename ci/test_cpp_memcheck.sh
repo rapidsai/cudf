@@ -11,7 +11,7 @@ set +e
 rapids-logger "Memcheck gtests with rmm_mode=cuda"
 export GTEST_CUDF_RMM_MODE=cuda
 COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
-for gt in "$CONDA_PREFIX"/bin/gtests/libcudf/* ; do
+for gt in "$CONDA_PREFIX"/bin/gtests/libcudf/*_TEST ; do
     test_name=$(basename ${gt})
     if [[ "$test_name" == "ERROR_TEST" ]] || [[ "$test_name" == "STREAM_IDENTIFICATION_TEST" ]]; then
         continue

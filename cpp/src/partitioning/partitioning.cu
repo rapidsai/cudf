@@ -493,11 +493,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
 
   // Holds the total number of rows in each partition
-  auto global_partition_sizes =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(num_partitions, stream);
+  auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_partitions, stream, rmm::mr::get_current_device_resource());
 
-  auto row_partition_offset =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows, stream);
+  auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_rows, stream, rmm::mr::get_current_device_resource());
 
   auto const row_hasher = experimental::row::hash::row_hasher(table_to_hash, stream);
   auto const hasher =
