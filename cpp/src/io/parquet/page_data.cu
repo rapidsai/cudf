@@ -2267,6 +2267,7 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
 
   uint32_t const t       = threadIdx.x;
   uint32_t const lane_id = t & 0x1f;
+  uint32_t const warp_id = t / 32;
   auto* const prefix_db  = &db_state.prefixes;
   auto* const suffix_db  = &db_state.suffixes;
   auto* const page       = &pages[blockIdx.x];
@@ -2308,14 +2309,16 @@ __global__ void __launch_bounds__(64) gpuComputeDeltaPageStringSizes(
       uint32_t const idx = db->current_value_idx + i + lane_id;
       u64 const my_len   = idx < db->value_count ? db->value[rolling_index(idx)] : 0;
 
+      // TODO: use cudf::detail::single_lane_block_sum_reduce instead of atomicAdd.
+      // then can stop using u64.
       // get sum for warp
       using WarpReduce = cub::WarpReduce<u64>;
-      __shared__ typename WarpReduce::TempStorage temp_storage;
+      __shared__ typename WarpReduce::TempStorage temp_storage[2];
       // note: sum_len will only be valid on thread 0.
-      u64 const sum_len = WarpReduce(temp_storage).Sum(my_len);
+      u64 const sum_len = WarpReduce(temp_storage[warp_id]).Sum(my_len);
 
       if (lane_id == 0) { atomicAdd(&total_bytes, sum_len); }
-      __syncthreads();
+      __syncwarp();
     }
 
     if (lane_id == 0) { SetupNextMiniBlock(db, true); }
