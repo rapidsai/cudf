@@ -439,7 +439,7 @@ __global__ void simple_device_char_kernel(device_span<char> result)
 {
   const char* str = "world hello";
   for (int offset = 0; offset < result.size(); ++offset) {
-    *(result.data() + offset) = *(str + offset);
+    result.data()[offset] = str[offset];
   }
 }
 
