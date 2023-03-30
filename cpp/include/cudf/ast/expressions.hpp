@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,6 +188,16 @@ class literal : public expression {
   template <typename T>
   literal(cudf::duration_scalar<T>& value)
     : scalar(value), value(cudf::get_scalar_device_view(value))
+  {
+  }
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A string scalar value
+   */
+  literal(cudf::string_scalar& value)
+    : scalar(value), value(cudf::get_scalar_experimental_device_view(value))
   {
   }
 

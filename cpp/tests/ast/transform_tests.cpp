@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -25,6 +26,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -397,6 +400,40 @@ TEST_F(TransformTest, StringComparison)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, StringScalarComparison)
+{
+  auto c_0   = cudf::test::strings_column_wrapper({"1", "12", "123", "23"});
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::string_scalar("2");
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{true, true, true, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, NumericScalarComparison)
+{
+  auto c_0   = column_wrapper<int32_t>{1, 12, 123, 23};
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(2);
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{true, false, false, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, CopyColumn)
 {
   auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
@@ -638,6 +675,78 @@ TEST_F(TransformTest, NullLogicalOr)
   auto result   = cudf::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+struct literal_converter {
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return std::is_same_v<T, cudf::string_view> ||
+           (cudf::is_fixed_width<T>() && !cudf::is_fixed_point<T>());
+  }
+
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  cudf::ast::literal operator()(cudf::scalar& _value)
+  {
+    using scalar_type       = cudf::scalar_type_t<T>;
+    auto& low_literal_value = static_cast<scalar_type&>(_value);
+    return cudf::ast::literal(low_literal_value);
+  }
+
+  template <typename T, std::enable_if_t<!is_supported<T>()>* = nullptr>
+  cudf::ast::literal operator()(cudf::scalar& _value)
+  {
+    CUDF_FAIL("Unsupported type for literal");
+  }
+};
+
+std::unique_ptr<cudf::table> filter_table_by_range(cudf::table_view const& input,
+                                                   cudf::column_view const& sort_col,
+                                                   cudf::scalar& low,
+                                                   cudf::scalar& high,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  // return low.compare(elem) <= 0 && high.compare(elem) > 0;
+  auto col_ref_0   = cudf::ast::column_reference(0);
+  auto low_literal = cudf::type_dispatcher(low.type(), literal_converter{}, low);
+  auto expr_1 = cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, low_literal);
+  auto high_literal = cudf::type_dispatcher(high.type(), literal_converter{}, high);
+  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_0, high_literal);
+  auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
+  auto result = cudf::compute_column(input, expr_3);
+  return cudf::detail::apply_boolean_mask(input, result->view(), rmm::cuda_stream_default, mr);
+}
+
+TEST_F(TransformTest, RangeFilterString)
+{
+  auto c_0   = cudf::test::strings_column_wrapper({"1", "12", "123", "2"});
+  auto table = cudf::table_view{{c_0}};
+  auto mr    = rmm::mr::get_current_device_resource();
+
+  auto lower  = cudf::string_scalar("2", true, rmm::cuda_stream_default, mr);
+  auto higher = cudf::string_scalar("12", true, rmm::cuda_stream_default, mr);
+  // elem > "12" && elem <= "2"  -> "123", "2"
+  auto c_1      = cudf::test::strings_column_wrapper({"123", "2"});
+  auto expected = cudf::table_view{{c_1}};
+  auto result   = filter_table_by_range(table, c_0, lower, higher, mr);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected.column(0), result->view().column(0), verbosity);
+}
+
+TEST_F(TransformTest, RangeFilterNumeric)
+{
+  auto c_0   = column_wrapper<int32_t>{{1, 12, 5, 2}};
+  auto table = cudf::table_view{{c_0}};
+  auto mr    = rmm::mr::get_current_device_resource();
+
+  auto higher = cudf::numeric_scalar<int32_t>(2, true, rmm::cuda_stream_default, mr);
+  auto lower  = cudf::numeric_scalar<int32_t>(12, true, rmm::cuda_stream_default, mr);
+  // elem > 2 && elem <= 12  -> 12, 5
+  auto c_1      = column_wrapper<int32_t>{{12, 5}};
+  auto expected = cudf::table_view{{c_1}};
+  auto result   = filter_table_by_range(table, c_0, lower, higher, mr);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected.column(0), result->view().column(0), verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
