@@ -101,7 +101,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->sync_marker[1] = get_raw<uint64_t>();
 
   md->metadata_size  = m_cur - m_base;
-  md->skip_rows      = first_row;
+  md->skip_rows      = 0;
   md->total_num_rows = 0;
   max_block_size     = 0;
   total_object_count = 0;
@@ -115,6 +115,10 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   //
   // N.B. "object" and "row" are used interchangeably here; "object" is
   //      avro nomenclature, "row" is ours.
+  //
+  // N.B. If we're skipping rows, we ignore blocks (i.e. don't add them to
+  //      md->block_list) that precede the block containing the first row
+  //      we're interested in.
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
     auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());

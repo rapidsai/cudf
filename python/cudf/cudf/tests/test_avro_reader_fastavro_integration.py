@@ -497,6 +497,73 @@ def test_avro_reader_num_rows(total_rows_and_num_rows):
 
 
 @pytest.mark.parametrize(
+    "total_rows_and_num_rows_and_sync_interval",
+    [
+        (10, 10, 2),
+        (10, 10, 5),
+        (10, 10, 9),
+        (10, 10, 10),
+        (100, 10, 20),
+        (10, 0, 2),
+        (10, 0, 5),
+        (10, 0, 9),
+        (10, 0, 10),
+        (10, 1, 2),
+        (10, 1, 5),
+        (10, 1, 9),
+        (10, 1, 10),
+        (10, 9, 2),
+        (10, 9, 5),
+        (10, 9, 9),
+        (10, 9, 10),
+    ],
+)
+def test_avro_reader_num_rows_multiblock(
+    total_rows_and_num_rows_and_sync_interval,
+):
+    (
+        total_rows,
+        num_rows,
+        sync_interval,
+    ) = total_rows_and_num_rows_and_sync_interval
+    assert total_rows >= num_rows
+    assert sync_interval <= total_rows
+
+    schema = {
+        "name": "root",
+        "type": "record",
+        "fields": [
+            {"name": "0", "type": "int"},
+            {"name": "1", "type": "string"},
+        ],
+    }
+
+    df = rand_dataframe(
+        [
+            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
+            {
+                "dtype": "str",
+                "null_frequency": 0,
+                "cardinality": 100,
+                "max_string_length": 10,
+            },
+        ],
+        total_rows,
+    )
+    source_df = cudf.DataFrame.from_arrow(df)
+    expected_df = source_df.head(num_rows)
+
+    records = df.to_pandas().to_dict(orient="records")
+
+    buffer = io.BytesIO()
+    fastavro.writer(buffer, schema, records, sync_interval=sync_interval)
+    buffer.seek(0)
+
+    actual_df = cudf.read_avro(buffer, num_rows=num_rows)
+    assert_eq(expected_df, actual_df)
+
+
+@pytest.mark.parametrize(
     "total_rows_and_skip_rows",
     [
         (10, 1),
