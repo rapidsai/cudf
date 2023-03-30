@@ -59,7 +59,7 @@ cdef class DataType:
     cpdef int32_t scale(self)
 
 
-ctypedef bool underlying_type_t_null_policy
+ctypedef cbool underlying_type_t_null_policy
 cpdef enum NullPolicy:
     EXCLUDE = <underlying_type_t_null_policy> null_policy.EXCLUDE
     INCLUDE = <underlying_type_t_null_policy> null_policy.INCLUDE

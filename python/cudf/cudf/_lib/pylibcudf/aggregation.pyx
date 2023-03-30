@@ -1,5 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+from enum import IntEnum
+
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp cimport aggregation as libcudf_aggregation
@@ -27,11 +29,19 @@ from cudf._lib.cpp.aggregation cimport (
     make_udf_aggregation,
     make_variance_aggregation,
 )
-from cudf._lib.cpp.types cimport (
-    interpolation,
-    null_policy,
-    size_type,
-    underlying_type_t_null_policy,
+from cudf._lib.cpp.types cimport interpolation as interpolation_t, size_type
+
+from cudf._lib.types import Interpolation, NullHandling
+
+from cudf._lib.types cimport underlying_type_t_interpolation
+
+from .types cimport null_policy, underlying_type_t_null_policy
+
+import pandas as pd
+
+from cudf._lib.cpp.aggregation cimport (
+    underlying_type_t_correlation_type,
+    underlying_type_t_rank_method,
 )
 
 
@@ -45,6 +55,21 @@ cdef class Aggregation:
             "Aggregation types should not be constructed directly. "
             "Use one of the factory functions."
         )
+
+class CorrelationType(IntEnum):
+    PEARSON = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.PEARSON
+    )
+    KENDALL = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.KENDALL
+    )
+    SPEARMAN = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.SPEARMAN
+    )
+
 
 
 cdef class GroupbyAggregation(Aggregation):
@@ -197,8 +222,8 @@ cdef class GroupbyAggregation(Aggregation):
             q = [q]
 
         cdef vector[double] c_q = q
-        cdef interpolation c_interp = (
-            <interpolation> (
+        cdef interpolation_t c_interp = (
+            <interpolation_t> (
                 <underlying_type_t_interpolation> (
                     Interpolation[interpolation.upper()]
                 )
