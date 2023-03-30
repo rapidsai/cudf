@@ -895,6 +895,7 @@ def test_str_to_datetime_error():
         np.datetime64("2005-02-25"),
         np.datetime64("2005-02-25T03:30"),
         np.datetime64("nat"),
+        # TODO: https://github.com/pandas-dev/pandas/issues/52295
     ],
 )
 @pytest.mark.parametrize("data_dtype", DATETIME_TYPES)

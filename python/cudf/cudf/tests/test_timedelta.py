@@ -986,9 +986,6 @@ def test_timedelta_index_properties(data, dtype, name):
 
     local_assert(expected_seconds, actual_seconds)
 
-    import pdb
-
-    pdb.set_trace()
     expected_microseconds = pdi.microseconds
     actual_microseconds = gdi.microseconds
 

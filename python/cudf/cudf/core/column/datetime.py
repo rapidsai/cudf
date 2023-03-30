@@ -251,18 +251,29 @@ class DatetimeColumn(column.ColumnBase):
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                return cudf.Scalar(None, dtype=self.dtype)
+                other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+                if other_time_unit not in {"s", "ms", "ns", "us"}:
+                    other_time_unit = "ns"
+
+                return cudf.Scalar(
+                    None, dtype=f"datetime64[{other_time_unit}]"
+                )
 
             other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
+            if np.isnat(other):
+                return cudf.Scalar(
+                    None,
+                    dtype="timedelta64[ns]"
+                    if other_time_unit not in {"s", "ms", "ns", "us"}
+                    else other.dtype,
+                )
+
             if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
-
-            if np.isnat(other):
-                return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -406,7 +417,9 @@ class DatetimeColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)
+            return other._datetime_binop(self, op, reflect=reflect).astype(
+                self.dtype
+            )
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
@@ -452,8 +465,8 @@ class DatetimeColumn(column.ColumnBase):
             return NotImplemented
 
         result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if out_dtype != cudf.dtype(np.bool_):
-            return result_col.astype(lhs.dtype)
+        if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
+            return result_col  # .astype(lhs.dtype)
         else:
             return result_col
 

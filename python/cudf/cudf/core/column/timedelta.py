@@ -193,9 +193,7 @@ class TimeDeltaColumn(ColumnBase):
             elif op == "__mod__":
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
-                common_dtype = (
-                    self.dtype
-                )  # determine_out_dtype(self.dtype, other.dtype)
+                common_dtype = determine_out_dtype(self.dtype, other.dtype)
                 out_dtype = np.float64 if op == "__truediv__" else np.int64
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
@@ -232,7 +230,12 @@ class TimeDeltaColumn(ColumnBase):
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
             if np.isnat(other):
-                return cudf.Scalar(None, dtype=self.dtype)
+                return cudf.Scalar(
+                    None,
+                    dtype="timedelta64[ns]"
+                    if other_time_unit not in {"s", "ms", "ns", "us"}
+                    else self.dtype,
+                )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
                 common_dtype = "timedelta64[s]"
