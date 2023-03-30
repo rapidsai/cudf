@@ -912,9 +912,7 @@ void reader::impl::load_and_decompress_data(
   // This function should never be called if `num_rows == 0`.
   CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
 
-  std::mutex queue_mutex;
   std::deque<file_portion> file_portions;
-  std::condition_variable portion_added;
   constexpr size_t portion_size = 512 * 1024 * 1024;
 
   auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
@@ -933,11 +931,7 @@ void reader::impl::load_and_decompress_data(
           row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
           remaining_rows,
           streams[portion_number % streams.size()]);
-        {
-          const std::scoped_lock lock(queue_mutex);
-          file_portions.emplace_back(std::move(portion));
-          portion_added.notify_one();
-        }
+        file_portions.emplace_back(std::move(portion));
 
         this_portion_size = row_group.total_byte_size;
         starting_rowgroup += portion_rowgroup_count;
@@ -953,11 +947,7 @@ void reader::impl::load_and_decompress_data(
       row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
       remaining_rows,
       streams[portion_number % streams.size()]);
-    {
-      const std::scoped_lock lock(queue_mutex);
-      file_portions.emplace_back(std::move(portion));
-      portion_added.notify_one();
-    }
+    file_portions.emplace_back(std::move(portion));
 
     CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
     return true;
@@ -969,51 +959,39 @@ void reader::impl::load_and_decompress_data(
   auto streams     = get_streams(num_streams, stream_pool);
   fork_stream(streams, _stream);
 
-  // spawn a thread to queue all the file reads
-  auto read_task = std::async(std::launch::async, spawn_reads, streams);
+  spawn_reads(streams);
 
   std::vector<hostdevice_vector<gpu::PageInfo>> pages_vector;
   std::vector<file_portion> completed_portions;
 
-  while (read_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
-         !file_portions.empty()) {
-    auto next_portion = [&]() -> std::optional<file_portion> {
-      std::unique_lock lk(queue_mutex);
-      if (file_portions.empty()) { portion_added.wait(lk); }
-      if (!file_portions.empty()) {
-        auto d = std::move(file_portions.front());
-        file_portions.pop_front();
-        return std::optional<file_portion>(std::move(d));
-      }
-      return std::nullopt;
-    }();
+  while (!file_portions.empty()) {
+    auto next_portion = std::move(file_portions.front());
+    file_portions.pop_front();
 
-    if (next_portion) {
-      // wait for read to complete
-      nvtxRangePushA("read wait");
-      next_portion->read_handle.wait();
-      nvtxRangePop();
+    // wait for read to complete
+    nvtxRangePushA("read wait");
+    next_portion.read_handle.wait();
+    nvtxRangePop();
 
-      // Process dataset chunk pages into output columns
-      auto const portion_pages = count_page_headers(next_portion->chunks, next_portion->stream);
-      auto pages_info =
-        hostdevice_vector<gpu::PageInfo>(portion_pages, portion_pages, next_portion->stream);
+    // Process dataset chunk pages into output columns
+    auto const portion_pages = count_page_headers(next_portion.chunks, next_portion.stream);
+    auto pages_info =
+      hostdevice_vector<gpu::PageInfo>(portion_pages, portion_pages, next_portion.stream);
 
-      if (portion_pages > 0) {
-        // decoding of column/page information
-        decode_page_headers(next_portion->chunks, pages_info, next_portion->stream);
-        if (next_portion->has_compressed_data) {
-          _file_itm_data.decomp_page_data.emplace_back(
-            decompress_page_data(next_portion->chunks, pages_info, next_portion->stream));
-          // Free compressed data
-          for (auto& rpd : next_portion->raw_compressed_page_data) {
-            rpd.reset();
-          }
+    if (portion_pages > 0) {
+      // decoding of column/page information
+      decode_page_headers(next_portion.chunks, pages_info, next_portion.stream);
+      if (next_portion.has_compressed_data) {
+        _file_itm_data.decomp_page_data.emplace_back(
+          decompress_page_data(next_portion.chunks, pages_info, next_portion.stream));
+        // Free compressed data
+        for (auto& rpd : next_portion.raw_compressed_page_data) {
+          rpd.reset();
         }
-        pages_vector.push_back(std::move(pages_info));
       }
-      completed_portions.emplace_back(std::move(*next_portion));
+      pages_vector.push_back(std::move(pages_info));
     }
+    completed_portions.emplace_back(std::move(next_portion));
   }
 
   join_stream(streams, _stream);
@@ -1022,13 +1000,12 @@ void reader::impl::load_and_decompress_data(
   merge_arrays(completed_portions, pages_vector, _stream);
 
   // update streams
-  for (auto& buf : _file_itm_data.decomp_page_data) {
-    buf.set_stream(_stream);
-  }
-
-  for (auto& rpd : _file_itm_data.raw_page_data) {
-    rpd->set_stream(_stream);
-  }
+  std::for_each(_file_itm_data.decomp_page_data.begin(),
+                _file_itm_data.decomp_page_data.end(),
+                [&](auto& buf) { buf.set_stream(_stream); });
+  std::for_each(_file_itm_data.raw_page_data.begin(),
+                _file_itm_data.raw_page_data.end(),
+                [&](auto& rpd) { rpd->set_stream(_stream); });
 
   // build output column info
   // walk the schema, building out_buffers that mirror what our final cudf columns will look
