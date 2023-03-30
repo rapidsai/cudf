@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -40,6 +40,11 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_ ASSOCIATED_TARGETS cudf
 )
+
+# All modules need to include the header containing the exception handler.
+foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/..)
+endforeach()
 
 add_subdirectory(convert)
 add_subdirectory(split)
