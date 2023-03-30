@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/sorting.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -197,8 +198,13 @@ TYPED_TEST(GroupbyM2TypedTest, InputHaveNullsAndNaNs)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
   auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  auto const sort_order = cudf::sorted_order(cudf::table_view{{out_keys->view()}});
+  auto const sorted_out =
+    cudf::gather(cudf::table_view{{out_keys->view(), out_M2s->view()}}, *sort_order);
+  auto const [sorted_keys, sorted_vals] =
+    std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
@@ -236,6 +242,11 @@ TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
   auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  auto const sort_order = cudf::sorted_order(cudf::table_view{{out_keys->view()}});
+  auto const sorted_out =
+    cudf::gather(cudf::table_view{{out_keys->view(), out_M2s->view()}}, *sort_order);
+  auto const [sorted_keys, sorted_vals] =
+    std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
 }
