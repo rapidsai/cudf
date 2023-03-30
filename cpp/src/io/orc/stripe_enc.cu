@@ -1347,6 +1347,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
         [] __device__(compression_result & stat) { stat.status = compression_status::FAILURE; });
       // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
       // writing without compression
+      CUDF_LOG_WARN("ORC writer: error during compression, writing uncompressed data");
     }
   } else if (compression == ZLIB) {
     if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
