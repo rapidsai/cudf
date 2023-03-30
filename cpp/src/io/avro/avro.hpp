@@ -76,7 +76,10 @@ struct column_desc {
  *
  * `skip_rows` is the number of rows to skip.
  *
- * `block_list` is a list of all blocks in the file.
+ * `block_list` is a list of all blocks that contain the selected rows.  If no
+ * row filtering has been done via `num_rows` or `skip_rows`; it will contain
+ * all blocks.  Otherwise, it will contain only blocks selected by those
+ * constraints.
  */
 struct file_metadata {
   std::map<std::string, std::string> user_data;
