@@ -325,6 +325,34 @@ std::unique_ptr<column> segmented_variance(column_view const& col,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Counts the number of unique values within each segment of a column
+ *
+ * Unique entries are counted by comparing adjacent values so the column segments
+ * are expected to be sorted before calling this function otherwise the results
+ * are undefined.
+ *
+ * If any input segment is empty, that segment's result is null.
+ *
+ * If `null_handling==null_policy::INCLUDE`, the segment count is the number of
+ * unique values +1 which includes all the null entries in that segment.
+ * If `null_handling==null_policy::EXCLUDE`, the segment count does not include nulls.
+ *
+ * @throw cudf::logic_error if input column type is a nested type
+ *
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column of unique counts per segment
+ */
+std::unique_ptr<column> segmented_nunique(column_view const& col,
+                                          device_span<size_type const> offsets,
+                                          null_policy null_handling,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
