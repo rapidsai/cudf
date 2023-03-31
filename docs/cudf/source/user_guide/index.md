@@ -12,7 +12,7 @@ groupby
 guide-to-udfs
 cupy-interop
 options
-performance_comparisons/index
+performance-comparisons/index
 PandasCompat
 copy-on-write
 ```
