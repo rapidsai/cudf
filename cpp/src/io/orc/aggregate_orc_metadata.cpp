@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,10 +106,10 @@ auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sour
 
 }  // namespace
 
-size_type aggregate_orc_metadata::calc_num_rows() const
+int64_t aggregate_orc_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto const& sum, auto const& pfm) {
+    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto const& sum, auto const& pfm) {
       return sum + pfm.get_total_rows();
     });
 }
@@ -153,7 +153,7 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 
 std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
-  size_type& row_start,
+  int64_t& row_start,
   size_type& row_count,
   rmm::cuda_stream_view stream)
 {
@@ -186,14 +186,14 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    row_start = std::max(row_start, 0);
+    row_start = std::min(row_start, get_num_rows());
     if (row_count < 0) {
-      row_count = static_cast<size_type>(
-        std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+      CUDF_EXPECTS(get_num_rows() - row_start <= std::numeric_limits<size_type>::max(),
+                   "ORC reader can't read all rows from its input(s)");
+      row_count = static_cast<size_type>(get_num_rows() - row_start);
+    } else {
+    row_count = static_cast<size_type>(std::min<int64_t>(row_count, get_num_rows() - row_start));
     }
-    row_count = std::min(row_count, get_num_rows() - row_start);
-    CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-    CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
     size_type count            = 0;
     size_type stripe_skip_rows = 0;

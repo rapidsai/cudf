@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ class orc_reader_options {
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
   // Rows to skip from the start;
-  size_type _skip_rows = 0;
+  int64_t _skip_rows = 0;
   // Rows to read; -1 is all
   size_type _num_rows = -1;
 
@@ -124,7 +124,7 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  size_type get_skip_rows() const { return _skip_rows; }
+  int64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
@@ -187,7 +187,7 @@ class orc_reader_options {
    *
    * @param rows Number of rows
    */
-  void set_skip_rows(size_type rows)
+  void set_skip_rows(int64_t rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
     _skip_rows = rows;
@@ -287,7 +287,7 @@ class orc_reader_options_builder {
    * @param rows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& skip_rows(size_type rows)
+  orc_reader_options_builder& skip_rows(int64_t rows)
   {
     options.set_skip_rows(rows);
     return *this;

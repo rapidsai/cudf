@@ -933,7 +933,7 @@ std::unique_ptr<table> reader::impl::compute_timezone_table(
     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 
-table_with_metadata reader::impl::read(size_type skip_rows,
+table_with_metadata reader::impl::read(int64_t skip_rows,
                                        size_type num_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
