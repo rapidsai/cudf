@@ -1848,7 +1848,11 @@ def test_string_count(data, pat, flags):
         ps.str.count(pat=pat, flags=flags),
         check_dtype=False,
     )
-    assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
+    assert_eq(
+        cudf.Index(gs).str.count(pat=pat),
+        pd.Index(ps).str.count(pat=pat),
+        exact=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2214,7 +2218,11 @@ def test_string_str_rindex(data, sub, er):
 
     if er is None:
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
-        assert_eq(pd.Index(ps).str.rindex(sub), as_index(gs).str.rindex(sub))
+        assert_eq(
+            pd.Index(ps).str.rindex(sub),
+            as_index(gs).str.rindex(sub),
+            exact=False,
+        )
 
     try:
         ps.str.rindex(sub)
