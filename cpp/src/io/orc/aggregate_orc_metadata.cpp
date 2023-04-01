@@ -151,6 +151,20 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
+// Move to row_selection
+std::pair<int64_t, size_type> skip_rows_num_rows_from_options(
+  int64_t skip_rows_opt, std::optional<size_type> const& num_rows_opt, int64_t num_source_rows)
+{
+  auto const rows_to_skip = std::min(skip_rows_opt, num_source_rows);
+  if (not num_rows_opt.has_value()) {
+    CUDF_EXPECTS(num_source_rows - rows_to_skip <= std::numeric_limits<size_type>::max(),
+                 "ORC reader can't read all rows from its input(s)");
+  }
+  return {rows_to_skip,
+          static_cast<size_type>(std::min<int64_t>(num_rows_opt.value_or(num_source_rows),
+                                                   num_source_rows - rows_to_skip))};
+}
+
 std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
@@ -158,16 +172,20 @@ aggregate_orc_metadata::select_stripes(
   std::optional<size_type> const& num_rows_opt,
   rmm::cuda_stream_view stream)
 {
-  std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
+  CUDF_EXPECTS(
+    (skip_rows_opt == 0 and not num_rows_opt.has_value()) or user_specified_stripes.empty(),
+    "Can't use both the row selection and the stripe selection");
 
-  auto rows_to_skip = std::min(skip_rows_opt, get_num_rows());
-  auto rows_to_read = 0;
+  auto [rows_to_skip, rows_to_read] = [&]() {
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
+    return skip_rows_num_rows_from_options(skip_rows_opt, num_rows_opt, get_num_rows());
+  }();
+
+  std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
 
   if (!user_specified_stripes.empty()) {
     CUDF_EXPECTS(user_specified_stripes.size() == per_file_metadata.size(),
                  "Must specify stripes for each source");
-    CUDF_EXPECTS(skip_rows_opt == 0 and not num_rows_opt.has_value(),
-                 "Can't use both the row selection and the stripe selection");
 
     // Each vector entry represents a source file; each nested vector represents the
     // user_defined_stripes to get from that source file
@@ -188,15 +206,6 @@ aggregate_orc_metadata::select_stripes(
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    if (not num_rows_opt.has_value()) {
-      CUDF_EXPECTS(get_num_rows() - rows_to_skip <= std::numeric_limits<size_type>::max(),
-                   "ORC reader can't read all rows from its input(s)");
-      rows_to_read = static_cast<size_type>(get_num_rows() - rows_to_skip);
-    } else {
-      rows_to_read = static_cast<size_type>(
-        std::min<int64_t>(num_rows_opt.value(), get_num_rows() - rows_to_skip));
-    }
-
     size_type count            = 0;
     size_type stripe_skip_rows = 0;
     // Iterate all source files, each source file has corelating metadata
