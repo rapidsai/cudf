@@ -613,7 +613,7 @@ void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> 
   _row_groups = std::move(row_groups);
 }
 
-void parquet_reader_options::set_skip_rows(size_type val)
+void parquet_reader_options::set_skip_rows(int64_t val)
 {
   if ((val != 0) and (!_row_groups.empty())) {
     CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
