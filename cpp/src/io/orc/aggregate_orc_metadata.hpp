@@ -115,10 +115,10 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  std::vector<metadata::stripe_source_mapping> select_stripes(
+  std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
-    int64_t& row_start,
-    size_type& row_count,
+    int64_t row_start,
+    std::optional<size_type> const& num_rows_opt,
     rmm::cuda_stream_view stream);
 
   /**

@@ -60,7 +60,7 @@ class orc_reader_options {
   // Rows to skip from the start;
   int64_t _skip_rows = 0;
   // Rows to read; -1 is all
-  size_type _num_rows = -1;
+  std::optional<size_type> _num_rows;
 
   // Whether to use row index to speed-up reading
   bool _use_index = true;
@@ -131,7 +131,7 @@ class orc_reader_options {
    *
    * @return Number of row to read
    */
-  size_type get_num_rows() const { return _num_rows; }
+  std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
@@ -178,7 +178,8 @@ class orc_reader_options {
   void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
     CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0), "Can't set stripes along with skip_rows");
-    CUDF_EXPECTS(stripes.empty() or (_num_rows == -1), "Can't set stripes along with num_rows");
+    CUDF_EXPECTS(stripes.empty() or not _num_rows.has_value(),
+                 "Can't set stripes along with num_rows");
     _stripes = std::move(stripes);
   }
 
@@ -200,7 +201,7 @@ class orc_reader_options {
    */
   void set_num_rows(size_type nrows)
   {
-    CUDF_EXPECTS(nrows == -1 or _stripes.empty(), "Can't set both num_rows along with stripes");
+    CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows along with stripes");
     _num_rows = nrows;
   }
 
