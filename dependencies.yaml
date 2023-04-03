@@ -216,8 +216,8 @@ dependencies:
           - &gmock gmock==1.10.0.*
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - libarrow==10.0.1.*
-          - librdkafka=1.7.0
+          - libarrow==11.0.0.*
+          - librdkafka>=1.9.0,<1.10.0a0
           - spdlog>=1.11.0,<1.12
   build_wheels:
     common:
@@ -232,7 +232,7 @@ dependencies:
           - cython>=0.29,<0.30
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==10.0.1.*
+          - pyarrow==11.0.0.*
           - numpy>=1.21
   build_python:
     common:
@@ -251,13 +251,13 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow==10.*
+          - libarrow==11.*
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          - pyarrow==10.*
+          - pyarrow==11.*
   cudatoolkit:
     specific:
       - output_types: conda
@@ -392,11 +392,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka==1.7.0
+          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [requirements, pyproject]
         packages:
           - *cudf
-          - confluent-kafka==1.7.0
+          - confluent-kafka>=1.9.0,<1.10.0a0
   run_custreamz:
     common:
       - output_types: [conda, requirements, pyproject]

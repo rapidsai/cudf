@@ -159,6 +159,7 @@ struct encoder_chunk_streams {
  * @brief Struct to describe a column stream within a stripe
  */
 struct StripeStream {
+  uint8_t* data_ptr;        // encoded and gathered output
   size_t bfr_offset;        // Offset of this stream in compressed buffer
   uint32_t stream_size;     // Size of stream in bytes
   uint32_t first_chunk_id;  // First chunk of the stripe
