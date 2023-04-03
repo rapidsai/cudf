@@ -27,7 +27,7 @@
 
 // Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr size_t data_size         = (512 << 21) + (512 << 20);
+constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
@@ -57,10 +57,10 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType, cudf::io::io_type IOType>
+template <cudf::io::io_type IOType, data_type DataType>
 void BM_parquet_read_data(
   nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
+  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<DataType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
@@ -132,9 +132,7 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
-NVBENCH_BENCH_TYPES(BM_parquet_read_data,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(io_list, d_type_list))
   .set_name("parquet_read_decode")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
