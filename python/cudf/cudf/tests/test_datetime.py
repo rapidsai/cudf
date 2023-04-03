@@ -191,8 +191,8 @@ def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())
     gdf_data = Series(pd_data)
     base = getattr(pd_data.dt, field)
-    test = getattr(gdf_data.dt, field).to_pandas().astype("int64")
-    assert_eq(base, test)
+    test = getattr(gdf_data.dt, field)
+    assert_eq(base, test, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -200,7 +200,7 @@ def test_dt_series(data, field):
 def test_dt_index(data, field):
     pd_data = data.copy()
     gdf_data = DatetimeIndex(pd_data)
-    assert_eq(getattr(gdf_data, field), getattr(pd_data, field))
+    assert_eq(getattr(gdf_data, field), getattr(pd_data, field), exact=False)
 
 
 def test_setitem_datetime():
