@@ -755,11 +755,6 @@ void reader::impl::merge_arrays(std::vector<file_portion>& portions,
   std::vector<size_t> page_array_sizes;
   page_array_sizes.reserve(page_arrays.size());
 
-  //  for (size_t i=0; i<page_arrays.size(); ++i) {
-  //    page_arrays[i].device_to_host(_stream);
-  //  }
-  //  _file_itm_data.chunks.device_to_host(_stream, true);
-
   size_t chunks_so_far = 0;
   for (size_t i = 0; i < page_arrays.size(); ++i) {
     auto& portion_pages = page_arrays[i];
@@ -812,6 +807,7 @@ void reader::impl::merge_arrays(std::vector<file_portion>& portions,
 reader::impl::file_portion reader::impl::create_and_read_column_chunks(
   cudf::host_span<row_group_info const> const row_groups_info,
   size_type remaining_rows,
+  size_t portion_index,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -902,6 +898,7 @@ reader::impl::file_portion reader::impl::create_and_read_column_chunks(
                       std::move(raw_page_data),
                       std::move(raw_compressed_page_data),
                       total_decompressed_size > 0,
+                      portion_index,
                       stream};
 }
 
@@ -921,6 +918,8 @@ void reader::impl::load_and_decompress_data(
   std::vector<hostdevice_vector<gpu::PageInfo>> pages_vector;
 
   std::mutex completed_portions_mutex;
+  std::mutex pages_vector_mutex;
+  std::mutex decomp_page_data_mutex;
   std::vector<file_portion> completed_portions;
 
   auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
@@ -938,6 +937,7 @@ void reader::impl::load_and_decompress_data(
         auto portion = create_and_read_column_chunks(
           row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
           remaining_rows,
+          portion_number,
           streams[portion_number % streams.size()]);
         {
           const std::scoped_lock lock(queue_mutex);
@@ -958,6 +958,7 @@ void reader::impl::load_and_decompress_data(
     auto portion = create_and_read_column_chunks(
       row_groups_info.subspan(starting_rowgroup, portion_rowgroup_count),
       remaining_rows,
+      portion_number,
       streams[portion_number % streams.size()]);
     {
       const std::scoped_lock lock(queue_mutex);
@@ -1002,18 +1003,41 @@ void reader::impl::load_and_decompress_data(
         // decoding of column/page information
         decode_page_headers(next_portion->chunks, pages_info, next_portion->stream);
         if (next_portion->has_compressed_data) {
-          _file_itm_data.decomp_page_data.emplace_back(
-            decompress_page_data(next_portion->chunks, pages_info, next_portion->stream));
+          auto decomp_page_data =
+            decompress_page_data(next_portion->chunks, pages_info, next_portion->stream);
+          {
+            std::unique_lock lk(decomp_page_data_mutex);
+            _file_itm_data.decomp_page_data.emplace_back(std::move(decomp_page_data));
+          }
           // Free compressed data
           for (auto& rpd : next_portion->raw_compressed_page_data) {
             rpd.reset();
           }
         }
-        pages_vector.push_back(std::move(pages_info));
+        {
+          std::unique_lock lk(pages_vector_mutex);
+          auto const current_size = pages_vector.size();
+          if (current_size == next_portion->portion_index) {
+            pages_vector.emplace_back(std::move(pages_info));
+          } else {
+            if (pages_vector.size() <= next_portion->portion_index) {
+              pages_vector.resize(next_portion->portion_index + 1);
+            }
+            pages_vector[next_portion->portion_index] = std::move(pages_info);
+          }
+        }
       }
       {
         std::unique_lock lk(completed_portions_mutex);
-        completed_portions.emplace_back(std::move(*next_portion));
+        auto const current_size = completed_portions.size();
+        if (current_size == next_portion->portion_index) {
+          completed_portions.emplace_back(std::move(*next_portion));
+        } else {
+          if (completed_portions.size() <= next_portion->portion_index) {
+            completed_portions.resize(next_portion->portion_index + 1);
+          }
+          completed_portions[next_portion->portion_index] = std::move(*next_portion);
+        }
       }
     }
   };
@@ -1029,7 +1053,7 @@ void reader::impl::load_and_decompress_data(
     std::vector<std::future<void>> workers;
     workers.reserve(num_worker_threads);
     for (int i = 0; i < num_worker_threads; ++i) {
-      workers.push_back(std::async(std::launch::async, process_portions));
+      workers.push_back(std::async(std::launch::async, process_portions, i));
     }
     return workers;
   }();
@@ -1039,8 +1063,6 @@ void reader::impl::load_and_decompress_data(
   for (auto& worker : worker_tasks) {
     worker.wait();
   }
-
-  join_stream(streams, _stream);
 
   // merge page and chunk arrays into single hostdevice_vectors for further processing
   merge_arrays(completed_portions, pages_vector, _stream);
@@ -1052,6 +1074,11 @@ void reader::impl::load_and_decompress_data(
   std::for_each(_file_itm_data.raw_page_data.begin(),
                 _file_itm_data.raw_page_data.end(),
                 [&](auto& rpd) { rpd->set_stream(_stream); });
+
+  completed_portions.clear();
+  pages_vector.clear();
+
+  join_stream(streams, _stream);
 
   // build output column info
   // walk the schema, building out_buffers that mirror what our final cudf columns will look

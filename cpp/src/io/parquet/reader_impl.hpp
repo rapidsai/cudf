@@ -124,6 +124,7 @@ class reader::impl {
     std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
     std::vector<std::unique_ptr<datasource::buffer>> raw_compressed_page_data;
     bool has_compressed_data;
+    size_t portion_index;
     rmm::cuda_stream_view stream;
   };
 
@@ -162,6 +163,7 @@ class reader::impl {
   file_portion create_and_read_column_chunks(
     cudf::host_span<row_group_info const> const row_groups_info,
     size_type remaining_rows,
+    size_t portion_index,
     rmm::cuda_stream_view stream);
 
   /**
