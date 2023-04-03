@@ -40,20 +40,20 @@ namespace nvtext {
  * @throw std::invalid_argument if h_id is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
- * @param h_id  Hash algorithm to use;
- *              Only HASH_MURMUR3 is currently supported.
+ * @param seed  Seed value used for the MurmurHash3_32 algorithm
  * @param width The character width used for apply substrings;
  *              Any string smaller than this width will not be hashed.
  *              Default is 4 characters.
- * @param seed  Seed value used for the MurmurHash3_32 algorithm
+ * @param h_id  Hash algorithm to use;
+ *              Only HASH_MURMUR3 is currently supported.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Minhash values for each string in input
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::numeric_scalar<cudf::hash_value_type> seed = cudf::numeric_scalar(cudf::DEFAULT_HASH_SEED),
-  cudf::hash_id h_id                               = cudf::hash_id::HASH_MURMUR3,
   cudf::size_type width                            = 4,
+  cudf::hash_id h_id                               = cudf::hash_id::HASH_MURMUR3,
   rmm::mr::device_memory_resource* mr              = rmm::mr::get_current_device_resource());
 
 /**
@@ -69,20 +69,20 @@ std::unique_ptr<cudf::column> minhash(
  * @throw std::invalid_argument if seeds is empty
  *
  * @param input Strings column to compute minhash
- * @param h_id  Hash algorithm to use;
- *              Only HASH_MURMUR3 is currently supported.
  * @param seeds Seed values used for the MurmurHash3_32 algorithm
  * @param width The character width used for apply substrings;
  *              Any string smaller than this width will not be hashed.
  *              Default is 4 characters.
+ * @param h_id  Hash algorithm to use;
+ *              Only HASH_MURMUR3 is currently supported.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of Minhash values for each string per seed
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
   cudf::device_span<cudf::hash_value_type const> seeds,
-  cudf::hash_id h_id                  = cudf::hash_id::HASH_MURMUR3,
   cudf::size_type width               = 4,
+  cudf::hash_id h_id                  = cudf::hash_id::HASH_MURMUR3,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

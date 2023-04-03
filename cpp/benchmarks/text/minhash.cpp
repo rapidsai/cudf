@@ -57,7 +57,7 @@ static void bench_minhash(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);  // output are hashes
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = nvtext::minhash(input, seeds.view(), cudf::hash_id::HASH_MURMUR3, hash_width);
+    auto result = nvtext::minhash(input, seeds.view(), hash_width);
   });
 }
 

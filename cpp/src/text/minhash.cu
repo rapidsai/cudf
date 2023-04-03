@@ -89,8 +89,8 @@ struct minhash_fn {
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
-                                      cudf::hash_id h_id,
                                       cudf::size_type width,
+                                      cudf::hash_id h_id,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -144,23 +144,23 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::numeric_scalar<cudf::hash_value_type> seed,
-                                      cudf::hash_id h_id,
                                       cudf::size_type width,
+                                      cudf::hash_id h_id,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto seeds = cudf::device_span<cudf::hash_value_type const>{seed.data(), 1};
-  return detail::minhash(input, seeds, h_id, width, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, width, h_id, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
-                                      cudf::hash_id h_id,
                                       cudf::size_type width,
+                                      cudf::hash_id h_id,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minhash(input, seeds, h_id, width, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, width, h_id, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

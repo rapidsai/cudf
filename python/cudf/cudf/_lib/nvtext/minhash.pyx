@@ -14,7 +14,7 @@ from cudf._lib.cpp.types cimport size_type
 
 
 @acquire_spill_lock()
-def minhash(Column strings, Column seeds, str method, int width):
+def minhash(Column strings, Column seeds, int width, str method):
 
     cdef column_view c_strings = strings.view()
     cdef size_type c_width = width
@@ -31,8 +31,8 @@ def minhash(Column strings, Column seeds, str method, int width):
             cpp_minhash(
                 c_strings,
                 c_seeds,
-                c_hash_function,
-                c_width
+                c_width,
+                c_hash_function
             )
         )
 

@@ -5265,7 +5265,7 @@ class StringMethods(ColumnMethods):
         else:
             seeds = seeds._column
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds, method, n)
+            libstrings.minhash(self._column, seeds, n, method)
         )
 
 
