@@ -2809,6 +2809,19 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   restore_decode_cache(s);
 }
 
+
+struct page_tform_functor {
+  void* const data;
+
+  __device__ PageInfo operator()(PageInfo& page, int64_t offset)
+  {
+    if (page.page_strings_size != 0) {
+      page.page_string_data = static_cast<uint8_t*>(data) + offset;
+    }
+    return page;
+  }
+};
+
 }  // anonymous namespace
 
 /**
@@ -2833,23 +2846,22 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
     });
 
   if (need_sizes) {
-    int64_t total_size = thrust::transform_reduce(
-      rmm::exec_policy(stream),
-      pages.d_begin(),
-      pages.d_end(),
-      [] __device__(auto& page) { return page.page_strings_size; },
-      0L,
-      thrust::plus<int64_t>{});
+    auto const page_sizes = [] __device__(PageInfo const& page) { return page.page_strings_size; };
+    int64_t total_size    = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                  pages.d_begin(),
+                                                  pages.d_end(),
+                                                  page_sizes,
+                                                  0L,
+                                                  thrust::plus<int64_t>{});
 
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
-    thrust::transform_exclusive_scan(
-      rmm::exec_policy(stream),
-      pages.d_begin(),
-      pages.d_end(),
-      page_string_offsets.begin(),
-      [] __device__(auto& page) { return page.page_strings_size; },
-      0L,
-      thrust::plus<int64_t>{});
+    thrust::transform_exclusive_scan(rmm::exec_policy(stream),
+                                     pages.d_begin(),
+                                     pages.d_end(),
+                                     page_string_offsets.begin(),
+                                     page_sizes,
+                                     0L,
+                                     thrust::plus<int64_t>{});
 
     page_string_data = rmm::device_buffer(total_size, stream);
 
@@ -2858,12 +2870,7 @@ void ComputeDeltaPageStringSizes(hostdevice_vector<PageInfo>& pages,
                       pages.d_end(),
                       page_string_offsets.begin(),
                       pages.d_begin(),
-                      [data = page_string_data.data()] __device__(auto& page, auto offset) {
-                        if (page.page_strings_size != 0) {
-                          page.page_string_data = static_cast<uint8_t*>(data) + offset;
-                        }
-                        return page;
-                      });
+                      page_tform_functor{page_string_data.data()});
   }
 }
 
