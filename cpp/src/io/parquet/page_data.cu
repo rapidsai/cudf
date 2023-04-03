@@ -2809,7 +2809,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   restore_decode_cache(s);
 }
 
-
 struct page_tform_functor {
   void* const data;
 
