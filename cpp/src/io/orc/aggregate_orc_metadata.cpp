@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include "aggregate_orc_metadata.hpp"
+#include <io/orc/aggregate_orc_metadata.hpp>
+
+#include <io/utilities/row_selection.hpp>
 
 #include <algorithm>
 #include <numeric>
@@ -151,20 +153,6 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
-// Move to row_selection
-std::pair<int64_t, size_type> skip_rows_num_rows_from_options(
-  int64_t skip_rows_opt, std::optional<size_type> const& num_rows_opt, int64_t num_source_rows)
-{
-  auto const rows_to_skip = std::min(skip_rows_opt, num_source_rows);
-  if (not num_rows_opt.has_value()) {
-    CUDF_EXPECTS(num_source_rows - rows_to_skip <= std::numeric_limits<size_type>::max(),
-                 "ORC reader can't read all rows from its input(s)");
-  }
-  return {rows_to_skip,
-          static_cast<size_type>(std::min<int64_t>(num_rows_opt.value_or(num_source_rows),
-                                                   num_source_rows - rows_to_skip))};
-}
-
 std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
@@ -178,7 +166,8 @@ aggregate_orc_metadata::select_stripes(
 
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
-    return skip_rows_num_rows_from_options(skip_rows_opt, num_rows_opt, get_num_rows());
+    return cudf::io::detail::skip_rows_num_rows_from_options(
+      skip_rows_opt, num_rows_opt, get_num_rows());
   }();
 
   std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
