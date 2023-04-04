@@ -16,7 +16,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
@@ -54,7 +54,7 @@ requirements:
     - setuptools
     - numba >=0.56.4,<0.57
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow =10
+    - pyarrow =11
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
