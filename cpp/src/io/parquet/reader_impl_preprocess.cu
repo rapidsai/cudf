@@ -1216,8 +1216,8 @@ struct get_page_schema {
 };
 
 struct input_col_info {
-   int const _schema_idx;
-   size_type const _nesting_depth;
+  int const _schema_idx;
+  size_type const _nesting_depth;
 };
 
 /**
@@ -1668,6 +1668,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
     h_cols_info.reserve(_input_columns.size());
     std::transform(_input_columns.cbegin(),
                    _input_columns.cend(),
+
                    std::back_inserter(h_cols_info),
                    [](auto& col) -> input_col_info {
                      return {col.schema_idx, static_cast<size_type>(col.nesting_depth())};
