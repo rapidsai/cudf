@@ -54,6 +54,11 @@
 #include <optional>
 #include <utility>
 
+// Forward declaration to reduce dependency on the relevant header.
+namespace cudf::structs::detail {
+class flattened_table;
+}
+
 namespace cudf {
 
 namespace experimental {
@@ -721,30 +726,30 @@ struct preprocessed_table {
    * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
    * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
    * of list columns).
+   * @param flattened_input_aux_data The data structure generated from
+   * `cudf::structs::detail::flatten_nested_columns` containing the input flattened table along
+   * with its corresponding flattened column orders and null orders.
+   * @param structs_ranked_columns Store the intermediate results from transforming the
+   * child columns of lists-of-structs columns into integer columns using `cudf::rank()`
+   * and will be used for row comparison.
    */
-  preprocessed_table(table_device_view_owner&& table,
-                     rmm::device_uvector<order>&& column_order,
-                     rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths,
-                     std::vector<detail::dremel_data>&& dremel_data,
-                     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data(std::move(dremel_data)),
-      _dremel_device_views(std::move(dremel_device_views)){};
+  preprocessed_table(
+    table_device_view_owner&& table,
+    rmm::device_uvector<order>&& column_order,
+    rmm::device_uvector<null_order>&& null_precedence,
+    rmm::device_uvector<size_type>&& depths,
+    std::vector<detail::dremel_data>&& dremel_data,
+    rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
 
-  preprocessed_table(table_device_view_owner&& table,
-                     rmm::device_uvector<order>&& column_order,
-                     rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data{},
-      _dremel_device_views{} {};
+  preprocessed_table(
+    table_device_view_owner&& table,
+    rmm::device_uvector<order>&& column_order,
+    rmm::device_uvector<null_order>&& null_precedence,
+    rmm::device_uvector<size_type>&& depths,
+    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -809,6 +814,14 @@ struct preprocessed_table {
   // Dremel encoding of list columns used for the comparison algorithm
   std::optional<std::vector<detail::dremel_data>> _dremel_data;
   std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
+
+  // Auxiliary data generated from `cudf::structs::detail::flatten_nested_columns`
+  // that needs to be kept alive.
+  std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
+
+  // Intermediate columns generated from transforming the child columns of lists-of-structs columns
+  // into integer columns using `cudf::rank()`, also need to be kept alive.
+  std::vector<std::unique_ptr<column>> _structs_ranked_columns;
 };
 
 /**
@@ -887,8 +900,14 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
+
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -906,9 +925,14 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(
+        d_t->_structs_ranked_columns.size() == 0,
+        "The input table was preprocessed using a different type of physical element comparator.");
+    }
+
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,

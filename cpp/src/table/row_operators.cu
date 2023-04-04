@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -372,16 +373,168 @@ namespace row {
 
 namespace lexicographic {
 
+namespace {
+
+/**
+ * @brief Transform a lists-of-structs column into lists-of-integers column.
+ *
+ * For lists-of-structs column at any nested level, the child structs column will be replaced by an
+ * integer column of its ranks generated using `cudf::rank()`.
+ *
+ * If the input column is not lists-of-structs, or does not contain lists-of-structs at any nested
+ * level, the input will be passed through.
+ *
+ * @param input The input column to transform
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of new column_view representing the transformed input and the generated rank
+ *         (size_type) column which needs to be kept alive
+ */
+std::pair<column_view, std::unique_ptr<column>> transform_lists_of_structs(
+  column_view const& input, rmm::cuda_stream_view stream)
+{
+  auto const make_transformed_input = [&](auto const& new_child) {
+    return column_view{data_type{type_id::LIST},
+                       input.size(),
+                       nullptr,
+                       input.null_mask(),
+                       input.null_count(),
+                       input.offset(),
+                       {input.child(lists_column_view::offsets_column_index), new_child}};
+  };
+
+  if (input.type().id() == type_id::LIST) {
+    // Should not use sliced child because we reuse the input's offset value and offsets child.
+    auto const child = input.child(lists_column_view::child_column_index);
+
+    if (child.type().id() == type_id::STRUCT) {
+      // Dense ranks should be used instead of first rank.
+      // Consider this example: input = [ [{0, "a"}, {3, "c"}], [{0, "a"}, {2, "b"}] ].
+      // If first rank is used, transformed_input = [ [0, 3], [1, 2] ]. Comparing them will lead to
+      // the result row(0) < row(1) which is incorrect.
+      // With dense rank, transformed_input = [ [0, 2], [0, 1] ], producing correct comparison.
+      auto ranks             = cudf::detail::rank(child,
+                                      rank_method::DENSE,
+                                      order::ASCENDING,
+                                      null_policy::EXCLUDE,
+                                      null_order::BEFORE,
+                                      false,
+                                      stream,
+                                      rmm::mr::get_current_device_resource());
+      auto transformed_input = make_transformed_input(ranks->view());
+      return {std::move(transformed_input), std::move(ranks)};
+    } else if (child.type().id() == type_id::LIST) {
+      auto [new_child, ranks_cols] = transform_lists_of_structs(child, stream);
+      if (ranks_cols) {
+        auto transformed_input = make_transformed_input(new_child);
+        return {transformed_input, std::move(ranks_cols)};
+      }
+    }
+  } else if (input.type().id() == type_id::STRUCT) {
+    CUDF_EXPECTS(
+      std::all_of(input.child_begin(),
+                  input.child_end(),
+                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
+      "Structs columns containing lists should be flattened before reaching this function.");
+  }
+
+  return {input, nullptr};
+}
+
+/**
+ * @brief Transform any lists-of-structs column in a given table into lists-of-integers column.
+ *
+ * @param input The input table to transform
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of new table_view representing the transformed input and the generated rank
+ *         (integer) column which needs to be kept alive
+ */
+std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
+  table_view const& input, rmm::cuda_stream_view stream)
+{
+  std::vector<column_view> transformed_columns;
+  std::vector<std::unique_ptr<column>> aux_data;
+  std::for_each(input.begin(), input.end(), [&](auto const& col) {
+    auto [transformed_col, col_aux_data] = transform_lists_of_structs(col, stream);
+    transformed_columns.push_back(transformed_col);
+    if (col_aux_data) { aux_data.emplace_back(std::move(col_aux_data)); }
+  });
+
+  return {table_view{transformed_columns}, std::move(aux_data)};
+}
+
+/**
+ * @brief Check if the input column has structs-of-lists column at any nested level.
+ *
+ * @param input The input column to check
+ * @return Boolean value indicating if there is structs-of-lists column
+ */
+bool has_nested_structs_of_lists(column_view const& input)
+{
+  if (input.type().id() == type_id::STRUCT) {
+    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
+      return child.type().id() == type_id::LIST || has_nested_structs_of_lists(child);
+    });
+  } else if (input.type().id() == type_id::LIST) {
+    return has_nested_structs_of_lists(input.child(lists_column_view::child_column_index));
+  }
+
+  return false;
+}
+
+/**
+ * @brief Flatten the given table if it contains any structs-of-lists column.
+ *
+ * If the input table contains any structs-of-lists column, the entire table will be flattened to
+ * a table of non-struct columns. Otherwise, the input table is passed through.
+ *
+ * @param input The input table
+ * @param stream The stream to launch kernels and h->d copies on while preprocessing
+ * @return A pair of table_view representing the flattened input and an auxiliary data structure
+ *         that needs to be kept alive
+ */
+std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
+flatten_nested_structs_of_lists(table_view const& input,
+                                host_span<order const> column_order,
+                                host_span<null_order const> null_precedence,
+                                rmm::cuda_stream_view stream)
+{
+  if (std::any_of(input.begin(), input.end(), has_nested_structs_of_lists)) {
+    auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
+      input,
+      std::vector<order>{column_order.begin(), column_order.end()},
+      std::vector<null_order>{null_precedence.begin(), null_precedence.end()},
+      cudf::structs::detail::column_nullability::FORCE,
+      stream,
+      rmm::mr::get_current_device_resource());
+    auto output_table = structs_flattened->flattened_columns();
+    return {std::move(output_table), std::move(structs_flattened)};
+  }
+
+  return {input, nullptr};
+}
+
+}  // namespace
+
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& t,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  check_lex_compatibility(t);
+  // Firstly, flatten the input table if it contains any structs-of-lists column.
+  auto [flattened_t, flattened_t_aux_data] =
+    flatten_nested_structs_of_lists(t, column_order, null_precedence, stream);
+
+  // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
+  auto [transformed_t, structs_ranked_columns] = transform_lists_of_structs(flattened_t, stream);
+
+  check_lex_compatibility(transformed_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(t, column_order, null_precedence);
+    flattened_t_aux_data
+      ? decompose_structs(
+          transformed_t, flattened_t_aux_data->orders(), flattened_t_aux_data->null_orders())
+      : decompose_structs(transformed_t, column_order, null_precedence);
 
   auto d_t            = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order = detail::make_device_uvector_async(
@@ -391,7 +544,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
-  if (detail::has_nested_columns(t)) {
+  if (detail::has_nested_columns(transformed_t)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
@@ -399,13 +552,56 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(dremel_data),
-                             std::move(d_dremel_device_view)));
+                             std::move(d_dremel_device_view),
+                             std::move(flattened_t_aux_data),
+                             std::move(structs_ranked_columns)));
   } else {
-    return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t),
-                                                                      std::move(d_column_order),
-                                                                      std::move(d_null_precedence),
-                                                                      std::move(d_depths)));
+    return std::shared_ptr<preprocessed_table>(
+      new preprocessed_table(std::move(d_t),
+                             std::move(d_column_order),
+                             std::move(d_null_precedence),
+                             std::move(d_depths),
+                             std::move(flattened_t_aux_data),
+                             std::move(structs_ranked_columns)));
   }
+}
+
+preprocessed_table::preprocessed_table(
+  table_device_view_owner&& table,
+  rmm::device_uvector<order>&& column_order,
+  rmm::device_uvector<null_order>&& null_precedence,
+  rmm::device_uvector<size_type>&& depths,
+  std::vector<detail::dremel_data>&& dremel_data,
+  rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
+  : _t(std::move(table)),
+    _column_order(std::move(column_order)),
+    _null_precedence(std::move(null_precedence)),
+    _depths(std::move(depths)),
+    _dremel_data(std::move(dremel_data)),
+    _dremel_device_views(std::move(dremel_device_views)),
+    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
+    _structs_ranked_columns(std::move(structs_ranked_columns))
+{
+}
+
+preprocessed_table::preprocessed_table(
+  table_device_view_owner&& table,
+  rmm::device_uvector<order>&& column_order,
+  rmm::device_uvector<null_order>&& null_precedence,
+  rmm::device_uvector<size_type>&& depths,
+  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
+  : _t(std::move(table)),
+    _column_order(std::move(column_order)),
+    _null_precedence(std::move(null_precedence)),
+    _depths(std::move(depths)),
+    _dremel_data{},
+    _dremel_device_views{},
+    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
+    _structs_ranked_columns(std::move(structs_ranked_columns))
+{
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,
