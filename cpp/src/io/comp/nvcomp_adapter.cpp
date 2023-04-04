@@ -270,7 +270,7 @@ size_t batched_compress_temp_size(compression_type compression,
   } catch (...) {
     // Ignore errors in the expanded version; fall back to the old API in case of failure
     CUDF_LOG_WARN(
-      "Error in CompressGetTempSizeEx call, falling back to CompressGetTempSize; this may increase "
+      "CompressGetTempSizeEx call failed, falling back to CompressGetTempSize; this may increase "
       "the memory usage");
   }
 #endif
