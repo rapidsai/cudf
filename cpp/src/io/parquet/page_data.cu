@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -2193,7 +2194,7 @@ __device__ void StringScan(delta_byte_array_state_s* dba,
 
 // given prefix and suffix state, plus pointers to the page suffix data
 // and page output data, calculate a batch of output strings.  called
-// by all threads in a warp.
+// by all threads in a warp. used for strings < 32 chars.
 // updates suffix_data and last_string pointers.
 __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
                                       uint8_t const*& suffix_data,
@@ -2255,6 +2256,113 @@ __device__ void CalculateStringValues(delta_byte_array_state_s* dba,
     if (lane_id == 31) {
       last_string = strings_out + string_off;
       suffix_data += suffix_off + suffix_len;
+    }
+    __syncwarp();
+  }
+}
+
+// stole this from cudf/strings/detail/gather.cuh. modified to run on a single string on one warp.
+// copies from src to dst in 16B chunks per thread.
+__device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
+{
+  using cudf::detail::warp_size;
+  using cudf::strings::detail::load_uint4;
+
+  constexpr size_t out_datatype_size = sizeof(uint4);
+  constexpr size_t in_datatype_size  = sizeof(uint);
+
+  auto const alignment_offset = reinterpret_cast<std::uintptr_t>(dst) % out_datatype_size;
+  uint4* out_chars_aligned    = reinterpret_cast<uint4*>(dst - alignment_offset);
+  auto const in_start         = src;
+
+  // Both `out_start_aligned` and `out_end_aligned` are indices into `dst`.
+  // `out_start_aligned` is the first 16B aligned memory location after `dst + 4`.
+  // `out_end_aligned` is the last 16B aligned memory location before `len - 4`. Characters
+  // between `[out_start_aligned, out_end_aligned)` will be copied using uint4.
+  // `dst + 4` and `len - 4` are used instead of `dst` and `len` to avoid
+  // `load_uint4` reading beyond string boundaries.
+  // use signed int since out_end_aligned can be negative.
+  int64_t out_start_aligned = (in_datatype_size + alignment_offset + out_datatype_size - 1) /
+                                out_datatype_size * out_datatype_size -
+                              alignment_offset;
+  int64_t out_end_aligned =
+    (len - in_datatype_size + alignment_offset) / out_datatype_size * out_datatype_size -
+    alignment_offset;
+
+  for (int64_t ichar = out_start_aligned + lane_id * out_datatype_size; ichar < out_end_aligned;
+       ichar += warp_size * out_datatype_size) {
+    *(out_chars_aligned + (ichar + alignment_offset) / out_datatype_size) =
+      load_uint4((const char*)in_start + ichar);
+  }
+
+  // Tail logic: copy characters of the current string outside
+  // `[out_start_aligned, out_end_aligned)`.
+  if (out_end_aligned <= out_start_aligned) {
+    // In this case, `[out_start_aligned, out_end_aligned)` is an empty set, and we copy the
+    // entire string.
+    for (int64_t ichar = lane_id; ichar < len; ichar += warp_size) {
+      dst[ichar] = in_start[ichar];
+    }
+  } else {
+    // Copy characters in range `[0, out_start_aligned)`.
+    if (lane_id < out_start_aligned) { dst[lane_id] = in_start[lane_id]; }
+    // Copy characters in range `[out_end_aligned, len)`.
+    int64_t ichar = out_end_aligned + lane_id;
+    if (ichar < len) { dst[ichar] = in_start[ichar]; }
+  }
+}
+
+// character parallel version of CalculateStringValues(). This is faster for strings longer than
+// 32 chars.
+__device__ void CalculateStringValuesCP(delta_byte_array_state_s* dba,
+                                        uint8_t const*& suffix_data,
+                                        uint8_t* strings_out,
+                                        uint8_t const*& last_string,
+                                        uint32_t start_idx,
+                                        uint32_t lane_id)
+{
+  using cudf::detail::warp_size;
+  __shared__ __align__(8) uint8_t* so_ptr;
+
+  auto* const prefix_db = &dba->prefixes;
+  auto* const suffix_db = &dba->suffixes;
+
+  if (start_idx >= suffix_db->value_count) { return; }
+  uint32_t const end_idx = start_idx + suffix_db->values_per_mb;
+
+  // figure out where string output starts
+  if (lane_id == 0) {
+    so_ptr = strings_out;
+    if (start_idx != 0) {
+      int last_idx = rolling_index(start_idx - 1);
+      so_ptr += dba->offset[last_idx] + prefix_db->value[last_idx] + suffix_db->value[last_idx];
+    }
+  }
+  __syncwarp();
+
+  for (int idx = start_idx; idx < end_idx && idx < suffix_db->value_count; idx++) {
+    uint32_t const src_idx    = rolling_index(idx);
+    uint64_t const suffix_len = suffix_db->value[src_idx];
+    uint64_t const prefix_len = prefix_db->value[src_idx];
+    uint64_t const string_len = prefix_len + suffix_len;
+
+    // copy prefix and suffix data into current strings_out position
+    // for longer strings use a 4-byte version stolen from gather_chars_fn_string_parallel.
+    if (string_len > 64) {
+      if (prefix_len > 0) { wideStrcpy(so_ptr, last_string, prefix_len, lane_id); }
+      if (suffix_len > 0) { wideStrcpy(so_ptr + prefix_len, suffix_data, suffix_len, lane_id); }
+    } else {
+      for (int i = lane_id; i < string_len; i += warp_size) {
+        so_ptr[i] = i < prefix_len ? last_string[i] : suffix_data[i - prefix_len];
+      }
+    }
+    __syncwarp();
+
+    if (lane_id == 0) {
+      dba->offset[src_idx] = static_cast<uint64_t>(so_ptr - strings_out);
+      last_string          = so_ptr;
+      so_ptr += string_len;
+      suffix_data += suffix_len;
     }
     __syncwarp();
   }
@@ -2518,6 +2626,9 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
 
   // TODO(ets) assert string_data != nullptr
 
+  // choose a character parallel string copy when the average string is longer than a warp
+  auto const use_char_ll = (s->page.page_strings_size / s->page.num_rows) > cudf::detail::warp_size;
+
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
@@ -2552,7 +2663,11 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
     }
     __syncthreads();
     if (t < 32) {
-      CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      if (use_char_ll) {
+        CalculateStringValuesCP(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      } else {
+        CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      }
     }
     skip_pos += batch_size;
     __syncthreads();
@@ -2595,7 +2710,11 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
       int const leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t const dtype_len   = s->dtype_len;
 
-      CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      if (use_char_ll) {
+        CalculateStringValuesCP(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      } else {
+        CalculateStringValues(dba, suffix_data, strings_data, last_string, skip_pos, lane_id);
+      }
       skip_pos += batch_size;
 
       // process the mini-block in batches of 32
