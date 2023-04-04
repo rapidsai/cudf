@@ -606,7 +606,7 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
 
 void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> row_groups)
 {
-  if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
+  if ((!row_groups.empty()) and ((_skip_rows != 0) or _num_rows.has_value())) {
     CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
   }
 
@@ -624,7 +624,7 @@ void parquet_reader_options::set_skip_rows(int64_t val)
 
 void parquet_reader_options::set_num_rows(size_type val)
 {
-  if ((val != -1) and (!_row_groups.empty())) {
+  if (!_row_groups.empty()) {
     CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
   }
 

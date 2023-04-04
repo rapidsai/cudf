@@ -59,7 +59,7 @@ class orc_reader_options {
   std::vector<std::vector<size_type>> _stripes;
   // Rows to skip from the start;
   int64_t _skip_rows = 0;
-  // Rows to read; -1 is all
+  // Rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
 
   // Whether to use row index to speed-up reading

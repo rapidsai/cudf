@@ -59,8 +59,8 @@ class parquet_reader_options {
   std::vector<std::vector<size_type>> _row_groups;
   // Number of rows to skip from the start
   int64_t _skip_rows = 0;
-  // Number of rows to read; -1 is all
-  size_type _num_rows = -1;
+  // Number of rows to read; `nullopt` is all
+  std::optional<size_type> _num_rows;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -143,7 +143,7 @@ class parquet_reader_options {
    *
    * @return Number of rows to read
    */
-  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
+  [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read, if set.

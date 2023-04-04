@@ -71,7 +71,7 @@ class reader::impl {
    * @return The set of columns along with metadata
    */
   table_with_metadata read(size_type skip_rows,
-                           size_type num_rows,
+                           std::optional<size_type> const& num_rows,
                            bool uses_custom_row_bounds,
                            host_span<std::vector<size_type> const> row_group_indices);
 
@@ -126,7 +126,7 @@ class reader::impl {
    * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
    */
   void prepare_data(size_type skip_rows,
-                    size_type num_rows,
+                    std::optional<size_type> const& num_rows,
                     bool uses_custom_row_bounds,
                     host_span<std::vector<size_type> const> row_group_indices);
 

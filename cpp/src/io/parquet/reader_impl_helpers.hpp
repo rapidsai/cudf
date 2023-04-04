@@ -172,7 +172,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
-    size_type row_count) const;
+    std::optional<size_type> const& row_count) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns
