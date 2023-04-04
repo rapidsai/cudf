@@ -913,7 +913,7 @@ void reader::impl::load_and_decompress_data(
   std::deque<file_portion> file_portions;
   std::condition_variable portion_added;
   bool all_portions_added       = false;
-  constexpr size_t portion_size = 64 * 1024 * 1024;
+  constexpr size_t portion_size = 512 * 1024 * 1024;
 
   std::vector<hostdevice_vector<gpu::PageInfo>> pages_vector;
 
@@ -974,6 +974,7 @@ void reader::impl::load_and_decompress_data(
   auto process_portions = [&]() {
     CUDF_FUNC_RANGE();
     while (1) {
+      nvtxRangePushA("get portion");
       auto next_portion = [&]() -> std::optional<file_portion> {
         std::unique_lock lk(queue_mutex);
         if (file_portions.empty()) {
@@ -986,6 +987,7 @@ void reader::impl::load_and_decompress_data(
         }
         return std::nullopt;
       }();
+      nvtxRangePop();
 
       if (!next_portion) { return; }
 
@@ -996,25 +998,35 @@ void reader::impl::load_and_decompress_data(
 
       // Process dataset chunk pages into output columns
       auto const portion_pages = count_page_headers(next_portion->chunks, next_portion->stream);
+      nvtxRangePushA("Allocate portion pages");
       auto pages_info =
         hostdevice_vector<gpu::PageInfo>(portion_pages, portion_pages, next_portion->stream);
+      nvtxRangePop();
 
       if (portion_pages > 0) {
+        nvtxRangePushA("process portion");
         // decoding of column/page information
         decode_page_headers(next_portion->chunks, pages_info, next_portion->stream);
         if (next_portion->has_compressed_data) {
           auto decomp_page_data =
             decompress_page_data(next_portion->chunks, pages_info, next_portion->stream);
           {
+            nvtxRangePushA("push decomp_page_data");
             std::unique_lock lk(decomp_page_data_mutex);
             _file_itm_data.decomp_page_data.emplace_back(std::move(decomp_page_data));
+            nvtxRangePop();
           }
-          // Free compressed data
-          for (auto& rpd : next_portion->raw_compressed_page_data) {
-            rpd.reset();
+          {
+            nvtxRangePushA("Free compressed data");
+            // Free compressed data
+            for (auto& rpd : next_portion->raw_compressed_page_data) {
+              rpd.reset();
+            }
+            nvtxRangePop();
           }
         }
         {
+          nvtxRangePushA("insert pages");
           std::unique_lock lk(pages_vector_mutex);
           auto const current_size = pages_vector.size();
           if (current_size == next_portion->portion_index) {
@@ -1025,9 +1037,12 @@ void reader::impl::load_and_decompress_data(
             }
             pages_vector[next_portion->portion_index] = std::move(pages_info);
           }
+          nvtxRangePop();
         }
+        nvtxRangePop();
       }
       {
+        nvtxRangePushA("insert completed portions");
         std::unique_lock lk(completed_portions_mutex);
         auto const current_size = completed_portions.size();
         if (current_size == next_portion->portion_index) {
@@ -1038,6 +1053,7 @@ void reader::impl::load_and_decompress_data(
           }
           completed_portions[next_portion->portion_index] = std::move(*next_portion);
         }
+        nvtxRangePop();
       }
     }
   };
@@ -1053,7 +1069,7 @@ void reader::impl::load_and_decompress_data(
     std::vector<std::future<void>> workers;
     workers.reserve(num_worker_threads);
     for (int i = 0; i < num_worker_threads; ++i) {
-      workers.push_back(std::async(std::launch::async, process_portions, i));
+      workers.push_back(std::async(std::launch::async, process_portions));
     }
     return workers;
   }();
