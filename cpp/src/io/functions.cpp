@@ -615,18 +615,18 @@ void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> 
 
 void parquet_reader_options::set_skip_rows(int64_t val)
 {
-  if ((val != 0) and (!_row_groups.empty())) {
-    CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-  }
+    CUDF_EXPECTS(val >= 0, "skip_rows cannot be negative");
+  CUDF_EXPECTS(_row_groups.empty(), "skip_rows can't be set along with a non-empty row_groups");
+  
 
   _skip_rows = val;
 }
 
 void parquet_reader_options::set_num_rows(size_type val)
 {
-  if (!_row_groups.empty()) {
-    CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-  }
+    CUDF_EXPECTS(val >= 0, "num_rows cannot be negative");
+    CUDF_EXPECTS(_row_groups.empty(), "num_rows can't be set along with a non-empty row_groups");
+
 
   _num_rows = val;
 }

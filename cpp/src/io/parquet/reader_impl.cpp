@@ -236,7 +236,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   }
 }
 
-void reader::impl::prepare_data(size_type skip_rows,  // TODO int64_t
+void reader::impl::prepare_data(int64_t skip_rows,
                                 std::optional<size_type> const& num_rows,
                                 bool uses_custom_row_bounds,
                                 host_span<std::vector<size_type> const> row_group_indices)
@@ -332,7 +332,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read(size_type skip_rows,
+table_with_metadata reader::impl::read(int64_t skip_rows,
                                        std::optional<size_type> const& num_rows,
                                        bool uses_custom_row_bounds,
                                        host_span<std::vector<size_type> const> row_group_indices)
