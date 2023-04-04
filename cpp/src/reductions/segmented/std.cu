@@ -16,12 +16,13 @@
 
 #include "compound.cuh"
 
-#include <cudf/detail/segmented_reduction_functions.hpp>
+#include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::column> segmented_standard_deviation(column_view const& col,
                                                            device_span<size_type const> offsets,
@@ -31,11 +32,11 @@ std::unique_ptr<cudf::column> segmented_standard_deviation(column_view const& co
                                                            rmm::cuda_stream_view stream,
                                                            rmm::mr::device_memory_resource* mr)
 {
-  using reducer =
-    compound::detail::compound_segmented_dispatcher<cudf::reduction::op::standard_deviation>;
+  using reducer = compound::detail::compound_segmented_dispatcher<op::standard_deviation>;
   return cudf::type_dispatcher(
     col.type(), reducer(), col, offsets, output_dtype, null_handling, ddof, stream, mr);
 }
 
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

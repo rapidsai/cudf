@@ -1120,7 +1120,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                  tdigests.end(),
                  std::back_inserter(tdigest_views),
                  [](std::unique_ptr<table> const& t) { return t->view(); });
-  auto merged = cudf::detail::concatenate(tdigest_views, stream);
+  auto merged =
+    cudf::detail::concatenate(tdigest_views, stream, rmm::mr::get_current_device_resource());
 
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();

@@ -121,6 +121,8 @@ class CudfEngine(ArrowDatasetEngine):
                                 if row_groups
                                 else None,
                                 strings_to_categorical=strings_to_categorical,
+                                dataset_kwargs=dataset_kwargs,
+                                categorical_partitions=False,
                                 **kwargs,
                             )
                             for i, pof in enumerate(paths_or_fobs)
@@ -191,6 +193,8 @@ class CudfEngine(ArrowDatasetEngine):
 
         dataset_kwargs = kwargs.get("dataset", {})
         partitioning = partitioning or dataset_kwargs.get("partitioning", None)
+        if isinstance(partitioning, dict):
+            partitioning = pa_ds.partitioning(**partitioning)
 
         # Check if we are actually selecting any columns
         read_columns = columns
@@ -438,13 +442,14 @@ def set_object_dtypes_from_pa_schema(df, schema):
 
 
 def read_parquet(path, columns=None, **kwargs):
-    """Read parquet files into a Dask DataFrame
+    """
+    Read parquet files into a :class:`.DataFrame`.
 
-    Calls ``dask.dataframe.read_parquet`` with ``engine=CudfEngine``
-    to coordinate the execution of ``cudf.read_parquet``, and to
-    ultimately create a ``dask_cudf.DataFrame`` collection.
+    Calls :func:`dask.dataframe.read_parquet` with ``engine=CudfEngine``
+    to coordinate the execution of :func:`cudf.read_parquet`, and to
+    ultimately create a :class:`.DataFrame` collection.
 
-    See the ``dask.dataframe.read_parquet`` documentation for
+    See the :func:`dask.dataframe.read_parquet` documentation for
     all available options.
 
     Examples
@@ -469,6 +474,7 @@ def read_parquet(path, columns=None, **kwargs):
     See Also
     --------
     cudf.read_parquet
+    dask.dataframe.read_parquet
     """
     if isinstance(columns, str):
         columns = [columns]

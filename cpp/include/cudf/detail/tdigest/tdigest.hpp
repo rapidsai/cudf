@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,15 +131,14 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
  *
  * @returns The constructed tdigest column.
  */
-std::unique_ptr<column> make_tdigest_column(
-  size_type num_rows,
-  std::unique_ptr<column>&& centroid_means,
-  std::unique_ptr<column>&& centroid_weights,
-  std::unique_ptr<column>&& tdigest_offsets,
-  std::unique_ptr<column>&& min_values,
-  std::unique_ptr<column>&& max_values,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> make_tdigest_column(size_type num_rows,
+                                            std::unique_ptr<column>&& centroid_means,
+                                            std::unique_ptr<column>&& centroid_weights,
+                                            std::unique_ptr<column>&& tdigest_offsets,
+                                            std::unique_ptr<column>&& min_values,
+                                            std::unique_ptr<column>&& max_values,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create an empty tdigest column.
@@ -151,9 +150,8 @@ std::unique_ptr<column> make_tdigest_column(
  *
  * @returns An empty tdigest column.
  */
-std::unique_ptr<column> make_empty_tdigest_column(
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create an empty tdigest scalar.
@@ -165,9 +163,8 @@ std::unique_ptr<column> make_empty_tdigest_column(
  *
  * @returns An empty tdigest scalar.
  */
-std::unique_ptr<scalar> make_empty_tdigest_scalar(
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.

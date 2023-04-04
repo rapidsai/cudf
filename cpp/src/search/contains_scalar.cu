@@ -30,6 +30,7 @@
 
 #include <thrust/count.h>
 #include <thrust/pair.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
@@ -108,16 +109,24 @@ struct contains_scalar_dispatch {
     auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
 
     auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
-    return thrust::count_if(
-             rmm::exec_policy(stream),
-             begin,
-             end,
-             [d_comp, check_nulls, d_haystack = *haystack_cdv_ptr] __device__(auto const idx) {
-               if (check_nulls && d_haystack.is_null_nocheck(static_cast<size_type>(idx))) {
-                 return false;
-               }
-               return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
-             }) > 0;
+
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly without much degradation in
+    // runtime performance over using the comparator in a transform iterator with thrust::count_if.
+    auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      begin,
+      end,
+      d_results.begin(),
+      [d_comp, check_nulls, d_haystack = *haystack_cdv_ptr] __device__(auto const idx) {
+        if (check_nulls && d_haystack.is_null_nocheck(static_cast<size_type>(idx))) {
+          return false;
+        }
+        return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
+      });
+
+    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), true) > 0;
   }
 };
 
