@@ -66,4 +66,4 @@ NVBENCH_BENCH(bench_minhash)
   .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
   .add_int64_axis("row_width", {128, 512, 2048})
   .add_int64_axis("hash_width", {5, 10, 25})
-  .add_int64_axis("seed_count", {2, 260});
+  .add_int64_axis("seed_count", {2, 26});

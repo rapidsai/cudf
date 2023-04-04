@@ -54,11 +54,18 @@ struct minhash_fn {
     auto const lane_idx = idx % cudf::detail::warp_size;
 
     if (d_strings.is_null(str_idx)) { return; }
+
     auto const d_str = d_strings.element<cudf::string_view>(str_idx);
-    for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
-      auto const output_idx = str_idx * seeds.size() + seed_idx;
-      d_hashes[output_idx]  = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
+
+    // initialize hashes output for this string
+    if (lane_idx == 0) {
+      for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
+        auto const out_idx = (str_idx * seeds.size()) + seed_idx;
+        d_hashes[out_idx]  = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
+      }
     }
+    __syncwarp();
+
     auto const begin = d_str.begin() + lane_idx;
     auto const end   = [d_str, width = width] {
       auto const length = d_str.length();
@@ -66,20 +73,19 @@ struct minhash_fn {
       return d_str.begin() + static_cast<cudf::size_type>(length > 0);
     }();
 
+    // each lane hashes substrings of parts of the string
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
       auto const offset = itr.byte_offset();
       auto const ss =
         cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
 
+      // hashing each seed on the same section of string is 10x faster than
+      // re-substringing (my new word) for each seed
       for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
-        auto const output_idx = str_idx * seeds.size() + seed_idx;
-
-        auto const seed   = seeds[seed_idx];
-        auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seed};
-
-        auto const hvalue = hasher(ss);
-        // cudf::detail::hash_combine(seed, hasher(ss)); <-- matches cudf::hash() result
-        atomicMin(d_hashes + output_idx, hvalue);
+        auto const out_idx = (str_idx * seeds.size()) + seed_idx;
+        auto const hasher  = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
+        auto const hvalue  = hasher(ss);
+        atomicMin(d_hashes + out_idx, hvalue);
       }
     }
   }
@@ -123,7 +129,6 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                           input.null_count());
     return hashes;
   }
-  hashes->set_null_count(0);
 
   auto offsets = cudf::detail::sequence(
     input.size() + 1,
@@ -131,6 +136,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
     cudf::numeric_scalar<cudf::size_type>(static_cast<cudf::size_type>(seeds.size())),
     stream,
     mr);
+  hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
   return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(hashes),
