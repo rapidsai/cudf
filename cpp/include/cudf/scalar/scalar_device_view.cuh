@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
-#include <type_traits>
 
 /**
  * @file scalar_device_view.cuh
@@ -99,12 +98,8 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @returns Const reference to stored value
    */
   template <typename T>
-  __device__ std::conditional_t<std::is_same_v<T, cudf::string_view>, T const, T const&> value()
-    const noexcept
+  __device__ T const& value() const noexcept
   {
-    if constexpr (std::is_same_v<T, cudf::string_view>) {
-      return string_view(static_cast<char const*>(_data), _size);
-    }
     return *data<T>();
   }
 
@@ -145,8 +140,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
   }
 
  protected:
-  void* _data{};    ///< Pointer to device memory containing the value
-  size_type _size;  ///< Size of the string in bytes
+  void* _data{};  ///< Pointer to device memory containing the value
 
   /**
    * @brief Construct a new fixed width scalar device view object
@@ -161,14 +155,6 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    */
   fixed_width_scalar_device_view_base(data_type type, void* data, bool* is_valid)
     : detail::scalar_device_view_base(type, is_valid), _data(data)
-  {
-  }
-
-  /** @copydoc fixed_width_scalar_device_view_base(data_type,void*,bool*)
-   * @param size The size of the string in bytes
-   */
-  fixed_width_scalar_device_view_base(data_type type, void* data, bool* is_valid, size_type size)
-    : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
   {
   }
 };
@@ -356,21 +342,6 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
 };
 
 /**
- * @brief A type of scalar_device_view that stores a string value in fixed width device view
- */
-class string_scalar_experimental_device_view : public detail::fixed_width_scalar_device_view_base {
- public:
-  /// @copydoc string_scalar_device_view::string_scalar_device_view
-  string_scalar_experimental_device_view(data_type type,
-                                         const char* data,
-                                         bool* is_valid,
-                                         size_type size)
-    : detail::fixed_width_scalar_device_view_base(type, const_cast<char*>(data), is_valid, size)
-  {
-  }
-};
-
-/**
  * @brief A type of scalar_device_view that stores a pointer to a timestamp value
  */
 template <typename T>
@@ -431,17 +402,6 @@ auto get_scalar_device_view(numeric_scalar<T>& s)
 inline auto get_scalar_device_view(string_scalar& s)
 {
   return string_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size());
-}
-
-/**
- * @brief Get the experimental fixed width device view of a string_scalar
- *
- * @param s The string_scalar to get the device view of
- * @return A device view of a string_scalar
- */
-inline auto get_scalar_experimental_device_view(string_scalar& s)
-{
-  return string_scalar_experimental_device_view(s.type(), s.data(), s.validity_data(), s.size());
 }
 
 /**
