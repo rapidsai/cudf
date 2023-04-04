@@ -552,7 +552,14 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
-        return fmt
+        if ".%f" in fmt:
+            pass
+            # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/52418
+            # We cannot rely on format containing %f
+            # until above issue is fixed.
+            # Logic below handles those cases well.
+        else:
+            return fmt
 
     element_parts = element.split(".")
     if len(element_parts) != 2:

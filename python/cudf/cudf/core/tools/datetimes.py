@@ -361,7 +361,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 dtype=_unit_dtype_map[unit],
                 format=format,
             )
-    return col
+    return col.astype("datetime64[ns]")
 
 
 def get_units(value):
