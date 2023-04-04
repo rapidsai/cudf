@@ -155,16 +155,14 @@ enum class table_reference {
  */
 class generic_scalar_device_view : public cudf::detail::scalar_device_view_base {
  public:
-  // TODO: check if returning reference or value matters for performance, and register count.
   /**
-   * @brief Returns const reference to stored value.
+   * @brief Returns the stored value.
    *
    * @tparam T The desired type
-   * @returns Const reference to stored value
+   * @returns The stored value
    */
   template <typename T>
-  __device__ std::conditional_t<std::is_same_v<T, cudf::string_view>, T const, T const&> value()
-    const noexcept
+  __device__ T const value() const noexcept
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
       return string_view(static_cast<char const*>(_data), _size);
@@ -218,9 +216,6 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   /**
    * @brief Construct a new fixed width scalar device view object
    *
-   * This constructor should not be used directly. get_scalar_device_view
-   * should be used to get the view of an existing scalar
-   *
    * @param type The data type of the value
    * @param data The pointer to the data in device memory
    * @param is_valid The pointer to the bool in device memory that indicates the
@@ -232,9 +227,6 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   }
 
   /** @brief Construct a new string scalar device view object
-   *
-   * This constructor should not be used directly. get_scalar_device_view
-   * should be used to get the view of an existing scalar
    *
    * @param type The data type of the value
    * @param data The pointer to the data in device memory
