@@ -101,6 +101,8 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_include_directories(
     ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
   )
+  target_include_directories(${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nrt>")
+
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 

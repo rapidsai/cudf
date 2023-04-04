@@ -30,6 +30,8 @@
 #include <limits>
 #include <type_traits>
 
+#include <_nrt_cuda.cuh>
+
 using namespace cudf::strings::udf;
 
 extern "C" __device__ int len(int* nb_retval, void const* str)
@@ -661,4 +663,16 @@ make_definition_idx(BlockIdxMin, float64, double);
 make_definition_idx(BlockIdxMax, int64, int64_t);
 make_definition_idx(BlockIdxMax, float64, double);
 #undef make_definition_idx
+}
+
+__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
+{
+  udf_string* ptr = reinterpret_cast<udf_string*>(udf_str);
+  ptr->clear();
+}
+
+extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
+{
+  *nb_retval = NRT_MemInfo_new(udf_str, sizeof(udf_string), (NRT_dtor_function)udf_str_dtor, NULL);
+  return 0;
 }
