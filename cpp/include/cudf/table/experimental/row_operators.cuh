@@ -156,13 +156,23 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 namespace lexicographic {
 
 /**
+ * @brief The base class for element comparator.
+ *
+ * This base class also provide a unique id for each derived class through the `type_id()` function.
+ */
+template <typename T>
+struct element_comparator_impl {
+  static inline std::uintptr_t type_id() { return reinterpret_cast<std::uintptr_t>(&type_id); }
+};
+
+/**
  * @brief Computes a weak ordering of two values with special sorting behavior.
  *
  * This relational comparator functor compares physical values rather than logical
  * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or
  * greater than other values and is IEEE-754 compliant.
  */
-struct physical_element_comparator {
+struct physical_element_comparator : element_comparator_impl<physical_element_comparator> {
   /**
    * @brief Operator for relational comparisons.
    *
@@ -182,7 +192,8 @@ struct physical_element_comparator {
  * elements like lists, strings, or structs. It evaluates `NaN` as equivalent to other `NaN`s and
  * greater than all other values.
  */
-struct sorting_physical_element_comparator {
+struct sorting_physical_element_comparator
+  : element_comparator_impl<sorting_physical_element_comparator> {
   /**
    * @brief Operator for relational comparison of non-floating point values.
    *
@@ -686,6 +697,9 @@ struct preprocessed_table {
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
    * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
    *
+   * @tparam PhysicalElementComparator A relational comparator functor that compares individual
+   * values rather than logical elements, defaults to `NaN` aware relational comparator that
+   * evaluates `NaN` as greater than all other values.
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If empty, it is assumed all columns are
@@ -696,6 +710,7 @@ struct preprocessed_table {
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    * @return A shared pointer to a preprocessed table
    */
+  template <typename PhysicalElementComparator = sorting_physical_element_comparator>
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     host_span<order const> column_order,
                                                     host_span<null_order const> null_precedence,
@@ -741,7 +756,8 @@ struct preprocessed_table {
     std::vector<detail::dremel_data>&& dremel_data,
     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+    std::uintptr_t element_comparator_type_id);
 
   preprocessed_table(
     table_device_view_owner&& table,
@@ -749,7 +765,8 @@ struct preprocessed_table {
     rmm::device_uvector<null_order>&& null_precedence,
     rmm::device_uvector<size_type>&& depths,
     std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& structs_ranked_columns);
+    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+    std::uintptr_t element_comparator_type_id);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -822,6 +839,9 @@ struct preprocessed_table {
   // Intermediate columns generated from transforming the child columns of lists-of-structs columns
   // into integer columns using `cudf::rank()`, also need to be kept alive.
   std::vector<std::unique_ptr<column>> _structs_ranked_columns;
+
+  // type_id of the element comparator used to preprocess the input table.
+  std::uintptr_t _element_comparator_type_id;
 };
 
 /**
@@ -856,10 +876,7 @@ class self_comparator {
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
                   host_span<null_order const> null_precedence = {},
-                  rmm::cuda_stream_view stream                = cudf::get_default_stream())
-    : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
-  {
-  }
+                  rmm::cuda_stream_view stream                = cudf::get_default_stream());
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
@@ -902,11 +919,9 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(
-        d_t->_structs_ranked_columns.size() == 0,
-        "The input table was preprocessed using a different type of physical element comparator.");
-    }
+    CUDF_EXPECTS(
+      d_t->_element_comparator_type_id == PhysicalElementComparator::type_id(),
+      "The input table was preprocessed using a different type of physical element comparator.");
 
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
@@ -927,11 +942,9 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(
-        d_t->_structs_ranked_columns.size() == 0,
-        "The input table was preprocessed using a different type of physical element comparator.");
-    }
+    CUDF_EXPECTS(
+      d_t->_element_comparator_type_id == PhysicalElementComparator::type_id(),
+      "The input table was preprocessed using a different type of physical element comparator.");
 
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{

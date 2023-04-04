@@ -515,6 +515,7 @@ flatten_nested_structs_of_lists(table_view const& input,
 
 }  // namespace
 
+template <typename PhysicalElementComparator>
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& t,
   host_span<order const> column_order,
@@ -554,7 +555,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(flattened_t_aux_data),
-                             std::move(structs_ranked_columns)));
+                             std::move(structs_ranked_columns),
+                             PhysicalElementComparator::type_id()));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
@@ -562,9 +564,22 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(flattened_t_aux_data),
-                             std::move(structs_ranked_columns)));
+                             std::move(structs_ranked_columns),
+                             PhysicalElementComparator::type_id()));
   }
 }
+
+template std::shared_ptr<preprocessed_table>
+preprocessed_table::create<physical_element_comparator>(table_view const&,
+                                                        host_span<order const>,
+                                                        host_span<null_order const>,
+                                                        rmm::cuda_stream_view);
+
+template std::shared_ptr<preprocessed_table>
+preprocessed_table::create<sorting_physical_element_comparator>(table_view const&,
+                                                                host_span<order const>,
+                                                                host_span<null_order const>,
+                                                                rmm::cuda_stream_view);
 
 preprocessed_table::preprocessed_table(
   table_device_view_owner&& table,
@@ -574,7 +589,8 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+  std::uintptr_t element_comparator_type_id)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -582,7 +598,8 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _structs_ranked_columns(std::move(structs_ranked_columns))
+    _structs_ranked_columns(std::move(structs_ranked_columns)),
+    _element_comparator_type_id(element_comparator_type_id)
 {
 }
 
@@ -592,7 +609,8 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
   std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
-  std::vector<std::unique_ptr<column>>&& structs_ranked_columns)
+  std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+  std::uintptr_t element_comparator_type_id)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -600,7 +618,16 @@ preprocessed_table::preprocessed_table(
     _dremel_data{},
     _dremel_device_views{},
     _flattened_input_aux_data(std::move(flattened_input_aux_data)),
-    _structs_ranked_columns(std::move(structs_ranked_columns))
+    _structs_ranked_columns(std::move(structs_ranked_columns)),
+    _element_comparator_type_id(element_comparator_type_id)
+{
+}
+
+self_comparator::self_comparator(table_view const& t,
+                                 host_span<order const> column_order,
+                                 host_span<null_order const> null_precedence,
+                                 rmm::cuda_stream_view stream)
+  : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
 {
 }
 
