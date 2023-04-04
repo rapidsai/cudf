@@ -27,9 +27,15 @@ namespace detail {
  * @copydoc
  * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::mr::device_memory_resource*)
  *
+ * @tparam stable Whether to use stable sort
+ * @tparam PhysicalElementComparator A relational comparator functor that compares individual
+ * values rather than logical elements, defaults to `NaN` aware relational comparator that
+ * evaluates `NaN` as greater than all other values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <bool stable>
+template <bool stable,
+          typename PhysicalElementComparator =
+            cudf::experimental::row::lexicographic::physical_element_comparator>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
@@ -51,7 +57,9 @@ std::unique_ptr<column> sorted_order(table_view input,
   }
 
   // fast-path for single column sort
-  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type())) {
+  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type()) and
+      std::is_same_v<PhysicalElementComparator,
+                     cudf::experimental::row::lexicographic::physical_element_comparator>) {
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
@@ -67,10 +75,11 @@ std::unique_ptr<column> sorted_order(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto comp =
-    experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
+  auto comp = cudf::experimental::row::lexicographic::self_comparator(
+    input, column_order, null_precedence, stream);
   if (cudf::detail::has_nested_columns(input)) {
-    auto comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
+    auto comparator = comp.less<true, nullate::DYNAMIC, PhysicalElementComparator>(
+      nullate::DYNAMIC{has_nested_nulls(input)});
     if (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),
                           mutable_indices_view.begin<size_type>(),
@@ -83,7 +92,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                    comparator);
     }
   } else {
-    auto comparator = comp.less<false>(nullate::DYNAMIC{has_nested_nulls(input)});
+    auto comparator = comp.less<false, nullate::DYNAMIC, PhysicalElementComparator>(
+      nullate::DYNAMIC{has_nested_nulls(input)});
     if (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),
                           mutable_indices_view.begin<size_type>(),
