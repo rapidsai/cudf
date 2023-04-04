@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/segmented_reduction_functions.hpp>
+#include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
+namespace reduction {
 namespace detail {
 struct segmented_reduce_dispatch_functor {
   column_view const& col;
@@ -69,41 +70,34 @@ struct segmented_reduce_dispatch_functor {
   {
     switch (k) {
       case segmented_reduce_aggregation::SUM:
-        return reduction::segmented_sum(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_sum(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::PRODUCT:
-        return reduction::segmented_product(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_product(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::MIN:
-        return reduction::segmented_min(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_min(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::MAX:
-        return reduction::segmented_max(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_max(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::ANY:
-        return reduction::segmented_any(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_any(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::ALL:
-        return reduction::segmented_all(
-          col, offsets, output_dtype, null_handling, init, stream, mr);
+        return segmented_all(col, offsets, output_dtype, null_handling, init, stream, mr);
       case segmented_reduce_aggregation::SUM_OF_SQUARES:
-        return reduction::segmented_sum_of_squares(
-          col, offsets, output_dtype, null_handling, stream, mr);
+        return segmented_sum_of_squares(col, offsets, output_dtype, null_handling, stream, mr);
       case segmented_reduce_aggregation::MEAN:
-        return reduction::segmented_mean(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::VARIANCE: {
-        auto var_agg = static_cast<var_aggregation const&>(agg);
-        return reduction::segmented_variance(
+        return segmented_mean(col, offsets, output_dtype, null_handling, stream, mr);
+      case segmented_reduce_aggregation::VARIANCE: {
+        auto var_agg = static_cast<cudf::detail::var_aggregation const&>(agg);
+        return segmented_variance(
           col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
       }
-      case aggregation::STD: {
-        auto var_agg = static_cast<std_aggregation const&>(agg);
-        return reduction::segmented_standard_deviation(
+      case segmented_reduce_aggregation::STD: {
+        auto var_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
+        return segmented_standard_deviation(
           col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
       }
-      default:
-        CUDF_FAIL("Unsupported aggregation type.");
-        // TODO: Add support for compound_ops. GH #10432
+      case segmented_reduce_aggregation::NUNIQUE:
+        return segmented_nunique(col, offsets, null_handling, stream, mr);
+      default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
 };
@@ -127,13 +121,14 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
   }
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
-  return aggregation_dispatcher(
+  return cudf::detail::aggregation_dispatcher(
     agg.kind,
     segmented_reduce_dispatch_functor{
       segmented_values, offsets, output_dtype, null_handling, init, stream, mr},
     agg);
 }
 }  // namespace detail
+}  // namespace reduction
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          device_span<size_type const> offsets,
@@ -143,14 +138,14 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_reduce(segmented_values,
-                                  offsets,
-                                  agg,
-                                  output_dtype,
-                                  null_handling,
-                                  std::nullopt,
-                                  cudf::get_default_stream(),
-                                  mr);
+  return reduction::detail::segmented_reduce(segmented_values,
+                                             offsets,
+                                             agg,
+                                             output_dtype,
+                                             null_handling,
+                                             std::nullopt,
+                                             cudf::get_default_stream(),
+                                             mr);
 }
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
@@ -162,14 +157,14 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_reduce(segmented_values,
-                                  offsets,
-                                  agg,
-                                  output_dtype,
-                                  null_handling,
-                                  init,
-                                  cudf::get_default_stream(),
-                                  mr);
+  return reduction::detail::segmented_reduce(segmented_values,
+                                             offsets,
+                                             agg,
+                                             output_dtype,
+                                             null_handling,
+                                             init,
+                                             cudf::get_default_stream(),
+                                             mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,12 +86,11 @@ __global__ void valid_if_kernel(
  * null count
  */
 template <typename InputIterator, typename Predicate>
-std::pair<rmm::device_buffer, size_type> valid_if(
-  InputIterator begin,
-  InputIterator end,
-  Predicate p,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
+                                                  InputIterator end,
+                                                  Predicate p,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 

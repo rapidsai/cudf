@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150, PANDAS_LE_122
+from cudf.core._compat import PANDAS_GE_150
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -20,10 +20,6 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
     assert_eq(df, gdf)
 
 
-@pytest.mark.xfail(
-    condition=PANDAS_GE_120 and PANDAS_LE_122,
-    reason="https://github.com/pandas-dev/pandas/issues/40204",
-)
 def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
     df[[True, False, True]] = pd.DataFrame({"a": [-1, -2]})
@@ -357,3 +353,18 @@ def test_scatter_by_slice_with_start_and_step():
     target[1::2] = source
     ctarget[1::2] = csource
     assert_eq(target, ctarget)
+
+
+@pytest.mark.parametrize("n", [1, 3])
+def test_setitem_str_trailing_null(n):
+    trailing_nulls = "\x00" * n
+    s = cudf.Series(["a", "b", "c" + trailing_nulls])
+    assert s[2] == "c" + trailing_nulls
+    s[0] = "a" + trailing_nulls
+    assert s[0] == "a" + trailing_nulls
+    s[1] = trailing_nulls
+    assert s[1] == trailing_nulls
+    s[0] = ""
+    assert s[0] == ""
+    s[0] = "\x00"
+    assert s[0] == "\x00"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/default_stream.hpp>
+#include <cudf_test/stream_checking_resource_adaptor.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -125,10 +127,14 @@ int main(int argc, char** argv)
   ::testing::InitGoogleTest(&argc, argv);
   auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
   auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
-  if (stream_mode == "custom") {
-    auto resource = rmm::mr::get_current_device_resource();
-    auto adapter  = make_stream_checking_resource_adaptor(resource);
-    rmm::mr::set_current_device_resource(&adapter);
+  if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
+    auto resource                      = rmm::mr::get_current_device_resource();
+    auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
+    auto const error_on_invalid_stream = (stream_error_mode == "error");
+    auto const check_default_stream    = (stream_mode == "new_cudf_default");
+    auto adaptor                       = make_stream_checking_resource_adaptor(
+      resource, error_on_invalid_stream, check_default_stream);
+    rmm::mr::set_current_device_resource(&adaptor);
   }
   return RUN_ALL_TESTS();
 }

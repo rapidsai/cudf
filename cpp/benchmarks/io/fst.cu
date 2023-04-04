@@ -37,11 +37,10 @@
 
 #include <cstdlib>
 
-namespace cudf {
 namespace {
 auto make_test_json_data(nvbench::state& state)
 {
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
 
   // Test input
   std::string input = R"(  {)"
@@ -59,13 +58,12 @@ auto make_test_json_data(nvbench::state& state)
                       R"("price": 8.95)"
                       R"(}  {} [] [ ])";
 
-  auto d_input_scalar          = cudf::make_string_scalar(input);
-  auto& d_string_scalar        = static_cast<cudf::string_scalar&>(*d_input_scalar);
-  const size_type repeat_times = string_size / input.size();
+  auto d_input_scalar                = cudf::make_string_scalar(input);
+  auto& d_string_scalar              = static_cast<cudf::string_scalar&>(*d_input_scalar);
+  const cudf::size_type repeat_times = string_size / input.size();
   return cudf::strings::repeat_string(d_string_scalar, repeat_times);
 }
 
-using namespace cudf::test::io::json;
 // Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
@@ -78,9 +76,9 @@ constexpr std::size_t single_item = 1;
 
 void BM_FST_JSON(nvbench::state& state)
 {
-  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<cudf::size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
@@ -113,9 +111,9 @@ void BM_FST_JSON(nvbench::state& state)
 
 void BM_FST_JSON_no_outidx(nvbench::state& state)
 {
-  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<cudf::size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
@@ -148,9 +146,9 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
 
 void BM_FST_JSON_no_out(nvbench::state& state)
 {
-  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<cudf::size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
@@ -181,9 +179,9 @@ void BM_FST_JSON_no_out(nvbench::state& state)
 
 void BM_FST_JSON_no_str(nvbench::state& state)
 {
-  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<cudf::size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
@@ -228,5 +226,3 @@ NVBENCH_BENCH(BM_FST_JSON_no_out)
 NVBENCH_BENCH(BM_FST_JSON_no_str)
   .set_name("FST_JSON_no_str")
   .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
-
-}  // namespace cudf
