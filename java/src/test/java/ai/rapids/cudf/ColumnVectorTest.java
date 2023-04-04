@@ -45,7 +45,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
-
+  private static final boolean ALLOW_NON_EMPTY_NULLS = 
+      Boolean.getBoolean("ai.rapids.allow.nonempty.nulls");
+  
   public static final double PERCENTAGE = 0.0001;
 
   // IEEE 754 NaN values
@@ -742,6 +744,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testAndNullReconfigureNulls() {
+    assumeTrue(ALLOW_NON_EMPTY_NULLS);
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
          ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
@@ -757,6 +760,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testOrNullReconfigureNulls() {
+    assumeTrue(ALLOW_NON_EMPTY_NULLS);
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
          ColumnVector v2 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, Integer.MAX_VALUE);
@@ -6746,6 +6750,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testPurgeNonEmptyNullsList() {
+    assumeTrue(ALLOW_NON_EMPTY_NULLS);
     ColumnView[] values = getColumnViewWithNonEmptyNulls();
     try (ColumnView colWithNonEmptyNulls = values[1];
          ColumnView input = values[0];
@@ -6761,6 +6766,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testPurgeNonEmptyNullsStruct() {
+    assumeTrue(ALLOW_NON_EMPTY_NULLS);
     ColumnView[] values = getColumnViewWithNonEmptyNulls();
     try (ColumnView listCol = values[1];
          ColumnView input = values[0];
