@@ -35,7 +35,7 @@ namespace detail {
  */
 template <bool stable,
           typename PhysicalElementComparator =
-            cudf::experimental::row::lexicographic::physical_element_comparator>
+            cudf::experimental::row::lexicographic::sorting_physical_element_comparator>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
@@ -56,10 +56,14 @@ std::unique_ptr<column> sorted_order(table_view input,
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // fast-path for single column sort
+  // Fast-path for single column sort
+  // If the first column is floating-point, only run this path if special NaN handling is
+  // required (i.e., `sorting_physical_element_comparator` is being used).
   if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type()) and
-      std::is_same_v<PhysicalElementComparator,
-                     cudf::experimental::row::lexicographic::physical_element_comparator>) {
+      (not cudf::is_floating_point(input.column(0).type()) or
+       std::is_same_v<
+         PhysicalElementComparator,
+         cudf::experimental::row::lexicographic::sorting_physical_element_comparator>)) {
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
