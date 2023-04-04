@@ -70,7 +70,7 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column(unique_ptr[column] col):
-        cdef Column ret = Column.__new__()
+        cdef Column ret = Column.__new__(Column)
         ret.c_obj.swap(col)
         return ret
 

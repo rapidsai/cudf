@@ -31,11 +31,13 @@ from cudf._lib.cpp.aggregation cimport (
 )
 from cudf._lib.cpp.types cimport interpolation as interpolation_t, size_type
 
-from cudf._lib.types import Interpolation, NullHandling
+from cudf._lib.pylibcudf.types import Interpolation, NullPolicy
 
-from cudf._lib.types cimport underlying_type_t_interpolation
-
-from .types cimport null_policy, underlying_type_t_null_policy
+from cudf._lib.cpp.types cimport null_policy
+from cudf._lib.pylibcudf.types cimport (
+    underlying_type_t_interpolation,
+    underlying_type_t_null_policy,
+)
 
 import pandas as pd
 
@@ -81,28 +83,28 @@ cdef class GroupbyAggregation(Aggregation):
     # like groupbyaggregation_sum(...) (or any other variation `make_*` etc)
     @classmethod
     def sum(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_sum_aggregation[groupby_aggregation]())
         return obj
 
     @classmethod
     def min(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_min_aggregation[groupby_aggregation]())
         return obj
 
     @classmethod
     def max(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_max_aggregation[groupby_aggregation]())
         return obj
 
     @classmethod
     def idxmin(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_argmin_aggregation[
                 groupby_aggregation]())
@@ -110,7 +112,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def idxmax(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_argmax_aggregation[
                 groupby_aggregation]())
@@ -118,7 +120,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def mean(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_mean_aggregation[groupby_aggregation]())
         return obj
@@ -131,7 +133,7 @@ cdef class GroupbyAggregation(Aggregation):
         else:
             c_null_handling = null_policy.INCLUDE
 
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_count_aggregation[groupby_aggregation](
                 c_null_handling
@@ -140,17 +142,17 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def size(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.make_count_aggregation[groupby_aggregation](
                 <null_policy><underlying_type_t_null_policy>(
-                    NullHandling.INCLUDE)
+                    NullPolicy.INCLUDE)
             ))
         return obj
 
     @classmethod
     def collect(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_collect_list_aggregation[groupby_aggregation]())
@@ -158,7 +160,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def nunique(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_nunique_aggregation[groupby_aggregation]())
@@ -166,7 +168,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def nth(cls, size_type size):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_nth_element_aggregation[groupby_aggregation](size))
@@ -174,7 +176,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def product(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_product_aggregation[groupby_aggregation]())
@@ -183,7 +185,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def sum_of_squares(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_sum_of_squares_aggregation[groupby_aggregation]()
@@ -192,7 +194,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def var(cls, ddof=1):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_variance_aggregation[groupby_aggregation](ddof))
@@ -200,7 +202,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def std(cls, ddof=1):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_std_aggregation[groupby_aggregation](ddof))
@@ -208,7 +210,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def median(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_median_aggregation[groupby_aggregation]())
@@ -216,7 +218,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def quantile(cls, q=0.5, interpolation="linear"):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
 
         if not pd.api.types.is_list_like(q):
             q = [q]
@@ -225,7 +227,8 @@ cdef class GroupbyAggregation(Aggregation):
         cdef interpolation_t c_interp = (
             <interpolation_t> (
                 <underlying_type_t_interpolation> (
-                    Interpolation[interpolation.upper()]
+                    # TODO: Avoid getattr if possible
+                    getattr(Interpolation, interpolation.upper())
                 )
             )
         )
@@ -237,7 +240,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def unique(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_collect_set_aggregation[groupby_aggregation]())
@@ -245,13 +248,13 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def first(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_nth_element_aggregation[groupby_aggregation](
                 0,
                 <null_policy><underlying_type_t_null_policy>(
-                    NullHandling.EXCLUDE
+                    NullPolicy.EXCLUDE
                 )
             )
         )
@@ -259,13 +262,13 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def last(cls):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         obj.c_obj.swap(
             libcudf_aggregation.
             make_nth_element_aggregation[groupby_aggregation](
                 -1,
                 <null_policy><underlying_type_t_null_policy>(
-                    NullHandling.EXCLUDE
+                    NullPolicy.EXCLUDE
                 )
             )
         )
@@ -273,7 +276,7 @@ cdef class GroupbyAggregation(Aggregation):
 
     @classmethod
     def corr(cls, method, size_type min_periods):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
         cdef libcudf_aggregation.correlation_type c_method = (
             <libcudf_aggregation.correlation_type> (
                 <underlying_type_t_correlation_type> (
@@ -294,7 +297,7 @@ cdef class GroupbyAggregation(Aggregation):
         size_type min_periods,
         size_type ddof=1
     ):
-        cdef GroupbyAggregation obj = cls.__new__()
+        cdef GroupbyAggregation obj = cls.__new__(cls)
 
         obj.c_obj.swap(
             libcudf_aggregation.

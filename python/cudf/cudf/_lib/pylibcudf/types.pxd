@@ -3,7 +3,7 @@
 from libc.stdint cimport int32_t
 from libcpp cimport bool as cbool
 
-from cudf._lib.cpp.types cimport data_type, null_policy, type_id
+from cudf._lib.cpp.types cimport data_type, interpolation, null_policy, type_id
 
 ctypedef int32_t underlying_type_t_type_id
 cpdef enum TypeId:
@@ -63,3 +63,22 @@ ctypedef cbool underlying_type_t_null_policy
 cpdef enum NullPolicy:
     EXCLUDE = <underlying_type_t_null_policy> null_policy.EXCLUDE
     INCLUDE = <underlying_type_t_null_policy> null_policy.INCLUDE
+
+
+ctypedef int32_t underlying_type_t_interpolation
+cpdef enum Interpolation:
+    LINEAR = (
+        <underlying_type_t_interpolation> interpolation.LINEAR
+    )
+    LOWER = (
+        <underlying_type_t_interpolation> interpolation.LOWER
+    )
+    HIGHER = (
+        <underlying_type_t_interpolation> interpolation.HIGHER
+    )
+    MIDPOINT = (
+        <underlying_type_t_interpolation> interpolation.MIDPOINT
+    )
+    NEAREST = (
+        <underlying_type_t_interpolation> interpolation.NEAREST
+    )
