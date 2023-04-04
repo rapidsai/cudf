@@ -1679,19 +1679,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                          [](auto& l, auto& r) { return l._nesting_depth < r._nesting_depth; }))
         ._nesting_depth;
 
-    auto const d_cols_info = cudf::detail::make_device_uvector_sync(
-      h_cols_info, _stream);
-
-
-    // hostdevice_vector<input_col_info> input_cols{_input_columns.size(), _stream};
-    // size_type max_depth = 0;
-    // for (size_t i = 0; i < _input_columns.size(); i++) {
-    //   auto depth                  = static_cast<size_type>(_input_columns[i].nesting_depth());
-    //   max_depth                   = depth > max_depth ? depth : max_depth;
-    //   input_cols[i]._nesting_depth = depth;
-    //   input_cols[i]._schema_idx    = _input_columns[i].schema_idx;
-    // }
-    // input_cols.host_to_device(_stream);
+    auto const d_cols_info = cudf::detail::make_device_uvector_async(
+      h_cols_info, _stream, rmm::mr::get_current_device_resource());
 
     // size iterator. indexes pages by sorted order
     auto const size_input = cudf::detail::make_counting_transform_iterator(
