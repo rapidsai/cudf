@@ -1212,8 +1212,8 @@ struct get_page_schema {
 };
 
 struct input_col_info {
-  int const schema_idx;
-  size_type const nesting_depth;
+   int const _schema_idx;
+   size_type const _nesting_depth;
 };
 
 /**
@@ -1223,14 +1223,14 @@ struct input_col_info {
  * The input index will iterate through pages, nesting depth and column indices in that order.
  */
 struct reduction_indices {
-  const size_t _page_idx;
-  const size_type _depth_idx;
-  const size_type _col_idx;
+  size_t const page_idx;
+  size_type const depth_idx;
+  size_type const col_idx;
 
-  __device__ reduction_indices(size_t index, size_type max_depth, size_t num_pages)
-    : _page_idx(index % num_pages),
-      _depth_idx((index / num_pages) % max_depth),
-      _col_idx(index / (max_depth * num_pages))
+  __device__ reduction_indices(size_t index_, size_type max_depth_, size_t num_pages_)
+    : page_idx(index_ % num_pages_),
+      depth_idx((index_ / num_pages_) % max_depth_),
+      col_idx(index_ / (max_depth_ * num_pages_))
   {
   }
 };
@@ -1240,8 +1240,8 @@ struct reduction_indices {
  */
 struct get_page_nesting_size {
   input_col_info const* input_cols;
-  const size_type max_depth;
-  const size_t num_pages;
+  size_type const max_depth;
+  size_t const num_pages;
   gpu::PageInfo const* const pages;
   int const* page_indices;
 
@@ -1249,14 +1249,14 @@ struct get_page_nesting_size {
   {
     auto const indices = reduction_indices{index, max_depth, num_pages};
 
-    auto const& page = pages[page_indices[indices._page_idx]];
-    if (page.src_col_schema != input_cols[indices._col_idx].schema_idx ||
+    auto const& page = pages[page_indices[indices.page_idx]];
+    if (page.src_col_schema != input_cols[indices.col_idx]._schema_idx ||
         page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY ||
-        indices._depth_idx >= input_cols[indices._col_idx].nesting_depth) {
+        indices.depth_idx >= input_cols[indices.col_idx]._nesting_depth) {
       return 0;
     }
 
-    return page.nesting[indices._depth_idx].batch_size;
+    return page.nesting[indices.depth_idx].batch_size;
   }
 };
 
@@ -1330,13 +1330,13 @@ struct start_offset_output_iterator {
   {
     auto const indices = reduction_indices{index, max_depth, num_pages};
 
-    gpu::PageInfo const& p = pages[page_indices[indices._page_idx]];
-    if (p.src_col_schema != input_cols[indices._col_idx].schema_idx ||
+    gpu::PageInfo const& p = pages[page_indices[indices.page_idx]];
+    if (p.src_col_schema != input_cols[indices.col_idx]._schema_idx ||
         p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY ||
-        indices._depth_idx >= input_cols[indices._col_idx].nesting_depth) {
+        indices.depth_idx >= input_cols[indices.col_idx]._nesting_depth) {
       return empty;
     }
-    return p.nesting_decode[indices._depth_idx].page_start_value;
+    return p.nesting_decode[indices.depth_idx].page_start_value;
   }
 };
 
@@ -1666,15 +1666,28 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                    _input_columns.cend(),
                    std::back_inserter(h_cols_info),
                    [](auto& col) -> input_col_info {
-                     return {static_cast<size_type>(col.nesting_depth()), col.schema_idx};
+                     return {col.schema_idx, static_cast<size_type>(col.nesting_depth())};
                    });
+
     auto const max_depth =
       (*std::max_element(h_cols_info.cbegin(),
                          h_cols_info.cend(),
-                         [](auto& l, auto& r) { return l.nesting_depth < r.nesting_depth; }))
-        .nesting_depth;
-    auto const d_cols_info = cudf::detail::make_device_uvector_async(
-      h_cols_info, _stream, rmm::mr::get_current_device_resource());
+                         [](auto& l, auto& r) { return l._nesting_depth < r._nesting_depth; }))
+        ._nesting_depth;
+
+    auto const d_cols_info = cudf::detail::make_device_uvector_sync(
+      h_cols_info, _stream);
+
+
+    // hostdevice_vector<input_col_info> input_cols{_input_columns.size(), _stream};
+    // size_type max_depth = 0;
+    // for (size_t i = 0; i < _input_columns.size(); i++) {
+    //   auto depth                  = static_cast<size_type>(_input_columns[i].nesting_depth());
+    //   max_depth                   = depth > max_depth ? depth : max_depth;
+    //   input_cols[i]._nesting_depth = depth;
+    //   input_cols[i]._schema_idx    = _input_columns[i].schema_idx;
+    // }
+    // input_cols.host_to_device(_stream);
 
     // size iterator. indexes pages by sorted order
     auto const size_input = cudf::detail::make_counting_transform_iterator(
