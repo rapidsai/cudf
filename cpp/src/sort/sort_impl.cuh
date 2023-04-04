@@ -29,7 +29,7 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <bool stable = false>
+template <bool stable>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
