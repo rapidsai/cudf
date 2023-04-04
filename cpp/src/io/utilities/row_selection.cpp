@@ -30,10 +30,12 @@ std::pair<int64_t, size_type> skip_rows_num_rows_from_options(
   if (not num_rows_opt.has_value()) {
     CUDF_EXPECTS(num_source_rows - rows_to_skip <= std::numeric_limits<size_type>::max(),
                  "ORC reader can't read all rows from its input(s)");
+    return {rows_to_skip, num_source_rows - rows_to_skip};
   }
+  // Limit the number of rows to the end of the input
   return {rows_to_skip,
-          static_cast<size_type>(std::min<int64_t>(num_rows_opt.value_or(num_source_rows),
-                                                   num_source_rows - rows_to_skip))};
+          static_cast<size_type>(
+            std::min<int64_t>(num_rows_opt.value(), num_source_rows - rows_to_skip))};
 }
 
 }  // namespace cudf::io::detail
