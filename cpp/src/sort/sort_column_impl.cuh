@@ -33,6 +33,9 @@ namespace detail {
 /**
  * @brief Sort indices of a single column.
  *
+ * This API offers fast sorting for primitive types. It cannot handle nested types and will not
+ * consider `NaN` as equivalent to other `NaN`.
+ *
  * @param input Column to sort. The column data is not modified.
  * @param column_order Ascending or descending sort order
  * @param null_precedence How null rows are to be ordered
