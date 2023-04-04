@@ -118,18 +118,6 @@ class orc_streams {
   auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
-  /**
-   * @brief List of ORC stream offsets and their total size.
-   */
-  struct orc_stream_offsets {
-    std::vector<size_t> offsets;
-    size_t non_rle_data_size = 0;
-    size_t rle_data_size     = 0;
-    [[nodiscard]] auto data_size() const { return non_rle_data_size + rle_data_size; }
-  };
-  [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
-                                                   size_t num_rowgroups) const;
-
   operator std::vector<Stream> const &() const { return streams; }
 
  private:
@@ -152,7 +140,7 @@ struct file_segmentation {
  * @brief ORC per-chunk streams of encoded data.
  */
 struct encoded_data {
-  rmm::device_uvector<uint8_t> data;                        // Owning array of the encoded data
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
   hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
