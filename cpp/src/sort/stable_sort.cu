@@ -17,6 +17,7 @@
 #include "sort_impl.cuh"
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>

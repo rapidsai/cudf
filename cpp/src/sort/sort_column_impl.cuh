@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,63 @@
 
 #pragma once
 
-#include <sort/sort_impl.cuh>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Sort indices of a single column.
+ *
+ * @param input Column to sort. The column data is not modified.
+ * @param column_order Ascending or descending sort order
+ * @param null_precedence How null rows are to be ordered
+ * @param stable True if sort should be stable
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Sorted indices for the input column.
+ */
+template <bool stable>
+std::unique_ptr<column> sorted_order(column_view const& input,
+                                     order column_order,
+                                     null_order null_precedence,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Comparator functor needed for single column sort.
+ *
+ * @tparam Column element type.
+ */
+template <typename T>
+struct simple_comparator {
+  __device__ bool operator()(size_type lhs, size_type rhs)
+  {
+    if (has_nulls) {
+      bool lhs_null{d_column.is_null(lhs)};
+      bool rhs_null{d_column.is_null(rhs)};
+      if (lhs_null || rhs_null) {
+        if (!ascending) thrust::swap(lhs_null, rhs_null);
+        return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
+      }
+    }
+    return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+           (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+  }
+  column_device_view const d_column;
+  bool has_nulls;
+  bool ascending;
+  null_order null_precedence{};
+};
 
 template <bool stable>
 struct column_sorted_order_fn {
