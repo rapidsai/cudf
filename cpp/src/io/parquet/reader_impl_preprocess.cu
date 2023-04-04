@@ -1265,7 +1265,7 @@ struct get_page_nesting_size {
 };
 
 struct get_reduction_key {
-  const size_t num_pages;
+  size_t const num_pages;
   __device__ size_t operator()(size_t index) const { return index / num_pages; }
 };
 
