@@ -31,6 +31,7 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -92,8 +93,11 @@ struct substring_fn {
     char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto itr        = begin;
     while (step > 0 ? itr < end : end < itr) {
-      bytes += bytes_in_char_utf8(*itr);
-      if (d_buffer) d_buffer += from_char_utf8(*itr, d_buffer);
+      if (d_buffer) {
+        d_buffer += from_char_utf8(*itr, d_buffer);
+      } else {
+        bytes += bytes_in_char_utf8(*itr);
+      }
       itr += step;
     }
     if (!d_chars) d_offsets[idx] = bytes;
@@ -155,30 +159,18 @@ struct substring_from_fn {
   column_device_view const d_column;
   cudf::detail::input_indexalator const starts;
   cudf::detail::input_indexalator const stops;
-  int32_t* d_offsets{};
-  char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ string_view operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
+    if (d_column.is_null(idx)) { return string_view{nullptr, 0}; }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
     auto const start  = std::max(starts[idx], 0);
-    if (start >= length) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
+    if (start >= length) { return string_view{}; }
+
     auto const stop = stops[idx];
     auto const end  = (((stop < 0) || (stop > length)) ? length : stop);
-
-    auto const d_substr = d_str.substr(start, end - start);
-    if (d_chars)
-      memcpy(d_chars + d_offsets[idx], d_substr.data(), d_substr.size_bytes());
-    else
-      d_offsets[idx] = d_substr.size_bytes();
+    return d_str.substr(start, end - start);
   }
 };
 
@@ -203,23 +195,13 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count = d_column.size();
-
-  // Copy the null mask
-  rmm::device_buffer null_mask =
-    !d_column.nullable()
-      ? rmm::device_buffer{0, stream, mr}
-      : rmm::device_buffer(
-          d_column.null_mask(), cudf::bitmask_allocation_size_bytes(strings_count), stream, mr);
-
-  auto children =
-    make_strings_children(substring_from_fn{d_column, starts, stops}, strings_count, stream, mr);
-
-  return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+  auto results = rmm::device_uvector<string_view>(d_column.size(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(d_column.size()),
+                    results.begin(),
+                    substring_from_fn{d_column, starts, stops});
+  return make_strings_column(results, string_view{nullptr, 0}, stream, mr);
 }
 
 /**
