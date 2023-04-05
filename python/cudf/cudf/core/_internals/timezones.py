@@ -36,7 +36,6 @@ def _find_and_read_tzfile_tzpath(zone_name):
     for search_path in zoneinfo.TZPATH:
         if os.path.isfile(os.path.join(search_path, zone_name)):
             return _read_tzfile_as_frame(search_path, zone_name)
-    # if we didn't find
     raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
