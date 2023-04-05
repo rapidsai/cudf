@@ -104,8 +104,6 @@ std::unique_ptr<column> sorted_order(table_view input,
       nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);
   }
-  // protection for temporary d_column_order and d_null_precedence
-  stream.synchronize();
 
   return sorted_indices;
 }
