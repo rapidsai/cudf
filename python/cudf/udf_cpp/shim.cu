@@ -668,7 +668,7 @@ make_definition_idx(BlockIdxMax, float64, double);
 __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
 {
   udf_string* ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->clear();
+  ptr->~udf_string();
 }
 
 extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)

@@ -1,17 +1,28 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+Copyright (c) 2012, Anaconda, Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <cuda/atomic>
 
@@ -36,14 +47,19 @@ typedef struct MemInfo NRT_MemInfo;
 
 // Globally needed variables
 struct NRT_MemSys {
-  /* Shutdown flag */
-  int shutting;
   /* System allocation functions */
   struct {
     NRT_malloc_func malloc;
     NRT_realloc_func realloc;
     NRT_free_func free;
   } allocator;
+  struct {
+    bool enabled;
+    cuda::atomic<size_t, cuda::thread_scope_device> alloc;
+    cuda::atomic<size_t, cuda::thread_scope_device> free;
+    cuda::atomic<size_t, cuda::thread_scope_device> mi_alloc;
+    cuda::atomic<size_t, cuda::thread_scope_device> mi_free;
+} stats;
 };
 
 /* The Memory System object */
@@ -59,6 +75,10 @@ extern "C" __device__ void NRT_MemInfo_init(
   mi->dtor_info = dtor_info;
   mi->data      = data;
   mi->size      = size;
+  if (TheMSys.stats.enabled)
+  {
+    TheMSys.stats.mi_alloc++;
+  }
 }
 
 __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
@@ -79,7 +99,7 @@ extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi) { NRT_dealloc(mi
 
 extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
 {
-  if (mi->dtor && !TheMSys.shutting) /* We have a destructor and the system is not shutting down */
+  if (mi->dtor) /* We have a destructor */
     mi->dtor(mi->data, mi->size, NULL);
   /* Clear and release MemInfo */
   NRT_MemInfo_destroy(mi);
