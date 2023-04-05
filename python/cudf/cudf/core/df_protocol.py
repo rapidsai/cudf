@@ -770,17 +770,17 @@ def _ensure_gpu_buffer(buf, data_type, allow_copy: bool) -> _CuDFBuffer:
     # return it as is.  Otherwise, copy it to the device and return
     # the resulting buffer.
     if buf.__dlpack_device__()[0] != _Device.CUDA:
-        if not allow_copy:
-            raise TypeError(
-                "This operation must copy data from CPU to GPU. "
-                "Set `allow_copy=True` to allow it."
-            )
-        else:
+        if allow_copy:
             dbuf = rmm.DeviceBuffer(ptr=buf.ptr, size=buf.bufsize)
             return _CuDFBuffer(
                 as_buffer(dbuf, exposed=True),
                 protocol_dtype_to_cupy_dtype(data_type),
                 allow_copy,
+            )
+        else:
+            raise TypeError(
+                "This operation must copy data from CPU to GPU. "
+                "Set `allow_copy=True` to allow it."
             )
     return buf
 
