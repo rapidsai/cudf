@@ -17,13 +17,13 @@ gtest_version:
   - "=1.10.0"
 
 libarrow_version:
-  - "=10"
+  - "=11"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"
 
 librdkafka_version:
-  - ">=1.7.0,<1.8.0a0"
+  - ">=1.9.0,<1.10.0a0"
 
 fmt_version:
   - ">=9.1.0,<10"
