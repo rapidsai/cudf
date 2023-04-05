@@ -657,7 +657,39 @@ def from_dataframe(
     df: DataFrameObject, allow_copy: bool = False
 ) -> _CuDFDataFrame:
     """
-    Construct a cudf DataFrame from ``df`` if it supports ``__dataframe__``
+    Construct a ``DataFrame`` from ``df`` if it supports the
+    dataframe interchange protocol (``__dataframe__``).
+
+    Parameters
+    ----------
+    df: Object supporting dataframe interchange protocol
+    allow_copy
+        If ``True``, allow copying of the data. If ``False``, a
+        ``TypeError`` is raised if data copying is required to
+        construct the ``DataFrame`` (e.g., if ``df`` lives in CPU
+        memory).
+
+    Returns
+    -------
+    DataFrame
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> pdf = pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+    >>> df = cudf.from_dataframe(pdf, allow_copy=True)
+    >>> type(df)
+    cudf.core.dataframe.DataFrame
+    >>> df
+       a  b
+    0  1  x
+    1  2  y
+    2  3  z
+
+    Notes
+    -----
+    See https://data-apis.org/dataframe-protocol/latest/index.html
+    for the dataframe interchange protocol spec and API
     """
     if isinstance(df, cudf.DataFrame):
         return df
