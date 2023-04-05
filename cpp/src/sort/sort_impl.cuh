@@ -58,7 +58,8 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   // Fast-path for single column sort
   // If the first column is floating-point, only run this path if special NaN handling is
-  // required (i.e., `sorting_physical_element_comparator` is being used).
+  // required (i.e., `NaN` is always considered as equivalent to other `NaN`s and greater than all
+  // non-NaN values, which is equivalent to using `sorting_physical_element_comparator`.).
   if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type()) and
       (not cudf::is_floating_point(input.column(0).type()) or
        std::is_same_v<
