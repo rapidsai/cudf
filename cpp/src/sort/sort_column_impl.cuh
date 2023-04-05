@@ -117,34 +117,27 @@ struct column_sorted_order_fn {
     // But this also requires making a copy of the input data.
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
+
+    auto const do_sort = [&](auto const comp) {
+      if constexpr (stable) {
+        thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                                   d_col.begin<T>(),
+                                   d_col.end<T>(),
+                                   indices.begin<size_type>(),
+                                   comp);
+      } else {
+        thrust::sort_by_key(rmm::exec_policy(stream),
+                            d_col.begin<T>(),
+                            d_col.end<T>(),
+                            indices.begin<size_type>(),
+                            comp);
+      }
+    };
+
     if (ascending) {
-      if constexpr (stable) {
-        thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                                   d_col.begin<T>(),
-                                   d_col.end<T>(),
-                                   indices.begin<size_type>(),
-                                   thrust::less<T>());
-      } else {
-        thrust::sort_by_key(rmm::exec_policy(stream),
-                            d_col.begin<T>(),
-                            d_col.end<T>(),
-                            indices.begin<size_type>(),
-                            thrust::less<T>());
-      }
+      do_sort(thrust::less<T>{});
     } else {
-      if constexpr (stable) {
-        thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                                   d_col.begin<T>(),
-                                   d_col.end<T>(),
-                                   indices.begin<size_type>(),
-                                   thrust::greater<T>());
-      } else {
-        thrust::sort_by_key(rmm::exec_policy(stream),
-                            d_col.begin<T>(),
-                            d_col.end<T>(),
-                            indices.begin<size_type>(),
-                            thrust::greater<T>());
-      }
+      do_sort(thrust::greater<T>{});
     }
   }
 

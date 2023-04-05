@@ -67,8 +67,7 @@ std::unique_ptr<column> sorted_order(table_view input,
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
-    return stable ? sorted_order<true>(single_col, col_order, null_prec, stream, mr)
-                  : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
+    return sorted_order<stable>(single_col, col_order, null_prec, stream, mr);
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
@@ -79,36 +78,30 @@ std::unique_ptr<column> sorted_order(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto comp = cudf::experimental::row::lexicographic::self_comparator(
+  auto const do_sort = [&](auto const comparator) {
+    if constexpr (stable) {
+      thrust::stable_sort(rmm::exec_policy(stream),
+                          mutable_indices_view.begin<size_type>(),
+                          mutable_indices_view.end<size_type>(),
+                          comparator);
+    } else {
+      thrust::sort(rmm::exec_policy(stream),
+                   mutable_indices_view.begin<size_type>(),
+                   mutable_indices_view.end<size_type>(),
+                   comparator);
+    }
+  };
+
+  auto const comp = cudf::experimental::row::lexicographic::self_comparator(
     input, column_order, null_precedence, stream);
   if (cudf::detail::has_nested_columns(input)) {
-    auto comparator = comp.less<true, nullate::DYNAMIC, PhysicalElementComparator>(
+    auto const comparator = comp.less<true, nullate::DYNAMIC, PhysicalElementComparator>(
       nullate::DYNAMIC{has_nested_nulls(input)});
-    if (stable) {
-      thrust::stable_sort(rmm::exec_policy(stream),
-                          mutable_indices_view.begin<size_type>(),
-                          mutable_indices_view.end<size_type>(),
-                          comparator);
-    } else {
-      thrust::sort(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   comparator);
-    }
+    do_sort(comparator);
   } else {
-    auto comparator = comp.less<false, nullate::DYNAMIC, PhysicalElementComparator>(
+    auto const comparator = comp.less<false, nullate::DYNAMIC, PhysicalElementComparator>(
       nullate::DYNAMIC{has_nested_nulls(input)});
-    if (stable) {
-      thrust::stable_sort(rmm::exec_policy(stream),
-                          mutable_indices_view.begin<size_type>(),
-                          mutable_indices_view.end<size_type>(),
-                          comparator);
-    } else {
-      thrust::sort(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   comparator);
-    }
+    do_sort(comparator);
   }
   // protection for temporary d_column_order and d_null_precedence
   stream.synchronize();
