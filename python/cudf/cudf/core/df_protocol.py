@@ -49,10 +49,10 @@ class _Device(enum.IntEnum):
 
 
 class _MaskKind(enum.IntEnum):
-    NON_NULLABLE = (0,)
-    NAN = (1,)
-    SENTINEL = (2,)
-    BITMASK = (3,)
+    NON_NULLABLE = 0
+    NAN = 1
+    SENTINEL = 2
+    BITMASK = 3
     BYTEMASK = 4
 
 
