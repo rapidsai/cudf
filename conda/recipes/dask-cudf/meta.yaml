@@ -37,14 +37,14 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask >=2023.1.1
-    - distributed >=2023.1.1
+    - dask ==2023.3.2
+    - distributed ==2023.3.2.1
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask >=2023.1.1
-    - distributed >=2023.1.1
+    - dask ==2023.3.2
+    - distributed ==2023.3.2.1
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:
