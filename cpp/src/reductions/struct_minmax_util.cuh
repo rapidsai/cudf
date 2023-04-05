@@ -89,6 +89,8 @@ class comparison_binop_generator {
   std::vector<null_order> null_orders;
   rmm::cuda_stream_view stream;
 
+  cudf::experimental::row::lexicographic::self_comparator row_comparator;
+
   comparison_binop_generator(column_view const& input_,
                              rmm::cuda_stream_view stream_,
                              bool is_min_op_)
@@ -96,7 +98,8 @@ class comparison_binop_generator {
       is_min_op(is_min_op_),
       has_nulls{cudf::has_nested_nulls(cudf::table_view{{input_}})},
       null_orders{std::vector<null_order>{DEFAULT_NULL_ORDER}},
-      stream(stream_)
+      stream(stream_),
+      row_comparator{cudf::table_view{{input_}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_}
   {
     if (is_min_op_) {
       // If the input column has nulls (at the top level), null structs are excluded from the
@@ -112,8 +115,6 @@ class comparison_binop_generator {
  public:
   auto binop() const
   {
-    auto const row_comparator =
-      cudf::experimental::row::lexicographic::self_comparator(input_tview, {}, null_orders, stream);
     auto const device_comp = row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls});
     return row_arg_minmax_fn(input_tview.num_rows(), device_comp, is_min_op);
   }
