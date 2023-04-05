@@ -25,7 +25,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 PY_VER=${RAPIDS_PY_VERSION//./}
 LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1241/1fd0b84/rmm_conda_cpp_cuda11_$(arch).tar.gz)
-RMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1241/1fd0b84/rmm_conda_python_cuda11__${PY_VER}_$(arch).tar.gz)
+RMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1241/1fd0b84/rmm_conda_python_cuda11_${PY_VER}_$(arch).tar.gz)
 
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
