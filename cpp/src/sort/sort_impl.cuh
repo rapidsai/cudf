@@ -80,6 +80,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                    0);
 
   auto const do_sort = [&](auto const comparator) {
+    // Compiling `thrust::*sort*` APIs is expensive.
+    // Thus, we should optimize that by using constexpr condition to only compile what we need.
     if constexpr (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),
                           mutable_indices_view.begin<size_type>(),

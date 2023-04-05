@@ -119,6 +119,8 @@ struct column_sorted_order_fn {
     auto d_col    = temp_col.mutable_view();
 
     auto const do_sort = [&](auto const comp) {
+      // Compiling `thrust::*sort*` APIs is expensive.
+      // Thus, we should optimize that by using constexpr condition to only compile what we need.
       if constexpr (stable) {
         thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                    d_col.begin<T>(),
@@ -161,6 +163,8 @@ struct column_sorted_order_fn {
   {
     auto keys = column_device_view::create(input, stream);
     auto comp = simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence};
+    // Compiling `thrust::*sort*` APIs is expensive.
+    // Thus, we should optimize that by using constexpr condition to only compile what we need.
     if constexpr (stable) {
       thrust::stable_sort(
         rmm::exec_policy(stream), indices.begin<size_type>(), indices.end<size_type>(), comp);
