@@ -300,8 +300,7 @@ if buildAll || hasArg libcudf; then
     # Record build times
     if [[ "$BUILD_REPORT_METRICS" == "ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build metrics"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        MSG="<p>"
+        MSG=""
         # get some sccache stats after the compile
         if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
            COMPILE_REQUESTS=$(sccache -s | grep "Compile requests \+ [0-9]\+$" | awk '{ print $NF }')
@@ -318,7 +317,9 @@ if buildAll || hasArg libcudf; then
         BMR_DIR=${RAPIDS_ARTIFACTS_DIR:-"${LIB_BUILD_DIR}"}
         echo "Metrics output dir: [$BMR_DIR]"
         mkdir -p ${BMR_DIR}
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${BMR_DIR}/ninja_log.html
+        MSG_OUTFILE="$(mktemp)"
+        echo "$MSG" > "${MSG_OUTFILE}"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "${MSG_OUTFILE}" > ${BMR_DIR}/ninja_log.html
         cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
     fi
 

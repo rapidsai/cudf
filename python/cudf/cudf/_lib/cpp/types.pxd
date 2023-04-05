@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, uint32_t
 
@@ -47,8 +47,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         UNEQUAL "cudf::null_equality::UNEQUAL"
 
     ctypedef enum nan_equality "cudf::nan_equality":
+        # These names differ from the C++ names due to Cython warnings if
+        # "UNEQUAL" is declared by both null_equality and nan_equality.
         ALL_EQUAL "cudf::nan_equality::ALL_EQUAL"
-        UNEQUAL "cudf::nan_equality::UNEQUAL"
+        NANS_UNEQUAL "cudf::nan_equality::UNEQUAL"
 
     ctypedef enum type_id "cudf::type_id":
         EMPTY                  "cudf::type_id::EMPTY"

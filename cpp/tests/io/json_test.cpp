@@ -1326,7 +1326,6 @@ TEST_F(JsonReaderTest, TokenAllocation)
   };
 
   for (auto const& json_string : json_inputs) {
-    std::cout << json_string << "\n";
     // Initialize parsing options (reading json lines)
     cudf::io::json_reader_options json_lines_options =
       cudf::io::json_reader_options::builder(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,10 @@ namespace detail {
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<cudf::column> make_lists_column_from_scalar(
-  list_scalar const& value,
-  size_type size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& value,
+                                                            size_type size,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace lists

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,14 +203,13 @@ void copy_range_in_place(column_view const& source,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> The result target column
  */
-std::unique_ptr<column> copy_range(
-  column_view const& source,
-  column_view const& target,
-  size_type source_begin,
-  size_type source_end,
-  size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin,
+                                   size_type source_end,
+                                   size_type target_begin,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

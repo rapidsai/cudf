@@ -104,8 +104,11 @@ void BM_join(state_type& state, Join JoinFunc)
     // roughly 75% nulls
     auto validity =
       thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
-    return cudf::detail::valid_if(
-             validity, validity + size, thrust::identity<bool>{}, cudf::get_default_stream())
+    return cudf::detail::valid_if(validity,
+                                  validity + size,
+                                  thrust::identity<bool>{},
+                                  cudf::get_default_stream(),
+                                  rmm::mr::get_current_device_resource())
       .first;
   };
 

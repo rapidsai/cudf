@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,9 +124,11 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->total_data_size = m_cur - (m_base + md->metadata_size);
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {
-    type_kind_e kind = md->schema[i].kind;
-    if (kind > type_null && kind < type_record) {
-      // Primitive type column
+    type_kind_e kind                = md->schema[i].kind;
+    logicaltype_kind_e logical_kind = md->schema[i].logical_kind;
+
+    bool is_supported_kind = ((kind > type_null) && (kind < type_record));
+    if (is_supported_logical_type(logical_kind) || is_supported_kind) {
       column_desc col;
       int parent_idx       = md->schema[i].parent_idx;
       col.schema_data_idx  = (int32_t)i;
@@ -141,7 +143,9 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
                  --num_children) {
               int skip = 1;
               if (pos == i) {
-                col.parent_union_idx = md->schema[parent_idx].num_children - num_children;
+                // parent_idx will always be pointing to our immediate parent
+                // union at this point.
+                col.parent_union_idx = parent_idx;
               } else if (md->schema[pos].kind == type_null) {
                 col.schema_null_idx = pos;
                 break;
@@ -152,7 +156,9 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
               } while (skip != 0);
             }
           }
-          // Ignore the root or array entries
+          // We want to "inherit" the column name from our parent union's
+          // name, as long as we're not dealing with the root (parent_idx == 0)
+          // or array entries.
           if ((parent_idx != 0 && md->schema[parent_idx].kind != type_array) ||
               col.name.length() == 0) {
             if (col.name.length() > 0) { col.name.insert(0, 1, '.'); }
@@ -179,13 +185,14 @@ enum json_state_e {
   state_nextsymbol,
 };
 
-enum {
+enum attrtype_e {
   attrtype_none = -1,
   attrtype_type = 0,
   attrtype_name,
   attrtype_fields,
   attrtype_symbols,
   attrtype_items,
+  attrtype_logicaltype,
 };
 
 /**
@@ -205,26 +212,40 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
-  const std::unordered_map<std::string, type_kind_e> typenames = {{"null", type_null},
-                                                                  {"boolean", type_boolean},
-                                                                  {"int", type_int},
-                                                                  {"long", type_long},
-                                                                  {"float", type_float},
-                                                                  {"double", type_double},
-                                                                  {"bytes", type_bytes},
-                                                                  {"string", type_string},
-                                                                  {"record", type_record},
-                                                                  {"enum", type_enum},
-                                                                  {"array", type_array}};
-  const std::unordered_map<std::string, int> attrnames         = {{"type", attrtype_type},
-                                                          {"name", attrtype_name},
-                                                          {"fields", attrtype_fields},
-                                                          {"symbols", attrtype_symbols},
-                                                          {"items", attrtype_items}};
-  int cur_attr                                                 = attrtype_none;
-  m_base                                                       = json_str.c_str();
-  m_cur                                                        = m_base;
-  m_end                                                        = m_base + json_str.length();
+  const std::unordered_map<std::string, type_kind_e> typenames = {
+    {"null", type_null},
+    {"boolean", type_boolean},
+    {"int", type_int},
+    {"long", type_long},
+    {"float", type_float},
+    {"double", type_double},
+    {"bytes", type_bytes},
+    {"string", type_string},
+    {"record", type_record},
+    {"enum", type_enum},
+    {"array", type_array},
+    {"union", type_union},
+    {"fixed", type_fixed},
+    {"decimal", type_decimal},
+    {"date", type_date},
+    {"time-millis", type_time_millis},
+    {"time-micros", type_time_micros},
+    {"timestamp-millis", type_timestamp_millis},
+    {"timestamp-micros", type_timestamp_micros},
+    {"local-timestamp-millis", type_local_timestamp_millis},
+    {"local-timestamp-micros", type_local_timestamp_micros},
+    {"duration", type_duration}};
+  const std::unordered_map<std::string, attrtype_e> attrnames = {
+    {"type", attrtype_type},
+    {"name", attrtype_name},
+    {"fields", attrtype_fields},
+    {"symbols", attrtype_symbols},
+    {"items", attrtype_items},
+    {"logicalType", attrtype_logicaltype}};
+  attrtype_e cur_attr = attrtype_none;
+  m_base              = json_str.c_str();
+  m_cur               = m_base;
+  m_end               = m_base + json_str.length();
   while (more_data()) {
     int c = *m_cur++;
     switch (c) {
@@ -250,6 +271,10 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
             auto t = typenames.find(str);
             if (t == typenames.end()) return false;
             schema[entry_idx].kind = t->second;
+          } else if (cur_attr == attrtype_logicaltype) {
+            auto t = typenames.find(str);
+            if (t == typenames.end()) return false;
+            schema[entry_idx].logical_kind = static_cast<logicaltype_kind_e>(t->second);
           } else if (cur_attr == attrtype_name) {
             if (entry_idx < 0) return false;
             schema[entry_idx].name = std::move(str);
