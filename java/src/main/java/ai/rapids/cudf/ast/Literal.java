@@ -200,6 +200,15 @@ public final class Literal extends AstExpression {
     return ofDurationFromLong(type, value.longValue());
   }
 
+  /** Construct a string literal with the specified value or null. */
+  public static Literal ofString(String value) {
+    byte[] stringBytes = value.getBytes();
+    byte[] serializedValue = new byte[stringBytes.length + Integer.BYTES];
+    ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putInt(stringBytes.length);
+    System.arraycopy(stringBytes, 0, serializedValue, Integer.BYTES, stringBytes.length);
+    return new Literal(DType.STRING, serializedValue);
+  }
+
   Literal(DType type, byte[] serializedValue) {
     this.type = type;
     this.serializedValue = serializedValue;
