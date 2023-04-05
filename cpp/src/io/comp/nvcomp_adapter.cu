@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,10 +94,10 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
     [] __device__(auto const& results) { return results.status != compression_status::SKIPPED; });
 }
 
-size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
-                               device_span<compression_result> results,
-                               std::optional<size_t> max_valid_input_size,
-                               rmm::cuda_stream_view stream)
+void skip_unsupported_inputs(device_span<size_t> input_sizes,
+                             device_span<compression_result> results,
+                             std::optional<size_t> max_valid_input_size,
+                             rmm::cuda_stream_view stream)
 {
   if (max_valid_input_size.has_value()) {
     auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), results.begin());
@@ -114,12 +114,17 @@ size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
         return input_size > max_size;
       });
   }
-
-  return thrust::reduce(rmm::exec_policy(stream),
-                        input_sizes.begin(),
-                        input_sizes.end(),
-                        0ul,
-                        thrust::maximum<size_t>());
+}
+std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
+                                                         rmm::cuda_stream_view stream)
+{
+  auto const max = thrust::reduce(rmm::exec_policy(stream),
+                                  input_sizes.begin(),
+                                  input_sizes.end(),
+                                  0ul,
+                                  thrust::maximum<size_t>());
+  auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
+  return {max, sum};
 }
 
 }  // namespace cudf::io::nvcomp

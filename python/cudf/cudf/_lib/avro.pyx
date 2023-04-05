@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -50,6 +50,6 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     with nogil:
         c_result = move(libcudf_read_avro(options))
 
-    names = [name.decode() for name in c_result.metadata.column_names]
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
 
     return data_from_unique_ptr(move(c_result.tbl), column_names=names)

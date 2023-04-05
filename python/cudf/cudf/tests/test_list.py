@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -322,6 +322,24 @@ def test_get(data, index, expect):
     got = sr.list.get(index)
 
     assert_eq(expect, got, check_dtype=not expect.isnull().all())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"k": "v1"}, {"k": "v2"}],
+        [[{"k": "v1", "b": "v2"}], [{"k": "v3", "b": "v4"}]],
+        [
+            [{"k": "v1", "b": [{"c": 10, "d": "v5"}]}],
+            [{"k": "v3", "b": [{"c": 14, "d": "v6"}]}],
+        ],
+    ],
+)
+@pytest.mark.parametrize("index", [0, 1])
+def test_get_nested_struct_dtype_transfer(data, index):
+    sr = cudf.Series([data])
+    expect = cudf.Series(data[index : index + 1])
+    assert_eq(expect, sr.list.get(index))
 
 
 def test_get_nested_lists():

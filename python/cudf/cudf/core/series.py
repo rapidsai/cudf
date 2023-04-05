@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import functools
 import inspect
 import pickle
 import textwrap
+import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
@@ -39,6 +40,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -248,7 +250,11 @@ class _SeriesLocIndexer(_FrameIndexer):
         if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
             arg, cudf.MultiIndex
         ):
-            result = self._frame.index._get_row_major(self._frame, arg)
+            if is_scalar(arg):
+                row_arg = (arg,)
+            else:
+                row_arg = arg
+            result = self._frame.index._get_row_major(self._frame, row_arg)
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
@@ -364,6 +370,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     name : str, optional
         The name to give to the Series.
+
+    copy : bool, default False
+        Copy input data. Only affects Series or 1d ndarray input.
 
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
@@ -490,6 +499,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index=None,
         dtype=None,
         name=None,
+        copy=False,
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
@@ -520,6 +530,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if name is None:
                 name = data.name
             data = data._column
+            if copy:
+                data = data.copy(deep=True)
             if dtype is not None:
                 data = data.astype(dtype)
 
@@ -538,7 +550,30 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
-            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            # Using `getattr_static` to check if
+            # `data` is on device memory and perform
+            # a deep copy later. This is different
+            # from `hasattr` because, it doesn't
+            # invoke the property we are looking
+            # for and the latter actually invokes
+            # the property, which in this case could
+            # be expensive or mark a buffer as
+            # unspillable.
+            has_cai = (
+                type(
+                    inspect.getattr_static(
+                        data, "__cuda_array_interface__", None
+                    )
+                )
+                is property
+            )
+            data = column.as_column(
+                data,
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+            )
+            if copy and has_cai:
+                data = data.copy(deep=True)
         else:
             if dtype is not None:
                 data = data.astype(dtype)
@@ -1497,6 +1532,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             (
                 cudf.core.column.DecimalBaseColumn,
                 cudf.core.column.StructColumn,
+                cudf.core.column.ListColumn,
             ),
         ):
             col = col._with_type_metadata(objs[0].dtype)
@@ -1848,9 +1884,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             a default index.
         nullable : Boolean, Default False
             If ``nullable`` is ``True``, the resulting series will be
-            having a corresponding nullable Pandas dtype. If ``nullable``
-            is ``False``, the resulting series will either convert null
-            values to ``np.nan`` or ``None`` depending on the dtype.
+            having a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting series will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
 
         Returns
         -------
@@ -2228,18 +2267,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
@@ -2293,11 +2332,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -2590,6 +2626,86 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self
 
     T = property(transpose, doc=transpose.__doc__)
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate Series values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        Series. Either all duplicates, all except the first or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            Method to handle dropping duplicates:
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series[bool]
+            Series indicating whether each value has occurred in the
+            preceding values.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on cudf.Index.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Series.drop_duplicates : Remove duplicate values from Series.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set on False and all others on True:
+
+        >>> import cudf
+        >>> animals = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> animals.duplicated()
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        which is equivalent to
+
+        >>> animals.duplicated(keep='first')
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set on False and all others on True:
+
+        >>> animals.duplicated(keep='last')
+        0     True
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        By setting keep on ``False``, all duplicates are True:
+
+        >>> animals.duplicated(keep=False)
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+        """
+        return super().duplicated(keep=keep)
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):
@@ -3000,6 +3116,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         """{docstring}"""
 
+        if not datetime_is_numeric:
+            warnings.warn(
+                "`datetime_is_numeric` is deprecated and will be removed in "
+                "a future release. Specify `datetime_is_numeric=True` to "
+                "silence this warning and adopt the future behavior now.",
+                FutureWarning,
+            )
         if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
                 raise ValueError(
@@ -4771,6 +4894,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@acquire_spill_lock()
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.
@@ -4875,10 +4999,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         index = as_index(a.index)
 
     a_col = column.as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view)
+    a_array = cupy.asarray(a_col.data_array_view(mode="read"))
 
     b_col = column.as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view)
+    b_array = cupy.asarray(b_col.data_array_view(mode="read"))
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan

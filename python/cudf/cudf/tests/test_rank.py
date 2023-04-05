@@ -55,7 +55,8 @@ def test_rank_all_arguments(
     assert_eq(gdf["col1"].rank(**kwargs), pdf["col1"].rank(**kwargs))
     assert_eq(gdf["col2"].rank(**kwargs), pdf["col2"].rank(**kwargs))
     if numeric_only:
-        expect = pdf["str"].rank(**kwargs)
+        with pytest.warns(FutureWarning):
+            expect = pdf["str"].rank(**kwargs)
         got = gdf["str"].rank(**kwargs)
         assert expect.empty == got.empty
         expected = pdf.select_dtypes(include=np.number)

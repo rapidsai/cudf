@@ -27,23 +27,18 @@
 
 #include <thrust/host_vector.h>
 
-using aggregation = cudf::aggregation;
-using cudf::null_policy;
-using cudf::scan_type;
+using rank_result_col    = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+using percent_result_col = cudf::test::fixed_width_column_wrapper<double>;
 
-namespace cudf::test {
-
-using namespace iterators;
-
-template <typename T>
-using input              = fixed_width_column_wrapper<T>;
-using rank_result_col    = fixed_width_column_wrapper<size_type>;
-using percent_result_col = fixed_width_column_wrapper<double>;
-
-auto const rank         = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::MIN);
-auto const dense_rank   = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::DENSE);
-auto const percent_rank = cudf::make_rank_aggregation<scan_aggregation>(
-  cudf::rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED);
+auto const rank = cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::MIN);
+auto const dense_rank =
+  cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE);
+auto const percent_rank =
+  cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::MIN,
+                                                      {},
+                                                      cudf::null_policy::INCLUDE,
+                                                      {},
+                                                      cudf::rank_percentage::ONE_NORMALIZED);
 
 auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
 auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;
@@ -52,7 +47,7 @@ template <typename T>
 struct TypedRankScanTest : BaseScanTest<T> {
   inline void test_ungrouped_rank_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
-                                       scan_aggregation const& agg)
+                                       cudf::scan_aggregation const& agg)
   {
     auto col_out = cudf::scan(input, agg, INCLUSIVE_SCAN, INCLUDE_NULLS);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
@@ -102,7 +97,7 @@ TYPED_TEST(TypedRankScanTest, RankWithNulls)
       return make_vector<TypeParam>({-120, -120, -120, -16, -16, 5, 6, 6, 6, 6, 34, 113});
     return make_vector<TypeParam>({5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34});
   }();
-  auto const null_iter = nulls_at({3, 6, 7, 11});
+  auto const null_iter = cudf::test::iterators::nulls_at({3, 6, 7, 11});
   auto const b         = thrust::host_vector<bool>(null_iter, null_iter + v.size());
   auto col             = this->make_column(v, b);
 
@@ -130,19 +125,23 @@ template <typename TypeParam>
 auto make_input_column()
 {
   if constexpr (std::is_same_v<TypeParam, cudf::string_view>) {
-    return strings_column_wrapper{{"0", "0", "4", "4", "4", "5", "7", "7", "7", "9", "9", "9"},
-                                  null_at(5)};
+    return cudf::test::strings_column_wrapper{
+      {"0", "0", "4", "4", "4", "5", "7", "7", "7", "9", "9", "9"},
+      cudf::test::iterators::null_at(5)};
   } else {
+    using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
     return (std::is_signed_v<TypeParam>)
-             ? input<TypeParam>{{-1, -1, -4, -4, -4, 5, 7, 7, 7, 9, 9, 9}, null_at(5)}
-             : input<TypeParam>{{0, 0, 4, 4, 4, 5, 7, 7, 7, 9, 9, 9}, null_at(5)};
+             ? fw_wrapper{{-1, -1, -4, -4, -4, 5, 7, 7, 7, 9, 9, 9},
+                          cudf::test::iterators::null_at(5)}
+             : fw_wrapper{{0, 0, 4, 4, 4, 5, 7, 7, 7, 9, 9, 9}, cudf::test::iterators::null_at(5)};
   }
 }
 
 auto make_strings_column()
 {
-  return strings_column_wrapper{
-    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+  return cudf::test::strings_column_wrapper{
+    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"},
+    cudf::test::iterators::null_at(8)};
 }
 
 template <typename TypeParam>
@@ -150,7 +149,7 @@ auto make_mixed_structs_column()
 {
   auto col     = make_input_column<TypeParam>();
   auto strings = make_strings_column();
-  return structs_column_wrapper{{col, strings}};
+  return cudf::test::structs_column_wrapper{{col, strings}};
 }
 }  // namespace
 
@@ -183,17 +182,17 @@ TYPED_TEST(TypedRankScanTest, NestedStructs)
     auto struct_col = [&] {
       auto col     = make_input_column<TypeParam>();
       auto strings = make_strings_column();
-      return structs_column_wrapper{{col, strings}};
+      return cudf::test::structs_column_wrapper{{col, strings}};
     }();
     auto col = make_input_column<TypeParam>();
-    return structs_column_wrapper{{struct_col, col}};
+    return cudf::test::structs_column_wrapper{{struct_col, col}};
   }();
 
   auto const flat_col = [&] {
     auto col         = make_input_column<TypeParam>();
     auto strings_col = make_strings_column();
     auto nuther_col  = make_input_column<TypeParam>();
-    return structs_column_wrapper{{col, strings_col, nuther_col}};
+    return cudf::test::structs_column_wrapper{{col, strings_col, nuther_col}};
   }();
 
   auto const dense_out      = cudf::scan(nested_col, *dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
@@ -231,7 +230,7 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
   // Next, verify that if the structs column a null mask that is NOT pushed down to members,
   // the ranks are still correct.
   {
-    auto const null_iter = nulls_at({1, 2});
+    auto const null_iter = cudf::test::iterators::nulls_at({1, 2});
     struct_col->set_null_mask(
       cudf::test::detail::make_null_mask(null_iter, null_iter + struct_col->size()));
     auto const expected_dense   = rank_result_col{1, 2, 2, 3, 4, 5, 6, 6, 7, 8, 8, 9};
@@ -262,7 +261,8 @@ struct RankScanTest : public cudf::test::BaseFixture {
 
 TEST(RankScanTest, BoolRank)
 {
-  auto const vals             = input<bool>{0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto const vals =
+    cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   auto const expected_dense   = rank_result_col{1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2};
   auto const expected_rank    = rank_result_col{1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4};
   auto const expected_percent = percent_result_col{0.0,
@@ -288,7 +288,8 @@ TEST(RankScanTest, BoolRank)
 
 TEST(RankScanTest, BoolRankWithNull)
 {
-  auto const vals = input<bool>{{0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}, nulls_at({8, 9, 10, 11})};
+  auto const vals = cudf::test::fixed_width_column_wrapper<bool>{
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}, cudf::test::iterators::nulls_at({8, 9, 10, 11})};
   auto const expected_dense   = rank_result_col{1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3};
   auto const expected_rank    = rank_result_col{1, 1, 1, 4, 4, 4, 4, 4, 9, 9, 9, 9};
   auto const expected_percent = percent_result_col{0.0,
@@ -314,14 +315,13 @@ TEST(RankScanTest, BoolRankWithNull)
 
 TEST(RankScanTest, ExclusiveScan)
 {
-  auto const vals = input<uint32_t>{3, 4, 5};
+  auto const vals = cudf::test::fixed_width_column_wrapper<uint32_t>{3, 4, 5};
 
   // Only inclusive scans are supported, so these should all raise exceptions.
-  EXPECT_THROW(cudf::scan(vals, *dense_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+  EXPECT_THROW(cudf::scan(vals, *dense_rank, cudf::scan_type::EXCLUSIVE, INCLUDE_NULLS),
                cudf::logic_error);
-  EXPECT_THROW(cudf::scan(vals, *rank, scan_type::EXCLUSIVE, INCLUDE_NULLS), cudf::logic_error);
-  EXPECT_THROW(cudf::scan(vals, *percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+  EXPECT_THROW(cudf::scan(vals, *rank, cudf::scan_type::EXCLUSIVE, INCLUDE_NULLS),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::scan(vals, *percent_rank, cudf::scan_type::EXCLUSIVE, INCLUDE_NULLS),
                cudf::logic_error);
 }
-
-}  // namespace cudf::test

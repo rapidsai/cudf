@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,6 +170,10 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
+    if (options_.get_quoting() == cudf::io::quote_style::NONE) {
+      return std::make_unique<column>(column_v, stream_, mr_);
+    }
+
     // handle special characters: {delimiter, '\n', "} in row:
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
 
@@ -383,7 +387,7 @@ void write_chunked(data_sink* out_sink,
     CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
                                   ptr_all_bytes,
                                   total_num_bytes * sizeof(char),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 

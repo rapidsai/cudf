@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -451,6 +451,39 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
             std::back_inserter(result_strings));
 
   EXPECT_EQ(result_strings, reference_strings);
+}
+
+void test_quoting_disabled_with_delimiter(char delimiter_char)
+{
+  auto const delimiter     = std::string{delimiter_char};
+  auto const input_strings = cudf::test::strings_column_wrapper{
+    std::string{"All"} + delimiter + "the" + delimiter + "leaves",
+    "are\"brown",
+    "and\nthe\nsky\nis\ngrey"};
+  auto const input_table = table_view{{input_strings}};
+
+  auto const filepath = temp_env->get_temp_dir() + "unquoted.csv";
+  auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, input_table)
+                     .include_header(false)
+                     .inter_column_delimiter(delimiter_char)
+                     .quoting(cudf::io::quote_style::NONE);
+  cudf::io::write_csv(w_options.build());
+
+  auto r_options = cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+                     .header(-1)
+                     .delimiter(delimiter_char)
+                     .quoting(cudf::io::quote_style::NONE);
+  auto r_table = cudf::io::read_csv(r_options.build());
+
+  auto const expected =
+    cudf::test::strings_column_wrapper{"All", "are\"brown", "and", "the", "sky", "is", "grey"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(r_table.tbl->view().column(0), expected);
+}
+
+TEST_F(CsvWriterTest, QuotingDisabled)
+{
+  test_quoting_disabled_with_delimiter(',');
+  test_quoting_disabled_with_delimiter('\u0001');
 }
 
 TEST_F(CsvReaderTest, MultiColumn)
@@ -1168,12 +1201,8 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(type_id::FLOAT32, view.column(0).type().id());
 
-  const auto col_data = cudf::test::to_host<float>(view.column(0));
-  // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  // ignore all data because it is all nulls.
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_F(CsvReaderTest, StringInference)
@@ -1326,6 +1355,22 @@ TEST_F(CsvReaderTest, nullHandling)
     auto expect =
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
                                          {true, true, true, true, false, true, true, true});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
+  }
+
+  // Filter enabled, but no NA values
+  {
+    cudf::io::csv_reader_options in_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+        .keep_default_na(false)
+        .dtypes({dtype<cudf::string_view>()})
+        .header(-1)
+        .skip_blank_lines(false);
+    const auto result = cudf::io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
@@ -1785,7 +1830,9 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, StringsWithWriterSimple)
@@ -1810,7 +1857,9 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
@@ -1831,7 +1880,9 @@ TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
@@ -1859,7 +1910,9 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, EmptyFileWithWriter)
@@ -1965,7 +2018,9 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, ParseInRangeIntegers)
@@ -2240,8 +2295,8 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   // verify that the tables are identical, or as identical as expected.
   const auto new_table_view = new_table_and_metadata.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
-  EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
-  EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
+  EXPECT_EQ(new_table_and_metadata.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(new_table_and_metadata.metadata.schema_info[1].name, "1");
 }
 
 TEST_F(CsvReaderTest, UseColsValidation)

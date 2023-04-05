@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -334,9 +334,8 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                         column.null_count(),
                                         stream,
                                         mr);
-  auto launch =
-    launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
-      column, static_cast<mutable_column_view>(*output)};
+  auto launch = launch_functor<TransformFunctor, cudf::id_to_type<OutputColCudfT>>{
+    column, static_cast<mutable_column_view>(*output)};
 
   type_dispatcher(column.type(), launch, stream);
 

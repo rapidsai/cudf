@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import warnings
 from decimal import Decimal
@@ -79,32 +79,26 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
-        unsupported_msg = (
-            f"{op} not supported for the following dtypes: "
-            f"{self.dtype}, {other.dtype}"
-        )
-        try:
-            if op in {"__add__", "__sub__", "__mul__", "__div__"}:
-                output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-                result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
-                # TODO:  Why is this necessary? Why isn't the result's
-                # precision already set correctly based on output_type?
-                result.dtype.precision = output_type.precision
-            elif op in {
-                "__eq__",
-                "__ne__",
-                "__lt__",
-                "__gt__",
-                "__le__",
-                "__ge__",
-            }:
-                result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
-            else:
-                raise TypeError(unsupported_msg)
-        except RuntimeError as e:
-            if "Unsupported operator for these types" in str(e):
-                raise TypeError(unsupported_msg) from e
-            raise
+        if op in {"__add__", "__sub__", "__mul__", "__div__"}:
+            output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
+            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
+            # TODO:  Why is this necessary? Why isn't the result's
+            # precision already set correctly based on output_type?
+            result.dtype.precision = output_type.precision
+        elif op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+        }:
+            result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
+        else:
+            raise TypeError(
+                f"{op} not supported for the following dtypes: "
+                f"{self.dtype}, {other.dtype}"
+            )
 
         return result
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -150,12 +150,13 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+  stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -169,7 +170,10 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/segmented_sort.cpp sort/sort_lists.cpp sort/sort_structs.cpp)
+ConfigureNVBench(
+  SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
+  sort/sort_lists.cpp sort/sort_structs.cpp
+)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -187,7 +191,8 @@ ConfigureBench(
   reduction/reduce.cpp reduction/scan.cpp
 )
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################
@@ -248,7 +253,7 @@ ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chun
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_WRITER_BENCH io/csv/csv_writer.cpp)
+ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
@@ -285,19 +290,20 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
+  string/slice.cpp
   string/split.cpp
-  string/substring.cpp
   string/translate.cpp
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
-ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
+ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
+ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

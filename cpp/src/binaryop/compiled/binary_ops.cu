@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,8 +71,8 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   // build offsets column from the string size
   auto offsets_transformer_itr =
     thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
-  auto offsets_column = strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr);
+  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+    offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
   auto chars_column_v =
     column_view(data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data());

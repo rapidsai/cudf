@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -150,13 +149,14 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
     // build offsets column
 
     std::unique_ptr<column> p_offsets_column{nullptr};
+    size_type chars_bytes = 0;
     if (target.has_nulls()) {  // check validities for both source & target
       auto string_size_begin = thrust::make_transform_iterator(
         thrust::make_counting_iterator(0),
         compute_element_size<true, true, SourceValueIterator, SourceValidityIterator>{
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
-      p_offsets_column = detail::make_offsets_child_column(
+      std::tie(p_offsets_column, chars_bytes) = cudf::detail::make_offsets_child_column(
         string_size_begin, string_size_begin + target.size(), stream, mr);
     } else if (null_count > 0) {  // check validities for source only
       auto string_size_begin = thrust::make_transform_iterator(
@@ -164,7 +164,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
         compute_element_size<true, false, SourceValueIterator, SourceValidityIterator>{
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
-      p_offsets_column = detail::make_offsets_child_column(
+      std::tie(p_offsets_column, chars_bytes) = cudf::detail::make_offsets_child_column(
         string_size_begin, string_size_begin + target.size(), stream, mr);
     } else {  // no need to check validities
       auto string_size_begin = thrust::make_transform_iterator(
@@ -172,7 +172,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
         compute_element_size<false, false, SourceValueIterator, SourceValidityIterator>{
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
-      p_offsets_column = detail::make_offsets_child_column(
+      std::tie(p_offsets_column, chars_bytes) = cudf::detail::make_offsets_child_column(
         string_size_begin, string_size_begin + target.size(), stream, mr);
     }
 
@@ -180,8 +180,6 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     auto p_offsets =
       thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
-    auto const chars_bytes =
-      cudf::detail::get_value<int32_t>(p_offsets_column->view(), target.size(), stream);
     auto p_chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
 
     // copy to the chars column

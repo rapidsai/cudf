@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,21 +28,15 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cub/cub.cuh>
 
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 #include <algorithm>
-
-using cudf::device_span;
 
 namespace cudf {
 namespace strings {
@@ -59,7 +53,7 @@ namespace {
 //
 struct url_encoder_fn {
   column_device_view const d_strings;
-  int32_t const* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   // utility to create 2-byte hex characters from single binary byte
@@ -86,9 +80,13 @@ struct url_encoder_fn {
   }
 
   // main part of the functor the performs the url-encoding
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+
     string_view d_str = d_strings.element<string_view>(idx);
     //
     char* out_ptr    = d_chars ? d_chars + d_offsets[idx] : nullptr;
@@ -122,46 +120,29 @@ struct url_encoder_fn {
         }
       }
     }
-    return nbytes;
+    if (!d_chars) d_offsets[idx] = nbytes;
   }
 };
 
 }  // namespace
 
 //
-std::unique_ptr<column> url_encode(strings_column_view const& strings,
+std::unique_ptr<column> url_encode(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
+  auto d_column = column_device_view::create(input.parent(), stream);
 
-  // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-  // build offsets column
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), url_encoder_fn{d_strings});
-  auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  // build chars column
-  auto chars_column = create_chars_child_column(bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     url_encoder_fn{d_strings, d_offsets, d_chars});
+  auto children = cudf::strings::detail::make_strings_children(
+    url_encoder_fn{*d_column}, input.size(), stream, mr);
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             strings.null_count(),
-                             std::move(null_mask));
+  return make_strings_column(input.size(),
+                             std::move(children.first),
+                             std::move(children.second),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

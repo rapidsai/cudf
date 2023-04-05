@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,8 +80,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                               not_null_pred);
     });
 
-  auto null_purged_offsets = strings::detail::make_offsets_child_column(
-    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr);
+  auto null_purged_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
+    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr));
 
   return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }

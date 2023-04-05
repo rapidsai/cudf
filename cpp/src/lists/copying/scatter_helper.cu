@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -338,8 +338,8 @@ struct list_child_constructor {
     auto begin = thrust::make_transform_iterator(
       child_list_views.begin(), [] __device__(auto const& row) { return row.size(); });
 
-    auto child_offsets = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + child_list_views.size(), stream, mr);
+    auto child_offsets = std::get<0>(
+      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr));
 
     auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
       source_lists_column_view.child().child(1).type(),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ TEST_F(FromArrowTest, DateTimeTable)
   std::shared_ptr<arrow::Array> arr;
   arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(data);
+  CUDF_EXPECTS(timestamp_builder.AppendValues(data).ok(), "Failed to append values");
   CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -121,7 +121,8 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
     default: CUDF_FAIL("Unsupported duration unit in arrow");
   }
   arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
-  duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  CUDF_EXPECTS(duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok(),
+               "Failed to append values");
   CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -263,7 +264,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));

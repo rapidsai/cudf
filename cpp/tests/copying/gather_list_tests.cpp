@@ -23,7 +23,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -67,7 +66,6 @@ TYPED_TEST(GatherTestListTyped, Gather)
 TYPED_TEST(GatherTestListTyped, GatherNothing)
 {
   using T = TypeParam;
-  using namespace cudf;
 
   // List<T>
   {
@@ -94,13 +92,15 @@ TYPED_TEST(GatherTestListTyped, GatherNothing)
     // even though it is empty past the first level
     cudf::lists_column_view lcv(result->view().column(0));
     EXPECT_EQ(lcv.size(), 0);
-    EXPECT_EQ(lcv.child().type().id(), type_id::LIST);
+    EXPECT_EQ(lcv.child().type().id(), cudf::type_id::LIST);
     EXPECT_EQ(lcv.child().size(), 0);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().type().id(), type_id::LIST);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().size(), 0);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().type().id(),
-              type_id::INT32);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().size(), 0);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().type().id(), cudf::type_id::LIST);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().size(), 0);
+    EXPECT_EQ(
+      cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().type().id(),
+      cudf::type_id::INT32);
+    EXPECT_EQ(cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().size(),
+              0);
   }
 }
 
@@ -263,11 +263,7 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
     cudf::test::fixed_width_column_wrapper<int> gather_map{0, 15, 16, 2};
 
     cudf::table_view source_table({list});
-    auto results = cudf::detail::gather(source_table,
-                                        gather_map,
-                                        cudf::out_of_bounds_policy::NULLIFY,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                        cudf::get_default_stream());
+    auto results = cudf::gather(source_table, gather_map, cudf::out_of_bounds_policy::NULLIFY);
 
     std::vector<int32_t> expected_validity{1, 0, 0, 1};
     LCW<T> expected{{{{2, 3}, {4, 5}},
@@ -283,7 +279,6 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
 TEST_F(GatherTestList, GatherIncompleteHierarchies)
 {
   using LCW = cudf::test::lists_column_wrapper<int32_t>;
-  using namespace cudf;
 
   {
     // List<List<List<int>, but rows 1 and 2 are empty at the very top.
@@ -299,13 +294,15 @@ TEST_F(GatherTestList, GatherIncompleteHierarchies)
     // even though it is empty past the first level
     cudf::lists_column_view lcv(result->view().column(0));
     EXPECT_EQ(lcv.size(), 1);
-    EXPECT_EQ(lcv.child().type().id(), type_id::LIST);
+    EXPECT_EQ(lcv.child().type().id(), cudf::type_id::LIST);
     EXPECT_EQ(lcv.child().size(), 0);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().type().id(), type_id::LIST);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().size(), 0);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().type().id(),
-              type_id::INT32);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().size(), 0);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().type().id(), cudf::type_id::LIST);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().size(), 0);
+    EXPECT_EQ(
+      cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().type().id(),
+      cudf::type_id::INT32);
+    EXPECT_EQ(cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().size(),
+              0);
   }
 
   {
@@ -322,13 +319,15 @@ TEST_F(GatherTestList, GatherIncompleteHierarchies)
     // even though it is empty past the first level
     cudf::lists_column_view lcv(result->view().column(0));
     EXPECT_EQ(lcv.size(), 0);
-    EXPECT_EQ(lcv.child().type().id(), type_id::LIST);
+    EXPECT_EQ(lcv.child().type().id(), cudf::type_id::LIST);
     EXPECT_EQ(lcv.child().size(), 0);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().type().id(), type_id::LIST);
-    EXPECT_EQ(lists_column_view(lcv.child()).child().size(), 0);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().type().id(),
-              type_id::INT32);
-    EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().size(), 0);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().type().id(), cudf::type_id::LIST);
+    EXPECT_EQ(cudf::lists_column_view(lcv.child()).child().size(), 0);
+    EXPECT_EQ(
+      cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().type().id(),
+      cudf::type_id::INT32);
+    EXPECT_EQ(cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().size(),
+              0);
   }
 }
 

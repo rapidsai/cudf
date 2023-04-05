@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_ctx.device_ptr(),
                                   num_blocks * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -302,7 +302,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                     row_ctx.host_ptr(),
                                     num_blocks * sizeof(uint64_t),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
 
       // Pass 2: Output row offsets
@@ -323,7 +323,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
         CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                       row_ctx.device_ptr(),
                                       num_blocks * sizeof(uint64_t),
-                                      cudaMemcpyDeviceToHost,
+                                      cudaMemcpyDefault,
                                       stream.value()));
         stream.synchronize();
 
@@ -372,7 +372,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
                                   2 * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -523,21 +523,19 @@ void infer_column_types(parse_options const& parse_opts,
     });
   if (num_inferred_columns == 0) { return; }
 
-  auto const column_stats =
-    cudf::io::csv::gpu::detect_column_types(parse_opts.view(),
-                                            data,
-                                            make_device_uvector_async(column_flags, stream),
-                                            row_offsets,
-                                            num_inferred_columns,
-                                            stream);
+  auto const column_stats = cudf::io::csv::gpu::detect_column_types(
+    parse_opts.view(),
+    data,
+    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    row_offsets,
+    num_inferred_columns,
+    stream);
   stream.synchronize();
 
   auto inf_col_idx = 0;
   for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
     if (not(column_flags[col_idx] & column_parse::inferred)) { continue; }
     auto const& stats = column_stats[inf_col_idx++];
-    unsigned long long int_count_total =
-      stats.big_int_count + stats.negative_small_int_count + stats.positive_small_int_count;
     if (stats.null_count == num_records or stats.total_count() == 0) {
       // Entire column is NULL; allocate the smallest amount of memory
       column_types[col_idx] = data_type(cudf::type_id::INT8);
@@ -549,11 +547,7 @@ void infer_column_types(parse_options const& parse_opts,
                                 : timestamp_type;
     } else if (stats.bool_count > 0L) {
       column_types[col_idx] = data_type(cudf::type_id::BOOL8);
-    } else if (stats.float_count > 0L ||
-               (stats.float_count == 0L && int_count_total > 0L && stats.null_count > 0L)) {
-      // The second condition has been added to conform to
-      // pandas which states that a column of integers with
-      // a single NULL record need to be treated as floats.
+    } else if (stats.float_count > 0L) {
       column_types[col_idx] = data_type(cudf::type_id::FLOAT64);
     } else if (stats.big_int_count == 0) {
       column_types[col_idx] = data_type(cudf::type_id::INT64);
@@ -584,13 +578,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
 
   for (int col = 0, active_col = 0; col < num_actual_columns; ++col) {
     if (column_flags[col] & column_parse::enabled) {
-      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
-      auto out_buffer =
-        column_buffer(column_types[active_col],
-                      num_records,
-                      true,
-                      stream,
-                      is_final_allocation ? mr : rmm::mr::get_current_device_resource());
+      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, mr);
 
       out_buffer.name         = column_names[col];
       out_buffer.null_count() = UNKNOWN_NULL_COUNT;
@@ -607,14 +595,15 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     h_valid[i] = out_buffers[i].null_mask();
   }
 
-  cudf::io::csv::gpu::decode_row_column_data(parse_opts.view(),
-                                             data,
-                                             make_device_uvector_async(column_flags, stream),
-                                             row_offsets,
-                                             make_device_uvector_async(column_types, stream),
-                                             make_device_uvector_async(h_data, stream),
-                                             make_device_uvector_async(h_valid, stream),
-                                             stream);
+  cudf::io::csv::gpu::decode_row_column_data(
+    parse_opts.view(),
+    data,
+    make_device_uvector_async(column_flags, stream, rmm::mr::get_current_device_resource()),
+    row_offsets,
+    make_device_uvector_async(column_types, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(h_data, stream, rmm::mr::get_current_device_resource()),
+    make_device_uvector_async(h_valid, stream, rmm::mr::get_current_device_resource()),
+    stream);
 
   return out_buffers;
 }
@@ -723,7 +712,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
       for (auto& col_name : column_names) {
         if (++col_names_counts[col_name] > 1) {
-          // All duplicate columns will be ignored; First appearance is parsed
+          CUDF_LOG_WARN("Multiple columns with name {}; only the first appearance is parsed",
+                        col_name);
+
           const auto idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
@@ -857,7 +848,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       stream,
       mr);
     for (size_t i = 0; i < column_types.size(); ++i) {
-      metadata.column_names.emplace_back(out_buffers[i].name);
+      metadata.schema_info.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
           parse_opts.doublequote) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
@@ -870,7 +861,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
       } else {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
     }
   } else {
@@ -881,7 +872,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     // Handle empty metadata
     for (int col = 0; col < num_actual_columns; ++col) {
       if (column_flags[col] & column_parse::enabled) {
-        metadata.column_names.emplace_back(column_names[col]);
+        metadata.schema_info.emplace_back(column_names[col]);
       }
     }
   }

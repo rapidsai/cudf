@@ -1,9 +1,10 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import importlib
 import random
 import time
 import warnings
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
@@ -118,7 +119,7 @@ def test_spillable_buffer(manager: SpillManager):
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
     assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
-    buf.ptr  # Expose pointer
+    buf.mark_exposed()
     assert buf.exposed
     assert not buf.spillable
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
@@ -136,7 +137,6 @@ def test_spillable_buffer(manager: SpillManager):
 @pytest.mark.parametrize(
     "attribute",
     [
-        "ptr",
         "get_ptr",
         "memoryview",
         "is_spilled",
@@ -144,6 +144,7 @@ def test_spillable_buffer(manager: SpillManager):
         "spillable",
         "spill_lock",
         "spill",
+        "memory_info",
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
@@ -155,6 +156,22 @@ def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
         pass
     else:
         assert attr_base == attr_view
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_memory_info(manager: SpillManager, target):
+    if target == "gpu":
+        mem = rmm.DeviceBuffer(size=10)
+        ptr = mem.ptr
+    elif target == "cpu":
+        mem = np.empty(10, dtype="u1")
+        ptr = mem.__array_interface__["data"][0]
+    b = as_buffer(data=mem, exposed=False)
+    assert b.memory_info() == (ptr, mem.size, target)
+    assert b[:].memory_info() == (ptr, mem.size, target)
+    assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
+    assert b[1:].memory_info() == (ptr + 1, mem.size - 1, target)
+    assert b[2:4].memory_info() == (ptr + 2, 2, target)
 
 
 def test_from_pandas(manager: SpillManager):
@@ -192,7 +209,7 @@ def test_spilling_buffer(manager: SpillManager):
     buf = as_buffer(rmm.DeviceBuffer(size=10), exposed=False)
     buf.spill(target="cpu")
     assert buf.is_spilled
-    buf.ptr  # Expose pointer and trigger unspill
+    buf.mark_exposed()  # Expose pointer and trigger unspill
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
         buf.spill(target="cpu")
@@ -313,18 +330,16 @@ def test_spill_df_index(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
 
 
-def test_external_memory_never_spills(manager):
-    """
-    Test that external data, i.e., data not managed by RMM,
-    is never spilled
-    """
-
+def test_external_memory(manager):
     cupy.cuda.set_allocator()  # uses default allocator
-
-    a = cupy.asarray([1, 2, 3])
-    s = cudf.Series(a)
-    assert len(manager.buffers()) == 0
-    assert not s._data[None].data.spillable
+    cpy = cupy.asarray([1, 2, 3])
+    s = cudf.Series(cpy)
+    # Check that the cupy array is still alive after overwriting `cpy`
+    cpy = weakref.ref(cpy)
+    assert cpy() is not None
+    # Check that the series is spillable and known by the spill manager
+    assert len(manager.buffers()) == 1
+    assert s._data[None].data.spillable
 
 
 def test_spilling_df_views(manager):
@@ -352,23 +367,22 @@ def test_modify_spilled_views(manager):
     assert_eq(df_view, df.iloc[1:])
 
 
-def test_ptr_restricted(manager: SpillManager):
-    buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_get_ptr(manager: SpillManager, target):
+    if target == "gpu":
+        mem = rmm.DeviceBuffer(size=10)
+    elif target == "cpu":
+        mem = np.empty(10, dtype="u1")
+    buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
     assert len(buf._spill_locks) == 0
-    slock1 = SpillLock()
-    buf.get_ptr(spill_lock=slock1)
-    assert not buf.spillable
-    assert len(buf._spill_locks) == 1
-    slock2 = SpillLock()
-    buf.spill_lock(spill_lock=slock2)
-    buf.get_ptr(spill_lock=slock2)
-    assert not buf.spillable
-    assert len(buf._spill_locks) == 2
-    del slock1
-    assert len(buf._spill_locks) == 1
-    del slock2
-    assert len(buf._spill_locks) == 0
+    with acquire_spill_lock():
+        buf.get_ptr(mode="read")
+        assert not buf.spillable
+        with acquire_spill_lock():
+            buf.get_ptr(mode="read")
+            assert not buf.spillable
+        assert not buf.spillable
     assert buf.spillable
 
 
@@ -486,7 +500,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert len(buf._base._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
-    assert frames[0].ptr == buf.ptr
+    assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
 
     frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
@@ -523,6 +537,42 @@ def test_df_transpose(manager: SpillManager):
     assert df1._data._data["a"].data.exposed
     assert df2._data._data[0].data.exposed
     assert df2._data._data[1].data.exposed
+
+
+def test_as_buffer_of_spillable_buffer(manager: SpillManager):
+    data = cupy.arange(10, dtype="u1")
+    b1 = as_buffer(data, exposed=False)
+    assert isinstance(b1, SpillableBuffer)
+    assert b1.owner is data
+    b2 = as_buffer(b1)
+    assert b1 is b2
+
+    with pytest.raises(
+        ValueError,
+        match="buffer must either be exposed or spilled locked",
+    ):
+        # Use `memory_info` to access device point _without_ making
+        # the buffer unspillable.
+        b3 = as_buffer(b1.memory_info()[0], size=b1.size, owner=b1)
+
+    with acquire_spill_lock():
+        b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
+    assert isinstance(b3, SpillableBufferSlice)
+    assert b3.owner is b1
+
+    b4 = as_buffer(
+        b1.get_ptr(mode="write") + data.itemsize,
+        size=b1.size - data.itemsize,
+        owner=b3,
+    )
+    assert isinstance(b4, SpillableBufferSlice)
+    assert b4.owner is b1
+    assert all(cupy.array(b4.memoryview()) == data[1:])
+
+    b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
+    assert isinstance(b5, SpillableBufferSlice)
+    assert b5.owner is b1
+    assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
 
 @pytest.mark.parametrize("dtype", ["uint8", "uint64"])
@@ -574,7 +624,7 @@ def test_statistics_expose(manager: SpillManager):
     ]
 
     # Expose the first buffer
-    buffers[0].ptr
+    buffers[0].mark_exposed()
     assert len(manager.statistics.exposes) == 1
     stat = list(manager.statistics.exposes.values())[0]
     assert stat.count == 1
@@ -583,7 +633,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose all 10 buffers
     for i in range(10):
-        buffers[i].ptr
+        buffers[i].mark_exposed()
 
     # The rest of the ptr accesses should accumulate to a single stat
     # because they resolve to the same traceback.
@@ -603,7 +653,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose the new buffers and check that they are counted as spilled
     for i in range(10):
-        buffers[i].ptr
+        buffers[i].mark_exposed()
     assert len(manager.statistics.exposes) == 3
     stat = list(manager.statistics.exposes.values())[2]
     assert stat.count == 10

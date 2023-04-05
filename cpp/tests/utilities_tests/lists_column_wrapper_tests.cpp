@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1380,8 +1380,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
 
   auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
   auto num_lists            = lists_column_offsets->size() - 1;
-  auto lists_column         = make_lists_column(
-    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
+  auto lists_column =
+    make_lists_column(num_lists, std::move(lists_column_offsets), std::move(struct_column), 0, {});
 
   // Check if child column is unchanged.
 
@@ -1420,9 +1420,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
@@ -1444,18 +1444,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
 
   auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
   auto num_lists            = lists_column_offsets->size() - 1;
-  auto lists_column         = make_lists_column(
-    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
+  auto lists_column =
+    make_lists_column(num_lists, std::move(lists_column_offsets), std::move(struct_column), 0, {});
 
   auto lists_of_lists_column_offsets =
     test::fixed_width_column_wrapper<size_type>{0, 2, 3}.release();
-  auto num_lists_of_lists = lists_of_lists_column_offsets->size() - 1;
-  auto lists_of_lists_of_structs_column =
-    make_lists_column(num_lists_of_lists,
-                      std::move(lists_of_lists_column_offsets),
-                      std::move(lists_column),
-                      UNKNOWN_NULL_COUNT,
-                      {});
+  auto num_lists_of_lists               = lists_of_lists_column_offsets->size() - 1;
+  auto lists_of_lists_of_structs_column = make_lists_column(
+    num_lists_of_lists, std::move(lists_of_lists_column_offsets), std::move(lists_column), 0, {});
 
   // Check if child column is unchanged.
 
@@ -1507,9 +1503,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
@@ -1555,11 +1551,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto list_offset_column = test::fixed_width_column_wrapper<size_type>(
                               list_offset_iterator, list_offset_iterator + num_list_rows + 1)
                               .release();
-  auto lists_column = make_lists_column(num_list_rows,
-                                        std::move(list_offset_column),
-                                        std::move(struct_column),
-                                        cudf::UNKNOWN_NULL_COUNT,
-                                        {});
+  auto lists_column = make_lists_column(
+    num_list_rows, std::move(list_offset_column), std::move(struct_column), 0, {});
 
   // List construction succeeded.
   // Verify that the child is unchanged.

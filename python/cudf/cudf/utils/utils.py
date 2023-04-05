@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import functools
 import hashlib
@@ -214,6 +214,7 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
+    # TODO: Remove this in 23.04 to give users some time to switch.
     warnings.warn(
         "The cudf.set_allocator function is deprecated and will be removed in "
         "a future release. Please use rmm.reinitialize "
@@ -278,6 +279,12 @@ class GetAttrGetItemMixin:
 
 class NotIterable:
     def __iter__(self):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             f"{self.__class__.__name__} object is not iterable. "
             f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "

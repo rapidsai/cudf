@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <cudf/utilities/span.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 #include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -55,7 +56,7 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   auto [null_mask, null_count] = cudf::detail::valid_if(
       validity_begin, validity_end,
       [] __device__(auto optional_bool) { return optional_bool.value_or(false); },
-      cudf::get_default_stream());
+      cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const exemplar_without_null_mask = cudf::column_view{
       exemplar.type(),
       exemplar.size(),
@@ -152,8 +153,9 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
                    });
 
   // Create a new nullmask from the validity data.
-  auto [new_null_mask, new_null_count] = cudf::detail::valid_if(
-      validity.begin(), validity.end(), thrust::identity{}, cudf::get_default_stream());
+  auto [new_null_mask, new_null_count] =
+      cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{},
+                             cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   if (new_null_count > 0) {
     // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the
@@ -162,7 +164,8 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
       auto [null_mask, null_count] = cudf::detail::bitmask_and(
           std::vector<bitmask_type const *>{
               overlap_cv.null_mask(), static_cast<bitmask_type const *>(new_null_mask.data())},
-          std::vector<cudf::size_type>{0, 0}, overlap_cv.size(), stream);
+          std::vector<cudf::size_type>{0, 0}, overlap_cv.size(), stream,
+          rmm::mr::get_current_device_resource());
       overlap_result->set_null_mask(std::move(null_mask), null_count);
     } else {
       // Just set the output nullmask as the new nullmask.
@@ -187,13 +190,14 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   // Use `cudf::duplicate_keep_option::KEEP_LAST` so this will produce the desired behavior when
   // being called in `create_map` in spark-rapids.
   // Other options comparing nulls and NaNs are set as all-equal.
-  auto out_columns = cudf::detail::stable_distinct(
-                         table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
-                                     child.child(0), child.child(1)}}, // input table
-                         std::vector<size_type>{0, 1},                 // key columns
-                         cudf::duplicate_keep_option::KEEP_LAST, cudf::null_equality::EQUAL,
-                         cudf::nan_equality::ALL_EQUAL, stream)
-                         ->release();
+  auto out_columns =
+      cudf::detail::stable_distinct(
+          table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}}, child.child(0),
+                      child.child(1)}}, // input table
+          std::vector<size_type>{0, 1}, // key columns
+          cudf::duplicate_keep_option::KEEP_LAST, cudf::null_equality::EQUAL,
+          cudf::nan_equality::ALL_EQUAL, stream, rmm::mr::get_current_device_resource())
+          ->release();
   auto const out_labels = out_columns.front()->view();
 
   // Assemble a structs column of <out_keys, out_vals>.
@@ -211,9 +215,10 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   cudf::detail::labels_to_offsets(labels_begin, labels_begin + out_labels.size(), offsets_begin,
                                   offsets_begin + out_offsets->size(), stream);
 
-  return cudf::make_lists_column(input.size(), std::move(out_offsets), std::move(out_structs),
-                                 input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream), stream);
+  return cudf::make_lists_column(
+      input.size(), std::move(out_offsets), std::move(out_structs), input.null_count(),
+      cudf::detail::copy_bitmask(input.parent(), stream, rmm::mr::get_current_device_resource()),
+      stream);
 }
 
 } // namespace cudf::jni

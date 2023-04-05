@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
 
   std::vector<cudf::io::table_with_metadata> tables;
   // Process each chunk in parallel.
-  for (auto const [chunk_start, chunk_end] : record_ranges) {
+  for (auto const& [chunk_start, chunk_end] : record_ranges) {
     if (chunk_start == -1 or chunk_end == -1) continue;
     reader_opts_chunk.set_byte_range_offset(chunk_start);
     reader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
@@ -99,13 +99,12 @@ TEST_F(JsonReaderTest, ByteRange)
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{json_string.c_str(), json_string.size()})
       .compression(cudf::io::compression_type::NONE)
-      .lines(true)
-      .experimental(true);
+      .lines(true);
 
   // Read full test data via existing, nested JSON lines reader
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
 
-  auto datasources = cudf::io::datasource::create(json_lines_options.get_source().buffers());
+  auto datasources = cudf::io::datasource::create(json_lines_options.get_source().host_buffers());
 
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500}) {

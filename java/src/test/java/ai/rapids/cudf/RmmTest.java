@@ -51,6 +51,45 @@ public class RmmTest {
     }
   }
 
+  @Test
+  public void testCreateAdaptors() {
+    final long poolSize = 32 * 1024 * 1024; // 32 MiB
+    try (RmmCudaMemoryResource r = new RmmCudaMemoryResource()) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmCudaAsyncMemoryResource r = new RmmCudaAsyncMemoryResource(poolSize, poolSize)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmManagedMemoryResource r = new RmmManagedMemoryResource()) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmArenaMemoryResource<RmmCudaMemoryResource> r =
+             new RmmArenaMemoryResource<>(new RmmCudaMemoryResource(), poolSize, false)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmPoolMemoryResource<RmmCudaMemoryResource> r =
+             new RmmPoolMemoryResource<>(new RmmCudaMemoryResource(), poolSize, poolSize)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmLimitingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmLimitingResourceAdaptor<>(new RmmCudaMemoryResource(), poolSize, 64)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmLoggingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmLoggingResourceAdaptor<>(new RmmCudaMemoryResource(), Rmm.logToStderr(), true)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmTrackingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmTrackingResourceAdaptor<>(new RmmCudaMemoryResource(), 64)) {
+      assert(r.getHandle() != 0);
+      assert(r.getTotalBytesAllocated() == 0);
+      assert(r.getMaxTotalBytesAllocated() == 0);
+      assert(r.getScopedMaxTotalBytesAllocated() == 0);
+      r.resetScopedMaxTotalBytesAllocated(1024);
+      assert(r.getScopedMaxTotalBytesAllocated() == 1024);
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(ints = {
       RmmAllocationMode.CUDA_DEFAULT,

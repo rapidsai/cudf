@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.strings.regex_program cimport regex_program
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
 
@@ -39,20 +40,20 @@ cdef extern from "cudf/strings/split/split_re.hpp" namespace \
 
     cdef unique_ptr[table] split_re(
         const column_view& source_strings,
-        const string& pattern,
+        regex_program,
         size_type maxsplit) except +
 
     cdef unique_ptr[table] rsplit_re(
         const column_view& source_strings,
-        const string& pattern,
+        regex_program,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] split_record_re(
         const column_view& source_strings,
-        const string& pattern,
+        regex_program,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] rsplit_record_re(
         const column_view& source_strings,
-        const string& pattern,
+        regex_program,
         size_type maxsplit) except +

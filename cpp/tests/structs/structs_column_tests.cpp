@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -422,11 +422,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
     cudf::test::fixed_width_column_wrapper<size_type>{0, 2, 3, 5, 6}.release();
   auto num_list_rows = list_offsets_column->size() - 1;
 
-  auto list_col = cudf::make_lists_column(num_list_rows,
-                                          std::move(list_offsets_column),
-                                          std::move(struct_col),
-                                          cudf::UNKNOWN_NULL_COUNT,
-                                          {});
+  auto list_col = cudf::make_lists_column(
+    num_list_rows, std::move(list_offsets_column), std::move(struct_col), 0, {});
 
   // List of structs was constructed successfully. No exceptions.
   // Verify that child columns is as it was set.
@@ -460,22 +457,22 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
   // Compare with expected values.
 
   auto expected_level0_list = lists_column_wrapper<TypeParam, int32_t>{
-    {{}, {1}, {}, {3}, {}, {5, 5}, {}, {}, {}, {9}},
+    {{}, {3}, {}, {5, 5}, {}, {9}},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
   auto expected_level2_struct = structs_column_wrapper{{expected_level0_list}}.release();
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(cudf::lists_column_view(*list_of_struct_of_list).child(),
-                                      *expected_level2_struct);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::lists_column_view(*list_of_struct_of_list).child(),
+                                 *expected_level2_struct);
 
   auto expected_level3_list = cudf::make_lists_column(
     5,
-    std::move(fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release()),
+    std::move(fixed_width_column_wrapper<size_type>{0, 0, 2, 4, 4, 6}.release()),
     std::move(expected_level2_struct),
     cudf::UNKNOWN_NULL_COUNT,
     detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*list_of_struct_of_list, *expected_level3_list);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*list_of_struct_of_list, *expected_level3_list);
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
@@ -552,12 +549,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
     EXPECT_TRUE(struct_column->size() == 0);
     EXPECT_TRUE(struct_column->null_count() == 0);
 
-    auto empty_list_of_structs =
-      cudf::make_lists_column(0,
-                              fixed_width_column_wrapper<size_type>{0}.release(),
-                              std::move(struct_column),
-                              cudf::UNKNOWN_NULL_COUNT,
-                              {});
+    auto empty_list_of_structs = cudf::make_lists_column(
+      0, fixed_width_column_wrapper<size_type>{0}.release(), std::move(struct_column), 0, {});
 
     EXPECT_TRUE(empty_list_of_structs->size() == 0);
     EXPECT_TRUE(empty_list_of_structs->null_count() == 0);
@@ -613,11 +606,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(clone_structs_column, structs_column);
 
   auto list_of_structs_column =
-    cudf::make_lists_column(3,
-                            fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(),
-                            structs_column.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            {})
+    cudf::make_lists_column(
+      3, fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(), structs_column.release(), 0, {})
       .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_of_structs_column->view(),

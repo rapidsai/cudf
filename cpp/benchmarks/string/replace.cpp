@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int const len_mult   = 2;
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 

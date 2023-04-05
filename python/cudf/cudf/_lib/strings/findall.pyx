@@ -1,5 +1,6 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -12,6 +13,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.findall cimport findall as cpp_findall
 from cudf._lib.cpp.strings.regex_flags cimport regex_flags
+from cudf._lib.cpp.strings.regex_program cimport regex_program
 
 
 @acquire_spill_lock()
@@ -25,12 +27,13 @@ def findall(Column source_strings, object pattern, uint32_t flags):
 
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = <regex_flags>flags
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_findall(
             source_view,
-            pattern_string,
-            c_flags
+            dereference(c_prog)
         ))
 
     return Column.from_unique_ptr(move(c_result))

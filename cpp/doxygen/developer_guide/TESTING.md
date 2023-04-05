@@ -449,6 +449,10 @@ column data. Null elements are treated as equivalent.
 
 Verifies the bitwise equality of two device memory buffers.
 
+#### Caveats
+
+Column comparison functions in the `cudf::test::detail` namespace should **NOT** be used directly.
+
 ### Printing and accessing column data
 
 `include/cudf_test/column_utilities.hpp` defines various functions and overloads for printing

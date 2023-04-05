@@ -83,7 +83,7 @@ The details are based on features documented at https://www.regular-expressions.
 | String anchor | `$` (dollar) | Matches at the end of the string as well as before the final line break in the string | `.$` matches `f` in `abcdef` and in `abcdef\n` |
 | Line anchor | `$` (dollar) | When [cudf::strings::regex_flags::MULTILINE](@ref cudf::strings::regex_flags) is specified: Matches before each line break in addition to matching at the end of the string, thus matching at the end of each line in the string. | `.$` matches `c` and `f` in `abc\ndef` and in `abc\ndef\n`　|
 | String anchor | `\A` | Matches at the start of the string | `\A\w` matches only `a` in `abc` |
-| String anchor | `\Z` | Matches at the end of the string as well as before the final line break in the string | `\w\Z` matches `f` in `abc\ndef` and in `abc\ndef\n` but fails to match `abc\ndef\n\n` |
+| String anchor | `\Z` | Matches at the end of the string | `\w\Z` matches `f` in `abc\ndef` but fails to match `abc\ndef\n` |
 
 ### Word Boundaries
 

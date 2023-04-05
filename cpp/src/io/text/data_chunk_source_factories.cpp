@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,8 +74,7 @@ class datasource_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     if (_source->supports_device_read() && _source->is_device_read_preferred(read_size)) {
-      _source->device_read_async(
-        _offset, read_size, reinterpret_cast<uint8_t*>(chunk.data()), stream);
+      _source->device_read(_offset, read_size, reinterpret_cast<uint8_t*>(chunk.data()), stream);
     } else {
       auto& h_ticket = _tickets[_next_ticket_idx];
 
@@ -91,7 +90,7 @@ class datasource_chunk_reader : public data_chunk_reader {
 
       // copy the host-pinned data on to device
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyHostToDevice, stream.value()));
+        chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
 
       // record the host-to-device copy.
       CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -167,7 +166,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
     // copy the host-pinned data on to device
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyHostToDevice, stream.value()));
+      chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
 
     // record the host-to-device copy.
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -210,7 +209,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
       chunk.data(),
       _data.data() + _position,
       read_size,
-      cudaMemcpyHostToDevice,
+      cudaMemcpyDefault,
       stream.value()));
 
     _position += read_size;

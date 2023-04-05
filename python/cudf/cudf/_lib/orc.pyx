@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
@@ -120,7 +120,7 @@ cpdef read_orc(object filepaths_or_buffers,
     with nogil:
         c_result = move(libcudf_read_orc(c_orc_reader_options))
 
-    names = [name.decode() for name in c_result.metadata.column_names]
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
     actual_index_names, col_names, is_range_index, reset_index_name, \
         range_idx = _get_index_from_metadata(c_result.metadata.user_data,
                                              names,

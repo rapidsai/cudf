@@ -102,7 +102,6 @@ Function application, GroupBy & window
    :toctree: api/
 
    Series.apply
-   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
@@ -166,6 +165,7 @@ Reindexing / selection / label manipulation
    Series.add_suffix
    Series.drop
    Series.drop_duplicates
+   Series.duplicated
    Series.equals
    Series.first
    Series.head

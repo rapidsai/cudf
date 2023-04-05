@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,27 +74,14 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
-      auto const col_typeid = col->type().id();
-      col->set_null_mask(
-        cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset));
-
-      if (col_typeid == cudf::type_id::STRUCT) {
-        auto const null_mask  = col->view().null_mask();
-        auto const null_count = col->null_count();
-
-        for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
-          cudf::structs::detail::superimpose_nulls(null_mask,
-                                                   null_count,
-                                                   col->child(idx),
-                                                   cudf::get_default_stream(),
-                                                   rmm::mr::get_current_device_resource());
-        }
-      }
-
-      if (col_typeid == cudf::type_id::LIST || col_typeid == cudf::type_id::STRUCT ||
-          col_typeid == cudf::type_id::STRING) {
-        col = cudf::purge_nonempty_nulls(col->view());
-      }
+      auto const null_mask_buff =
+        cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
+      col = cudf::structs::detail::superimpose_nulls(
+        static_cast<cudf::bitmask_type const*>(null_mask_buff.data()),
+        cudf::UNKNOWN_NULL_COUNT,
+        std::move(col),
+        cudf::get_default_stream(),
+        rmm::mr::get_current_device_resource());
     }
   }
 
@@ -106,6 +93,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *input_table)
       .max_page_size_bytes(max_page_size_bytes)
       .max_page_size_rows(max_page_size_rows)
+      .max_page_fragment_size(cudf::io::default_max_page_fragment_size)
       .build();
   cudf::io::write_parquet(write_opts);
 
@@ -373,6 +361,53 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
+{
+  auto constexpr num_rows = 60'000;
+
+  auto const generate_input = [num_rows](bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+
+    // strings                                                 Page    total bytes   cumulative
+    // 20000 rows alternating 1-4 chars each (50000 + 80004)   A0      130004        130004
+    // 20000 rows alternating 1-4 chars each (50000 + 80004)   A1      130004        260008
+    // ...
+    auto const strings = std::vector<std::string>{"a", "bbbb"};
+    auto const str_iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return strings[i % 2]; });
+    input_columns.emplace_back(strings_col(str_iter, str_iter + num_rows).release());
+
+    // Cumulative sizes:
+    // A0 :  130004
+    // A1 :  260008
+    // A2 :  390012
+    return write_file(input_columns,
+                      "chunked_read_with_strings_precise",
+                      nullable,
+                      512 * 1024,  // 512KB per page
+                      20000        // 20k rows per page
+    );
+  };
+
+  auto const [expected_no_null, filepath_no_null] = generate_input(false);
+
+  // a chunk limit of 1 byte less than 2 pages should force it to produce 3 chunks:
+  // each 1 page in size
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 260'007);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+
+  // a chunk limit of exactly equal to 2 pages should force it to produce 2 chunks
+  // pages 0-1 and page 2
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 260'008);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 }
 

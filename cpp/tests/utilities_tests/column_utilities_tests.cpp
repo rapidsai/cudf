@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,13 +389,17 @@ TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
   //  Null count: 1
   //  0
   //    0, 1, 2
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 3};
-  cudf::test::fixed_width_column_wrapper<int> values{0, 1, 2};
-  auto l0 = cudf::make_lists_column(1,
-                                    offsets.release(),
-                                    values.release(),
-                                    1,
-                                    cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.emplace_back(
+    std::move(cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, 3}.release()));
+  children.emplace_back(std::move(cudf::test::fixed_width_column_wrapper<int>{0, 1, 2}.release()));
+
+  auto l0 = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::LIST},
+                                           1,
+                                           rmm::device_buffer{},
+                                           cudf::create_null_mask(1, cudf::mask_state::ALL_NULL),
+                                           1,
+                                           std::move(children));
 
   // sanitary
   //
@@ -412,7 +416,7 @@ TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
     cudf::test::detail::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
 }
 
-TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
+TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 {
   // list<int>
   {
@@ -436,14 +440,10 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
                                 cudf::test::detail::make_null_mask(valids.begin(), valids.end()));
 
     // properties
-    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(*c0, *c1);
-    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
-      *c0, *c1, cudf::test::debug_output_level::QUIET));
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
 
     // values
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_FALSE(
-      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*c0, *c1);
   }
 
   // list<list<struct<int, float>>>
@@ -462,7 +462,7 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
       7,
       c0_l2_offsets.release(),
       c0_l2_data.release(),
-      0,
+      2,
       cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end()));
     auto c0 = make_lists_column(
       7,
@@ -492,14 +492,10 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
       cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end()));
 
     // properties
-    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(*c0, *c1);
-    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
-      *c0, *c1, cudf::test::debug_output_level::QUIET));
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
 
     // values
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_FALSE(
-      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*c0, *c1);
   }
 }
 

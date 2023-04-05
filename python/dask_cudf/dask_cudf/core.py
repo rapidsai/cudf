@@ -1,15 +1,13 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import math
+import textwrap
 import warnings
 
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
 from tlz import partition_all
 
-import dask
-import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
@@ -29,12 +27,6 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _get_shuffle_type
-
-DASK_BACKEND_SUPPORT = parse_version(dask.__version__) >= parse_version(
-    "2022.10.0"
-)
-# TODO: Remove DASK_BACKEND_SUPPORT throughout codebase
-# when dask_cudf is pinned to dask>=2022.10.0
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -77,6 +69,18 @@ normalize_token.register(_Frame, lambda a: a._name)
 
 
 class DataFrame(_Frame, dd.core.DataFrame):
+    """
+    A distributed Dask DataFrame where the backing dataframe is a
+    :class:`cuDF DataFrame <cudf:cudf.DataFrame>`.
+
+    Typically you would not construct this object directly, but rather
+    use one of Dask-cuDF's IO routines.
+
+    Most operations on :doc:`Dask DataFrames <dask:dataframe>` are
+    supported, with many of the same caveats.
+
+    """
+
     _partition_type = cudf.DataFrame
 
     @_dask_cudf_nvtx_annotate
@@ -283,29 +287,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _naive_var(self, meta, skipna, ddof, split_every, out)
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
-
-    @_dask_cudf_nvtx_annotate
-    def repartition(self, *args, **kwargs):
-        """Wraps dask.dataframe DataFrame.repartition method.
-        Uses DataFrame.shuffle if `columns=` is specified.
-        """
-        # TODO: Remove this function in future(0.17 release)
-        columns = kwargs.pop("columns", None)
-        if columns:
-            warnings.warn(
-                "The columns argument will be removed from repartition in "
-                "future versions of dask_cudf. Use DataFrame.shuffle().",
-                FutureWarning,
-            )
-            warnings.warn(
-                "Rearranging data by column hash. Divisions will lost. "
-                "Set ignore_index=False to preserve Index values."
-            )
-            ignore_index = kwargs.pop("ignore_index", True)
-            return self.shuffle(
-                on=columns, ignore_index=ignore_index, **kwargs
-            )
-        return super().repartition(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, shuffle=None, **kwargs):
@@ -703,12 +684,35 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 
 from_cudf.__doc__ = (
-    "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
+    textwrap.dedent(
+        """
+        Create a :class:`.DataFrame` from a :class:`cudf.DataFrame`.
+
+        This function is a thin wrapper around
+        :func:`dask.dataframe.from_pandas`, accepting the same
+        arguments (described below) excepting that it operates on cuDF
+        rather than pandas objects.\n
+        """
+    )
+    + textwrap.dedent(dd.from_pandas.__doc__)
 )
 
 
 @_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
+    """
+    Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF
+    one.
+
+    Parameters
+    ----------
+    df : dask.dataframe.DataFrame
+        The Dask dataframe to convert
+
+    Returns
+    -------
+    dask_cudf.DataFrame : A new Dask collection backed by cuDF objects
+    """
     return df.map_partitions(cudf.from_pandas)
 
 

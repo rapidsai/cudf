@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,8 +56,6 @@ void BM_orc_read_varying_options(nvbench::state& state,
                                                     nvbench::enum_type<UsesNumpyDType>,
                                                     nvbench::enum_type<Timestamp>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const num_chunks = RowSelection == row_selection::ALL ? 1 : chunked_read_num_chunks;
 
   auto const use_index     = UsesIndex == uses_index::YES;

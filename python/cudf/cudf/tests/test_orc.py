@@ -19,8 +19,17 @@ from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
     assert_eq,
+    expect_warning_if,
     gen_rand_series,
     supported_numpy_dtypes,
+)
+
+# Removal of these deprecated features is no longer imminent. They will not be
+# removed until a suitable alternative has been implemented. As a result, we
+# also do not want to stop testing them yet.
+# https://github.com/rapidsai/cudf/issues/11519
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:(num_rows|skiprows) is deprecated and will be removed."
 )
 
 
@@ -1669,22 +1678,7 @@ def test_orc_writer_nvcomp(compression):
         assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
-@pytest.mark.parametrize("index", [True, False, None])
-@pytest.mark.parametrize(
-    "columns",
-    [
-        None,
-        [],
-        pytest.param(
-            ["b", "a"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12026"
-            ),
-        ),
-    ],
-)
-def test_orc_columns_and_index_param(index_obj, index, columns):
+def run_orc_columns_and_index_param(index_obj, index, columns):
     buffer = BytesIO()
     df = cudf.DataFrame(
         {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=index_obj
@@ -1704,6 +1698,67 @@ def test_orc_columns_and_index_param(index_obj, index, columns):
         )
     else:
         assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        [],
+    ],
+)
+def test_orc_columns_and_index_param(index_obj, index, columns):
+    run_orc_columns_and_index_param(index_obj, index, columns)
+
+
+@pytest.mark.parametrize(
+    "columns,index,index_obj",
+    [
+        (
+            ["a", "b"],
+            True,
+            None,
+        ),
+        (
+            ["a", "b"],
+            True,
+            [10, 11, 12],
+        ),
+        (
+            ["a", "b"],
+            True,
+            ["x", "y", "z"],
+        ),
+        (
+            ["a", "b"],
+            None,
+            [10, 11, 12],
+        ),
+        (
+            ["a", "b"],
+            None,
+            ["x", "y", "z"],
+        ),
+    ],
+)
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12026")
+def test_orc_columns_and_index_param_read_index(index_obj, index, columns):
+    run_orc_columns_and_index_param(index_obj, index, columns)
+
+
+@pytest.mark.parametrize(
+    "columns,index,index_obj",
+    [
+        (["a", "b"], False, None),
+        (["a", "b"], False, [10, 11, 12]),
+        (["a", "b"], False, ["x", "y", "z"]),
+        (["a", "b"], None, None),
+    ],
+)
+def test_orc_columns_and_index_param_no_read_index(index_obj, index, columns):
+    run_orc_columns_and_index_param(index_obj, index, columns)
 
 
 @pytest.mark.parametrize(
@@ -1787,7 +1842,12 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     )
     pyarrow.orc.write_table(pyorc_table, buffer)
 
-    assert_eq(negative_timestamp_df, cudf.read_orc(buffer, engine=engine))
+    # We warn the user that this function will fall back to the CPU for reading
+    # when the engine is pyarrow.
+    with expect_warning_if(engine == "pyarrow", UserWarning):
+        got = cudf.read_orc(buffer, engine=engine)
+
+    assert_eq(negative_timestamp_df, got)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
@@ -1833,4 +1893,17 @@ def test_reader_empty_stripe(datadir, fname):
 
     expected = pd.read_orc(path)
     got = cudf.read_orc(path)
+    assert_eq(expected, got)
+
+
+@pytest.mark.xfail(
+    reason="https://github.com/rapidsai/cudf/issues/11890", raises=RuntimeError
+)
+def test_reader_unsupported_offsets():
+    # needs enough data for more than one row group
+    expected = cudf.DataFrame({"str": ["*"] * 10001}, dtype="string")
+
+    buffer = BytesIO()
+    expected.to_pandas().to_orc(buffer)
+    got = cudf.read_orc(buffer)
     assert_eq(expected, got)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1022,7 +1022,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   cudaMemcpyAsync(h_inner_offsets.data(),
                   tdigest_offsets.begin<offset_type>(),
                   sizeof(offset_type) * tdigest_offsets.size(),
-                  cudaMemcpyDeviceToHost,
+                  cudaMemcpyDefault,
                   stream);
 
   stream.synchronize();
@@ -1120,7 +1120,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                  tdigests.end(),
                  std::back_inserter(tdigest_views),
                  [](std::unique_ptr<table> const& t) { return t->view(); });
-  auto merged = cudf::detail::concatenate(tdigest_views, stream);
+  auto merged =
+    cudf::detail::concatenate(tdigest_views, stream, rmm::mr::get_current_device_resource());
 
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();
@@ -1274,7 +1275,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   cudaMemcpyAsync(h_group_offsets.data(),
                   group_offsets.begin(),
                   sizeof(size_type) * group_offsets.size(),
-                  cudaMemcpyDeviceToHost,
+                  cudaMemcpyDefault,
                   stream);
 
   return merge_tdigests(tdv,

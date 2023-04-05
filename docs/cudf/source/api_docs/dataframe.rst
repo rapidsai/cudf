@@ -134,6 +134,7 @@ Computations / descriptive stats
    DataFrame.cumsum
    DataFrame.describe
    DataFrame.diff
+   DataFrame.eval
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
@@ -145,7 +146,6 @@ Computations / descriptive stats
    DataFrame.prod
    DataFrame.product
    DataFrame.quantile
-   DataFrame.quantiles
    DataFrame.rank
    DataFrame.round
    DataFrame.skew
@@ -165,6 +165,7 @@ Reindexing / selection / label manipulation
    DataFrame.add_suffix
    DataFrame.drop
    DataFrame.drop_duplicates
+   DataFrame.duplicated
    DataFrame.equals
    DataFrame.first
    DataFrame.head
