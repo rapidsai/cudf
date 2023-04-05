@@ -476,6 +476,65 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
+  private static Stream<Arguments> createStringLiteralComparisonParams() {
+    String[] in1 = new String[] {"a", "bb", null, "ccc", "dddd"};
+    String in2 = "ccc";
+    return Stream.of(
+        // nulls compare as equal by default
+        Arguments.of(BinaryOperator.NULL_EQUAL, in1, in2, Arrays.asList(false, false, false, true, false)),
+        Arguments.of(BinaryOperator.NOT_EQUAL, in1, in2, mapArray(in1, (a) -> !a.equals(in2))),
+        Arguments.of(BinaryOperator.LESS, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) < 0)),
+        Arguments.of(BinaryOperator.GREATER, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) > 0)),
+        Arguments.of(BinaryOperator.LESS_EQUAL, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) <= 0)),
+        Arguments.of(BinaryOperator.GREATER_EQUAL, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) >= 0)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("createStringLiteralComparisonParams")
+  void testStringLiteralComparison(BinaryOperator op, String[] in1, String in2,
+                                               List<Boolean> expectedValues) {
+    Literal lit = Literal.ofString(in2);
+    BinaryOperation expr = new BinaryOperation(op,
+        new ColumnReference(0),
+        lit);
+    try (Table t = new Table.TestBuilder().column(in1).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumn(t);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             expectedValues.toArray(new Boolean[0]))) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  private static Stream<Arguments> createBinaryComparisonOperationStringParams() {
+    String[] in1 = new String[] {"a", "bb", null, "ccc", "dddd"};
+    String[] in2 = new String[] {"aa", "b", null, "ccc", "ddd"};
+    return Stream.of(
+        // nulls compare as equal by default
+        Arguments.of(BinaryOperator.NULL_EQUAL, in1, in2, Arrays.asList(false, false, true, true, false)),
+        Arguments.of(BinaryOperator.NOT_EQUAL, in1, in2, mapArray(in1, in2, (a, b) -> !a.equals(b))),
+        Arguments.of(BinaryOperator.LESS, in1, in2, mapArray(in1, in2, (a, b) -> a.compareTo(b) < 0)),
+        Arguments.of(BinaryOperator.GREATER, in1, in2, mapArray(in1, in2, (a, b) -> a.compareTo(b) > 0)),
+        Arguments.of(BinaryOperator.LESS_EQUAL, in1, in2, mapArray(in1, in2, (a, b) -> a.compareTo(b) <= 0)),
+        Arguments.of(BinaryOperator.GREATER_EQUAL, in1, in2, mapArray(in1, in2, (a, b) -> a.compareTo(b) >= 0)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("createBinaryComparisonOperationStringParams")
+  void testBinaryComparisonOperationStringTransform(BinaryOperator op, String[] in1, String[] in2,
+                                               List<Boolean> expectedValues) {
+    BinaryOperation expr = new BinaryOperation(op,
+        new ColumnReference(0),
+        new ColumnReference(1));
+    try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumn(t);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             expectedValues.toArray(new Boolean[0]))) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
   private static Stream<Arguments> createBinaryBitwiseOperationParams() {
     Integer[] in1 = new Integer[] { -5, 4, null, 2, -3 };
     Integer[] in2 = new Integer[] { 123, -456, null, 0, -3 };
