@@ -627,9 +627,19 @@ def test_cudf_to_datetime(data, dayfirst):
     expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
     actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
 
-    if isinstance(actual, cudf.Series):
-        # TODO: PREM
-        assert_eq(actual, expected, check_dtype=False)
+    # TODO: Remove typecast to `ns` and following if/else
+    # workaround after following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
+
+    if actual is not None and expected is not None:
+        assert_eq(
+            actual.astype(pd_data.dtype)
+            if pd_data is not None
+            and hasattr(pd_data, "dtype")
+            and cudf.api.types.is_datetime_dtype(pd_data.dtype)
+            else actual.astype("datetime64[ns]"),
+            expected,
+        )
     else:
         assert_eq(actual, expected)
 
@@ -721,7 +731,11 @@ def test_to_datetime_units(data, unit):
     expected = pd.to_datetime(pd_data, unit=unit)
     actual = cudf.to_datetime(gd_data, unit=unit)
 
-    assert_eq(actual, expected)
+    # TODO: Remove typecast to `ns` after following
+    # issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
+
+    assert_eq(actual.astype("datetime64[ns]"), expected)
 
 
 @pytest.mark.parametrize(

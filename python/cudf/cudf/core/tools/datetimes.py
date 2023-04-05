@@ -131,7 +131,11 @@ def to_datetime(
             f"{errors}"
         )
     if infer_datetime_format in {None, False}:
-        warnings.warn("`infer_datetime_format` is deprecated", UserWarning)
+        warnings.warn(
+            "`infer_datetime_format` is deprecated and will "
+            "be removed in a future version of cudf.",
+            FutureWarning,
+        )
 
     if arg is None:
         return None
@@ -361,7 +365,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 dtype=_unit_dtype_map[unit],
                 format=format,
             )
-    return col.astype("datetime64[ns]")
+    return col
 
 
 def get_units(value):
