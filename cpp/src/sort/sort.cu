@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <sort/sort_impl.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -21,8 +23,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <sort/sort_impl.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
