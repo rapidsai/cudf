@@ -21,6 +21,7 @@
 
 #include <cstdlib>
 #include <cxxabi.h>
+#include <cstring>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
