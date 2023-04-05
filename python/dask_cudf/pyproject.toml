@@ -21,6 +21,7 @@ dependencies = [
     "cudf==23.4.*",
     "cupy-cuda11x>=9.5.0,<12.0.0a0",
     "dask==2023.3.2",
+    "dask-core==2023.3.2",
     "distributed==2023.3.2.1",
     "fsspec>=0.6.0",
     "numpy>=1.21",
