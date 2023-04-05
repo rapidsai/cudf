@@ -28,8 +28,8 @@ if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     rapids-logger "rapids-mamba-retry install -c dask/label/dev 'dask/label/dev::dask' 'dask/label/dev::distributed'"
     rapids-mamba-retry install -c dask/label/dev "dask/label/dev::dask" "dask/label/dev::distributed"
 else
-    rapids-logger "rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed==2023.3.2.1 conda-forge::dask-core==2023.3.2.1 --force-reinstall"
-    rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=="2023.3.2.1" conda-forge::dask-core=="2023.3.2.1" --force-reinstall
+    rapids-logger "rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed==2023.3.2.1 conda-forge::dask-core==2023.3.2 --force-reinstall"
+    rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=="2023.3.2.1" conda-forge::dask-core=="2023.3.2" --force-reinstall
 fi
 
 logger "python -c 'import dask_cudf'"
