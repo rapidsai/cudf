@@ -383,8 +383,10 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask==2023.3.2
-          - dask-core==2023.3.2
           - distributed==2023.3.2.1
+      - output_types: conda
+        packages:
+          - dask-core==2023.3.2
       - output_types: pyproject
         packages:
           - &cudf cudf==23.4.*
