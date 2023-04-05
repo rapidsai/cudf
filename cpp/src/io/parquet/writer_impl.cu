@@ -488,6 +488,9 @@ struct leaf_schema_fn {
     if (col_meta.is_decimal_precision_set()) {
       CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
                    "Precision must be equal to or greater than scale!");
+      if (col_schema.type == Type::INT64 and col_meta.get_decimal_precision() < 10) {
+        CUDF_LOG_WARN("Parquet writer: writing a decimal column with precision < 10 as int64");
+      }
       col_schema.decimal_precision = col_meta.get_decimal_precision();
     }
   }
