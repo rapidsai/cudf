@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/io/cuio_common.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 
 #include <cstdio>
 #include <fstream>
@@ -173,10 +174,24 @@ std::string exec_cmd(std::string_view cmd)
   return error_out;
 }
 
+void log_l3_warning_once()
+{
+  static bool is_logged = false;
+  if (not is_logged) {
+    CUDF_LOG_WARN(
+      "Running benchmarks without dropping the L3 cache; results may not reflect file IO "
+      "throughput");
+    is_logged = true;
+  }
+}
+
 void try_drop_l3_cache()
 {
   static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
-  if (not is_drop_cache_enabled) { return; }
+  if (not is_drop_cache_enabled) {
+    log_l3_warning_once();
+    return;
+  }
 
   std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
   CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),

@@ -110,6 +110,11 @@ class pair_equality {
   {
   }
 
+  // The parameters are build/probe rather than left/right because the operator
+  // is called by cuco's kernels with parameters in this order (note that this
+  // is an implementation detail that we should eventually stop relying on by
+  // defining operators with suitable heterogeneous typing). Rather than
+  // converting to left/right semantics, we can operate directly on build/probe
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
@@ -151,7 +156,7 @@ get_trivial_left_join_indices(table_view const& left,
  *
  * @param build Table of columns used to build join hash.
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * build
+ *                           build
  * @param hash_table Build hash table.
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.

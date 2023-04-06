@@ -52,11 +52,11 @@ namespace {
  * @param build_table The right hand table
  * @param probe_table The left hand table
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * build_table
+ *                           build_table
  * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * probe_table
+ *                           probe_table
  * @param hash_table A hash table built on the build table that maps the index
- * of every row to the hash value of that row
+ *                   of every row to the hash value of that row
  * @param join The type of join to be performed
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not
@@ -103,7 +103,6 @@ std::size_t compute_join_output_size(
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
 
@@ -132,9 +131,9 @@ std::size_t compute_join_output_size(
  * @param build_table Table of build side columns to join
  * @param probe_table Table of probe side columns to join
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * build_table
+ *                           build_table
  * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * probe_table
+ *                           probe_table
  * @param hash_table Hash table built from `build_table`
  * @param join The type of join to be performed
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
@@ -214,7 +213,7 @@ probe_join_hash_table(
                                        stream.value());
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
-        auto const actual_size = out1_zip_end - out1_zip_begin;
+        auto const actual_size = thrust::distance(out1_zip_begin, out1_zip_end);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
       }
@@ -248,9 +247,9 @@ probe_join_hash_table(
  * @param build_table Table of build side columns to join
  * @param probe_table Table of probe side columns to join
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * build_table
+ *                           build_table
  * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- * probe_table
+ *                           probe_table
  * @param hash_table Hash table built from `build_table`
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param compare_nulls Controls whether null join-key values should match or not
@@ -305,7 +304,6 @@ std::size_t get_full_join_size(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto device_comparator) {
     pair_equality equality{device_comparator};
-
     hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   };

@@ -1004,10 +1004,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType                     = cudf::scalar_type_t<cudf::string_view>;
       auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
@@ -1033,10 +1033,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType = cudf::scalar_type_t<cudf::string_view>;
       auto result1     = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
