@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,9 +151,9 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition     = 0,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  cudf::size_type start_partition,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   auto nrows = input.num_rows();
 

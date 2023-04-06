@@ -76,7 +76,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
 
-  auto d_views = make_device_uvector_async(device_views, stream);
+  auto d_views =
+    make_device_uvector_async(device_views, stream, rmm::mr::get_current_device_resource());
 
   // Compute the partition offsets
   auto offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -87,7 +88,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     thrust::plus{});
-  auto d_offsets         = make_device_uvector_async(offsets, stream);
+  auto d_offsets =
+    make_device_uvector_async(offsets, stream, rmm::mr::get_current_device_resource());
   auto const output_size = offsets.back();
 
   return std::make_tuple(

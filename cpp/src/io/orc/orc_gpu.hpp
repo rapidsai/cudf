@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "timezone.cuh"
+#include <cudf/detail/timezone.cuh>
 
 #include "orc.hpp"
 
@@ -159,6 +159,7 @@ struct encoder_chunk_streams {
  * @brief Struct to describe a column stream within a stripe
  */
 struct StripeStream {
+  uint8_t* data_ptr;        // encoded and gathered output
   size_t bfr_offset;        // Offset of this stream in compressed buffer
   uint32_t stream_size;     // Size of stream in bytes
   uint32_t first_chunk_id;  // First chunk of the stripe
@@ -294,7 +295,7 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint32_t num_columns,
                          uint32_t num_stripes,
                          size_t first_row,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level,

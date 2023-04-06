@@ -38,7 +38,7 @@ set +e
 
 rapids-logger "Run Java tests"
 pushd java
-mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF -DCUDF_JNI_ENABLE_PROFILING=OFF
+mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF
 popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"

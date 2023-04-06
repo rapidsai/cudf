@@ -42,7 +42,7 @@ namespace lists {
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
@@ -64,7 +64,7 @@ std::unique_ptr<column> contains(
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys Column of elements to be looked up in each list row
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
@@ -85,7 +85,7 @@ std::unique_ptr<column> contains(
  * Nulls inside non-null nested elements (such as lists or structs) are not considered.
  *
  * @param lists Lists column whose `n` rows are to be searched
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains_nulls(
@@ -102,7 +102,7 @@ enum class duplicate_find_option : int32_t {
 };
 
 /**
- * @brief Create a column of `size_type` values indicating the position of a search key
+ * @brief Create a column of values indicating the position of a search key
  * within each list row in the `lists` column
  *
  * The output column has as many elements as there are rows in the input `lists` column.
@@ -119,14 +119,14 @@ enum class duplicate_find_option : int32_t {
  * If `find_option == FIND_LAST`, the position of the last match in the list row is
  * returned.
  *
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
+ *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return INT32 column of `n` rows with the location of the `search_key`
- *
- * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return column of `n` rows with the location of the `search_key`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
@@ -135,7 +135,7 @@ std::unique_ptr<column> index_of(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of `size_type` values indicating the position of a search key
+ * @brief Create a column of values indicating the position of a search key
  * row within the corresponding list row in the `lists` column
  *
  * The output column has as many elements as there are rows in the input `lists` column.
@@ -152,16 +152,16 @@ std::unique_ptr<column> index_of(
  * If `find_option == FIND_LAST`, the position of the last match in the list row is
  * returned.
  *
+ * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
+ *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys A column of search keys to be looked up in each corresponding row of
  * `lists`
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return INT32 column of `n` rows with the location of the `search_key`
- *
- * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
- * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return column of `n` rows with the location of the `search_key`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,

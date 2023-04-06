@@ -21,10 +21,10 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
-#include <cudf/detail/segmented_reduction_functions.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+#include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -65,12 +65,14 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
       cudf::detail::slice(
         boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
-    auto const sizes       = cudf::reduction::segmented_sum(boolean_mask_sliced_child,
-                                                      boolean_mask_sliced_offsets,
-                                                      offset_data_type,
-                                                      null_policy::EXCLUDE,
-                                                      std::nullopt,
-                                                      stream);
+    auto const sizes =
+      cudf::reduction::detail::segmented_sum(boolean_mask_sliced_child,
+                                             boolean_mask_sliced_offsets,
+                                             offset_data_type,
+                                             null_policy::EXCLUDE,
+                                             std::nullopt,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, offset_type{0});
     auto const sizes_end   = sizes_begin + sizes->size();

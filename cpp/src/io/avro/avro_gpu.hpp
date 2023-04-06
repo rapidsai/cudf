@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,8 @@ namespace gpu {
  * @brief Struct to describe the avro schema
  */
 struct schemadesc_s {
-  uint32_t kind;   // avro type kind
+  cudf::io::avro::type_kind_e kind;                 // avro type kind
+  cudf::io::avro::logicaltype_kind_e logical_kind;  // avro logicaltype kind
   uint32_t count;  // for records/unions: number of following child columns, for nulls: global
                    // null_count, for enums: dictionary ofs
   void* dataptr;   // Ptr to column data, or null if column not selected

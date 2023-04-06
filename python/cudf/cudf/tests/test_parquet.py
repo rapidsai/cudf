@@ -2775,3 +2775,16 @@ def test_parquet_reader_unsupported_page_encoding(datadir):
     # expect a failure when reading the whole file
     with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
+
+
+@pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
+@pytest.mark.parametrize("force_nullable_schema", [True, False])
+def test_parquet_writer_schema_nullability(data, force_nullable_schema):
+    df = cudf.DataFrame(data)
+    file_obj = BytesIO()
+
+    df.to_parquet(file_obj, force_nullable_schema=force_nullable_schema)
+
+    assert pa.parquet.read_schema(file_obj).field(0).nullable == (
+        force_nullable_schema or df.isnull().any().any()
+    )
