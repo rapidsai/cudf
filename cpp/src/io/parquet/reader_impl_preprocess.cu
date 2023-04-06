@@ -1682,23 +1682,25 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
     auto const d_cols_info = cudf::detail::make_device_uvector_async(
       h_cols_info, _stream, rmm::mr::get_current_device_resource());
 
+    auto const num_keys = _input_columns.size() * max_depth * pages.size();
     // size iterator. indexes pages by sorted order
-    auto const size_input = cudf::detail::make_counting_transform_iterator(
-      0,
+    rmm::device_uvector<size_type> size_input{num_keys, _stream};
+    thrust::transform(
+      rmm::exec_policy(_stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_keys),
+      size_input.begin(),
       get_page_nesting_size{
         d_cols_info.data(), max_depth, pages.size(), pages.device_ptr(), page_index.begin()});
-
     auto const reduction_keys =
       cudf::detail::make_counting_transform_iterator(0, get_reduction_key{pages.size()});
-
     hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
-    auto const num_keys = _input_columns.size() * max_depth * pages.size();
 
     // find the size of each column
     thrust::reduce_by_key(rmm::exec_policy(_stream),
                           reduction_keys,
                           reduction_keys + num_keys,
-                          size_input,
+                          size_input.cbegin(),
                           thrust::make_discard_iterator(),
                           sizes.d_begin());
 
@@ -1707,7 +1709,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       rmm::exec_policy(_stream),
       reduction_keys,
       reduction_keys + num_keys,
-      size_input,
+      size_input.cbegin(),
       start_offset_output_iterator{
         pages.device_ptr(), page_index.begin(), 0, d_cols_info.data(), max_depth, pages.size()});
 
