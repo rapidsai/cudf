@@ -9,9 +9,9 @@ from locale import nl_langinfo
 from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
-import pandas as pd
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -21,11 +21,11 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
-from cudf.core._compat import PANDAS_GE_200
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
@@ -553,11 +553,12 @@ def infer_format(element: str, **kwargs) -> str:
 
     if fmt is not None:
         if ".%f" in fmt:
-            pass
-            # PANDAS BUG: https://github.com/pandas-dev/pandas/issues/52418
-            # We cannot rely on format containing %f
-            # until above issue is fixed.
+            # For context read:
+            # https://github.com/pandas-dev/pandas/issues/52418
+            # We cannot rely on format containing only %f
+            # c++/libcudf expects .%3f, .%6f, .%9f
             # Logic below handles those cases well.
+            pass
         else:
             return fmt
 
