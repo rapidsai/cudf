@@ -66,67 +66,6 @@ namespace parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-namespace {
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
-
-/**
- * @brief Function that translates GDF compression to parquet compression
- */
-parquet::Compression to_parquet_compression(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::AUTO:
-    case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
-    case compression_type::ZSTD: return parquet::Compression::ZSTD;
-    case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
-size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
-{
-  if (column.size() == 0) { return 0; }
-
-  if (is_fixed_width(column.type())) {
-    return size_of(column.type()) * column.size();
-  } else if (column.type().id() == type_id::STRING) {
-    auto const scol = strings_column_view(column);
-    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
-           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
-  } else if (column.type().id() == type_id::STRUCT) {
-    auto const scol = structs_column_view(column);
-    size_t ret      = 0;
-    for (int i = 0; i < scol.num_children(); i++) {
-      ret += column_size(scol.get_sliced_child(i), stream);
-    }
-    return ret;
-  } else if (column.type().id() == type_id::LIST) {
-    auto const lcol = lists_column_view(column);
-    return column_size(lcol.get_sliced_child(stream), stream);
-  }
-
-  CUDF_FAIL("Unexpected compound type");
-}
-
-// checks to see if the given column has a fixed size.  This doesn't
-// check every row, so assumes string and list columns are not fixed, even
-// if each row is the same width.
-// TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
-bool is_col_fixed_width(column_view const& column)
-{
-  if (column.type().id() == type_id::STRUCT) {
-    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
-  }
-
-  return is_fixed_width(column.type());
-}
-
-}  // namespace
-
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(std::vector<partition_info> const& partitions,
                             size_type num_columns,
@@ -235,6 +174,65 @@ struct aggregate_writer_metadata {
   std::string created_by         = "";
   uint32_t column_order_listsize = 0;
 };
+
+namespace {
+/**
+ * @brief Helper for pinned host memory
+ */
+template <typename T>
+using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
+
+/**
+ * @brief Function that translates GDF compression to parquet compression
+ */
+parquet::Compression to_parquet_compression(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
+    case compression_type::ZSTD: return parquet::Compression::ZSTD;
+    case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
+{
+  if (column.size() == 0) { return 0; }
+
+  if (is_fixed_width(column.type())) {
+    return size_of(column.type()) * column.size();
+  } else if (column.type().id() == type_id::STRING) {
+    auto const scol = strings_column_view(column);
+    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
+           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
+  } else if (column.type().id() == type_id::STRUCT) {
+    auto const scol = structs_column_view(column);
+    size_t ret      = 0;
+    for (int i = 0; i < scol.num_children(); i++) {
+      ret += column_size(scol.get_sliced_child(i), stream);
+    }
+    return ret;
+  } else if (column.type().id() == type_id::LIST) {
+    auto const lcol = lists_column_view(column);
+    return column_size(lcol.get_sliced_child(stream), stream);
+  }
+
+  CUDF_FAIL("Unexpected compound type");
+}
+
+// checks to see if the given column has a fixed size.  This doesn't
+// check every row, so assumes string and list columns are not fixed, even
+// if each row is the same width.
+// TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
+bool is_col_fixed_width(column_view const& column)
+{
+  if (column.type().id() == type_id::STRUCT) {
+    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
+  }
+
+  return is_fixed_width(column.type());
+}
 
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
@@ -1385,6 +1383,8 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
   constexpr size_t padding = 7;
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
+
+}  // namespace
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,

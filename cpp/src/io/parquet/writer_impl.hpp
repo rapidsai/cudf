@@ -44,7 +44,6 @@ namespace io {
 namespace detail {
 namespace parquet {
 // Forward internal classes
-struct parquet_column_view;
 struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
