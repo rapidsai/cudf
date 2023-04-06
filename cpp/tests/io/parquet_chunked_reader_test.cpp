@@ -74,11 +74,11 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
-      auto const null_mask_buff =
+      auto const [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
       col = cudf::structs::detail::superimpose_nulls(
-        static_cast<cudf::bitmask_type const*>(null_mask_buff.data()),
-        cudf::UNKNOWN_NULL_COUNT,
+        static_cast<cudf::bitmask_type const*>(null_mask.data()),
+        null_count,
         std::move(col),
         cudf::get_default_stream(),
         rmm::mr::get_current_device_resource());

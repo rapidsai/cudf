@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
-                                               cudf::UNKNOWN_NULL_COUNT,
+                                               list_mask.second,
                                                std::move(*(list_mask.first))));
   auto int_column = cudf::test::fixed_width_column_wrapper<int64_t>(
                       int64_data.begin(), int64_data.end(), validity.begin())
@@ -111,8 +111,8 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   cols.push_back(move(str_column));
   auto mask = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
     bool_data_validity.begin(), bool_data_validity.end()));
-  columns.emplace_back(cudf::make_structs_column(
-    length, std::move(cols), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first))));
+  columns.emplace_back(
+    cudf::make_structs_column(length, std::move(cols), mask.second, std::move(*(mask.first))));
 
   auto int64array = get_arrow_array<int64_t>(int64_data, validity);
 
@@ -289,8 +289,8 @@ TEST_F(ToArrowTest, StructColumn)
   cols2.push_back(std::move(int_col2));
   auto mask =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), mask.second, std::move(*(mask.first)));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));

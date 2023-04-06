@@ -936,7 +936,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
       .dtypes({dtype<int8_t>()})
       .lines(true)
       .legacy(true);  // Support in new reader coming in https://github.com/rapidsai/cudf/pull/12498
-  ;
+
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
@@ -1530,12 +1530,14 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
   // List column expected
   auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
   auto const validity = {1, 0, 0};
-  auto expected       = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto expected = cudf::make_lists_column(
     3,
     int_wrapper{{0, 2, 2, 2}}.release(),
     cudf::test::structs_column_wrapper{{leaf_child}, {false, true}}.release(),
-    2,
-    cudf::test::detail::make_null_mask(validity.begin(), validity.end()));
+    null_count,
+    std::move(null_mask));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), *expected);
 }
 

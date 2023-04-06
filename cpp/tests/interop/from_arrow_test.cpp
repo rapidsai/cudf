@@ -188,8 +188,8 @@ TEST_F(FromArrowTest, StructColumn)
   cols2.push_back(std::move(int_col2));
   auto mask =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), mask.second, std::move(*(mask.first)));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));

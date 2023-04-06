@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/gather.cuh>
@@ -170,7 +171,6 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(null_count < strings_count, "null strings column not yet supported");
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
 
   // build offsets column -- this is the number of strings + 1
