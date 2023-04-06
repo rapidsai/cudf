@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -43,10 +43,10 @@ def replace_re(Column source_strings,
     cdef const string_scalar* scalar_repl = \
         <const string_scalar*>(repl.get_raw_ptr())
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_replace_re(
             source_view,
             dereference(c_prog),
@@ -73,10 +73,10 @@ def replace_with_backrefs(
     cdef string pattern_string = <string>str(pattern).encode()
     cdef string repl_string = <string>str(repl).encode()
     cdef regex_flags c_flags = regex_flags.DEFAULT
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_replace_with_backrefs(
             source_view,
             dereference(c_prog),
