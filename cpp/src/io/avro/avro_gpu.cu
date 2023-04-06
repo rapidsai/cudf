@@ -366,8 +366,7 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
 
   while (cur < end) {
     uint32_t nrows;
-    const uint8_t* start                = cur;
-    const uint32_t start_rows_remaining = rows_remaining;
+    const uint8_t* start = cur;
 
     if (cur + min_row_size * rows_remaining == end) {
       // We're dealing with predictable fixed-size rows, which means we can
@@ -404,8 +403,10 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
       // Only lane 0 (i.e. 'threadIdx.x == 0') was active, so we need to
       // broadcast the new value of 'cur' and 'rows_remaining' to all other
       // threads in the warp.
-      cur            = start + shuffle(static_cast<uint32_t>(cur - start));
-      rows_remaining = start_rows_remaining + shuffle(rows_remaining - start_rows_remaining);
+      cur = start + shuffle(static_cast<uint32_t>(cur - start));
+      // rows_remaining is already uint32_t, so we don't need to do the
+      // start + shuffle(this - start) dance like we do above.
+      rows_remaining = shuffle(rows_remaining);
     } else if (nrows > 1) {
       cur = start + (nrows * min_row_size);
     }
