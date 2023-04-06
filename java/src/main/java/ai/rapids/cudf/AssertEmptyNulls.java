@@ -10,8 +10,8 @@ public class AssertEmptyNulls {
  */
   private static final boolean ALLOW_NON_EMPTY_NULLS =
       Boolean.getBoolean("ai.rapids.allow.nonempty.nulls");
-  public static void assertHasEmptyNulls(ColumnView cv) {
-    if (!ALLOW_NON_EMPTY_NULLS) {
+  public static void assertEmptyNulls(ColumnView cv) {
+    if (cv.type.isNestedType() && !ALLOW_NON_EMPTY_NULLS) {
       assert !cv.hasNonEmptyNulls() : "Column has non-empty nulls";
     }
   }
