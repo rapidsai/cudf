@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <nvtext/minhash.hpp>
 
@@ -89,6 +90,23 @@ TEST_F(MinHashTest, MultiSeed)
                 LCW{ 655955059u,  488346356u, 2394664816u},
                 LCW{  86520422u,  236622901u,  102546228u}});
   // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(MinHashTest, MultiSeedWithNullInputRow)
+{
+  auto validity = cudf::test::iterators::null_at(1);
+  auto input    = cudf::test::strings_column_wrapper({"abcdéfgh", "", "", "stuvwxyz"}, validity);
+  auto view     = cudf::strings_column_view(input);
+
+  auto const seeds   = std::vector<cudf::hash_value_type>{1, 2};
+  auto const d_seeds = cudf::detail::make_device_uvector_async(
+    seeds, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto results = nvtext::minhash(view, d_seeds);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::hash_value_type>;
+  LCW expected({LCW{484984072u, 1074168784u}, LCW{}, LCW{0u, 0u}, LCW{571652169u, 173528385u}},
+               validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

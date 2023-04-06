@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -137,13 +138,18 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
     stream,
     mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
-  return make_lists_column(input.size(),
-                           std::move(offsets),
-                           std::move(hashes),
-                           input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+  auto result = make_lists_column(input.size(),
+                                  std::move(offsets),
+                                  std::move(hashes),
+                                  input.null_count(),
+                                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                  stream,
+                                  mr);
+  // expect this condition to be very rare
+  if (input.null_count() > 0) {
+    result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
+  }
+  return result;
 }
 
 }  // namespace detail
