@@ -454,8 +454,6 @@ std::vector<column_buffer> decode_data(metadata& meta,
                             global_dictionary,
                             static_cast<uint8_t const*>(block_data.data()),
                             static_cast<uint32_t>(schema_desc.size()),
-                            meta.num_rows,
-                            meta.skip_rows,
                             min_row_data_size,
                             stream);
 
@@ -511,15 +509,15 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 
     if (meta.num_rows > 0) {
       rmm::device_buffer block_data;
-      if (source->is_device_read_preferred(meta.total_data_size)) {
-        block_data      = rmm::device_buffer{meta.total_data_size, stream};
+      if (source->is_device_read_preferred(meta.selected_data_size)) {
+        block_data      = rmm::device_buffer{meta.selected_data_size, stream};
         auto read_bytes = source->device_read(meta.block_list[0].offset,
-                                              meta.total_data_size,
+                                              meta.selected_data_size,
                                               static_cast<uint8_t*>(block_data.data()),
                                               stream);
         block_data.resize(read_bytes, stream);
       } else {
-        auto const buffer = source->host_read(meta.block_list[0].offset, meta.total_data_size);
+        auto const buffer = source->host_read(meta.block_list[0].offset, meta.selected_data_size);
         block_data        = rmm::device_buffer{buffer->data(), buffer->size(), stream};
       }
 

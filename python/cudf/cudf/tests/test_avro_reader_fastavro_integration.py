@@ -17,6 +17,7 @@ import pathlib
 from typing import Optional
 
 import fastavro
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -25,17 +26,12 @@ from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
-def cudf_from_avro_util(
-    schema: dict,
-    records: list,
-    skip_rows: Optional[int] = None,
-    num_rows: Optional[int] = None,
-) -> cudf.DataFrame:
+def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
     schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)
     buffer.seek(0)
-    return cudf.read_avro(buffer, skiprows=skip_rows, num_rows=num_rows)
+    return cudf.read_avro(buffer)
 
 
 avro_type_params = [
@@ -229,6 +225,8 @@ def test_avro_compression(rows, codec):
         ],
     }
 
+    # N.B. rand_dataframe() is brutally slow for some reason.  Switching to
+    #      np.random() speeds things up by a factor of 10.
     df = rand_dataframe(
         [
             {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
@@ -454,162 +452,211 @@ def test_alltypes_plain_avro():
     assert_eq(actual, expected)
 
 
-@pytest.mark.parametrize(
-    "total_rows_and_num_rows",
-    [(1, 1), (10, 5), (100, 10), (10, 10), (10, 0), (10, 9), (10, 1)],
-)
-def test_avro_reader_num_rows(total_rows_and_num_rows):
-    (total_rows, num_rows) = total_rows_and_num_rows
-    assert total_rows >= num_rows
+# The following values are used to test various boundary conditions associated
+# with multiblock avro files.  Each tuple consists of four values: total number
+# of rows to generate, number of rows to limit the result set to, number of
+# rows to skip, and number of rows per block.  If the total number of rows and
+# number of rows (i.e. first and second tuple elements) are equal, it means
+# that all rows will be returned.  If the rows per block also equals the first
+# two numbers, it means that a single block will be used.
+total_rows_and_num_rows_and_skip_rows_and_rows_per_block = [
+    (10, 10, 9, 9),
+    (10, 10, 9, 5),
+    (10, 10, 9, 3),
+    (10, 10, 9, 2),
+    (10, 10, 9, 10),
+    (10, 10, 8, 2),
+    (10, 10, 5, 5),
+    (10, 10, 2, 9),
+    (10, 10, 2, 2),
+    (10, 10, 1, 9),
+    (10, 10, 1, 5),
+    (10, 10, 1, 2),
+    (10, 10, 1, 10),
+    (10, 10, 10, 9),
+    (10, 10, 10, 5),
+    (10, 10, 10, 2),
+    (10, 10, 10, 10),
+    (10, 10, 0, 9),
+    (10, 10, 0, 5),
+    (10, 10, 0, 2),
+    (10, 10, 0, 10),
+    (100, 100, 99, 10),
+    (100, 100, 90, 90),
+    (100, 100, 90, 89),
+    (100, 100, 90, 88),
+    (100, 100, 90, 87),
+    (100, 100, 90, 5),
+    (100, 100, 89, 90),
+    (100, 100, 87, 90),
+    (100, 100, 50, 7),
+    (100, 100, 50, 31),
+    (10, 1, 8, 9),
+    (100, 1, 99, 10),
+    (100, 1, 98, 10),
+    (100, 1, 97, 10),
+    (100, 3, 90, 87),
+    (100, 4, 90, 5),
+    (100, 2, 89, 90),
+    (100, 9, 87, 90),
+    (100, 20, 50, 7),
+    (100, 10, 50, 31),
+    (100, 20, 50, 31),
+    (100, 30, 50, 31),
+    (256, 256, 0, 256),
+    (256, 256, 0, 32),
+    (256, 256, 0, 31),
+    (256, 256, 0, 33),
+    (256, 256, 31, 32),
+    (256, 256, 32, 31),
+    (256, 256, 31, 33),
+    (512, 512, 0, 32),
+    (512, 512, 0, 31),
+    (512, 512, 0, 33),
+    (512, 512, 31, 32),
+    (512, 512, 32, 31),
+    (512, 512, 31, 33),
+    (1024, 1024, 0, 1),
+    (1024, 1024, 0, 3),
+    (1024, 1024, 0, 7),
+    (1024, 1024, 0, 8),
+    (1024, 1024, 0, 9),
+    (1024, 1024, 0, 15),
+    (1024, 1024, 0, 16),
+    (1024, 1024, 0, 17),
+    (1024, 1024, 0, 32),
+    (1024, 1024, 0, 31),
+    (1024, 1024, 0, 33),
+    (1024, 1024, 31, 32),
+    (1024, 1024, 32, 31),
+    (1024, 1024, 31, 33),
+    (16384, 16384, 0, 31),
+    (16384, 16384, 0, 32),
+    (16384, 16384, 0, 33),
+    (16384, 16384, 0, 16384),
+]
 
-    schema = {
-        "name": "root",
-        "type": "record",
-        "fields": [
-            {"name": "0", "type": "int"},
-            {"name": "1", "type": "string"},
-        ],
-    }
-
-    df = rand_dataframe(
-        [
-            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
-            {
-                "dtype": "str",
-                "null_frequency": 0,
-                "cardinality": 100,
-                "max_string_length": 10,
-            },
-        ],
+total_rows_and_num_rows_and_skip_rows_and_rows_per_block_ids = [
+    f"total_rows={total_rows}-"
+    + (f"num_rows={num_rows}-" if num_rows != total_rows else "")
+    + f"skip_rows={skip_rows}-"
+    f"sync_interval={sync_interval}"
+    for (
         total_rows,
-    )
-    source_df = cudf.DataFrame.from_arrow(df)
-    expected_df = source_df.head(num_rows)
-
-    records = df.to_pandas().to_dict(orient="records")
-
-    buffer = io.BytesIO()
-    fastavro.writer(buffer, schema, records)
-    buffer.seek(0)
-
-    actual_df = cudf.read_avro(buffer, num_rows=num_rows)
-    assert_eq(expected_df, actual_df)
+        num_rows,
+        skip_rows,
+        sync_interval,
+    ) in total_rows_and_num_rows_and_skip_rows_and_rows_per_block
+]
 
 
+# N.B. The float32 and float64 types are chosen specifically to exercise
+#      the only path in the avro reader GPU code that can process multiple
+#      rows in parallel (via warp-level parallelism).  See the logic around
+#      the line `if (cur + min_row_size * rows_remaining == end)` in
+#      gpuDecodeAvroColumnData().
+@pytest.mark.parametrize("dtype", ["str", "float32", "float64"])
 @pytest.mark.parametrize(
-    "total_rows_and_num_rows_and_sync_interval",
-    [
-        (10, 10, 2),
-        (10, 10, 5),
-        (10, 10, 9),
-        (10, 10, 10),
-        (100, 10, 20),
-        (10, 0, 2),
-        (10, 0, 5),
-        (10, 0, 9),
-        (10, 0, 10),
-        (10, 1, 2),
-        (10, 1, 5),
-        (10, 1, 9),
-        (10, 1, 10),
-        (10, 9, 2),
-        (10, 9, 5),
-        (10, 9, 9),
-        (10, 9, 10),
-    ],
+    "use_sync_interval",
+    [True, False],
+    ids=["use_sync_interval", "ignore_sync_interval"],
 )
-def test_avro_reader_num_rows_multiblock(
-    total_rows_and_num_rows_and_sync_interval,
+@pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
+@pytest.mark.parametrize(
+    "total_rows_and_num_rows_and_skip_rows_and_rows_per_block",
+    total_rows_and_num_rows_and_skip_rows_and_rows_per_block,
+    ids=total_rows_and_num_rows_and_skip_rows_and_rows_per_block_ids,
+)
+def test_avro_reader_multiblock(
+    dtype,
+    codec,
+    use_sync_interval,
+    total_rows_and_num_rows_and_skip_rows_and_rows_per_block,
 ):
     (
         total_rows,
         num_rows,
-        sync_interval,
-    ) = total_rows_and_num_rows_and_sync_interval
+        skip_rows,
+        rows_per_block,
+    ) = total_rows_and_num_rows_and_skip_rows_and_rows_per_block
+
     assert total_rows >= num_rows
-    assert sync_interval <= total_rows
+    assert rows_per_block <= total_rows
+
+    limit_rows = not (num_rows == total_rows)
+    if limit_rows:
+        assert total_rows >= num_rows + skip_rows
+
+    if dtype == "str":
+        avro_type = "string"
+
+        # Generate a list of strings, each of which is a 6-digit number, padded
+        # with leading zeros.  This data set was very useful during development
+        # of the multiblock avro reader logic, as you get implicit feedback as
+        # to what may have gone wrong when the test fails, based on the
+        # expected vs actual values.
+        values = [f"{i:0>6}" for i in range(0, total_rows)]
+
+        # Strings are encoded in avro with a zigzag-encoded length prefix, and
+        # then the string data.  As all of our strings are fixed at length 6,
+        # we only need one byte to encode the length prefix (0xc).  Thus, our
+        # bytes per row is 6 + 1 = 7.
+        bytes_per_row = len(values[0]) + 1
+        assert bytes_per_row == 7, bytes_per_row
+
+    else:
+        assert dtype in ("float32", "float64")
+        bytes_per_row = 4 if dtype == "float32" else 8
+        avro_type = "float" if dtype == "float32" else "double"
+
+        # We don't use rand_dataframe() here, because it increases the
+        # execution time of each test by a factor of 10 or more (it appears
+        # to use a very costly approach to generating random data).
+        values = np.random.rand(total_rows).astype(dtype)
+
+    # The sync_interval is the number of bytes between sync blocks.  We know
+    # how many bytes we need per row, so we can calculate the number of bytes
+    # per block by multiplying the number of rows per block by the bytes per
+    # row.  This is the sync interval.
+    total_bytes_per_block = rows_per_block * bytes_per_row
+    sync_interval = total_bytes_per_block
+
+    source_df = cudf.DataFrame({"0": pd.Series(values)})
+
+    if limit_rows:
+        expected_df = source_df[skip_rows : skip_rows + num_rows].reset_index(
+            drop=True
+        )
+    else:
+        expected_df = source_df[skip_rows:].reset_index(drop=True)
+
+    records = source_df.to_pandas().to_dict(orient="records")
 
     schema = {
         "name": "root",
         "type": "record",
         "fields": [
-            {"name": "0", "type": "int"},
-            {"name": "1", "type": "string"},
+            {"name": "0", "type": avro_type},
         ],
     }
 
-    df = rand_dataframe(
-        [
-            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
-            {
-                "dtype": "str",
-                "null_frequency": 0,
-                "cardinality": 100,
-                "max_string_length": 10,
-            },
-        ],
-        total_rows,
-    )
-    source_df = cudf.DataFrame.from_arrow(df)
-    expected_df = source_df.head(num_rows)
+    if use_sync_interval:
+        kwds = {"sync_interval": sync_interval}
+    else:
+        kwds = {}
 
-    records = df.to_pandas().to_dict(orient="records")
+    kwds["codec"] = codec
 
     buffer = io.BytesIO()
-    fastavro.writer(buffer, schema, records, sync_interval=sync_interval)
+    fastavro.writer(buffer, schema, records, **kwds)
     buffer.seek(0)
 
-    actual_df = cudf.read_avro(buffer, num_rows=num_rows)
-    assert_eq(expected_df, actual_df)
+    if not limit_rows:
+        # Explicitly set num_rows to None if we want to read all rows.  This
+        # ensures we exercise the logic behind a read_avro() call where the
+        # caller doesn't specify the number of rows desired (which will be the
+        # most common use case).
+        num_rows = None
+    actual_df = cudf.read_avro(buffer, skiprows=skip_rows, num_rows=num_rows)
 
-
-@pytest.mark.parametrize(
-    "total_rows_and_skip_rows",
-    [
-        (10, 1),
-        (10, 2),
-        (10, 5),
-        (10, 8),
-        (10, 9),
-        (10, 10),
-        (100, 10),
-        (100, 99),
-        (1, 1),
-        (1, 2),
-    ],
-)
-def test_avro_reader_skip_rows(total_rows_and_skip_rows):
-    (total_rows, skip_rows) = total_rows_and_skip_rows
-
-    schema = {
-        "name": "root",
-        "type": "record",
-        "fields": [
-            {"name": "0", "type": "int"},
-            {"name": "1", "type": "string"},
-        ],
-    }
-
-    df = rand_dataframe(
-        [
-            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
-            {
-                "dtype": "str",
-                "null_frequency": 0,
-                "cardinality": 100,
-                "max_string_length": 10,
-            },
-        ],
-        total_rows,
-    )
-    source_df = cudf.DataFrame.from_arrow(df)
-    expected_df = source_df[skip_rows:].reset_index(drop=True)
-
-    records = df.to_pandas().to_dict(orient="records")
-
-    buffer = io.BytesIO()
-    fastavro.writer(buffer, schema, records)
-    buffer.seek(0)
-
-    actual_df = cudf.read_avro(buffer, skiprows=skip_rows)
     assert_eq(expected_df, actual_df)

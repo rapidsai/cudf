@@ -67,7 +67,7 @@ std::string container::get_encoded()
 bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
 {
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
-  uint32_t sig4, max_block_size;
+  uint32_t sig4, max_block_size, num_rows, row_offset;
   size_t total_object_count;
   uint64_t sync_marker[2];
   bool valid_sync_markers;
@@ -101,7 +101,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->sync_marker[1] = get_raw<uint64_t>();
 
   md->metadata_size  = m_cur - m_base;
-  md->skip_rows      = 0;
+  md->skip_rows      = first_row;
   md->total_num_rows = 0;
   max_block_size     = 0;
   total_object_count = 0;
@@ -113,29 +113,71 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   //    3. Handle the case where we've been asked to skip or limit rows.
   //    4. Verify sync markers at the end of each block.
   //
+  // A row offset is also maintained, and added to each block.  This reflects
+  // the absolute offset that needs to be added to any given row in order to
+  // get the row's index within the destination array.  See `row_idx` in
+  // `avro_decode_row()` for more information.
+  //
   // N.B. "object" and "row" are used interchangeably here; "object" is
   //      avro nomenclature, "row" is ours.
   //
   // N.B. If we're skipping rows, we ignore blocks (i.e. don't add them to
   //      md->block_list) that precede the block containing the first row
   //      we're interested in.
+  //
+  // N.B. The 18 below is (presumably) intended to account for the two 64-bit
+  //      object count and block size integers (16 bytes total), and then an
+  //      additional two bytes to represent the smallest possible row size.
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
     auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
-    if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
+    auto const next_end     = m_cur + block_size + 16;
+    // Abort on terminal conditions.  We keep these as separate lines instead of
+    // combining them into a single if in order to facilitate setting specific
+    // line breakpoints in the debugger.
+    if (block_size <= 0) { return false; }
+    if (object_count <= 0) { return false; }
+    if (next_end > m_end) { return false; }
+
+    // Update our total row count.  This is only captured for information
+    // purposes.
     md->total_num_rows += object_count;
-    if (object_count > first_row) {
-      auto block_row = static_cast<uint32_t>(total_object_count);
+
+    if (object_count <= first_row) {
+      // We've been asked to skip rows, and we haven't yet reached our desired
+      // number of rows to skip.  Subtract this block's rows (`object_count`)
+      // from the remaining rows to skip (`first_row`).  Do not add this block
+      // to our block list.
+      first_row -= object_count;
+    } else {
+      // Either we weren't asked to skip rows, or we were, but we've already hit
+      // our target number of rows to skip.  Add this block to our block list.
       max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
-        md->skip_rows = first_row;
+        // This is the first block, so add it to our list with the current value
+        // of `first_row`, which will reflect the number of rows to skip *in
+        // this block*.
+        m_start = m_cur;
         total_object_count -= first_row;
+        num_rows   = total_object_count;
+        row_offset = 0;
+        if ((max_num_rows > 0) && (max_num_rows < total_object_count)) { num_rows = max_num_rows; }
+        md->block_list.emplace_back(m_cur - m_base, block_size, row_offset, first_row, num_rows);
         first_row = 0;
+        row_offset += num_rows;
+      } else {
+        // Not our first block; `first_row` should always be zero here.
+        CUDF_EXPECTS(first_row == 0, "Invariant check failed: first_row != 0");
+
+        num_rows = object_count;
+        if ((max_num_rows > 0) && (max_num_rows < total_object_count)) {
+          num_rows -= (total_object_count - max_num_rows);
+        }
+
+        md->block_list.emplace_back(m_cur - m_base, block_size, row_offset, first_row, num_rows);
+        row_offset += num_rows;
       }
-      md->block_list.emplace_back(m_cur - m_base, block_size, block_row, object_count);
-    } else {
-      first_row -= object_count;
     }
     m_cur += block_size;
     // Read the next sync markers and ensure they match the first ones we
@@ -157,6 +199,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     md->num_rows = max_num_rows;
   }
   md->total_data_size = m_cur - (m_base + md->metadata_size);
+  CUDF_EXPECTS(m_cur > m_start, "Invariant check failed: `m_cur > m_start` is false.");
+  md->selected_data_size = m_cur - m_start;
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {
     type_kind_e kind                = md->schema[i].kind;

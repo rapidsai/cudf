@@ -26,17 +26,40 @@ namespace io {
 namespace avro {
 struct block_desc_s {
   block_desc_s() {}
-  explicit constexpr block_desc_s(size_t offset_,
-                                  uint32_t size_,
-                                  uint32_t first_row_,
-                                  uint32_t num_rows_)
-    : offset(offset_), size(size_), first_row(first_row_), num_rows(num_rows_)
+  explicit constexpr block_desc_s(
+    size_t offset_, uint32_t size_, uint32_t row_offset_, uint32_t first_row_, uint32_t num_rows_)
+    : offset(offset_),
+      size(size_),
+      row_offset(row_offset_),
+      first_row(first_row_),
+      num_rows(num_rows_)
   {
   }
 
+  // Offset of this block, in bytes, from the start of the file.
   size_t offset;
+
+  // Size of this block, in bytes.
   uint32_t size;
+
+  // The absolute row offset that needs to be added to each row index in order
+  // to derive the offset of the decoded data in the destination array.  E.g.
+  // `const ptrdiff_t row_idx = ((row - first_row) + row_offset)`.  See
+  // `avro_decode_row()` for details.
+  uint32_t row_offset;
+
+  // The index of the first row to be decoded from this block.  That is, the
+  // number of rows to skip in this block before starting to decode.  If this is
+  // 0, then no rows will be skipped.  If a user has requested `read_avro()` to
+  // skip rows, that will materialize as a non-zero `first_row` value in the
+  // appropriate block containing the first row to be decoded.
   uint32_t first_row;
+
+  // The number of rows to decode from this block.  If a user has requested
+  // `read_avro()` to limit the number of rows to return, this will materialize
+  // as a `num_rows` value less than the total number of rows in the appropriate
+  // block.  Otherwise, `num_rows` will be equal to the total number of rows in
+  // the block, after skipping `first_row` rows (if applicable).
   uint32_t num_rows;
 };
 
