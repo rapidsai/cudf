@@ -328,6 +328,7 @@ __device__ void gpuDecodeStream(
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
  * @param[in] t Warp1 thread ID (0..31)
@@ -447,6 +448,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_st
  * @brief Performs RLE decoding of dictionary indexes, for when dict_size=1
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target write position
  * @param[in] t Thread ID
  *
@@ -514,6 +516,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
  * processed
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
  * @param[in] t Thread ID
  *
@@ -562,6 +565,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
  * @brief Retrieves string information for a string at the specified source position
  *
  * @param[in] s Page state input
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  *
  * @return A pair containing a pointer to the string and its length
@@ -597,6 +601,7 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(
  * @brief Output a string descriptor
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
@@ -624,6 +629,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
  * @brief Output a boolean
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
@@ -699,6 +705,7 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @brief Convert an INT96 Spark timestamp to 64-bit timestamp
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[out] dst Pointer to row output data
  */
@@ -771,6 +778,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
  * @brief Output a 64-bit timestamp
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
@@ -851,6 +859,7 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @brief Output a fixed-length byte array as int.
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
@@ -885,6 +894,7 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
  * @brief Output a small fixed-length value
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
@@ -914,6 +924,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
  * @brief Output a N-byte value
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst8 Pointer to row output data
  * @param[in] len Length of element
@@ -1397,6 +1408,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  *
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] s Local page information
+ * @param[out] sb Page state buffer output
  * @param[in] t Thread index
  */
 static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
@@ -1569,6 +1581,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
  * Only runs on 1 warp.
  *
  * @param[in] s The local page state
+ * @param[out] sb Page state buffer output
  * @param[in] target_leaf_count Target count of non-null leaf values to generate indices for
  * @param[in] t Thread index
  */
