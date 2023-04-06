@@ -45,9 +45,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
-  private static final boolean ALLOW_NON_EMPTY_NULLS = 
+  private static final boolean ALLOW_NON_EMPTY_NULLS =
       Boolean.getBoolean("ai.rapids.allow.nonempty.nulls");
-  
+
   public static final double PERCENTAGE = 0.0001;
 
   // IEEE 754 NaN values
