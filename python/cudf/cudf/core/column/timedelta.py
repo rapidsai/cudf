@@ -558,7 +558,7 @@ class TimeDeltaColumn(ColumnBase):
         # performing division operation to extract the number
         # of nanoseconds.
 
-        if self._time_unit not in {"ns"}:
+        if self._time_unit != "ns":
             res_col = cudf.core.column.full(len(self), 0, dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
