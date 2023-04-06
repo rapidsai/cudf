@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200
 from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
 
 _UFUNCS = [
@@ -162,6 +162,16 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         pytest.mark.xfail(
             condition=not hasattr(cp, fname),
             reason=f"cupy has no support for '{fname}'",
+        )
+    )
+
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_200
+            and fname.startswith("bitwise")
+            and indexed
+            and has_nulls,
+            reason="https://github.com/pandas-dev/pandas/issues/52500",
         )
     )
 
@@ -342,8 +352,8 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                indexed
-                and fname
+                not PANDAS_GE_200
+                and indexed
                 in {
                     "add",
                     "arctan2",
@@ -379,7 +389,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
                 }
             ),
             reason=(
-                "pandas does not currently support misaligned "
+                "pandas<2.0 does not currently support misaligned "
                 "indexes in DataFrames"
             ),
         )
