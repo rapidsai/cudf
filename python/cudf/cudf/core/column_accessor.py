@@ -18,10 +18,10 @@ from typing import (
 )
 
 import pandas as pd
-from packaging.version import Version
 
 import cudf
 from cudf.core import column
+from cudf.core._compat import PANDAS_GE_200
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -247,24 +247,28 @@ class ColumnAccessor(abc.MutableMapping):
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
-            # Using `from_frame()` instead of `from_tuples`
-            # prevents coercion of values to a different type
-            # (e.g., ''->NaT)
-            with warnings.catch_warnings():
-                # Specifying `dtype="object"` here and passing that to
-                # `from_frame` is deprecated in pandas, but we cannot remove
-                # that without also losing compatibility with other current
-                # pandas behaviors like the NaT inference above. For now we
-                # must catch the warnings internally, but we will need to
-                # remove this when we implement compatibility with pandas 2.0,
-                # which will remove these compatibility layers.
-                assert Version(pd.__version__) < Version("2.0.0")
-                warnings.simplefilter("ignore")
-                result = pd.MultiIndex.from_frame(
-                    pd.DataFrame(
-                        self.names, columns=self.level_names, dtype="object"
-                    ),
+            if PANDAS_GE_200:
+                result = pd.MultiIndex.from_tuples(
+                    self.names,
+                    names=self.level_names,
                 )
+            else:
+                # Using `from_frame()` instead of `from_tuples`
+                # prevents coercion of values to a different type
+                # (e.g., ''->NaT)
+                with warnings.catch_warnings():
+                    # Specifying `dtype="object"` here and passing that to
+                    # `from_frame` is deprecated in pandas, but we cannot
+                    # remove that without also losing compatibility with other
+                    # current pandas behaviors like the NaT inference above.
+                    warnings.simplefilter("ignore")
+                    result = pd.MultiIndex.from_frame(
+                        pd.DataFrame(
+                            self.names,
+                            columns=self.level_names,
+                            dtype="object",
+                        ),
+                    )
         else:
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
