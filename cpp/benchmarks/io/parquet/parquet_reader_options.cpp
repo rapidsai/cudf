@@ -30,7 +30,7 @@
 constexpr std::size_t data_size      = 512 << 20;
 constexpr std::size_t row_group_size = 128 << 20;
 
-std::vector<std::string> get_col_names(cudf::io::source_info const& source)
+std::vector<std::string> get_top_level_col_names(cudf::io::source_info const& source)
 {
   cudf::io::parquet_reader_options const read_options =
     cudf::io::parquet_reader_options::builder(source);
@@ -39,7 +39,6 @@ std::vector<std::string> get_col_names(cudf::io::source_info const& source)
   std::vector<std::string> names;
   names.reserve(schema.size());
   std::transform(schema.cbegin(), schema.cend(), std::back_inserter(names), [](auto const& c) {
-    CUDF_EXPECTS(c.children.empty(), "nested types are not supported");
     return c.name;
   });
   return names;
@@ -81,7 +80,7 @@ void BM_parquet_read_options(nvbench::state& state,
   cudf::io::write_parquet(options);
 
   auto const cols_to_read =
-    select_column_names(get_col_names(source_sink.make_source_info()), ColSelection);
+    select_column_names(get_top_level_col_names(source_sink.make_source_info()), ColSelection);
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)

@@ -1358,6 +1358,22 @@ TEST_F(CsvReaderTest, nullHandling)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
+
+  // Filter enabled, but no NA values
+  {
+    cudf::io::csv_reader_options in_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+        .keep_default_na(false)
+        .dtypes({dtype<cudf::string_view>()})
+        .header(-1)
+        .skip_blank_lines(false);
+    const auto result = cudf::io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
+  }
 }
 
 TEST_F(CsvReaderTest, FailCases)
