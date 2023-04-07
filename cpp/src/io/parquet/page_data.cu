@@ -339,10 +339,11 @@ __device__ void gpuDecodeStream(
  * additional values.
  */
 template <bool sizes_only>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
-                                                                volatile page_state_buffers_s* sb,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
+  volatile page_state_s* s,
+  [[maybe_unused]] volatile page_state_buffers_s* sb,
+  int target_pos,
+  int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -524,7 +525,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
  */
 template <bool sizes_only>
 __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
-                                              volatile page_state_buffers_s* sb,
+                                              [[maybe_unused]] volatile page_state_buffers_s* sb,
                                               int target_pos,
                                               int t)
 {
@@ -633,7 +634,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputBoolean(volatile page_state_s* s,
+inline __device__ void gpuOutputBoolean(volatile page_state_s*,
                                         volatile page_state_buffers_s* sb,
                                         int src_pos,
                                         uint8_t* dst)
