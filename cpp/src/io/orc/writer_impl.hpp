@@ -347,10 +347,8 @@ class writer::impl {
   std::unique_ptr<table_input_metadata> _table_meta;
   cudf::io::orc::FileFooter _ffooter;
   cudf::io::orc::Metadata _orc_meta;
-  persisted_statistics
-    _persisted_stripe_statistics;  // Statistics data saved between calls to write
-                                   // before a close writes out the statistics.
-  bool _closed = false;            // To track if the output has been written to sink.
+  persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
+  bool _closed = false;  // To track if the output has been written to sink.
 };
 
 }  // namespace orc
