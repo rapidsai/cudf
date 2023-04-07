@@ -28,14 +28,9 @@ namespace detail {
  * sorted_order(table_view&,std::vector<order>,std::vector<null_order>,rmm::mr::device_memory_resource*)
  *
  * @tparam stable Whether to use stable sort
- * @tparam PhysicalElementComparator A relational comparator functor that compares individual
- * values rather than logical elements, defaults to `NaN` aware relational comparator that
- * evaluates `NaN` as greater than all other values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <bool stable,
-          typename PhysicalElementComparator =
-            cudf::experimental::row::lexicographic::sorting_physical_element_comparator>
+template <bool stable>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
@@ -56,15 +51,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // Fast-path for single column sort
-  // If the first column is floating-point, only run this path if special NaN handling is
-  // required (i.e., `NaN` is always considered as equivalent to other `NaN`s and greater than all
-  // non-NaN values, which is equivalent to using `sorting_physical_element_comparator`.).
-  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type()) and
-      (not cudf::is_floating_point(input.column(0).type()) or
-       std::is_same_v<
-         PhysicalElementComparator,
-         cudf::experimental::row::lexicographic::sorting_physical_element_comparator>)) {
+  // fast-path for single column sort
+  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type())) {
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
@@ -98,12 +86,10 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto const comp = cudf::experimental::row::lexicographic::self_comparator(
     input, column_order, null_precedence, stream);
   if (cudf::detail::has_nested_columns(input)) {
-    auto const comparator = comp.less<true, nullate::DYNAMIC, PhysicalElementComparator>(
-      nullate::DYNAMIC{has_nested_nulls(input)});
+    auto const comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);
   } else {
-    auto const comparator = comp.less<false, nullate::DYNAMIC, PhysicalElementComparator>(
-      nullate::DYNAMIC{has_nested_nulls(input)});
+    auto const comparator = comp.less<false>(nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);
   }
 
