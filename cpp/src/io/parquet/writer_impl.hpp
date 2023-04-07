@@ -213,7 +213,7 @@ class writer::impl {
   size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
 
  private:
-  // Cuda stream to be used
+  // Cuda stream to be used.
   rmm::cuda_stream_view _stream;
 
   // Writer options.
