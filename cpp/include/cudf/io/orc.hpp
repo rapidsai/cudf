@@ -174,6 +174,11 @@ class orc_reader_options {
    * @brief Sets list of stripes to read for each input source
    *
    * @param stripes Vector of vectors, mapping stripes to read to input sources
+   *
+   * @throw cudf::logic_error if a non-empty vector is passed, and `skip_rows` has been previously
+   * set
+   * @throw cudf::logic_error if a non-empty vector is passed, and `num_rows` has been previously
+   * set
    */
   void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
@@ -187,6 +192,9 @@ class orc_reader_options {
    * @brief Sets number of rows to skip from the start.
    *
    * @param rows Number of rows
+   *
+   * @throw cudf::logic_error if a negative value is passed
+   * @throw cudf::logic_error if stripes have been previously set
    */
   void set_skip_rows(int64_t rows)
   {
@@ -199,6 +207,9 @@ class orc_reader_options {
    * @brief Sets number of row to read.
    *
    * @param nrows Number of rows
+   *
+   * @throw cudf::logic_error if a negative value is passed
+   * @throw cudf::logic_error if stripes have been previously set
    */
   void set_num_rows(size_type nrows)
   {
@@ -574,6 +585,8 @@ class orc_writer_options {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param size_bytes Maximum stripe size, in bytes to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal size is passed
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -588,6 +601,8 @@ class orc_writer_options {
    * the stripe size.
    *
    * @param size_rows Maximum stripe size, in rows to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows is passed
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -601,6 +616,8 @@ class orc_writer_options {
    * Rounded down to a multiple of 8.
    *
    * @param stride Row index stride to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal row index stride is passed
    */
   void set_row_index_stride(size_type stride)
   {
@@ -929,6 +946,8 @@ class chunked_orc_writer_options {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param size_bytes Maximum stripe size, in bytes to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal stripe size is passed
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -943,6 +962,8 @@ class chunked_orc_writer_options {
    * the stripe size.
    *
    * @param size_rows Maximum stripe size, in rows to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows in a stripe is passed
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -956,6 +977,8 @@ class chunked_orc_writer_options {
    * Rounded down to a multiple of 8.
    *
    * @param stride Row index stride to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows in a row group is passed
    */
   void set_row_index_stride(size_type stride)
   {
