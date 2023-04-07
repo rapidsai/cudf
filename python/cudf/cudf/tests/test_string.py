@@ -784,6 +784,12 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
+def test_string_invalid_regex():
+    gs = cudf.Series(["a"])
+    with pytest.raises(RuntimeError):
+        gs.str.extract(r"{\}")
+
+
 @pytest.mark.parametrize(
     "pat,regex",
     [
