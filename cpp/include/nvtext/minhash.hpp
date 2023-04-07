@@ -60,7 +60,10 @@ std::unique_ptr<cudf::column> minhash(
  * @brief Returns the minhash values for each string per seed
  *
  * Hash values are computed from substrings of each string and the
- * minimum hash value is returned for each string.
+ * minimum hash value is returned for each string for each seed.
+ * Each row of the list column are seed results for the corresponding
+ * string. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
  *
  * Any null row entries result in corresponding null output rows.
  *
