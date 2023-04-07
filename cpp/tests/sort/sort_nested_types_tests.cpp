@@ -122,6 +122,70 @@ TEST_F(NestedStructTest, StructsHaveListsWithNulls)
   }
 }
 
+TEST_F(NestedStructTest, SlicedStructsHaveListsNoNulls)
+{
+  // Input has equal elements, thus needs to be tested by stable sort.
+  // The original input has 3 first elements repeated at the beginning and the end.
+  auto const input_original = [] {
+    auto child0 = int32s_lists{
+      {4, 2, 0}, {}, {5}, {4, 2, 0}, {}, {5}, {4, 1}, {4, 0}, {}, {}, {4, 2, 0}, {}, {5}};
+    auto child1 = int32s_col{1, 2, 5, 1, 2, 5, 0, 3, 3, 4, 1, 2, 5};
+    return structs_col{{child0, child1}};
+  }();
+
+  auto const input = cudf::slice(input_original, {3, 10})[0];
+
+  {
+    auto const expected_order = int32s_col{1, 5, 6, 4, 3, 0, 2};
+    auto const order          = cudf::stable_sorted_order(cudf::table_view{{input}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+
+  {
+    auto const expected_order = int32s_col{2, 0, 3, 4, 6, 5, 1};
+    auto const order =
+      cudf::stable_sorted_order(cudf::table_view{{input}}, {cudf::order::DESCENDING});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+}
+
+TEST_F(NestedStructTest, SlicedStructsHaveListsWithNulls)
+{
+  // Input has equal elements, thus needs to be tested by stable sort.
+  // The original input has 2 first elements repeated at the beginning and the end.
+  auto const input_original = [] {
+    auto child0 = int32s_lists{{{4, 2, null}, null_at(2)},
+                               {},
+                               {{4, 2, null}, null_at(2)},
+                               {},
+                               {} /*NULL*/,
+                               {5},
+                               {4, 1},
+                               {4, 0},
+                               {},
+                               {},
+                               {{4, 2, null}, null_at(2)},
+                               {}};
+    auto child1 = int32s_col{{1, 2, 1, 2, null, 5, null, 3, 3, 4, 1, 2}, nulls_at({4, 6})};
+    return structs_col{{child0, child1}, null_at(4)};
+  }();
+
+  auto const input = cudf::slice(input_original, {2, 10})[0];
+
+  {
+    auto const expected_order = int32s_col{2, 1, 6, 7, 5, 4, 0, 3};
+    auto const order          = cudf::stable_sorted_order(cudf::table_view{{input}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+
+  {
+    auto const expected_order = int32s_col{3, 0, 4, 5, 7, 6, 1, 2};
+    auto const order =
+      cudf::stable_sorted_order(cudf::table_view{{input}}, {cudf::order::DESCENDING});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+}
+
 TEST_F(NestedStructTest, StructsOfStructsHaveListsNoNulls)
 {
   // Input has equal elements, thus needs to be tested by stable sort.
