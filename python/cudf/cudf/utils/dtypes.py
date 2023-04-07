@@ -269,14 +269,14 @@ def to_cudf_compatible_scalar(val, dtype=None):
             # the string value directly (cudf.DeviceScalar will DTRT)
             return val
 
-    if isinstance(val, datetime.datetime):
-        val = np.datetime64(val)
-    elif isinstance(val, datetime.timedelta):
-        val = np.timedelta64(val)
-    elif isinstance(val, pd.Timestamp):
+    if isinstance(val, pd.Timestamp):
         val = val.to_datetime64()
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
+    elif isinstance(val, datetime.datetime):
+        val = np.datetime64(val)
+    elif isinstance(val, datetime.timedelta):
+        val = np.timedelta64(val)
 
     val = _maybe_convert_to_default_type(
         cudf.api.types.pandas_dtype(type(val))

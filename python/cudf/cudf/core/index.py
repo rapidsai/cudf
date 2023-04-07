@@ -64,6 +64,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from cudf.core._compat import PANDAS_GE_200
 
 T = TypeVar("T", bound="Frame")
 
@@ -2289,7 +2290,10 @@ class DatetimeIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
-        nanos = self._values.astype("datetime64[ns]")
+        if PANDAS_GE_200:
+            nanos = self._values
+        else:
+            nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     @_cudf_nvtx_annotate
@@ -2507,7 +2511,9 @@ class TimedeltaIndex(GenericIndex):
         """
         Number of days for each element.
         """
-        return as_index(arbitrary=self._values.days, name=self.name)
+        return as_index(
+            arbitrary=self._values.days, name=self.name, dtype="int32"
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2515,7 +2521,9 @@ class TimedeltaIndex(GenericIndex):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return as_index(arbitrary=self._values.seconds, name=self.name)
+        return as_index(
+            arbitrary=self._values.seconds, name=self.name, dtype="int32"
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2523,7 +2531,9 @@ class TimedeltaIndex(GenericIndex):
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return as_index(arbitrary=self._values.microseconds, name=self.name)
+        return as_index(
+            arbitrary=self._values.microseconds, name=self.name, dtype="int32"
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2532,7 +2542,9 @@ class TimedeltaIndex(GenericIndex):
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return as_index(arbitrary=self._values.nanoseconds, name=self.name)
+        return as_index(
+            arbitrary=self._values.nanoseconds, name=self.name, dtype="int32"
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

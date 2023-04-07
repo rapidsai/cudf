@@ -2643,6 +2643,12 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     pa_chunk_array = pa.chunked_array(np_list_data)
 
     expect = pd.Series(pa_chunk_array.to_pandas())
+    if cudf.api.types.is_datetime64_dtype(
+        data_type
+    ) or cudf.api.types.is_timedelta64_dtype(data_type):
+        # Workaround for an Arrow Bug:
+        # https://github.com/apache/arrow/issues/34462
+        expect = expect.astype(data_type)
     got = cudf.Series(pa_chunk_array)
 
     assert_eq(expect, got)
@@ -2657,6 +2663,12 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     )
 
     expect = pa_table.to_pandas()
+    if cudf.api.types.is_datetime64_dtype(
+        data_type
+    ) or cudf.api.types.is_timedelta64_dtype(data_type):
+        # Workaround for an Arrow Bug:
+        # https://github.com/apache/arrow/issues/34462
+        expect = expect.astype(data_type)
     got = cudf.DataFrame.from_arrow(pa_table)
 
     assert_eq(expect, got)
@@ -3929,9 +3941,6 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
-        else:
-            with pytest.raises(NotImplementedError):
-                gdata.all(level="a")
 
     got = gdata.all()
     expected = pdata.all()
@@ -3990,9 +3999,6 @@ def test_any(data, axis):
             got = gdata.any(bool_only=True)
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
-        else:
-            with pytest.raises(NotImplementedError):
-                gdata.any(level="a")
 
         got = gdata.any(axis=axis)
         expected = pdata.any(axis=axis)
@@ -5187,7 +5193,6 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
     gdf = cudf.DataFrame(data)
-
     pdf = gdf.to_pandas()
 
     with expect_warning_if(

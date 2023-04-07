@@ -20,7 +20,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_LT_153
+from cudf.core._compat import PANDAS_LT_153, PANDAS_GE_200
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -286,6 +286,16 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in got.columns:
             got = got.drop(columns=["col_category"])
 
+    if PANDAS_GE_200 and columns is None:
+        # https://github.com/pandas-dev/pandas/issues/52412
+        assert expect["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
+        assert expect["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
+        expect["col_datetime64[ms]"] = expect["col_datetime64[ms]"].astype(
+            "datetime64[ms]"
+        )
+        expect["col_datetime64[us]"] = expect["col_datetime64[us]"].astype(
+            "datetime64[us]"
+        )
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -1432,7 +1442,16 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
     expect = pdf
     got = pd.read_parquet(gdf_fname)
-
+    if PANDAS_GE_200:
+        # https://github.com/pandas-dev/pandas/issues/52412
+        assert got["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
+        assert got["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
+        got["col_datetime64[ms]"] = got["col_datetime64[ms]"].astype(
+            "datetime64[ms]"
+        )
+        got["col_datetime64[us]"] = got["col_datetime64[us]"].astype(
+            "datetime64[us]"
+        )
     # verify INT96 timestamps were converted back to the same data.
     assert_eq(expect, got, check_categorical=False)
 
