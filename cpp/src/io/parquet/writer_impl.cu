@@ -934,7 +934,8 @@ void writer::impl::init_row_group_fragments(
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(
     partitions, _stream, rmm::mr::get_current_device_resource());
-  gpu::InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, _stream);
+  gpu::InitRowGroupFragments(
+    frag, col_desc, d_partitions, part_frag_offset, fragment_size, _stream);
   frag.device_to_host(_stream, true);
 }
 
@@ -1255,7 +1256,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
           reason) {
         CUDF_FAIL("Compression error: " + reason.value());
       }
-      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, _stream);
+      nvcomp::batched_compress(
+        nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, _stream);
 
       break;
     }
@@ -1318,10 +1320,8 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    _stream(stream),
+                   rmm::cuda_stream_view stream)
+  : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
     _max_row_group_size{options.get_row_group_size_bytes()},
     _max_row_group_rows{options.get_row_group_size_rows()},
@@ -1346,10 +1346,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
                    SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    _stream(stream),
+                   rmm::cuda_stream_view stream)
+  : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
     _max_row_group_size{options.get_row_group_size_bytes()},
     _max_row_group_rows{options.get_row_group_size_rows()},
@@ -1404,13 +1402,16 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     add_default_name(_table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto vec         = table_to_linked_columns(table);
-  auto schema_tree = construct_schema_tree(vec, *_table_meta, _single_write_mode, _int96_timestamps);
+  auto vec = table_to_linked_columns(table);
+  auto schema_tree =
+    construct_schema_tree(vec, *_table_meta, _single_write_mode, _int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
   for (schema_tree_node const& schema_node : schema_tree) {
-    if (schema_node.leaf_column) { parquet_columns.emplace_back(schema_node, schema_tree, _stream); }
+    if (schema_node.leaf_column) {
+      parquet_columns.emplace_back(schema_node, schema_tree, _stream);
+    }
   }
 
   // Mass allocation of column_device_views for each parquet_column_view
@@ -1718,8 +1719,13 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
-    chunks, col_desc, num_columns, _max_page_size_bytes, _max_page_size_rows, _compression, _stream);
+  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(chunks,
+                                                                 col_desc,
+                                                                 num_columns,
+                                                                 _max_page_size_bytes,
+                                                                 _max_page_size_rows,
+                                                                 _compression,
+                                                                 _stream);
 
   // Get the maximum page size across all chunks
   size_type max_page_uncomp_data_size =
@@ -1921,7 +1927,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
-    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_async(pages, _stream);
+    thrust::host_vector<gpu::EncPage> h_pages =
+      cudf::detail::make_host_vector_async(pages, _stream);
     _stream.synchronize();
 
     // add column and offset indexes to metadata
@@ -2048,18 +2055,16 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
                SingleWriteMode mode,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
 }
 
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
                SingleWriteMode mode,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
 }
 

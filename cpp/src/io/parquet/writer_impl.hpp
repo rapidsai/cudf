@@ -65,13 +65,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -80,13 +78,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -217,19 +213,17 @@ class writer::impl {
   size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
 
  private:
-  // TODO : figure out if we want to keep this. It is currently unused.
-  rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;
 
-  Compression _compression             = Compression::UNCOMPRESSED;
+  Compression _compression              = Compression::UNCOMPRESSED;
   size_t _max_row_group_size            = default_row_group_size_bytes;
   size_type _max_row_group_rows         = default_row_group_size_rows;
   size_t _max_page_size_bytes           = default_max_page_size_bytes;
   size_type _max_page_size_rows         = default_max_page_size_rows;
-  statistics_freq _stats_granularity   = statistics_freq::STATISTICS_NONE;
-  dictionary_policy _dict_policy       = dictionary_policy::ALWAYS;
-  size_t _max_dictionary_size          = default_max_dictionary_size;
+  statistics_freq _stats_granularity    = statistics_freq::STATISTICS_NONE;
+  dictionary_policy _dict_policy        = dictionary_policy::ALWAYS;
+  size_t _max_dictionary_size           = default_max_dictionary_size;
   bool _int96_timestamps                = false;
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   std::optional<size_type> _max_page_fragment_size;
