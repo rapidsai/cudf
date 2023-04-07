@@ -382,8 +382,11 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask>=2023.1.1
-          - distributed>=2023.1.1
+          - dask==2023.3.2
+          - distributed==2023.3.2.1
+      - output_types: conda
+        packages:
+          - dask-core==2023.3.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
           - &cudf cudf==23.6.*
