@@ -5757,7 +5757,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
+        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
 
         common_dtype = find_common_type(filtered.dtypes)
         if (
