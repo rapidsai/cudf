@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ struct column_scalar_scatterer_impl {
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -184,14 +184,18 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                    stream,
                                    mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
-    auto scalar_index = dictionary::detail::get_index(dict_view, source.get(), stream);
-    auto scalar_iter  = thrust::make_permutation_iterator(
+    auto scalar_index = dictionary::detail::get_index(
+      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
+    auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
-    thrust::scatter(
-      rmm::exec_policy(stream), scalar_iter, scalar_iter + scatter_rows, scatter_iter, target_iter);
+    thrust::scatter(rmm::exec_policy_nosync(stream),
+                    scalar_iter,
+                    scalar_iter + scatter_rows,
+                    scatter_iter,
+                    target_iter);
 
     // build the dictionary indices column from the result
     auto const indices_type = new_indices->type();
@@ -249,7 +253,8 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
-      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+      auto row_slr =
+        get_element(typed_s->view().column(i), 0, stream, rmm::mr::get_current_device_resource());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -299,7 +304,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                             return col1.type().id() == col2.type().id();
                           }),
                "Column types do not match between source and target");
-  CUDF_EXPECTS(scatter_map.has_nulls() == false, "Scatter map contains nulls");
+  CUDF_EXPECTS(not scatter_map.has_nulls(), "Scatter map contains nulls");
 
   if (scatter_map.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 
@@ -331,7 +336,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
 {
   CUDF_EXPECTS(source.size() == static_cast<size_t>(target.num_columns()),
                "Number of columns in source and target not equal");
-  CUDF_EXPECTS(indices.has_nulls() == false, "indices contains nulls");
+  CUDF_EXPECTS(not indices.has_nulls(), "indices contains nulls");
 
   if (indices.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 
@@ -382,14 +387,14 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
     data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    mutable_indices.begin<size_type>(),
                    mutable_indices.end<size_type>(),
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map =
-    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream);
+  auto scatter_map = detail::apply_boolean_mask(
+    table_view{{indices->view()}}, boolean_mask, stream, rmm::mr::get_current_device_resource());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 

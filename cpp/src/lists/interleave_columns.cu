@@ -22,7 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 

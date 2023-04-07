@@ -1,8 +1,9 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set, TypeVar
 
@@ -15,6 +16,7 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
+from cudf._lib.types import size_type_dtype
 from cudf._typing import DtypeObj
 from cudf.api.types import (
     is_bool_dtype,
@@ -197,6 +199,12 @@ class BaseIndex(Serializable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property
@@ -216,6 +224,37 @@ class BaseIndex(Serializable):
         Returns
         -------
         bool
+        """
+        raise NotImplementedError
+
+    @property
+    def hasnans(self):
+        """
+        Return True if there are any NaNs or nulls.
+
+        Returns
+        -------
+        out : bool
+            If Series has at least one NaN or null value, return True,
+            if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> index = cudf.Index([1, 2, np.nan, 3, 4], nan_as_null=False)
+        >>> index
+        Float64Index([1.0, 2.0, nan, 3.0, 4.0], dtype='float64')
+        >>> index.hasnans
+        True
+
+        `hasnans` returns `True` for the presence of any `NA` values:
+
+        >>> index = cudf.Index([1, 2, None, 3, 4])
+        >>> index
+        Int64Index([1, 2, <NA>, 3, 4], dtype='int64')
+        >>> index.hasnans
+        True
         """
         raise NotImplementedError
 
@@ -468,8 +507,8 @@ class BaseIndex(Serializable):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self.is_boolean() and other.is_numeric()) or (
-            self.is_numeric() and other.is_boolean()
+        if (self._is_boolean() and other._is_numeric()) or (
+            self._is_numeric() and other._is_boolean()
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -595,9 +634,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas Index.
+
+        Parameters
+        ----------
+        nullable : bool, Default False
+            If ``nullable`` is ``True``, the resulting index will have
+            a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting index will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
 
         Examples
         --------
@@ -791,6 +841,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index only consists of numeric data.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_any_real_numeric_dtype` instead.
+
         Returns
         -------
         bool
@@ -824,11 +877,22 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         raise NotImplementedError
 
     def is_boolean(self):
         """
         Check if the Index only consists of booleans.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_bool_dtype` instead.
 
         Returns
         -------
@@ -857,11 +921,22 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         raise NotImplementedError
 
     def is_integer(self):
         """
         Check if the Index only consists of integers.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_integer_dtype` instead.
 
         Returns
         -------
@@ -890,6 +965,14 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         raise NotImplementedError
 
     def is_floating(self):
@@ -898,6 +981,9 @@ class BaseIndex(Serializable):
 
         The Index may consist of only floats, NaNs, or a mix of floats,
         integers, or NaNs.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_float_dtype` instead.
 
         Returns
         -------
@@ -930,11 +1016,22 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         raise NotImplementedError
 
     def is_object(self):
         """
         Check if the Index is of the object dtype.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_object_dtype` instead.
 
         Returns
         -------
@@ -964,11 +1061,22 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         raise NotImplementedError
 
     def is_categorical(self):
         """
         Check if the Index holds categorical data.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_categorical_dtype` instead.
 
         Returns
         -------
@@ -1005,11 +1113,22 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         raise NotImplementedError
 
     def is_interval(self):
         """
         Check if the Index holds Interval objects.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_interval_dtype` instead.
 
         Returns
         -------
@@ -1040,6 +1159,14 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         raise NotImplementedError
 
     def _union(self, other, sort=None):
@@ -1426,6 +1553,63 @@ class BaseIndex(Serializable):
             self._column_names,
         )
 
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate index values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        array. Either all duplicates, all except the first, or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            The value or values in a set of duplicates to mark as missing.
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        cupy.ndarray[bool]
+
+        See Also
+        --------
+        Series.duplicated : Equivalent method on cudf.Series.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Index.drop_duplicates : Remove duplicate values from Index.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set to False and all others to True:
+
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> idx.duplicated()
+        array([False, False,  True, False,  True])
+
+        which is equivalent to
+
+        >>> idx.duplicated(keep='first')
+        array([False, False,  True, False,  True])
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set to False and all others to True:
+
+        >>> idx.duplicated(keep='last')
+        array([ True, False,  True, False, False])
+
+        By setting keep to ``False``, all duplicates are True:
+
+        >>> idx.duplicated(keep=False)
+        array([ True, False,  True, False,  True])
+        """
+        return self.to_series().duplicated(keep=keep).to_cupy()
+
     def dropna(self, how="any"):
         """
         Drop null rows from Index.
@@ -1466,7 +1650,7 @@ class BaseIndex(Serializable):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
+            gather_map = gather_map.astype(size_type_dtype)
 
         if not _gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify

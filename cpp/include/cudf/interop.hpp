@@ -16,7 +16,14 @@
 
 #pragma once
 
+// We disable warning 611 because the `arrow::TableBatchReader` only partially
+// override the `ReadNext` method of `arrow::RecordBatchReader::ReadNext`
+// triggering warning 611-D from nvcc.
+#pragma nv_diag_suppress 611
+#pragma nv_diag_suppress 2810
 #include <arrow/api.h>
+#pragma nv_diag_default 611
+#pragma nv_diag_default 2810
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>

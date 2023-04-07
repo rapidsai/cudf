@@ -1,4 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -15,6 +17,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def replace_tokens(Column strings,
                    Column targets,
                    Column replacements,
@@ -49,6 +52,7 @@ def replace_tokens(Column strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def filter_tokens(Column strings,
                   size_type min_token_length,
                   object py_replacement,

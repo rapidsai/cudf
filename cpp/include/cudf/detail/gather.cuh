@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy(stream),
+    thrust::gather_if(rmm::exec_policy_nosync(stream),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -137,7 +137,7 @@ void gather_helper(InputItr source_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
     thrust::gather(
-      rmm::exec_policy(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
+      rmm::exec_policy_nosync(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
   }
 }
 
@@ -583,10 +583,12 @@ void gather_bitmask(table_view const& source,
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
-  auto d_target_masks = make_device_uvector_async(target_masks, stream);
+  auto d_target_masks =
+    make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
 
   auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
+    target.size(), stream, rmm::mr::get_current_device_resource());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {
@@ -647,13 +649,12 @@ void gather_bitmask(table_view const& source,
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>
-std::unique_ptr<table> gather(
-  table_view const& source_table,
-  MapIterator gather_map_begin,
-  MapIterator gather_map_end,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> gather(table_view const& source_table,
+                              MapIterator gather_map_begin,
+                              MapIterator gather_map_end,
+                              out_of_bounds_policy bounds_policy,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 

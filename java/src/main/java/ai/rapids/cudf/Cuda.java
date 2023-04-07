@@ -388,7 +388,7 @@ public class Cuda {
 
   /**
    * Gets the major CUDA compute capability of the current device.
-   * 
+   *
    * For reference: https://developer.nvidia.com/cuda-gpus
    * Hardware Generation	Compute Capability
    *     Ampere	                8.x
@@ -398,15 +398,15 @@ public class Cuda {
    *     Maxwell                5.x
    *     Kepler	                3.x
    *     Fermi	                2.x
-   * 
+   *
    * @return The Major compute capability version number of the current CUDA device
    * @throws CudaException on any error
    */
-  public static native int getComputeCapabilityMajor() throws CudaException;  
+  public static native int getComputeCapabilityMajor() throws CudaException;
 
   /**
    * Gets the minor CUDA compute capability of the current device.
-   * 
+   *
    * For reference: https://developer.nvidia.com/cuda-gpus
    * Hardware Generation	Compute Capability
    *     Ampere	                8.x
@@ -416,7 +416,7 @@ public class Cuda {
    *     Maxwell                5.x
    *     Kepler	                3.x
    *     Fermi	                2.x
-   * 
+   *
    * @return The Minor compute capability version number of the current CUDA device
    * @throws CudaException on any error
    */

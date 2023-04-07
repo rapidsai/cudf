@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pandas as pd
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -27,14 +27,10 @@ from cudf._lib.cpp.types cimport (
     order,
     size_type,
 )
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
+@acquire_spill_lock()
 def drop_nulls(list columns, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
@@ -78,6 +74,7 @@ def drop_nulls(list columns, how="any", keys=None, thresh=None):
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def apply_boolean_mask(list columns, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
@@ -107,6 +104,7 @@ def apply_boolean_mask(list columns, Column boolean_mask):
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
@@ -191,6 +189,7 @@ def drop_duplicates(list columns,
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     """
     Finds number of unique rows in `source_column`

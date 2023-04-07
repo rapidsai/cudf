@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 """
 Helper functions for parameterized docstring
@@ -20,7 +20,7 @@ _wrapopts = {"width": 78, "replace_whitespace": False}
 def docfmt(**kwargs):
     """Format docstring.
 
-    Similiar to saving the result of ``__doc__.format(**kwargs)`` as the
+    Similar to saving the result of ``__doc__.format(**kwargs)`` as the
     function's docstring.
     """
     kwargs = {k: v.lstrip() for k, v in kwargs.items()}
@@ -83,7 +83,7 @@ doc_describe = docfmt_partial(
         Generate descriptive statistics.
 
         Descriptive statistics include those that summarize the
-        central tendency, dispersion and shape of a dataset’s
+        central tendency, dispersion and shape of a dataset's
         distribution, excluding ``NaN`` values.
 
         Analyzes both numeric and object series, as well as
@@ -129,6 +129,11 @@ doc_describe = docfmt_partial(
         datetime_is_numeric : bool, default False
             For DataFrame input, this also controls whether datetime columns
             are included by default.
+
+            .. deprecated:: 23.04
+
+               `datetime_is_numeric` is deprecated and will be removed in
+               a future version of cudf.
 
         Returns
         -------

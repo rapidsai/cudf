@@ -1,0 +1,20 @@
+name: Add new issue/PR to project
+
+on:
+  issues:
+    types:
+      - opened
+
+  pull_request_target:
+    types:
+      - opened
+
+jobs:
+  add-to-project:
+    name: Add issue or PR to project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v0.3.0
+        with:
+          project-url: https://github.com/orgs/rapidsai/projects/51
+          github-token: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -349,7 +349,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end = next_delimiter;
-          if (options.keepquotes == false) {
+          if (not options.keepquotes) {
             if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
               ++field_start;
               --end;
@@ -794,8 +794,8 @@ std::vector<column_type_histogram> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats =
-    detail::make_zeroed_device_uvector_async<column_type_histogram>(num_active_columns, stream);
+  auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
+    num_active_columns, stream, rmm::mr::get_current_device_resource());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);

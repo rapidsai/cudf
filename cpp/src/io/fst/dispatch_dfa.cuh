@@ -302,7 +302,7 @@ struct DispatchFSM : DeviceFSMPolicy {
   }
 
   //------------------------------------------------------------------------------
-  // POLICY INVOKATION
+  // POLICY INVOCATION
   //------------------------------------------------------------------------------
   template <typename ActivePolicyT>
   CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t Invoke()

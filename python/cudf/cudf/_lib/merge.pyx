@@ -6,7 +6,6 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.column cimport Column
 from cudf._lib.cpp.merge cimport merge as cpp_merge
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view

@@ -217,7 +217,7 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
   std::map<std::string, int64_t> results;
   RdKafka::ErrorCode err;
 
-  if (cached == true) {
+  if (cached) {
     err = consumer->get_watermark_offsets(topic, partition, &low, &high);
   } else {
     err = consumer->query_watermark_offsets(topic, partition, &low, &high, timeout);

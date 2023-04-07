@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -44,19 +46,18 @@ namespace detail {
  * d2 is now {[a, b, c, d, e, f], [5, 0, 3, 1, 2, 2, 2, 5, 0]}
  * ```
  */
-std::unique_ptr<column> add_keys(
-  dictionary_column_view const& dictionary_column,
-  column_view const& new_keys,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
+                                 column_view const& new_keys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto combined_keys =
-    cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
+  auto combined_keys = cudf::detail::concatenate(
+    std::vector<column_view>{old_keys, new_keys}, stream, rmm::mr::get_current_device_resource());
 
   // Drop duplicates from the combined keys, then sort the result.
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]

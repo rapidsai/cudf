@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef HELPER_FUNCTIONS_CUH
-#define HELPER_FUNCTIONS_CUH
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -242,5 +241,3 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs,
 {
   return !lhs.equal(rhs);
 }
-
-#endif  // HELPER_FUNCTIONS_CUH

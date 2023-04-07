@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -246,12 +246,11 @@ struct scan_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<column> scan_inclusive(
-  column_view const& input,
-  scan_aggregation const& agg,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scan_inclusive(column_view const& input,
+                                       scan_aggregation const& agg,
+                                       null_policy null_handling,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
@@ -264,10 +263,22 @@ std::unique_ptr<column> scan_inclusive(
   // If the input is a structs column, we also need to push down nulls from the parent output column
   // into the children columns.
   if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
-    for (size_type idx = 0; idx < output->num_children(); ++idx) {
-      structs::detail::superimpose_parent_nulls(
-        output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
-    }
+    auto const num_rows   = output->size();
+    auto const null_count = output->null_count();
+    auto content          = output->release();
+
+    // Build new children columns.
+    const auto null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    std::for_each(content.children.begin(),
+                  content.children.end(),
+                  [null_mask, null_count, stream, mr](auto& child) {
+                    child = structs::detail::superimpose_nulls(
+                      null_mask, null_count, std::move(child), stream, mr);
+                  });
+
+    // Replace the children columns.
+    output = cudf::make_structs_column(
+      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 
   return output;

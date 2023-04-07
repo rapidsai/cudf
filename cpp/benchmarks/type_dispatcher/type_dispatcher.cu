@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -194,8 +194,8 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   rmm::device_uvector<TypeParam*> d_vec(n_cols, cudf::get_default_stream());
 
   if (dispatching_type == NO_DISPATCHING) {
-    CUDF_CUDA_TRY(cudaMemcpy(
-      d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyHostToDevice));
+    CUDF_CUDA_TRY(
+      cudaMemcpy(d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyDefault));
   }
 
   // Warm up

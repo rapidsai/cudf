@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -512,7 +512,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
 
     // info for the offsets buffer
     auto offset_col = current;
-    CUDF_EXPECTS(scv.offsets().nullable() == false, "Encountered nullable string offsets column");
+    CUDF_EXPECTS(not scv.offsets().nullable(), "Encountered nullable string offsets column");
     *current = src_buf_info(type_id::INT32,
                             // note: offsets can be null in the case where the string column
                             // has been created with empty_like().
@@ -530,7 +530,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     parent_offset_index = offset_col - head;
 
     // prevent appending buf_info for non-existent chars buffer
-    CUDF_EXPECTS(scv.chars().nullable() == false, "Encountered nullable string chars column");
+    CUDF_EXPECTS(not scv.chars().nullable(), "Encountered nullable string chars column");
 
     // info for the chars buffer
     *current = src_buf_info(
@@ -1047,11 +1047,8 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
 
   // HtoD indices and source buf info to device
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_indices,
-                                h_indices,
-                                indices_size + src_buf_info_size,
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyDefault, stream.value()));
 
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
   std::size_t const buf_sizes_size =
@@ -1184,7 +1181,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
                                 d_buf_sizes,
                                 buf_sizes_size + dst_buf_info_size,
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
@@ -1226,14 +1223,14 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // HtoD src and dest buffers
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream.value()));
+    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyDefault, stream.value()));
 
   // perform the copy.
   copy_data(num_bufs, num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info, stream);
 
   // DtoH dst info (to retrieve null counts)
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDeviceToHost, stream.value()));
+    h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDefault, stream.value()));
 
   stream.synchronize();
 

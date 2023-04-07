@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -6,7 +6,6 @@ import pyarrow as pa
 import cudf
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -316,7 +315,7 @@ cdef columns_from_table_view(
     object owners,
 ):
     """
-    Given a ``cudf::table_view``, construsts a list of columns from it,
+    Given a ``cudf::table_view``, constructs a list of columns from it,
     along with referencing an owner Python object that owns the memory
     lifetime. owner must be either None or a list of column. If owner
     is a list of columns, the owner of the `i`th ``cudf::column_view``
@@ -341,8 +340,8 @@ cdef data_from_table_view(
     along with referencing an ``owner`` Python object that owns the memory
     lifetime. If ``owner`` is a Frame we reach inside of it and
     reach inside of each ``cudf.Column`` to make the owner of each newly
-    created ``DeviceBufferLike`` underneath the ``cudf.Column`` objects of the
-    created Frame the respective ``DeviceBufferLike`` from the relevant
+    created ``Buffer`` underneath the ``cudf.Column`` objects of the
+    created Frame the respective ``Buffer`` from the relevant
     ``cudf.Column`` of the ``owner`` Frame
     """
     cdef size_type column_idx = 0

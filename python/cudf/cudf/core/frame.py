@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
 from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -321,15 +322,19 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
-        result = {}
+        result_data = {}
         for col_name, col in self._data.items():
             dt = dtype.get(col_name, col.dtype)
             if not is_dtype_equal(dt, col.dtype):
-                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
             else:
-                result[col_name] = col.copy() if copy else col
+                result_data[col_name] = col.copy() if copy else col
 
-        return result
+        return ColumnAccessor._create_unsafe(
+            data=result_data,
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+        )
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -480,9 +485,20 @@ class Frame(BinaryOperand, Scannable):
             )
 
         if dtype is None:
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
-            )
+            dtypes = [col.dtype for col in self._data.values()]
+            for dtype in dtypes:
+                if isinstance(
+                    dtype,
+                    (
+                        cudf.ListDtype,
+                        cudf.core.dtypes.DecimalDtype,
+                        cudf.StructDtype,
+                    ),
+                ):
+                    raise NotImplementedError(
+                        f"{dtype} cannot be exposed as a cupy array"
+                    )
+            dtype = find_common_type(dtypes)
 
         matrix = make_empty_matrix(
             shape=(len(self), ncol), dtype=dtype, order="F"
@@ -953,7 +969,7 @@ class Frame(BinaryOperand, Scannable):
         return self[out_cols]
 
     @_cudf_nvtx_annotate
-    def _quantiles(
+    def _quantile_table(
         self,
         q,
         interpolation="LINEAR",
@@ -972,7 +988,7 @@ class Frame(BinaryOperand, Scannable):
         ]
 
         return self._from_columns_like_self(
-            libcudf.quantiles.quantiles(
+            libcudf.quantiles.quantile_table(
                 [*self._columns],
                 q,
                 interpolation,
@@ -1210,7 +1226,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1289,7 +1305,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1363,12 +1379,12 @@ class Frame(BinaryOperand, Scannable):
         ----------
         value : Frame (Shape must be consistent with self)
             Values to be hypothetically inserted into Self
-        side : str {‘left’, ‘right’} optional, default ‘left‘
-            If ‘left’, the index of the first suitable location found is given
-            If ‘right’, return the last such index
+        side : str {'left', 'right'} optional, default 'left'
+            If 'left', the index of the first suitable location found is given
+            If 'right', return the last such index
         ascending : bool optional, default True
             Sorted Frame is in ascending order (otherwise descending)
-        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+        na_position : str {'last', 'first'} optional, default 'last'
             Position of null values in sorted order
 
         Returns
@@ -1444,7 +1460,7 @@ class Frame(BinaryOperand, Scannable):
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view)
+        result = cupy.asarray(outcol.data_array_view(mode="read"))
         if scalar_flag:
             return result[0].item()
         else:
@@ -1476,8 +1492,8 @@ class Frame(BinaryOperand, Scannable):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns
@@ -1697,9 +1713,10 @@ class Frame(BinaryOperand, Scannable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        lmask = as_column(left_column.nullmask)
-                        rmask = as_column(right_column.nullmask)
-                        output_mask = (lmask | rmask).data
+                        with acquire_spill_lock():
+                            lmask = as_column(left_column.nullmask)
+                            rmask = as_column(right_column.nullmask)
+                            output_mask = (lmask | rmask).data
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1734,6 +1751,7 @@ class Frame(BinaryOperand, Scannable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
+    @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
     ):
@@ -2311,17 +2329,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     # Alias for kurtosis.
-    @copy_docstring(kurtosis)
-    def kurt(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
-        return self.kurtosis(
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
-        )
+    kurt = kurtosis
 
     @_cudf_nvtx_annotate
     def skew(
@@ -2481,6 +2489,11 @@ class Frame(BinaryOperand, Scannable):
         b    249
         dtype: int64
         """
+        warnings.warn(
+            f"Support for {self.__class__}.sum_of_squares is deprecated and "
+            "will be removed",
+            FutureWarning,
+        )
         return self._reduce("sum_of_squares", dtype=dtype)
 
     @_cudf_nvtx_annotate

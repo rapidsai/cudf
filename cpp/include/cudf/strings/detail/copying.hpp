@@ -49,13 +49,11 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column of size (end-start)/step.
  */
-std::unique_ptr<cudf::column> copy_slice(
-  strings_column_view const& strings,
-  size_type start,
-  size_type end = -1,
-  // Move before end?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
+                                         size_type start,
+                                         size_type end,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Returns a new strings column created by shifting the rows by a specified offset.

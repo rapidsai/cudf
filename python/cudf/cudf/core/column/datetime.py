@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import datetime
 import locale
 import re
 from locale import nl_langinfo
-from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
@@ -22,16 +21,12 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
-from cudf.core._compat import PANDAS_GE_120
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
 
-if PANDAS_GE_120:
-    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
-else:
-    _guess_datetime_format = pd.core.tools.datetimes._guess_datetime_format
+_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -98,11 +93,11 @@ class DatetimeColumn(column.ColumnBase):
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
         The datetime values
     dtype : np.dtype
         The data type
-    mask : DeviceBufferLike; optional
+    mask : Buffer; optional
         The validity mask
     """
 
@@ -121,9 +116,9 @@ class DatetimeColumn(column.ColumnBase):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: DtypeObj,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
@@ -131,9 +126,7 @@ class DatetimeColumn(column.ColumnBase):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
@@ -264,6 +257,11 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif isinstance(other, str):
+            try:
+                return cudf.Scalar(other, dtype=self.dtype)
+            except ValueError:
+                pass
 
         return NotImplemented
 
@@ -291,20 +289,16 @@ class DatetimeColumn(column.ColumnBase):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
-
         return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:

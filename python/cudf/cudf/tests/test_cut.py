@@ -23,7 +23,7 @@ from cudf.testing._utils import assert_eq
 )  # if ordered is False we need labels
 @pytest.mark.parametrize("precision", [1, 2, 3])
 def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
-    # will test optional labels, retbins and duplicates seperately
+    # will test optional labels, retbins and duplicates separately
     # they need more specific parameters to work
     pcat = pd.cut(
         x=x,

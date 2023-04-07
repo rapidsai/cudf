@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fil
 {
   if (!fill_valid) {
     return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
-      size, cudf::get_default_stream());
+      size, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());
     CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(),
@@ -536,11 +536,11 @@ void cleanEndWord(rmm::device_buffer& mask, int begin_bit, int end_bit)
   auto number_of_bits       = end_bit - begin_bit;
   if (number_of_bits % 32 != 0) {
     cudf::bitmask_type end_mask = 0;
-    CUDF_CUDA_TRY(cudaMemcpy(
-      &end_mask, ptr + number_of_mask_words - 1, sizeof(end_mask), cudaMemcpyDeviceToHost));
+    CUDF_CUDA_TRY(
+      cudaMemcpy(&end_mask, ptr + number_of_mask_words - 1, sizeof(end_mask), cudaMemcpyDefault));
     end_mask = end_mask & ((1 << (number_of_bits % 32)) - 1);
-    CUDF_CUDA_TRY(cudaMemcpy(
-      ptr + number_of_mask_words - 1, &end_mask, sizeof(end_mask), cudaMemcpyHostToDevice));
+    CUDF_CUDA_TRY(
+      cudaMemcpy(ptr + number_of_mask_words - 1, &end_mask, sizeof(end_mask), cudaMemcpyDefault));
   }
 }
 

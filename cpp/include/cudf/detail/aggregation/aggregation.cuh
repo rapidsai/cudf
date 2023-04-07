@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,8 +232,8 @@ struct update_target_element<
   aggregation::SUM,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                   !is_fixed_point<Source>()>> {
+  std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,

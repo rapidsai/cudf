@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,18 +25,16 @@
 #include <fstream>
 #include <random>
 
-using namespace cudf::test;
+auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
+  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-auto const temp_env = static_cast<TempDirTestEnvironment*>(
-  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-
-struct DataChunkSourceTest : public BaseFixture {
+struct DataChunkSourceTest : public cudf::test::BaseFixture {
 };
 
 std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
 {
   std::string result(chunk.size(), '\0');
-  cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDeviceToHost);
+  CUDF_CUDA_TRY(cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDefault));
   return result;
 }
 
@@ -109,7 +107,7 @@ TEST_F(DataChunkSourceTest, DataSourceHost)
 TEST_F(DataChunkSourceTest, DataSourceFile)
 {
   std::string content = "file datasource";
-  // make it big enought to have is_device_read_preferred return true
+  // make it big enough to have is_device_read_preferred return true
   content.reserve(content.size() << 20);
   for (int i = 0; i < 20; i++) {
     content += content;

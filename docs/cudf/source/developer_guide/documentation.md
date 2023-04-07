@@ -4,7 +4,7 @@ cuDF documentation is split into multiple pieces.
 All core functionality is documented using inline docstrings.
 Additional pages like user or developer guides are written independently.
 While docstrings are written using [reStructuredText](https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html) (reST),
-the latter are written using [MyST](https://myst-parser.readthedocs.io/en/latest/) 
+the latter are written using [MyST](https://myst-parser.readthedocs.io/en/latest/)
 The inline docstrings are organized using a small set of additional reST pages.
 The results are all then compiled together using [Sphinx](https://www.sphinx-doc.org/en/master/).
 This document discusses each of these components and how to contribute to them.
@@ -38,7 +38,7 @@ class A:
         ----------
         bar : str
             Description of bar.
-        
+
         Returns
         -------
         float
@@ -167,7 +167,7 @@ so links should make use of the appropriately namespaced anchors for links rathe
 The following are required to build the documentation:
 - A RAPIDS-compatible GPU. This is necessary because the documentation execute code.
 - A working copy of cudf in the same build environment.
-  We recommend following the [build instructions](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment). 
+  We recommend following the [build instructions](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
 - Sphinx, numpydoc, and MyST-NB.
   Assuming you follow the build instructions, these should automatically be installed into your environment.
 
@@ -190,7 +190,7 @@ Alternatively, you may specify a port with `python -m http.server $PORT`.
 You may build docs on a remote machine but want to view them locally.
 Assuming the other machine's IP address is visible on your local network,
 you can view the docs by replacing `localhost` with the IP address of the host machine.
-Alternatively, you may also forward the port using e.g. 
+Alternatively, you may also forward the port using e.g.
 `ssh -N -f -L localhost:$LOCAL_PORT:localhost:$REMOTE_PORT $REMOTE_IP`.
 That will make `$REMOTE_IP:$REMOTE_PORT` visible at `localhost:$LOCAL_PORT`.
 

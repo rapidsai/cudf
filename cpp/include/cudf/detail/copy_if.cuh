@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,14 +229,13 @@ struct DeviceType<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
-    Filter filter,
-    cudf::size_type per_thread,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const* block_offsets,
+                                           Filter filter,
+                                           cudf::size_type per_thread,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     auto output_column = cudf::detail::allocate_like(
       input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
@@ -277,14 +276,13 @@ struct scatter_gather_functor {
 
   template <typename T,
             std::enable_if_t<!cudf::is_fixed_width<T>() and !cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const*,
-    Filter filter,
-    cudf::size_type,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const*,
+                                           Filter filter,
+                                           cudf::size_type,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
@@ -320,11 +318,10 @@ struct scatter_gather_functor {
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
 template <typename Filter>
-std::unique_ptr<table> copy_if(
-  table_view const& input,
-  Filter filter,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> copy_if(table_view const& input,
+                               Filter filter,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 

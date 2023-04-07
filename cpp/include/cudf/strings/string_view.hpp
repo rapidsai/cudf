@@ -17,6 +17,8 @@
 
 #include <cudf/types.hpp>
 
+#include <cuda_runtime.h>
+
 #include <iterator>
 
 /**

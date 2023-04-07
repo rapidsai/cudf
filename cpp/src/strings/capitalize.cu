@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -108,6 +108,7 @@ struct base_fn {
   {
     if (d_column.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
 
     auto& derived     = static_cast<Derived&>(*this);

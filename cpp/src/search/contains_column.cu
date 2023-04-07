@@ -119,9 +119,11 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
-  auto needles_matched     = dictionary::detail::add_keys(needles, haystack.keys(), stream);
-  auto const needles_view  = dictionary_column_view(needles_matched->view());
-  auto haystack_matched    = dictionary::detail::set_keys(haystack, needles_view.keys(), stream);
+  auto needles_matched = dictionary::detail::add_keys(
+    needles, haystack.keys(), stream, rmm::mr::get_current_device_resource());
+  auto const needles_view = dictionary_column_view(needles_matched->view());
+  auto haystack_matched   = dictionary::detail::set_keys(
+    haystack, needles_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto const haystack_view = dictionary_column_view(haystack_matched->view());
 
   // now just use the indices for the contains

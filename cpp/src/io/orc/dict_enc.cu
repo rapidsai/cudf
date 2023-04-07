@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "orc_common.hpp"
 #include "orc_gpu.hpp"
 
+#include <cudf/io/orc_types.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
 

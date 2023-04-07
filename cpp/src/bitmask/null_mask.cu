@@ -107,7 +107,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
 {
   auto x                  = destination + word_index(begin_bit);
   const auto last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = (valid == true) ? 0xffff'ffff : 0;
+  bitmask_type fill_value = valid ? 0xffff'ffff : 0;
 
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
@@ -121,7 +121,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
         mask = mask & set_least_significant_bits(intra_word_index(end_bit));
       }
       x[destination_word_index] =
-        (valid == true) ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
+        valid ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
     } else {
       x[destination_word_index] = fill_value;
     }

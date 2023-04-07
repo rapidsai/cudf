@@ -9,11 +9,15 @@
           "VERSION": "?",
           "GIT_SHALLOW": "?",
           "OPTIONS": "*",
-          "FIND_PACKAGE_ARGUMENTS": "*" 
+          "FIND_PACKAGE_ARGUMENTS": "*"
         }
       },
       "ConfigureTest": {
-        "flags": ["TEST_NAME", "TEST_SRC"]
+        "flags": ["TEST_NAME", "TEST_SRC"],
+        "kwargs": {
+          "GPUS": 1,
+          "PERCENT": 1
+        }
       },
       "ConfigureBench": {
         "flags": ["BENCH_NAME", "BENCH_SRC"]

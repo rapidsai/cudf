@@ -139,7 +139,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
     auto validity = cudf::detail::valid_if(
       gather_map_begin,
       gather_map_begin + gather_map_size,
-      [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
+      [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index); },
       stream,
       mr);
     null_mask  = std::move(validity.first);

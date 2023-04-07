@@ -144,7 +144,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   thrust::exclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
   // last element is the total output size
-  // (device-to-host copy of 1 integer -- includes synching the stream)
+  // (device-to-host copy of 1 integer -- includes syncing the stream)
   cudf::size_type output_size = offsets.back_element(stream);
 
   //  create chars vector

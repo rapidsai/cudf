@@ -34,8 +34,8 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
   if (not nullable) {
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   } else {
-    auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 2 == 0 ? true : false; });
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size, valids);
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2102,7 +2102,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
   CUDF_CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
                                 get_brotli_dictionary(),
                                 sizeof(brotli_dictionary_s),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     inputs, outputs, results, scratch_u8, fb_heap_size);
@@ -2112,7 +2112,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost, stream.value()));
+      &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDefault, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
     cur = (dump[0] > cur) ? dump[0] : 0xffff'ffffu;

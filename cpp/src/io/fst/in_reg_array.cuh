@@ -26,7 +26,7 @@ namespace cudf::io::fst::detail {
 
 /**
  * @brief A bit-packed array of items that can be backed by registers yet allows to be dynamically
- * addressed at runtime. The data struture is explained in greater detail in the paper <a
+ * addressed at runtime. The data structure is explained in greater detail in the paper <a
  * href="http://www.vldb.org/pvldb/vol13/p616-stehle.pdf">ParPaRaw: Massively Parallel Parsing of
  * Delimiter-Separated Raw Data</a>.
  *

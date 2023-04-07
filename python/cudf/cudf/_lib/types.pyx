@@ -11,12 +11,13 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_null_order,
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
 
 import cudf
+
+size_type_dtype = np.dtype("int32")
 
 
 class TypeId(IntEnum):

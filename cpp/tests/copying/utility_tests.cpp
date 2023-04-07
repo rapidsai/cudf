@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -168,14 +169,6 @@ std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-void expect_tables_prop_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
-{
-  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  for (cudf::size_type index = 0; index < lhs.num_columns(); index++) {
-    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs.column(index), rhs.column(index));
-  }
-}
-
 struct EmptyLikeTableTest : public cudf::test::BaseFixture {
 };
 
@@ -187,7 +180,7 @@ TEST_F(EmptyLikeTableTest, TableTest)
   auto expected          = create_table(0, cudf::mask_state::ALL_VALID);
   auto got               = cudf::empty_like(input->view());
 
-  expect_tables_prop_equal(got->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(got->view(), expected->view());
 }
 
 template <typename T>
@@ -199,26 +192,52 @@ TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
 {
   // For same size as input
-  cudf::size_type size   = 10;
-  cudf::mask_state state = cudf::mask_state::ALL_VALID;
-  auto input    = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
-  auto expected = make_numeric_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
+  cudf::size_type size = 10;
+
+  auto input = make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::UNALLOCATED);
   auto got = cudf::allocate_like(input->view());
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*input, *got);
+
+  input = make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
+  got = cudf::allocate_like(input->view());
+  EXPECT_EQ(input->type(), got->type());
+  EXPECT_EQ(input->size(), got->size());
+  EXPECT_EQ(input->nullable(), got->nullable());
+  EXPECT_EQ(input->num_children(), got->num_children());
+  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
+  // This value will be incorrect since the null mask will contain uninitialized bits
+  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
+  // This means any subsequent call to null_count() will try to compute the null-count
+  // using the uninitialized null-mask.
 }
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
 {
-  // For same size as input
+  // For different size as input
   cudf::size_type size           = 10;
   cudf::size_type specified_size = 5;
-  cudf::mask_state state         = cudf::mask_state::ALL_VALID;
-  auto input    = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
-  auto expected = make_numeric_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, specified_size, cudf::mask_state::ALL_VALID);
+
+  auto state = cudf::mask_state::UNALLOCATED;
+  auto input = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
+  auto expected =
+    make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, specified_size, state);
   auto got = cudf::allocate_like(input->view(), specified_size);
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
+
+  input = make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
+  got = cudf::allocate_like(input->view(), specified_size);
+  EXPECT_EQ(input->type(), got->type());
+  EXPECT_EQ(specified_size, got->size());
+  EXPECT_EQ(input->nullable(), got->nullable());
+  EXPECT_EQ(input->num_children(), got->num_children());
+  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
+  // This value will be incorrect since the null mask will contain uninitialized bits
+  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
+  // This means any subsequent call to null_count() will try to compute the null-count
+  // using the uninitialized null-mask.
 }
 
 CUDF_TEST_PROGRAM_MAIN()

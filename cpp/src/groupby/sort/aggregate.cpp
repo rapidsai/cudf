@@ -615,7 +615,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   CUDF_EXPECTS(
     values.num_children() == 2,
     "Input to `groupby correlation` must be a structs column having 2 children columns.");
-  CUDF_EXPECTS(values.nullable() == false,
+  CUDF_EXPECTS(not values.nullable(),
                "Input to `groupby correlation` must be a non-nullable structs column.");
 
   auto const& corr_agg = dynamic_cast<cudf::detail::correlation_aggregation const&>(agg);
@@ -701,7 +701,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_tdigest(
+                   cudf::tdigest::detail::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -745,7 +745,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                   cudf::tdigest::detail::group_merge_tdigest(get_grouped_values(),
                                                               helper.group_offsets(stream),
                                                               helper.group_labels(stream),
                                                               helper.num_groups(stream),

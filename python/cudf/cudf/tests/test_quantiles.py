@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import re
 
@@ -16,7 +16,7 @@ def test_single_q():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
@@ -28,7 +28,7 @@ def test_with_index():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
@@ -48,7 +48,7 @@ def test_with_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
@@ -62,9 +62,6 @@ def test_quantile_range_error(q):
         rfunc=gs.quantile,
         lfunc_args_and_kwargs=([q],),
         rfunc_args_and_kwargs=([q],),
-        expected_error_message=re.escape(
-            "percentiles should all be in the interval [0, 1]"
-        ),
     )
 
 

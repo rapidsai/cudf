@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,13 +114,12 @@ __global__ void offset_bitmask_binop(Binop op,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <typename Binop>
-std::pair<rmm::device_buffer, size_type> bitmask_binop(
-  Binop op,
-  host_span<bitmask_type const* const> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::pair<rmm::device_buffer, size_type> bitmask_binop(Binop op,
+                                                       host_span<bitmask_type const* const> masks,
+                                                       host_span<size_type const> masks_begin_bits,
+                                                       size_type mask_size_bits,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
   auto null_count =
@@ -169,11 +168,11 @@ size_type inplace_bitmask_binop(Binop op,
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
+    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
                                 masks_begin_bits.data(),
                                 masks_begin_bits.size_bytes(),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
 
   auto constexpr block_size = 256;
@@ -426,7 +425,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 
   // Construct a contiguous host buffer of indices and copy to device.
   auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
-  auto const d_indices = make_device_uvector_async(h_indices, stream);
+  auto const d_indices =
+    make_device_uvector_async(h_indices, stream, rmm::mr::get_current_device_resource());
 
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(

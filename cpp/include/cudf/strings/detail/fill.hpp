@@ -42,13 +42,12 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> fill(
-  strings_column_view const& strings,
-  size_type begin,
-  size_type end,
-  string_scalar const& value,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> fill(strings_column_view const& strings,
+                             size_type begin,
+                             size_type end,
+                             string_scalar const& value,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

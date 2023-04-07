@@ -1,5 +1,6 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
+import os
 import textwrap
 from collections.abc import Container
 from dataclasses import dataclass
@@ -15,6 +16,26 @@ class Option:
 
 
 _OPTIONS: Dict[str, Option] = {}
+
+
+def _env_get_int(name, default):
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):
+        return default
+
+
+def _env_get_bool(name, default):
+    env = os.getenv(name)
+    if env is None:
+        return default
+    as_a_int = _env_get_int(name, None)
+    env = env.lower().strip()
+    if env == "true" or env == "on" or as_a_int:
+        return True
+    if env == "false" or env == "off" or as_a_int == 0:
+        return False
+    return default
 
 
 def _register_option(
@@ -129,6 +150,53 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
+def _cow_validator(val):
+    if get_option("spill") and val:
+        raise ValueError(
+            "Copy-on-write is not supported when spilling is enabled. "
+            "Please set `spill` to `False`"
+        )
+    if val not in {False, True}:
+        raise ValueError(
+            f"{val} is not a valid option. Must be one of {{False, True}}."
+        )
+
+
+def _spill_validator(val):
+    try:
+        if get_option("copy_on_write") and val:
+            raise ValueError(
+                "Spilling is not supported when copy-on-write is enabled. "
+                "Please set `copy_on_write` to `False`"
+            )
+    except KeyError:
+        pass
+    if val not in {False, True}:
+        raise ValueError(
+            f"{val} is not a valid option. Must be one of {{False, True}}."
+        )
+
+
+def _integer_validator(val):
+    try:
+        int(val)
+        return True
+    except ValueError:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be an integer."
+        )
+
+
+def _integer_and_none_validator(val):
+    try:
+        if val is None or int(val):
+            return
+    except ValueError:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be an integer or None."
+        )
+
+
 _register_option(
     "default_integer_bitwidth",
     None,
@@ -162,4 +230,77 @@ _register_option(
     """
     ),
     _make_contains_validator([None, 32, 64]),
+)
+
+_register_option(
+    "spill",
+    _env_get_bool("CUDF_SPILL", False),
+    textwrap.dedent(
+        """
+        Enables spilling.
+        \tValid values are True or False. Default is False.
+        """
+    ),
+    _spill_validator,
+)
+
+
+_register_option(
+    "copy_on_write",
+    _env_get_bool("CUDF_COPY_ON_WRITE", False),
+    textwrap.dedent(
+        """
+        If set to `False`, disables copy-on-write.
+        If set to `True`, enables copy-on-write.
+        Read more at: :ref:`copy-on-write-user-doc`
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _cow_validator,
+)
+
+
+_register_option(
+    "spill_on_demand",
+    _env_get_bool("CUDF_SPILL_ON_DEMAND", True),
+    textwrap.dedent(
+        """
+        Enables spilling on demand using an RMM out-of-memory error handler.
+        This has no effect if spilling is disabled, see the "spill" option.
+        \tValid values are True or False. Default is True.
+        """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "spill_device_limit",
+    _env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
+    textwrap.dedent(
+        """
+        Enforce a device memory limit in bytes.
+        This has no effect if spilling is disabled, see the "spill" option.
+        \tValid values are any positive integer or None (disabled).
+        \tDefault is None.
+        """
+    ),
+    _integer_and_none_validator,
+)
+
+_register_option(
+    "spill_stats",
+    _env_get_int("CUDF_SPILL_STATS", 0),
+    textwrap.dedent(
+        """
+        If not 0, enables statistics at the specified level:
+            0  - disabled (no overhead).
+            1+ - duration and number of bytes spilled (very low overhead).
+            2+ - a traceback for each time a spillable buffer is exposed
+                permanently (potential high overhead).
+
+        Valid values are any positive integer.
+        Default is 0 (disabled).
+        """
+    ),
+    _integer_validator,
 )

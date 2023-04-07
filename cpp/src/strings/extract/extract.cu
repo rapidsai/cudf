@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -86,13 +87,12 @@ struct extract_fn {
 
 //
 std::unique_ptr<table> extract(strings_column_view const& input,
-                               std::string_view pattern,
-                               regex_flags const flags,
+                               regex_program const& prog,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
@@ -136,7 +136,16 @@ std::unique_ptr<table> extract(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, pattern, flags, cudf::get_default_stream(), mr);
+  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
+  return detail::extract(strings, *h_prog, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<table> extract(strings_column_view const& strings,
+                               regex_program const& prog,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -28,7 +28,9 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) except *
 
     @staticmethod
-    cdef Column from_unique_ptr(unique_ptr[column] c_col)
+    cdef Column from_unique_ptr(
+        unique_ptr[column] c_col, bint data_ptr_exposed=*
+    )
 
     @staticmethod
     cdef Column from_column_view(column_view, object)

@@ -74,8 +74,7 @@ struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::YES> {
 template <>
 struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_us>>;
+                           std::pair<cudf::duration_s, cudf::duration_ms>>;
 };
 
 /**

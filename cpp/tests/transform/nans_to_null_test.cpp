@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,15 +43,14 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
     std::vector<bool> expected_mask;
 
     if (mask.size() > 0) {
-      std::transform(
-        input.begin(),
-        input.end(),
-        mask.begin(),
-        std::back_inserter(expected_mask),
-        [](T val, bool validity) { return (std::isnan(val) or validity == false) ? false : true; });
+      std::transform(input.begin(),
+                     input.end(),
+                     mask.begin(),
+                     std::back_inserter(expected_mask),
+                     [](T val, bool validity) { return validity and not std::isnan(val); });
     } else {
       std::transform(input.begin(), input.end(), std::back_inserter(expected_mask), [](T val) {
-        return (std::isnan(val)) ? false : true;
+        return not std::isnan(val);
       });
     }
 

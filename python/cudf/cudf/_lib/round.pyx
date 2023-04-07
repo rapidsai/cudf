@@ -1,4 +1,6 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -12,6 +14,7 @@ from cudf._lib.cpp.round cimport (
 )
 
 
+@acquire_spill_lock()
 def round(Column input_col, int decimal_places=0, how="half_even"):
     """
     Round column values to the given number of decimal places

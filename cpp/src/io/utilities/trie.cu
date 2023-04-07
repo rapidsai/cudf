@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@ namespace detail {
 rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
                                                              rmm::cuda_stream_view stream)
 {
+  if (keys.empty()) { return rmm::device_uvector<serial_trie_node>{0, stream}; }
+
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
     using TrieNodePtr                 = std::unique_ptr<TreeTrieNode>;
@@ -101,7 +103,8 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
     // Only add the terminating character if any nodes were added
     if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
-  return cudf::detail::make_device_uvector_sync(nodes, stream);
+  return cudf::detail::make_device_uvector_sync(
+    nodes, stream, rmm::mr::get_current_device_resource());
 }
 
 }  // namespace detail

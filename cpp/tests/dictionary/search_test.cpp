@@ -35,8 +35,10 @@ TEST_F(DictionarySearchTest, StringsColumn)
 
   result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("eee"));
   EXPECT_FALSE(result->is_valid());
-  result = cudf::dictionary::detail::get_insert_index(
-    dictionary, cudf::string_scalar("eee"), cudf::get_default_stream());
+  result   = cudf::dictionary::detail::get_insert_index(dictionary,
+                                                      cudf::string_scalar("eee"),
+                                                      cudf::get_default_stream(),
+                                                      rmm::mr::get_current_device_resource());
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(uint32_t{5}, n_result->value());
 }
@@ -52,8 +54,10 @@ TEST_F(DictionarySearchTest, WithNulls)
 
   result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(5));
   EXPECT_FALSE(result->is_valid());
-  result = cudf::dictionary::detail::get_insert_index(
-    dictionary, cudf::numeric_scalar<int64_t>(5), cudf::get_default_stream());
+  result   = cudf::dictionary::detail::get_insert_index(dictionary,
+                                                      cudf::numeric_scalar<int64_t>(5),
+                                                      cudf::get_default_stream(),
+                                                      rmm::mr::get_current_device_resource());
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(uint32_t{1}, n_result->value());
 }
@@ -64,7 +68,8 @@ TEST_F(DictionarySearchTest, EmptyColumn)
   cudf::numeric_scalar<int64_t> key(7);
   auto result = cudf::dictionary::get_index(dictionary, key);
   EXPECT_FALSE(result->is_valid());
-  result = cudf::dictionary::detail::get_insert_index(dictionary, key, cudf::get_default_stream());
+  result = cudf::dictionary::detail::get_insert_index(
+    dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   EXPECT_FALSE(result->is_valid());
 }
 
@@ -74,6 +79,7 @@ TEST_F(DictionarySearchTest, Errors)
   cudf::numeric_scalar<double> key(7);
   EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::logic_error);
   EXPECT_THROW(
-    cudf::dictionary::detail::get_insert_index(dictionary, key, cudf::get_default_stream()),
+    cudf::dictionary::detail::get_insert_index(
+      dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
     cudf::logic_error);
 }

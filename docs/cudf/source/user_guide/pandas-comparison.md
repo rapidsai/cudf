@@ -65,6 +65,8 @@ Categories (2, int64): [1, 2]
 
 See the docs on [missing data](missing-data) for details.
 
+(pandas-comparison/iteration)=
+
 ## Iteration
 
 Iterating over a cuDF `Series`, `DataFrame` or `Index` is not
@@ -152,7 +154,7 @@ can do the following:
 dtype: object
 ```
 
-For compatibilty with Pandas, cuDF reports the data type for strings
+For compatibility with Pandas, cuDF reports the data type for strings
 as `"object"`, but we do *not* support storing or operating on
 collections of arbitrary Python objects.
 

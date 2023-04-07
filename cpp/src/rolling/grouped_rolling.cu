@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
 
-  sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES, {}};
   auto const& group_offsets{helper.group_offsets(stream)};
   auto const& group_labels{helper.group_labels(stream)};
 
@@ -467,8 +467,10 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
       cudf::device_span<cudf::size_type const>(group_offsets.data(), num_groups);
 
     // When there are no nulls, just copy the input group offsets to the output.
-    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets_span, stream),
-                           cudf::detail::make_device_uvector_async(group_offsets_span, stream));
+    return std::make_tuple(cudf::detail::make_device_uvector_async(
+                             group_offsets_span, stream, rmm::mr::get_current_device_resource()),
+                           cudf::detail::make_device_uvector_async(
+                             group_offsets_span, stream, rmm::mr::get_current_device_resource()));
   }
 }
 
@@ -993,7 +995,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
 
   index_vector group_offsets(0, stream), group_labels(0, stream);
   if (group_keys.num_columns() > 0) {
-    sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
+    sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES, {}};
     group_offsets = index_vector(helper.group_offsets(stream), stream);
     group_labels  = index_vector(helper.group_labels(stream), stream);
   }

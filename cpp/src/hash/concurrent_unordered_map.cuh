@@ -340,7 +340,7 @@ class concurrent_unordered_map {
       index          = (index + 1) % m_capacity;
     }
 
-    bool const insert_success = (status == insert_result::SUCCESS) ? true : false;
+    bool const insert_success = status == insert_result::SUCCESS;
 
     return thrust::make_pair(
       iterator(m_hashtbl_values, m_hashtbl_values + m_capacity, current_bucket), insert_success);

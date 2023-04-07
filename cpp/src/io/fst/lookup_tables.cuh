@@ -101,7 +101,7 @@ class SingleSymbolSmemLUT {
     // Initialize the out-of-bounds lookup: sym_to_sgid[max_base_match_val+1] -> no_match_id
     sgid_init.host_ptr()->sym_to_sgid[max_base_match_val + 1] = no_match_id;
 
-    // Alias memory / return memory requiremenets
+    // Alias memory / return memory requirements
     sgid_init.host_ptr()->num_valid_entries = max_base_match_val + 1;
 
     sgid_init.host_to_device(stream);

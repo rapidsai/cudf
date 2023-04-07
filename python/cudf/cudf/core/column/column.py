@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -64,7 +64,12 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    as_buffer,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -77,6 +82,8 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     get_time_unit,
+    is_mixed_with_object_dtype,
+    min_scalar_type,
     min_unsigned_type,
     np_to_pa_dtype,
     pandas_dtypes_alias_to_cudf_alias,
@@ -111,19 +118,77 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             {None: self.copy(deep=False)}
         )
 
-    @property
-    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+    def data_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
-        """
-        return cuda.as_cuda_array(self.data).view(self.dtype)
 
-    @property
-    def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
+        """
+        if self.data is not None:
+            if mode == "read":
+                obj = _proxy_cai_obj(
+                    self.data._get_cuda_array_interface(readonly=True),
+                    owner=self.data,
+                )
+            elif mode == "write":
+                obj = self.data
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(self.dtype)
+
+    def mask_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
+
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
         """
-        return cuda.as_cuda_array(self.mask).view(mask_dtype)
+        if self.mask is not None:
+            if mode == "read":
+                obj = _proxy_cai_obj(
+                    self.mask._get_cuda_array_interface(readonly=True),
+                    owner=self.mask,
+                )
+            elif mode == "write":
+                obj = self.mask
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(mask_dtype)
 
     def __len__(self) -> int:
         return self.size
@@ -161,7 +226,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view.copy_to_host()
+        with acquire_spill_lock():
+            return self.data_array_view(mode="read").copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
@@ -174,7 +240,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self.data_array_view)
+        return cupy.asarray(self.data_array_view(mode="write"))
 
     def find_and_replace(
         self: T,
@@ -357,30 +423,56 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return len(self) - self.null_count
 
     @property
-    def nullmask(self) -> DeviceBufferLike:
+    def nullmask(self) -> Buffer:
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
-        return self.mask_array_view
+        return self.mask_array_view(mode="read")
+
+    def force_deep_copy(self: T) -> T:
+        """
+        A method to create deep copy irrespective of whether
+        `copy-on-write` is enabled.
+        """
+        result = libcudf.copying.copy_column(self)
+        return cast(T, result._with_type_metadata(self.dtype))
 
     def copy(self: T, deep: bool = True) -> T:
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        Makes a copy of the Column.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, a true physical copy of the column
+            is made.
+            If False and `copy_on_write` is False, the same
+            memory is shared between the buffers of the Column
+            and changes made to one Column will propagate to
+            its copy and vice-versa.
+            If False and `copy_on_write` is True, the same
+            memory is shared between the buffers of the Column
+            until there is a write operation being performed on
+            them.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return cast(T, result._with_type_metadata(self.dtype))
+            return self.force_deep_copy()
         else:
             return cast(
                 T,
                 build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
+                    data=self.base_data
+                    if self.base_data is None
+                    else self.base_data.copy(deep=False),
+                    dtype=self.dtype,
+                    mask=self.base_mask
+                    if self.base_mask is None
+                    else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
-                    children=self.base_children,
+                    children=tuple(
+                        col.copy(deep=False) for col in self.base_children
+                    ),
                 ),
             )
 
@@ -502,7 +594,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if other is NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
+            # Try and maintain the dtype
+            other = other.dtype.type(other.item())
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
@@ -514,7 +607,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
-        num_keys = (stop - start) // step
+        num_keys = len(range(start, stop, step))
 
         self._check_scatter_key_length(num_keys, value)
 
@@ -614,7 +707,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result | libcudf.unary.is_nan(self)
 
@@ -625,7 +718,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result & libcudf.unary.is_non_nan(self)
 
@@ -682,7 +775,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
-            indices = indices.astype("int32")
+            indices = indices.astype(libcudf.types.size_type_dtype)
         if not libcudf.copying._gather_map_is_valid(
             indices, len(self), check_bounds, nullify
         ):
@@ -761,12 +854,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         return res._data["bool"].fillna(False)
 
-    def as_mask(self) -> DeviceBufferLike:
+    def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
 
         Returns
         -------
-        DeviceBufferLike
+        Buffer
         """
 
         if self.has_nulls():
@@ -847,6 +940,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
+        if self.dtype == dtype:
+            return self
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
 
@@ -894,8 +989,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             ordered = False
 
-        sr = cudf.Series(self)
-
         # Re-label self w.r.t. the provided categories
         if (
             isinstance(dtype, cudf.CategoricalDtype)
@@ -904,7 +997,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             isinstance(dtype, pd.CategoricalDtype)
             and dtype.categories is not None
         ):
-            labels = sr._label_encoding(cats=dtype.categories)
+            labels = self._label_encoding(cats=as_column(dtype.categories))
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -913,20 +1006,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),
-                codes=labels._column,
+                codes=labels,
                 mask=self.mask,
                 ordered=dtype.ordered,
             )
 
-        cats = sr.unique().astype(sr.dtype)
+        cats = self.unique().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=1
+        labels = self._label_encoding(
+            cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
         )
 
         # columns include null index in factorization; remove:
         if self.has_nulls():
-            cats = cats._column.dropna(drop_nan=False)
+            cats = cats.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
@@ -934,7 +1027,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return build_categorical_column(
             categories=cats,
-            codes=labels._column,
+            codes=labels,
             mask=self.mask,
             ordered=ordered,
         )
@@ -995,7 +1088,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def argsort(
         self, ascending: bool = True, na_position: str = "last"
-    ) -> ColumnBase:
+    ) -> "cudf.core.column.NumericalColumn":
 
         return self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1185,15 +1278,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         result_col = self
 
+        # TODO: If and when pandas decides to validate that `min_count` >= 0 we
+        # should insert comparable behavior.
+        # https://github.com/pandas-dev/pandas/issues/50022
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        elif min_count < 0:
-            warnings.warn(
-                f"min_count value cannot be negative({min_count}), will "
-                f"default to 0."
-            )
         return result_col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
@@ -1211,6 +1302,81 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         the children of ``self``.
         """
         return self
+
+    def _label_encoding(
+        self,
+        cats: ColumnBase,
+        dtype: Dtype = None,
+        na_sentinel: ScalarLike = None,
+    ):
+        """
+        Convert each value in `self` into an integer code, with `cats`
+        providing the mapping between codes and values.
+
+        Examples
+        --------
+        >>> from cudf.core.column import as_column
+        >>> col = as_column(['foo', 'bar', 'foo', 'baz'])
+        >>> cats = as_column(['foo', 'bar', 'baz'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bf3155c0>
+        [
+          0,
+          1,
+          0,
+          2
+        ]
+        dtype: int8
+        >>> cats = as_column(['foo', 'bar'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bfde0e40>
+        [
+          0,
+          1,
+          0,
+          -1
+        ]
+        dtype: int8
+        """
+        from cudf._lib.join import join as cpp_join
+
+        if na_sentinel is None or na_sentinel.value is cudf.NA:
+            na_sentinel = cudf.Scalar(-1)
+
+        def _return_sentinel_column():
+            return cudf.core.column.full(
+                size=len(self), fill_value=na_sentinel, dtype=dtype
+            )
+
+        if dtype is None:
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+
+        if is_mixed_with_object_dtype(self, cats):
+            return _return_sentinel_column()
+
+        try:
+            # Where there is a type-cast failure, we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return _return_sentinel_column()
+
+        codes = arange(len(cats), dtype=dtype)
+        left_gather_map, right_gather_map = cpp_join(
+            [self], [cats], how="left"
+        )
+        codes = codes.take(
+            right_gather_map, nullify=True, check_bounds=False
+        ).fillna(na_sentinel.value)
+
+        # reorder `codes` so that its values correspond to the
+        # values of `self`:
+        order = arange(len(self))
+        order = order.take(left_gather_map, check_bounds=False).argsort()
+        codes = codes.take(order)
+        return codes
 
 
 def column_empty_like(
@@ -1235,7 +1401,7 @@ def column_empty_like(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            children=(codes,),
             size=codes.size,
         )
 
@@ -1274,27 +1440,28 @@ def column_empty(
     elif is_list_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
         data = None
         children = (
             build_column(
-                data=as_device_buffer_like(
+                data=as_buffer(
                     rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype("int32").itemsize
+                        size=row_count
+                        * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
-                dtype="int32",
+                dtype=libcudf.types.size_type_dtype,
             ),
         )
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             build_column(
-                data=as_device_buffer_like(
+                data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count * cudf.dtype("int8").itemsize
                     )
@@ -1303,9 +1470,7 @@ def column_empty(
             ),
         )
     else:
-        data = as_device_buffer_like(
-            rmm.DeviceBuffer(size=row_count * dtype.itemsize)
-        )
+        data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
     if masked:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
@@ -1318,11 +1483,11 @@ def column_empty(
 
 
 def build_column(
-    data: Union[DeviceBufferLike, None],
+    data: Union[Buffer, None],
     dtype: Dtype,
     *,
     size: int = None,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
     children: Tuple[ColumnBase, ...] = (),
@@ -1332,12 +1497,12 @@ def build_column(
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
         The data buffer (can be None if constructing certain Column
         types like StringColumn, ListColumn, or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
-    mask : DeviceBufferLike, optional
+    mask : Buffer, optional
         The mask buffer
     size : int, optional
     offset : int, optional
@@ -1482,7 +1647,7 @@ def build_column(
 def build_categorical_column(
     categories: ColumnBase,
     codes: ColumnBase,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1498,7 +1663,7 @@ def build_categorical_column(
     codes : Column
         Column of codes, the size of the resulting Column will be
         the size of `codes`
-    mask : DeviceBufferLike
+    mask : Buffer
         Null mask
     size : int, optional
     offset : int, optional
@@ -1542,7 +1707,7 @@ def build_interval_column(
         Column of values representing the left of the interval
     right_col : Column
         Column of representing the right of the interval
-    mask : DeviceBufferLike
+    mask : Buffer
         Null mask
     size : int, optional
     offset : int, optional
@@ -1573,7 +1738,7 @@ def build_interval_column(
 def build_list_column(
     indices: ColumnBase,
     elements: ColumnBase,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1587,7 +1752,7 @@ def build_list_column(
         Column of list indices
     elements : ColumnBase
         Column of list elements
-    mask: DeviceBufferLike
+    mask: Buffer
         Null mask
     size: int, optional
     offset: int, optional
@@ -1619,7 +1784,7 @@ def build_struct_column(
     names: Sequence[str],
     children: Tuple[ColumnBase, ...],
     dtype: Optional[Dtype] = None,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1633,7 +1798,7 @@ def build_struct_column(
         Field names to map to children dtypes, must be strings.
     children : tuple
 
-    mask: DeviceBufferLike
+    mask: Buffer
         Null mask
     size: int, optional
     offset: int, optional
@@ -1669,9 +1834,7 @@ def _make_copy_replacing_NaT_with_null(column):
     out_col = cudf._lib.replace.replace(
         column,
         build_column(
-            as_device_buffer_like(
-                np.array([na_value], dtype=column.dtype).view("|u1")
-            ),
+            as_buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
             dtype=column.dtype,
         ),
         null,
@@ -1766,7 +1929,9 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_device_buffer_like(arbitrary)
+        data = as_buffer(arbitrary)
+        if cudf.get_option("copy_on_write"):
+            data._zero_copied = True
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1914,7 +2079,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
-            buffer = as_device_buffer_like(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -1932,7 +2097,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
-            buffer = as_device_buffer_like(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -2211,7 +2376,7 @@ def _construct_array(
     return arbitrary
 
 
-def _mask_from_cuda_array_interface_desc(obj) -> Union[DeviceBufferLike, None]:
+def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -2223,7 +2388,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[DeviceBufferLike, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = Buffer(data=ptr, size=mask_size, owner=obj)
+            mask = as_buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)
@@ -2428,16 +2593,26 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
         )
     elif newsize == 0:
-        col = column_empty(0, head.dtype, masked=True)
-    else:
-        # Filter out inputs that have 0 length, then concatenate.
-        objs = [o for o in objs if len(o)]
-        try:
-            col = libcudf.concat.concat_columns(objs)
-        except RuntimeError as e:
-            if "exceeds size_type range" in str(e):
-                raise OverflowError(
-                    "total size of output is too large for a cudf column"
-                ) from e
-            raise
-    return col
+        return column_empty(0, head.dtype, masked=True)
+
+    # Filter out inputs that have 0 length, then concatenate.
+    return libcudf.concat.concat_columns([o for o in objs if len(o)])
+
+
+def _proxy_cai_obj(cai, owner):
+    """
+    Returns a proxy CAI SimpleNameSpace wrapped
+    with the provided `cai` as `__cuda_array_interface__`
+    and owner as `owner` to keep the object alive.
+    This is an internal utility for `data_array_view`
+    and `mask_array_view` where an object with
+    read-only CAI is required.
+    """
+    return cuda_array_interface_wrapper(
+        ptr=cai["data"][0],
+        size=cai["shape"][0],
+        owner=owner,
+        readonly=cai["data"][1],
+        typestr=cai["typestr"],
+        version=cai["version"],
+    )

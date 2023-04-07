@@ -217,17 +217,15 @@ TEST_F(ApplyBooleanMaskTest, Failure)
     // Invalid mask type.
     auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
     auto const filter = lists<int32_t>{{0, 0, 0}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Mask must be of type BOOL8.");
+    EXPECT_THROW(apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
   }
   {
     // Mismatched number of rows.
     auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
     auto const filter = filter_t{{0, 0, 0}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Boolean masks column must have same number of rows as input.");
+    EXPECT_THROW(apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
   }
 }
 }  // namespace cudf::test

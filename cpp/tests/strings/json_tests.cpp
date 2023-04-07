@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <stdexcept>
+
 // reference:  https://jsonpath.herokuapp.com/
 
 // clang-format off
 std::string json_string{
-  "{" 
+  "{"
     "\"store\": {""\"book\": ["
         "{"
           "\"category\": \"reference\","
@@ -101,7 +103,7 @@ TEST_F(JsonPathTests, GetJsonObjectChildOp)
     auto result     = drop_whitespace(*result_raw);
 
     // clang-format off
-    cudf::test::strings_column_wrapper expected_raw{     
+    cudf::test::strings_column_wrapper expected_raw{
       "{"
         "\"book\": ["
           "{"
@@ -246,7 +248,7 @@ TEST_F(JsonPathTests, GetJsonObjectWildcardOp)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[" 
+      "["
         "{"
           "\"book\": ["
             "{"
@@ -482,7 +484,7 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyQuery)
 
 TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 {
-  // empty input -> null
+  // empty string input -> null
   {
     cudf::test::strings_column_wrapper input{""};
     std::string json_path("$");
@@ -505,6 +507,14 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
+}
+
+TEST_F(JsonPathTests, GetJsonObjectEmptyInput)
+{
+  cudf::test::strings_column_wrapper input{};
+  std::string json_path("$");
+  auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, input);
 }
 
 // badly formed JSONpath strings
@@ -558,7 +568,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 
   {
@@ -567,7 +577,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 
   {
@@ -576,7 +586,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 }
 
@@ -676,7 +686,7 @@ TEST_F(JsonPathTests, MixedOutput)
          "\"z\": {\"i\": 10, \"j\": 100},"
          "\"b\": [\"c\",null,true,-1]"
       "}"
-      }, 
+      },
       {1, 1, 0, 1, 1, 1});
     // clang-format on
 
@@ -708,11 +718,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "c", 
-      "c", 
-      "", 
-      "", 
-      "", 
+      "c",
+      "c",
+      "",
+      "",
+      "",
       "[\"c\",null,true,-1]"},
       {1, 1, 0, 0, 0, 1});
     // clang-format on
@@ -726,11 +736,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "[\"c\"]", 
-      "[\"c\"]", 
-      "", 
-      "[\"y\",500]", 
-      "[]", 
+      "[\"c\"]",
+      "[\"c\"]",
+      "",
+      "[\"y\",500]",
+      "[]",
       "["
         "{\"i\": 10, \"j\": 100},"
         "[\"c\",null,true,-1]"
@@ -747,11 +757,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "[]", 
-      "[]", 
-      "", 
+      "[]",
+      "[]",
       "",
-      "",      
+      "",
+      "",
       "[\"c\",null,true,-1]"},
       {1, 1, 0, 0, 0, 1});
     // clang-format on
@@ -835,7 +845,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
                 "\'b\': [\'c\',null,true,-1]"
               "}"
     "}",
-    
+
     "{"
       "\'a\': \"abc'def\""
     "}",
@@ -869,7 +879,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
       "}",
       "abc'def",
       "'abc'def'"
-      }, 
+      },
       {1, 1, 0, 1, 1, 1, 1, 1});
     // clang-format on
 
