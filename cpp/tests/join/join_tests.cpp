@@ -1882,4 +1882,151 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(superimposed_results, expected);
 }
 
+using lcw = cudf::test::lists_column_wrapper<int32_t>;
+using cudf::test::iterators::null_at;
+
+struct JoinTestLists : public cudf::test::BaseFixture {
+  /*
+    [
+      NULL,      0
+      [1],       1
+      [2, NULL], 2
+      [],        3
+      [5, 6]     4
+  */
+  lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}, null_at(0)};
+
+  /*
+    [
+      [1],       0
+      [3],       1
+      NULL,      2
+      [],        3
+      [2, NULL], 4
+      [5],       5
+      [6]        6
+    ]
+  */
+  lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}, null_at(2)};
+
+  auto column_view_from_device_uvector(rmm::device_uvector<cudf::size_type> const& vector)
+  {
+    auto const indices_span = cudf::device_span<cudf::size_type const>{vector};
+    return cudf::column_view{indices_span};
+  }
+
+  auto sort_and_gather(
+    cudf::table_view table,
+    cudf::column_view gather_map,
+    cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK)
+  {
+    auto const gather_table = cudf::gather(table, gather_map, oob_policy);
+    auto const sort_order   = cudf::sorted_order(*gather_table);
+    return cudf::gather(*gather_table, *sort_order);
+  }
+
+  template <typename JoinFunc>
+  void join(cudf::column_view left_gold_map,
+            cudf::column_view right_gold_map,
+            cudf::null_equality nulls_equal,
+            JoinFunc join_func,
+            cudf::out_of_bounds_policy oob_policy)
+  {
+    auto const build_tv = cudf::table_view{{build}};
+    auto const probe_tv = cudf::table_view{{probe}};
+
+    auto const [left_result_map, right_result_map] =
+      join_func(build_tv, probe_tv, nulls_equal, rmm::mr::get_current_device_resource());
+
+    auto const left_result_table =
+      sort_and_gather(build_tv, column_view_from_device_uvector(*left_result_map), oob_policy);
+    auto const right_result_table =
+      sort_and_gather(probe_tv, column_view_from_device_uvector(*right_result_map), oob_policy);
+
+    auto const left_gold_table  = sort_and_gather(build_tv, left_gold_map, oob_policy);
+    auto const right_gold_table = sort_and_gather(probe_tv, right_gold_map, oob_policy);
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*left_result_table, *left_gold_table);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*right_result_table, *right_gold_table);
+  }
+
+  void inner_join(cudf::column_view left_gold_map,
+                  cudf::column_view right_gold_map,
+                  cudf::null_equality nulls_equal)
+  {
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         cudf::inner_join,
+         cudf::out_of_bounds_policy::DONT_CHECK);
+  }
+
+  void full_join(cudf::column_view left_gold_map,
+                 cudf::column_view right_gold_map,
+                 cudf::null_equality nulls_equal)
+  {
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         cudf::full_join,
+         cudf::out_of_bounds_policy::NULLIFY);
+  }
+
+  void left_join(cudf::column_view left_gold_map,
+                 cudf::column_view right_gold_map,
+                 cudf::null_equality nulls_equal)
+  {
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         cudf::left_join,
+         cudf::out_of_bounds_policy::NULLIFY);
+  }
+};
+
+TEST_F(JoinTestLists, ListWithNullsEqualInnerJoin)
+{
+  auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3});
+  auto const right_gold_map = column_wrapper<int32_t>({0, 2, 3, 4});
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+}
+
+TEST_F(JoinTestLists, ListWithNullsUnequalInnerJoin)
+{
+  auto const left_gold_map  = column_wrapper<int32_t>({1, 3});
+  auto const right_gold_map = column_wrapper<int32_t>({0, 3});
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+}
+
+TEST_F(JoinTestLists, ListWithNullsEqualFullJoin)
+{
+  auto const left_gold_map =
+    column_wrapper<int32_t>({0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue});
+  auto const right_gold_map = column_wrapper<int32_t>({2, 0, 4, 3, NoneValue, 1, 5, 6});
+  this->full_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+}
+
+TEST_F(JoinTestLists, ListWithNullsUnequalFullJoin)
+{
+  auto const left_gold_map =
+    column_wrapper<int32_t>({0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue, NoneValue});
+  auto const right_gold_map =
+    column_wrapper<int32_t>({NoneValue, 0, NoneValue, 3, NoneValue, 1, 5, 6, 2, 4});
+  this->full_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+}
+
+TEST_F(JoinTestLists, ListWithNullsEqualLeftJoin)
+{
+  auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3, 4});
+  auto const right_gold_map = column_wrapper<int32_t>({2, 0, 4, 3, NoneValue});
+  this->left_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+}
+
+TEST_F(JoinTestLists, ListWithNullsUnequalLeftJoin)
+{
+  auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3, 4});
+  auto const right_gold_map = column_wrapper<int32_t>({NoneValue, 0, NoneValue, 3, NoneValue});
+  this->left_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
