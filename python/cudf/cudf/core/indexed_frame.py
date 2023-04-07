@@ -3330,14 +3330,6 @@ class IndexedFrame(Frame):
         fname = ufunc.__name__
 
         if ret is not None:
-            # pandas bitwise operations return bools if indexes are misaligned.
-            if "bitwise" in fname:
-                reflect = self is not inputs[0]
-                other = inputs[0] if reflect else inputs[1]
-                if isinstance(other, self.__class__) and not self.index.equals(
-                    other.index
-                ):
-                    ret = ret.astype(bool)
             return ret
 
         # Attempt to dispatch all other functions to cupy.
