@@ -575,19 +575,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
-        # We should not actually remove this code until we have implemented the
-        # get_indexers method as an alternative, see
-        # https://github.com/rapidsai/cudf/issues/12312
-        if method is not None:
-            warnings.warn(
-                f"Passing method to {self.__class__.__name__}.get_loc is "
-                "deprecated and will raise in a future version.",
-                FutureWarning,
-            )
-
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
         # Given an actual integer,
-        idx = (key - self._start) / self._step
+        idx = (target - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
         if method is None:
             if tolerance is not None:
@@ -597,17 +587,17 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 )
 
             if idx > idx_int_upper_bound or idx < 0:
-                raise KeyError(key)
+                raise KeyError(target)
 
-            idx_int = (key - self._start) // self._step
+            idx_int = (target - self._start) // self._step
             if idx_int != idx:
-                raise KeyError(key)
+                raise KeyError(target)
             return idx_int
 
         if (method == "ffill" and idx < 0) or (
             method == "bfill" and idx > idx_int_upper_bound
         ):
-            raise KeyError(key)
+            raise KeyError(target)
 
         round_method = {
             "ffill": math.floor,
@@ -615,8 +605,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
             "nearest": round,
         }[method]
         if tolerance is not None and (abs(idx) * self._step > tolerance):
-            raise KeyError(key)
+            raise KeyError(target)
         return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
+        # Given an actual integer,
+        if is_scalar(key):
+            key = [key]
+        return self.get_indexer(key)
 
     @_cudf_nvtx_annotate
     def _union(self, other, sort=None):
@@ -1128,12 +1125,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return _index_from_data(super().astype({self.name: dtype}, copy))
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
         """Get integer location, slice or boolean mask for requested label.
 
         Parameters
         ----------
-        key : label
+        target : label
         method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
             - default: exact matches only.
             - pad / ffill: find the PREVIOUS index value if no exact match.
@@ -1144,7 +1141,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         tolerance : int or float, optional
             Maximum distance from index value for inexact matches. The value
             of the index at the matching location must satisfy the equation
-            ``abs(index[loc] - key) <= tolerance``.
+            ``abs(index[loc] - target) <= tolerance``.
 
         Returns
         -------
@@ -1168,15 +1165,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         >>> numeric_unique_index.get_loc(3)
         2
         """
-        # We should not actually remove this code until we have implemented the
-        # get_indexers method as an alternative, see
-        # https://github.com/rapidsai/cudf/issues/12312
-        if method is not None:
-            warnings.warn(
-                f"Passing method to {self.__class__.__name__}.get_loc is "
-                "deprecated and will raise in a future version.",
-                FutureWarning,
-            )
+        if is_scalar(target):
+            raise TypeError("Should be a sequence")
         if tolerance is not None:
             raise NotImplementedError(
                 "Parameter tolerance is not supported yet."
@@ -1204,22 +1194,20 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        key_as_table = cudf.core.frame.Frame(
-            {"None": as_column(key, length=1)}
-        )
+        target_as_table = cudf.core.frame.Frame({"None": as_column(target)})
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
-            self, key_as_table, is_sorted
+            self, target_as_table, is_sorted
         )
 
         if lower_bound == upper_bound:
-            # Key not found, apply method
+            # target not found, apply method
             if method in ("pad", "ffill"):
                 if lower_bound == 0:
-                    raise KeyError(key)
+                    raise KeyError(target)
                 return lower_bound - 1
             elif method in ("backfill", "bfill"):
                 if lower_bound == self._data.nrows:
-                    raise KeyError(key)
+                    raise KeyError(target)
                 return lower_bound
             elif method == "nearest":
                 if lower_bound == self._data.nrows:
@@ -1230,11 +1218,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 upper_val = self._column.element_indexing(lower_bound)
                 return (
                     lower_bound - 1
-                    if abs(lower_val - key) < abs(upper_val - key)
+                    if abs(lower_val - target) < abs(upper_val - target)
                     else lower_bound
                 )
             else:
-                raise KeyError(key)
+                raise KeyError(target)
 
         if lower_bound + 1 == upper_bound:
             # Search result is unique, return int.
@@ -1254,6 +1242,40 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         true_inds = sort_inds.slice(lower_bound, upper_bound).values
         mask[true_inds] = True
         return mask
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
+        """Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+
+        Returns
+        -------
+        int or slice or boolean mask
+            - If result is unique, return integer index
+            - If index is monotonic, loc is returned as a slice object
+            - Otherwise, a boolean mask is returned
+
+        Examples
+        --------
+        >>> unique_index = cudf.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+        >>> monotonic_index = cudf.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+        >>> non_monotonic_index = cudf.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        >>> numeric_unique_index = cudf.Index([1, 2, 3])
+        >>> numeric_unique_index.get_loc(3)
+        2
+        """
+        if is_scalar(key):
+            key = [key]
+        return self.get_indexer(target=key)
 
     @_cudf_nvtx_annotate
     def __repr__(self):

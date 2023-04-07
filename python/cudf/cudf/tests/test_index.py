@@ -1967,30 +1967,92 @@ def test_get_loc_single_unique_numeric(idx, key, method):
     "idx",
     [pd.RangeIndex(3, 100, 4)],
 )
-@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+@pytest.mark.parametrize(
+    "key",
+    [
+        list(range(1, 20, 3)),
+        list(range(20, 35, 3)),
+        list(range(35, 77, 3)),
+        list(range(77, 110, 3)),
+    ],
+)
 @pytest.mark.parametrize("method", [None, "ffill"])
-def test_get_loc_rangeindex(idx, key, method):
+def test_get_indexer_rangeindex(idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)
 
+    # if (
+    #     (any(k not in pi for k in key) and method is None)
+    #     # Get key before the first element is KeyError
+    #     or (key < pi.start and method in "ffill")
+    #     # Get key after the last element is KeyError
+    #     or (key >= pi.stop and method in "bfill")
+    # ):
+    #     assert_exceptions_equal(
+    #         lfunc=pi.get_indexer,
+    #         rfunc=gi.get_indexer,
+    #         lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+    #         rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+    #     )
+    # else:
+    # with expect_warning_if(method is not None):
+    expected = pi.get_indexer(key, method=method)
+    # with expect_warning_if(method is not None):
+    got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [pd.RangeIndex(3, 100, 4)],
+)
+@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+def test_get_loc_rangeindex(idx, key):
+    pi = idx
+    gi = cudf.from_pandas(pi)
     if (
-        (key not in pi and method is None)
+        (key not in pi)
         # Get key before the first element is KeyError
-        or (key < pi.start and method in "ffill")
+        or (key < pi.start)
         # Get key after the last element is KeyError
-        or (key >= pi.stop and method in "bfill")
+        or (key >= pi.stop)
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
             rfunc=gi.get_loc,
-            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.Index([1, 3, 3, 6]),  # monotonic
+        pd.Index([6, 1, 3, 3]),  # non-monotonic
+    ],
+)
+@pytest.mark.parametrize("key", [0, 3, 6, 7])
+def test_get_loc_single_duplicate_numeric(idx, key):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
+        )
+    else:
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
 
         assert_eq(expected, got)
 
@@ -2004,7 +2066,29 @@ def test_get_loc_rangeindex(idx, key, method):
 )
 @pytest.mark.parametrize("key", [0, 3, 6, 7])
 @pytest.mark.parametrize("method", [None])
-def test_get_loc_single_duplicate_numeric(idx, key, method):
+def test_get_indexer_single_duplicate_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_indexer,
+            rfunc=gi.get_indexer,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_indexer(key, method=method)
+        got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "f", "m", "q"]), pd.Index(["m", "f", "b", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+def test_get_loc_single_unique_string(idx, key):
     pi = idx
     gi = cudf.from_pandas(pi)
 
@@ -2012,14 +2096,12 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
             rfunc=gi.get_loc,
-            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
 
         assert_eq(expected, got)
 
@@ -2029,7 +2111,7 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
 )
 @pytest.mark.parametrize("key", ["a", "f", "n", "z"])
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_loc_single_unique_string(idx, key, method):
+def test_get_indexer_single_unique_string(idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)
 
@@ -2043,16 +2125,36 @@ def test_get_loc_single_unique_string(idx, key, method):
         or (key == "z" and method == "bfill")
     ):
         assert_exceptions_equal(
-            lfunc=pi.get_loc,
-            rfunc=gi.get_loc,
+            lfunc=pi.get_indexer,
+            rfunc=gi.get_indexer,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_indexer(key, method=method)
+        got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "m", "m", "q"]), pd.Index(["m", "f", "m", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+def test_get_loc_single_duplicate_string(idx, key):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
+        )
+    else:
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
 
         assert_eq(expected, got)
 
@@ -2062,22 +2164,53 @@ def test_get_loc_single_unique_string(idx, key, method):
 )
 @pytest.mark.parametrize("key", ["a", "f", "n", "z"])
 @pytest.mark.parametrize("method", [None])
-def test_get_loc_single_duplicate_string(idx, key, method):
+def test_get_indexer_single_duplicate_string(idx, key, method):
     pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_indexer,
+            rfunc=gi.get_indexer,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_indexer(key, method=method)
+        got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 2, 1), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 2), (2, 2, 1), (1, 1, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 1, 2), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+    ],
+)
+@pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
+def test_get_loc_multi_numeric(idx, key):
+    pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
         assert_exceptions_equal(
             lfunc=pi.get_loc,
             rfunc=gi.get_loc,
-            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
 
         assert_eq(expected, got)
 
@@ -2098,22 +2231,64 @@ def test_get_loc_single_duplicate_string(idx, key, method):
 )
 @pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
 @pytest.mark.parametrize("method", [None])
-def test_get_loc_multi_numeric(idx, key, method):
+def test_get_indexer_multi_numeric(idx, key, method):
     pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
         assert_exceptions_equal(
-            lfunc=pi.get_loc,
-            rfunc=gi.get_loc,
+            lfunc=pi.get_indexer,
+            rfunc=gi.get_indexer,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_indexer(key, method=method)
+        got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 1), (1, 1, 1), (2, 2, 1)]
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "key, result",
+    [
+        (1, slice(1, 5, 1)),  # deviates
+        ((1, 2), slice(1, 3, 1)),
+        ((1, 2, 3), slice(1, 2, None)),
+        ((2, 1, 1), slice(0, 1, None)),
+        ((9, 9, 9), None),
+    ],
+)
+def test_get_loc_multi_numeric_deviate(idx, key, result):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    with expect_warning_if(
+        isinstance(key, tuple), pd.errors.PerformanceWarning
+    ):
+        key_flag = key not in pi
+
+    if key_flag:
+        with expect_warning_if(
+            isinstance(key, tuple), pd.errors.PerformanceWarning
+        ):
+            assert_exceptions_equal(
+                lfunc=pi.get_loc,
+                rfunc=gi.get_loc,
+                lfunc_args_and_kwargs=([], {"key": key}),
+                rfunc_args_and_kwargs=([], {"key": key}),
+            )
+    else:
+        expected = result
+        got = gi.get_loc(key)
 
         assert_eq(expected, got)
 
@@ -2137,7 +2312,7 @@ def test_get_loc_multi_numeric(idx, key, method):
     ],
 )
 @pytest.mark.parametrize("method", [None])
-def test_get_loc_multi_numeric_deviate(idx, key, result, method):
+def test_get_indexer_multi_numeric_deviate(idx, key, result, method):
     pi = idx
     gi = cudf.from_pandas(pi)
 
@@ -2222,8 +2397,7 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
 @pytest.mark.parametrize(
     "key", ["a", ("a", "a"), ("a", "b", "c"), ("b", "c", "a"), ("z", "z", "z")]
 )
-@pytest.mark.parametrize("method", [None])
-def test_get_loc_multi_string(idx, key, method):
+def test_get_loc_multi_string(idx, key):
     pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
@@ -2231,14 +2405,89 @@ def test_get_loc_multi_string(idx, key, method):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
             rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key}),
+            rfunc_args_and_kwargs=([], {"key": key}),
+        )
+    else:
+        expected = pi.get_loc(key)
+        got = gi.get_loc(key)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("b", "a", "a"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "key", ["a", ("a", "a"), ("a", "b", "c"), ("b", "c", "a"), ("z", "z", "z")]
+)
+@pytest.mark.parametrize("method", [None])
+def test_get_indexer_multi_string(idx, key, method):
+    pi = idx.sort_values()
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_indexer,
+            rfunc=gi.get_indexer,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_loc(key, method=method)
-        with expect_warning_if(method is not None):
-            got = gi.get_loc(key, method=method)
+        expected = pi.get_indexer(key, method=method)
+        got = gi.get_indexer(key, method=method)
 
         assert_eq(expected, got)
 

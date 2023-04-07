@@ -91,7 +91,10 @@ class BaseIndex(Serializable):
     def values(self):
         raise NotImplementedError
 
-    def get_loc(self, key, method=None, tolerance=None):
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
+        raise NotImplementedError
+
+    def get_loc(self, key):
         raise NotImplementedError
 
     def __getitem__(self, key):

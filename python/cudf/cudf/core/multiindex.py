@@ -1642,7 +1642,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return level
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
+    def get_indexer(self, target, method=None, tolerance=None):
         """
         Get location for a label or a tuple of labels.
 
@@ -1650,7 +1650,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         Parameters
         ----------
-        key : label or tuple of labels (one for each level)
+        target : label or tuple of labels (one for each level)
         method : None
 
         Returns
@@ -1712,24 +1712,26 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
         is_unique = self.is_unique
-        key = (key,) if not isinstance(key, tuple) else key
+        target = (target,) if not isinstance(target, tuple) else target
 
-        # Handle partial key search. If length of `key` is less than `nlevels`,
-        # Only search levels up to `len(key)` level.
-        key_as_table = cudf.core.frame.Frame(
-            {i: column.as_column(k, length=1) for i, k in enumerate(key)}
+        # Handle partial target search. If length of `target` is less than `nlevels`,
+        # Only search levels up to `len(target)` level.
+        target_as_table = cudf.core.frame.Frame(
+            {i: column.as_column(k, length=1) for i, k in enumerate(target)}
         )
         partial_index = self.__class__._from_data(
-            data=self._data.select_by_index(slice(key_as_table._num_columns))
+            data=self._data.select_by_index(
+                slice(target_as_table._num_columns)
+            )
         )
         (
             lower_bound,
             upper_bound,
             sort_inds,
-        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
+        ) = _lexsorted_equal_range(partial_index, target_as_table, is_sorted)
 
         if lower_bound == upper_bound:
-            raise KeyError(key)
+            raise KeyError(target)
 
         if is_unique and lower_bound + 1 == upper_bound:
             # Indices are unique (Pandas constraint), search result is unique,
@@ -1754,6 +1756,65 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         mask = cp.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
+        """
+        Get location for a label or a tuple of labels.
+
+        The location is returned as an integer/slice or boolean mask.
+
+        Parameters
+        ----------
+        key : label or tuple of labels (one for each level)
+        method : None
+
+        Returns
+        -------
+        loc : int, slice object or boolean mask
+            - If index is unique, search result is unique, return a single int.
+            - If index is monotonic, index is returned as a slice object.
+            - Otherwise, cudf attempts a best effort to convert the search
+              result into a slice object, and will return a boolean mask if
+              failed to do so. Notice this can deviate from Pandas behavior
+              in some situations.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> mi = cudf.MultiIndex.from_tuples(
+        ...     [('a', 'd'), ('b', 'e'), ('b', 'f')])
+        >>> mi.get_loc('b')
+        slice(1, 3, None)
+        >>> mi.get_loc(('b', 'e'))
+        1
+        >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
+        ...     [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
+        >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
+        slice(1, 4, 2)
+
+        .. pandas-compat::
+            **MultiIndex.get_loc**
+
+            The return types of this function may deviates from the
+            method provided by Pandas. If the index is neither
+            lexicographically sorted nor unique, a best effort attempt is made
+            to coerce the found indices into a slice. For example:
+
+            .. code-block::
+
+                >>> import pandas as pd
+                >>> import cudf
+                >>> x = pd.MultiIndex.from_tuples([
+                ...     (2, 1, 1), (1, 2, 3), (1, 2, 1),
+                ...     (1, 1, 1), (1, 1, 1), (2, 2, 1),
+                ... ])
+                >>> x.get_loc(1)
+                array([False,  True,  True,  True,  True, False])
+                >>> cudf.from_pandas(x).get_loc(1)
+                slice(1, 5, 1)
+        """
+        return self.get_indexer(target=key)
 
     def _get_reconciled_name_object(self, other) -> MultiIndex:
         """
