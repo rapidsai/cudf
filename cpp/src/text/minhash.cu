@@ -34,6 +34,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -43,6 +45,12 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+/**
+ * @brief Compute the minhash of each string for each seed
+ *
+ * This is a warp-per-string algorithm where parallel threads within a warp
+ * work on substrings of a single string row.
+ */
 struct minhash_fn {
   cudf::column_device_view d_strings;
   cudf::device_span<cudf::hash_value_type const> seeds;
@@ -56,14 +64,13 @@ struct minhash_fn {
 
     if (d_strings.is_null(str_idx)) { return; }
 
-    auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+    auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
+    auto const d_output = d_hashes + (str_idx * seeds.size());
 
     // initialize hashes output for this string
     if (lane_idx == 0) {
-      for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
-        auto const out_idx = (str_idx * seeds.size()) + seed_idx;
-        d_hashes[out_idx]  = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
-      }
+      auto const init = d_str.empty() ? 0 : std::numeric_limits<cudf::hash_value_type>::max();
+      thrust::fill(thrust::seq, d_output, d_output + seeds.size(), init);
     }
     __syncwarp();
 
@@ -77,16 +84,15 @@ struct minhash_fn {
     // each lane hashes substrings of parts of the string
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
       auto const offset = itr.byte_offset();
-      auto const ss =
+      auto const hash_str =
         cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
 
       // hashing each seed on the same section of string is 10x faster than
       // re-substringing (my new word) for each seed
-      for (auto seed_idx = 0; seed_idx < static_cast<cudf::size_type>(seeds.size()); ++seed_idx) {
-        auto const out_idx = (str_idx * seeds.size()) + seed_idx;
-        auto const hasher  = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
-        auto const hvalue  = hasher(ss);
-        atomicMin(d_hashes + out_idx, hvalue);
+      for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
+        auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
+        auto const hvalue = hasher(hash_str);
+        atomicMin(d_output + seed_idx, hvalue);
       }
     }
   }
@@ -131,6 +137,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
     return hashes;
   }
 
+  // build the offsets for the output lists column
   auto offsets = cudf::detail::sequence(
     input.size() + 1,
     cudf::numeric_scalar<cudf::size_type>(0),
@@ -138,6 +145,8 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
     stream,
     mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
+
+  // build the lists column from the offsets and the hashes
   auto result = make_lists_column(input.size(),
                                   std::move(offsets),
                                   std::move(hashes),

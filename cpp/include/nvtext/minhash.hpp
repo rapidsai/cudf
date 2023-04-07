@@ -34,7 +34,7 @@ namespace nvtext {
  * Hash values are computed from substrings of each string and the
  * minimum hash value is returned for each string.
  *
- * All null row entries are ignored and the output contains all valid rows.
+ * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if h_id is not HASH_MURMUR3
@@ -62,7 +62,7 @@ std::unique_ptr<cudf::column> minhash(
  * Hash values are computed from substrings of each string and the
  * minimum hash value is returned for each string.
  *
- * All null row entries are ignored and the output contains all valid rows.
+ * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if h_id is not HASH_MURMUR3
@@ -76,7 +76,7 @@ std::unique_ptr<cudf::column> minhash(
  * @param h_id  Hash algorithm to use;
  *              Only HASH_MURMUR3 is currently supported.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return List column of Minhash values for each string per seed
+ * @return List column of minhash values for each string per seed
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
