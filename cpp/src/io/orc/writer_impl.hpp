@@ -245,13 +245,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -260,13 +258,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -329,8 +325,7 @@ class writer::impl {
                                 std::vector<StripeInformation>& stripes);
 
  private:
-  // CUDA stream and resources.
-  rmm::mr::device_memory_resource* const _mr;
+  // CUDA stream.
   rmm::cuda_stream_view const _stream;
 
   // Writer options.
@@ -352,9 +347,10 @@ class writer::impl {
   std::unique_ptr<table_input_metadata> _table_meta;
   cudf::io::orc::FileFooter _ffooter;
   cudf::io::orc::Metadata _orc_meta;
-  persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls to write
-                                                     // before a close writes out the statistics.
-  bool _closed = false;  // To track if the output has been written to sink.
+  persisted_statistics
+    _persisted_stripe_statistics;  // Statistics data saved between calls to write
+                                   // before a close writes out the statistics.
+  bool _closed = false;            // To track if the output has been written to sink.
 };
 
 }  // namespace orc
