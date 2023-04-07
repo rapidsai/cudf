@@ -81,14 +81,14 @@ struct minhash_fn {
       return d_str.begin() + static_cast<cudf::size_type>(length > 0);
     }();
 
-    // each lane hashes substrings of parts of the string
+    // each lane hashes substrings of the given width
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
       auto const offset = itr.byte_offset();
       auto const hash_str =
         cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
 
       // hashing each seed on the same section of string is 10x faster than
-      // re-substringing (my new word) for each seed
+      // computing the substrings for each seed
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
         auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
         auto const hvalue = hasher(hash_str);
@@ -103,14 +103,15 @@ struct minhash_fn {
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
                                       cudf::size_type width,
-                                      cudf::hash_id h_id,
+                                      cudf::hash_id hash_function,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!seeds.empty(), "Parameter seeds cannot be empty", std::invalid_argument);
-  CUDF_EXPECTS(
-    width > 1, "Parameter width should be an integer value of 2 or greater", std::invalid_argument);
-  CUDF_EXPECTS(h_id == cudf::hash_id::HASH_MURMUR3,
+  CUDF_EXPECTS(width >= 2,
+               "Parameter width should be an integer value of 2 or greater",
+               std::invalid_argument);
+  CUDF_EXPECTS(hash_function == cudf::hash_id::HASH_MURMUR3,
                "Only murmur3 hash algorithm supported",
                std::invalid_argument);
 
@@ -166,22 +167,22 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::numeric_scalar<cudf::hash_value_type> seed,
                                       cudf::size_type width,
-                                      cudf::hash_id h_id,
+                                      cudf::hash_id hash_function,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto seeds = cudf::device_span<cudf::hash_value_type const>{seed.data(), 1};
-  return detail::minhash(input, seeds, width, h_id, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, width, hash_function, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<cudf::hash_value_type const> seeds,
                                       cudf::size_type width,
-                                      cudf::hash_id h_id,
+                                      cudf::hash_id hash_function,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::minhash(input, seeds, width, h_id, cudf::get_default_stream(), mr);
+  return detail::minhash(input, seeds, width, hash_function, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext
