@@ -105,6 +105,9 @@ class json_reader_options {
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
 
+  // Whether to recover after an invalid JSON line
+  bool _recover_from_error = false;
+
   /**
    * @brief Constructor from source info.
    *
@@ -236,6 +239,13 @@ class json_reader_options {
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
+   * @brief Whether the reader should recover after an invalid JSON line.
+   *
+   * @returns true if the reader should recover, false otherwise
+   */
+  bool is_enabled_recover_from_error() const { return _recover_from_error; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -305,6 +315,13 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should recover after an invalid JSON line.
+   *
+   * @param val Boolean value to indicate whether the reader should recover from invalid JSON lines.
+   */
+  void enable_recover_from_error(bool val) { _recover_from_error = val; }
 };
 
 /**
@@ -446,6 +463,18 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should recover after an invalid JSON line.
+   *
+   * @param val Boolean value to indicate whether the reader should recover from invalid JSON lines.
+   * @return this for chaining
+   */
+  json_reader_options_builder& recover_from_error(bool val)
+  {
+    options._recover_from_error = val;
     return *this;
   }
 

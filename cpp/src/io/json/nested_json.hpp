@@ -175,10 +175,12 @@ namespace detail {
  * character of \p d_json_in, where a '{' represents that the corresponding input character is
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
+ * @param[in] reset_on_new_line If true, the stack resets to the empty stack on a new line
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
+                       bool reset_on_new_line,
                        rmm::cuda_stream_view stream);
 
 /**
