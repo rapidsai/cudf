@@ -96,13 +96,11 @@ struct byte_list_conversion_fn<
     auto offsets_column =
       std::get<0>(cudf::detail::make_offsets_child_column(begin, begin + input.size(), stream, mr));
 
-    rmm::device_buffer null_mask = detail::copy_bitmask(input, stream, mr);
-
     auto result = make_lists_column(input.size(),
                                     std::move(offsets_column),
                                     std::move(byte_column),
                                     input.null_count(),
-                                    std::move(null_mask),
+                                    detail::copy_bitmask(input, stream, mr),
                                     stream,
                                     mr);
 
@@ -129,15 +127,12 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     if (strings_count == 0) return cudf::empty_like(input);
 
     auto col_content = std::make_unique<column>(input, stream, mr)->release();
-    auto contents =
+    auto chars_contents =
       col_content.children[strings_column_view::chars_column_index].release()->release();
-    auto data      = contents.data.release();
-    auto null_mask = contents.null_mask.release();
-    auto uint8_col = std::make_unique<column>(data_type{type_id::UINT8},
-                                              data->size(),
-                                              std::move(*data),
-                                              std::move(*null_mask),
-                                              UNKNOWN_NULL_COUNT);
+    auto chars_buffer = chars_contents.data.release();
+    auto num_chars    = chars_buffer->size();
+    auto uint8_col    = std::make_unique<column>(
+      data_type{type_id::UINT8}, num_chars, std::move(*chars_buffer), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
       input.size(),
