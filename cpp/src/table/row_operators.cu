@@ -155,7 +155,7 @@ table_view remove_struct_child_offsets(table_view table)
  * The list parents are still needed to define the range of elements in the leaf that belong to the
  * same row.
  *
- * In the case of structs column having its first child is a lists column such as
+ * In the case of structs column with a lists column as its first child such as
  * `Struct<List<int>, float>`, after decomposition we get three columns `Struct<>`,
  * `List<int>`, and `float`.
  *
