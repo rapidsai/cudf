@@ -206,7 +206,7 @@ auto decompose_structs(table_view table,
                                  prev_col.size(),
                                  nullptr,
                                  prev_col.null_mask(),
-                                 UNKNOWN_NULL_COUNT,
+                                 prev_col.null_count(),
                                  prev_col.offset(),
                                  std::move(children));
         }
@@ -220,7 +220,7 @@ auto decompose_structs(table_view table,
               parent->size(),
               nullptr,  // list has no data of its own
               nullptr,  // If we're going through this then nullmask is already in another branch
-              UNKNOWN_NULL_COUNT,
+              0,
               parent->offset(),
               {*parent->children[lists_column_view::offsets_column_index], temp_col});
           } else if (parent->type().id() == type_id::STRUCT) {
@@ -229,7 +229,7 @@ auto decompose_structs(table_view table,
                                    parent->size(),
                                    temp_col.head(),
                                    temp_col.null_mask(),
-                                   UNKNOWN_NULL_COUNT,
+                                   temp_col.null_count(),
                                    parent->offset(),
                                    {temp_col.child_begin(), temp_col.child_end()});
           }
