@@ -30,7 +30,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <numeric>
 
 namespace cudf {
 namespace lists {
@@ -124,22 +123,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask = create_null_mask(
     total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
-  cudf::size_type null_count{0};
   if (has_nulls) {
     cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
-    null_count = std::transform_reduce(
-      columns.begin(),
-      columns.end(),
-      0,
-      [](auto x, auto y) { return x + y; },
-      [](auto col) { return col.null_count(); });
   }
 
   // assemble into outgoing list column
   return make_lists_column(total_list_count,
                            std::move(offsets),
                            std::move(data),
-                           null_count,
+                           has_nulls ? UNKNOWN_NULL_COUNT : 0,
                            std::move(null_mask),
                            stream,
                            mr);
