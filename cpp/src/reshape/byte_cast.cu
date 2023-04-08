@@ -118,7 +118,7 @@ struct byte_list_conversion_fn<
 template <typename T>
 struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   static std::unique_ptr<column> invoke(column_view const& input,
-                                        flip_endianness configuration,
+                                        flip_endianness,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
