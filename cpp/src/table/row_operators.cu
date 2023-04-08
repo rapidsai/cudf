@@ -472,11 +472,12 @@ std::
       }
     }
   } else if (lhs.type().id() == type_id::STRUCT) {
-    CUDF_EXPECTS(
-      std::all_of(lhs.child_begin(),
-                  lhs.child_end(),
-                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
-      "Structs columns containing lists should be flattened before reaching this function.");
+    //    CUDF_EXPECTS(
+    //      std::all_of(lhs.child_begin(),
+    //                  lhs.child_end(),
+    //                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
+    //      "Structs columns containing lists should be flattened before reaching this function.");
+    // TODO: check recursively.
   }
 
   return {lhs, rhs, nullptr, nullptr};
@@ -526,25 +527,27 @@ transform_lists_of_structs(table_view const& lhs,
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
   table_view const& input,
-  std::vector<int>&& verticalized_col_depths,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
   bool safe_for_two_table_comparator,
   rmm::cuda_stream_view stream)
 {
-  check_lex_compatibility(input);
+  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
+    decompose_structs(input, column_order, null_precedence);
 
-  auto d_t = table_device_view::create(input, stream);
-  auto d_column_order =
-    detail::make_device_uvector_async(column_order, stream, rmm::mr::get_current_device_resource());
+  check_lex_compatibility(verticalized_lhs);
+
+  auto d_t            = table_device_view::create(verticalized_lhs, stream);
+  auto d_column_order = detail::make_device_uvector_async(
+    new_column_order, stream, rmm::mr::get_current_device_resource());
   auto d_null_precedence = detail::make_device_uvector_async(
-    null_precedence, stream, rmm::mr::get_current_device_resource());
+    new_null_precedence, stream, rmm::mr::get_current_device_resource());
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
   if (detail::has_nested_columns(input)) {
-    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(input, stream);
+    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
                              std::move(d_column_order),
@@ -566,28 +569,23 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
 }
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
-  table_view const& input,
+  table_view const& t,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(input, column_order, null_precedence);
-
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
   [[maybe_unused]] auto [transformed_t, unused_0, structs_ranked_columns, unused_1] =
-    transform_lists_of_structs(decomposed_input, std::nullopt, stream);
+    transform_lists_of_structs(t, std::nullopt, stream);
 
   // Since the preprocessed_table is created alone, it is safe for two-table comparator
   // only if not any transformation for lists-of-structs was performed.
-  // TODO: this should also based on whether structs have floating point.
   bool const safe_for_two_table_comparator = structs_ranked_columns.size() == 0;
 
   return create_preprocessed_table(transformed_t,
-                                   std::move(verticalized_col_depths),
                                    std::move(structs_ranked_columns),
-                                   new_column_order,
-                                   new_null_precedence,
+                                   column_order,
+                                   null_precedence,
                                    safe_for_two_table_comparator,
                                    stream);
 }
@@ -599,35 +597,22 @@ preprocessed_table::create(table_view const& lhs,
                            host_span<null_order const> null_precedence,
                            rmm::cuda_stream_view stream)
 {
-  auto [decomposed_lhs,
-        new_column_order_lhs,
-        new_null_precedence_lhs,
-        verticalized_col_depths_lhs] = decompose_structs(lhs, column_order, null_precedence);
-
-  auto [decomposed_rhs,
-        new_column_order_rhs,
-        new_null_precedence_rhs,
-        verticalized_col_depths_rhs] = decompose_structs(rhs, column_order, null_precedence);
-
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
   auto [transformed_lhs,
         transformed_rhs_opt,
         structs_ranked_columns_lhs,
-        structs_ranked_columns_rhs] =
-    transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
+        structs_ranked_columns_rhs] = transform_lists_of_structs(lhs, rhs, stream);
 
   return {create_preprocessed_table(transformed_lhs,
-                                    std::move(verticalized_col_depths_lhs),
                                     std::move(structs_ranked_columns_lhs),
-                                    new_column_order_lhs,
-                                    new_null_precedence_lhs,
+                                    column_order,
+                                    null_precedence,
                                     true /*safe_for_two_table_comparator*/,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
-                                    std::move(verticalized_col_depths_rhs),
                                     std::move(structs_ranked_columns_rhs),
-                                    new_column_order_rhs,
-                                    new_null_precedence_rhs,
+                                    column_order,
+                                    null_precedence,
                                     true /*safe_for_two_table_comparator*/,
                                     stream)};
 }
