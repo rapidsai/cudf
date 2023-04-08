@@ -463,57 +463,6 @@ std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_s
   return {table_view{transformed_columns}, std::move(aux_data)};
 }
 
-/**
- * @brief Check if the input column has structs-of-lists column at any nested level.
- *
- * @param input The input column to check
- * @return Boolean value indicating if there is structs-of-lists column
- */
-bool has_nested_structs_of_lists(column_view const& input)
-{
-  if (input.type().id() == type_id::STRUCT) {
-    return std::any_of(input.child_begin(), input.child_end(), [](auto const& child) {
-      return child.type().id() == type_id::LIST || has_nested_structs_of_lists(child);
-    });
-  } else if (input.type().id() == type_id::LIST) {
-    return has_nested_structs_of_lists(input.child(lists_column_view::child_column_index));
-  }
-
-  return false;
-}
-
-/**
- * @brief Flatten the given table if it contains any structs-of-lists column.
- *
- * If the input table contains any structs-of-lists column, the entire table will be flattened to
- * a table of non-struct columns. Otherwise, the input table is passed through.
- *
- * @param input The input table
- * @param stream The stream to launch kernels and h->d copies on while preprocessing
- * @return A pair of table_view representing the flattened input and an auxiliary data structure
- *         that needs to be kept alive
- */
-std::pair<table_view, std::unique_ptr<cudf::structs::detail::flattened_table>>
-flatten_nested_structs_of_lists(table_view const& input,
-                                host_span<order const> column_order,
-                                host_span<null_order const> null_precedence,
-                                rmm::cuda_stream_view stream)
-{
-  if (std::any_of(input.begin(), input.end(), has_nested_structs_of_lists)) {
-    auto structs_flattened = cudf::structs::detail::flatten_nested_columns(
-      input,
-      std::vector<order>{column_order.begin(), column_order.end()},
-      std::vector<null_order>{null_precedence.begin(), null_precedence.end()},
-      cudf::structs::detail::column_nullability::FORCE,
-      stream,
-      rmm::mr::get_current_device_resource());
-    auto output_table = structs_flattened->flattened_columns();
-    return {std::move(output_table), std::move(structs_flattened)};
-  }
-
-  return {input, nullptr};
-}
-
 }  // namespace
 
 template <typename PhysicalElementComparator>
@@ -523,20 +472,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   host_span<null_order const> null_precedence,
   rmm::cuda_stream_view stream)
 {
-  // Firstly, flatten the input table if it contains any structs-of-lists column.
-  auto [flattened_t, flattened_t_aux_data] =
-    flatten_nested_structs_of_lists(t, column_order, null_precedence, stream);
-
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
-  auto [transformed_t, structs_ranked_columns] = transform_lists_of_structs(flattened_t, stream);
+  auto [transformed_t, structs_ranked_columns] = transform_lists_of_structs(t, stream);
 
   check_lex_compatibility(transformed_t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    flattened_t_aux_data
-      ? decompose_structs(
-          transformed_t, flattened_t_aux_data->orders(), flattened_t_aux_data->null_orders())
-      : decompose_structs(transformed_t, column_order, null_precedence);
+    decompose_structs(transformed_t, column_order, null_precedence);
 
   auto d_t            = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order = detail::make_device_uvector_async(
@@ -555,7 +497,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_depths),
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
-                             std::move(flattened_t_aux_data),
                              std::move(structs_ranked_columns),
                              PhysicalElementComparator::type_id()));
   } else {
@@ -564,7 +505,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
-                             std::move(flattened_t_aux_data),
                              std::move(structs_ranked_columns),
                              PhysicalElementComparator::type_id()));
   }
@@ -589,7 +529,6 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<size_type>&& depths,
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   std::uintptr_t element_comparator_type_id)
   : _t(std::move(table)),
@@ -598,7 +537,6 @@ preprocessed_table::preprocessed_table(
     _depths(std::move(depths)),
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
-    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
     _structs_ranked_columns(std::move(structs_ranked_columns)),
     _element_comparator_type_id(element_comparator_type_id)
 {
@@ -609,7 +547,6 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<order>&& column_order,
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
-  std::unique_ptr<structs::detail::flattened_table>&& flattened_input_aux_data,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   std::uintptr_t element_comparator_type_id)
   : _t(std::move(table)),
@@ -618,7 +555,6 @@ preprocessed_table::preprocessed_table(
     _depths(std::move(depths)),
     _dremel_data{},
     _dremel_device_views{},
-    _flattened_input_aux_data(std::move(flattened_input_aux_data)),
     _structs_ranked_columns(std::move(structs_ranked_columns)),
     _element_comparator_type_id(element_comparator_type_id)
 {

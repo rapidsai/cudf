@@ -54,11 +54,6 @@
 #include <optional>
 #include <utility>
 
-// Forward declaration to reduce dependency on the relevant header.
-namespace cudf::structs::detail {
-class flattened_table;
-}
-
 namespace cudf {
 
 namespace experimental {
@@ -741,32 +736,25 @@ struct preprocessed_table {
    * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
    * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
    * of list columns).
-   * @param flattened_input_aux_data The data structure generated from
-   * `cudf::structs::detail::flatten_nested_columns` containing the input flattened table along
-   * with its corresponding flattened column orders and null orders.
    * @param structs_ranked_columns Store the intermediate results from transforming the
    * child columns of lists-of-structs columns into integer columns using `cudf::rank()`
    * and will be used for row comparison.
    */
-  preprocessed_table(
-    table_device_view_owner&& table,
-    rmm::device_uvector<order>&& column_order,
-    rmm::device_uvector<null_order>&& null_precedence,
-    rmm::device_uvector<size_type>&& depths,
-    std::vector<detail::dremel_data>&& dremel_data,
-    rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-    std::uintptr_t element_comparator_type_id);
+  preprocessed_table(table_device_view_owner&& table,
+                     rmm::device_uvector<order>&& column_order,
+                     rmm::device_uvector<null_order>&& null_precedence,
+                     rmm::device_uvector<size_type>&& depths,
+                     std::vector<detail::dremel_data>&& dremel_data,
+                     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
+                     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+                     std::uintptr_t element_comparator_type_id);
 
-  preprocessed_table(
-    table_device_view_owner&& table,
-    rmm::device_uvector<order>&& column_order,
-    rmm::device_uvector<null_order>&& null_precedence,
-    rmm::device_uvector<size_type>&& depths,
-    std::unique_ptr<cudf::structs::detail::flattened_table>&& flattened_input_aux_data,
-    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-    std::uintptr_t element_comparator_type_id);
+  preprocessed_table(table_device_view_owner&& table,
+                     rmm::device_uvector<order>&& column_order,
+                     rmm::device_uvector<null_order>&& null_precedence,
+                     rmm::device_uvector<size_type>&& depths,
+                     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+                     std::uintptr_t element_comparator_type_id);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -831,10 +819,6 @@ struct preprocessed_table {
   // Dremel encoding of list columns used for the comparison algorithm
   std::optional<std::vector<detail::dremel_data>> _dremel_data;
   std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
-
-  // Auxiliary data generated from `cudf::structs::detail::flatten_nested_columns`
-  // that needs to be kept alive.
-  std::unique_ptr<cudf::structs::detail::flattened_table> _flattened_input_aux_data;
 
   // Intermediate columns generated from transforming the child columns of lists-of-structs columns
   // into integer columns using `cudf::rank()`, also need to be kept alive.
