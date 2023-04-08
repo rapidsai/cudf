@@ -1016,7 +1016,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
       const auto num_columns = columns_level.size();
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
         total_num_stripes, num_columns, stream);
-      memset(chunks.base_host_ptr(), 0, chunks.memory_size());
+      memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
       const bool use_index =
         _use_index &&
