@@ -734,6 +734,7 @@ struct preprocessed_table {
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
   /**
+   *  TODO
    * @brief create_preprocessed_table
    * @param input
    * @param flattened_input_aux_data
@@ -745,6 +746,7 @@ struct preprocessed_table {
    */
   static std::shared_ptr<preprocessed_table> create_preprocessed_table(
     table_view const& input,
+    std::vector<int>&& verticalized_col_depths,
     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
     host_span<order const> column_order,
     host_span<null_order const> null_precedence,

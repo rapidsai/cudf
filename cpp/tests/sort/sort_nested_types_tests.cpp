@@ -353,3 +353,5 @@ TEST_F(NestedListTest, ListsOfListsOfStructsNoNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
   }
 }
+
+// TODO: Struct of list of struct
