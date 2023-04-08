@@ -2457,13 +2457,15 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_binary_state_s db_state;
+  __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(16) page_state_s state_g;
 
-  page_state_s* const s   = &state_g;
-  uint32_t const page_idx = blockIdx.x;
-  uint32_t const t        = threadIdx.x;
-  uint32_t const lane_id  = t & 0x1f;
-  auto* const db          = &db_state;
+  page_state_s* const s          = &state_g;
+  page_state_buffers_s* const sb = &state_buffers;
+  uint32_t const page_idx        = blockIdx.x;
+  uint32_t const t               = threadIdx.x;
+  uint32_t const lane_id         = t & 0x1f;
+  auto* const db                 = &db_state;
 
   // this kernel only handles one encoding type
   if (pages[page_idx].encoding != Encoding::DELTA_BINARY_PACKED) { return; }
@@ -2530,7 +2532,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, target_pos, t);
+      gpuDecodeLevels(s, sb, target_pos, t);
     } else if (t < 64) {
       // warp 1
       // unpack deltas and save in db->value
@@ -2547,7 +2549,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       // process the mini-block in batches of 32
       for (uint32_t sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
-        int32_t dst_pos = s->nz_idx[rolling_index(sp)];
+        int32_t dst_pos = sb->nz_idx[rolling_index(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
@@ -2582,17 +2584,19 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_byte_array_state_s db_state;
+  __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(8) uint8_t const* suffix_data;
   __shared__ __align__(8) uint8_t const* last_string;
   __shared__ __align__(16) page_state_s state_g;
 
-  page_state_s* const s   = &state_g;
-  uint32_t const page_idx = blockIdx.x;
-  uint32_t const t        = threadIdx.x;
-  uint32_t const lane_id  = t & 0x1f;
-  auto* const prefix_db   = &db_state.prefixes;
-  auto* const suffix_db   = &db_state.suffixes;
-  auto* const dba         = &db_state;
+  page_state_s* const s          = &state_g;
+  page_state_buffers_s* const sb = &state_buffers;
+  uint32_t const page_idx        = blockIdx.x;
+  uint32_t const t               = threadIdx.x;
+  uint32_t const lane_id         = t & 0x1f;
+  auto* const prefix_db          = &db_state.prefixes;
+  auto* const suffix_db          = &db_state.suffixes;
+  auto* const dba                = &db_state;
 
   // this kernel only handles one encoding type
   if (pages[page_idx].encoding != Encoding::DELTA_BYTE_ARRAY) { return; }
@@ -2684,7 +2688,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, target_pos, t);
+      gpuDecodeLevels(s, sb, target_pos, t);
 
     } else if (t < 96) {
       // warp 1 gets prefixes and warp 2 gets suffixes
@@ -2712,7 +2716,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
       // process the mini-block in batches of 32
       for (uint32_t sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
-        int dst_pos = s->nz_idx[rolling_index(sp)];
+        int dst_pos = sb->nz_idx[rolling_index(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
