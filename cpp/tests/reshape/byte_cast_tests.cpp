@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -295,7 +296,7 @@ TEST_F(ByteCastTest, fp64ValuesWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp64->view(), fp64_expected->view());
 }
 
-TEST_F(ByteCastTest, StringValues)
+TEST_F(ByteCastTest, StringValuesNoNulls)
 {
   cudf::test::strings_column_wrapper const strings_col(
     {"", "The quick", " brown fox...", "!\"#$%&\'()*+,-./", "0123456789:;<=>?@", "[\\]^_`{|}~"});
@@ -324,6 +325,37 @@ TEST_F(ByteCastTest, StringValues)
      {0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e}});
 
   auto const output_strings = cudf::byte_cast(strings_col, cudf::flip_endianness::YES);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_strings->view(), strings_expected);
+}
+
+TEST_F(ByteCastTest, StringValuesWithNulls)
+{
+  auto const strings_col = [] {
+    auto output =
+      cudf::test::strings_column_wrapper(
+        {"", "The quick", " brown fox...", "!\"#$%&\'()*+,-./", "0123456789:;<=>?@", "[\\]^_`{|}~"})
+        .release();
+
+    // Set nulls by `set_null_mask` so the output column will have non-empty nulls.
+    // This is intentional.
+    auto const null_iter = cudf::test::iterators::nulls_at({2, 4});
+    output->set_null_mask(
+      cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()));
+
+    return output;
+  }();
+
+  auto const strings_expected = cudf::test::lists_column_wrapper<uint8_t>{
+    {{},
+     {0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b},
+     {} /*NULL*/,
+     {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f},
+     {} /*NULL*/,
+     {0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e}},
+    cudf::test::iterators::nulls_at({2, 4})};
+
+  auto const output_strings = cudf::byte_cast(*strings_col, cudf::flip_endianness::YES);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_strings->view(), strings_expected);
 }
