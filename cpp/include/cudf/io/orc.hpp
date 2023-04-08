@@ -129,7 +129,8 @@ class orc_reader_options {
   /**
    * @brief Returns number of row to read.
    *
-   * @return Number of row to read
+   * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
+   * is read until the end)
    */
   std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 

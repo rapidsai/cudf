@@ -141,7 +141,8 @@ class parquet_reader_options {
   /**
    * @brief Returns number of rows to read.
    *
-   * @return Number of rows to read
+   * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
+   * is read until the end)
    */
   [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
