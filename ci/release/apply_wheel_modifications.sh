@@ -6,12 +6,6 @@
 VERSION=${1}
 CUDA_SUFFIX=${2}
 
-# __init__.py versions
-sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/cudf/cudf/__init__.py
-sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/dask_cudf/dask_cudf/__init__.py
-sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/cudf_kafka/cudf_kafka/__init__.py
-sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/custreamz/custreamz/__init__.py
-
 # pyproject.toml versions
 sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/cudf/pyproject.toml
 sed -i "s/^version = .*/version = \"${VERSION}\"/g" python/dask_cudf/pyproject.toml

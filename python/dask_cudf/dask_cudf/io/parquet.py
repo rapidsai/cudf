@@ -121,6 +121,8 @@ class CudfEngine(ArrowDatasetEngine):
                                 if row_groups
                                 else None,
                                 strings_to_categorical=strings_to_categorical,
+                                dataset_kwargs=dataset_kwargs,
+                                categorical_partitions=False,
                                 **kwargs,
                             )
                             for i, pof in enumerate(paths_or_fobs)
@@ -191,6 +193,8 @@ class CudfEngine(ArrowDatasetEngine):
 
         dataset_kwargs = kwargs.get("dataset", {})
         partitioning = partitioning or dataset_kwargs.get("partitioning", None)
+        if isinstance(partitioning, dict):
+            partitioning = pa_ds.partitioning(**partitioning)
 
         # Check if we are actually selecting any columns
         read_columns = columns

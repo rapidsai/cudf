@@ -139,9 +139,16 @@ mixed_join(
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -387,9 +394,16 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);

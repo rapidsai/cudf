@@ -60,6 +60,7 @@ def _write_parquet(
     max_page_size_rows=None,
     partitions_info=None,
     storage_options=None,
+    force_nullable_schema=False,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -89,6 +90,7 @@ def _write_parquet(
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
+        "force_nullable_schema": force_nullable_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -126,6 +128,7 @@ def write_to_dataset(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     storage_options=None,
+    force_nullable_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -179,7 +182,6 @@ def write_to_dataset(
     max_page_size_rows: integer or None, default None
         Maximum number of rows of each page of the output.
         If None, 20000 will be used.
-
     storage_options : dict, optional, default None
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
@@ -187,6 +189,10 @@ def write_to_dataset(
         header options. For other URLs (e.g. starting with "s3://", and
         "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -224,6 +230,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
         )
 
     else:
@@ -244,6 +251,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
         )
 
     return metadata
@@ -712,6 +720,7 @@ def to_parquet(
     max_page_size_rows=None,
     storage_options=None,
     return_metadata=False,
+    force_nullable_schema=False,
     *args,
     **kwargs,
 ):
@@ -760,6 +769,7 @@ def to_parquet(
                 max_page_size_rows=max_page_size_rows,
                 return_metadata=return_metadata,
                 storage_options=storage_options,
+                force_nullable_schema=force_nullable_schema,
             )
 
         partition_info = (
@@ -784,6 +794,7 @@ def to_parquet(
             max_page_size_rows=max_page_size_rows,
             partitions_info=partition_info,
             storage_options=storage_options,
+            force_nullable_schema=force_nullable_schema,
         )
 
     else:

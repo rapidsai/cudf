@@ -907,14 +907,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index is None:
             num_rows = 0
             if data:
-                col_name = next(iter(data))
-                if is_scalar(data[col_name]):
-                    num_rows = num_rows or 1
-                else:
-                    data[col_name] = column.as_column(
-                        data[col_name], nan_as_null=nan_as_null
+                keys, values, lengths = zip(
+                    *(
+                        (k, v, 1)
+                        if is_scalar(v)
+                        else (
+                            k,
+                            vc := as_column(v, nan_as_null=nan_as_null),
+                            len(vc),
+                        )
+                        for k, v in data.items()
                     )
-                    num_rows = len(data[col_name])
+                )
+                data = dict(zip(keys, values))
+                try:
+                    (num_rows,) = (set(lengths) - {1}) or {1}
+                except ValueError:
+                    raise ValueError("All arrays must be the same length")
+
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)

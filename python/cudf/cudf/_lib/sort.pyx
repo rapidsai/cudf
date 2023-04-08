@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -18,11 +18,13 @@ from cudf._lib.cpp.search cimport lower_bound, upper_bound
 from cudf._lib.cpp.sorting cimport (
     is_sorted as cpp_is_sorted,
     rank,
+    segmented_sort_by_key as cpp_segmented_sort_by_key,
     sorted_order,
 )
+from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
-from cudf._lib.utils cimport table_view_from_columns
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 @acquire_spill_lock()
@@ -141,6 +143,67 @@ def order_by(list columns_from_table, object ascending, str na_position):
                                      null_precedence))
 
     return Column.from_unique_ptr(move(c_result))
+
+
+def segmented_sort_by_key(
+    list values,
+    list keys,
+    Column segment_offsets,
+    list column_order=None,
+    list null_precedence=None,
+):
+    """
+    Sort segments of a table by given keys
+
+    Parameters
+    ----------
+    values : list[Column]
+        Columns of the table which will be sorted
+    keys : list[Column]
+        Columns making up the sort key
+    offsets : Column
+        Segment offsets
+    column_order : list[bool], optional
+        Sequence of boolean values which correspond to each column in
+        keys providing the sort order (default all True).
+        With True <=> ascending; False <=> descending.
+    null_precedence : list[str], optional
+        Sequence of "first" or "last" values (default "first")
+        indicating the position of null values when sorting the keys.
+
+    Returns
+    -------
+    list[Column]
+        list of value columns sorted by keys
+    """
+    cdef table_view values_view = table_view_from_columns(values)
+    cdef table_view keys_view = table_view_from_columns(keys)
+    cdef column_view offsets_view = segment_offsets.view()
+    cdef vector[order] c_column_order
+    cdef vector[null_order] c_null_precedence
+    cdef unique_ptr[table] result
+    ncol = len(values)
+    column_order = column_order or [True] * ncol
+    null_precedence = null_precedence or ["first"] * ncol
+    for asc, null in zip(column_order, null_precedence):
+        c_column_order.push_back(order.ASCENDING if asc else order.DESCENDING)
+        if asc ^ (null == "first"):
+            c_null_precedence.push_back(null_order.AFTER)
+        elif asc ^ (null == "last"):
+            c_null_precedence.push_back(null_order.BEFORE)
+        else:
+            raise ValueError(f"Invalid null precedence {null}")
+    with nogil:
+        result = move(
+            cpp_segmented_sort_by_key(
+                values_view,
+                keys_view,
+                offsets_view,
+                c_column_order,
+                c_null_precedence,
+            )
+        )
+    return columns_from_unique_ptr(move(result))
 
 
 @acquire_spill_lock()

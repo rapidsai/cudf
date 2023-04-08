@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.04.00
+  VERSION 23.06.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -369,7 +369,7 @@ add_library(
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
   src/io/orc/stripe_init.cu
-  src/io/orc/timezone.cpp
+  src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
@@ -464,6 +464,7 @@ add_library(
   src/reductions/segmented/max.cu
   src/reductions/segmented/mean.cu
   src/reductions/segmented/min.cu
+  src/reductions/segmented/nunique.cu
   src/reductions/segmented/product.cu
   src/reductions/segmented/reductions.cpp
   src/reductions/segmented/std.cu

@@ -16,10 +16,11 @@
 
 #include "simple.cuh"
 
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::column> segmented_any(
   column_view const& col,
@@ -33,17 +34,12 @@ std::unique_ptr<cudf::column> segmented_any(
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_any() operation requires output type `BOOL8`");
 
+  using reducer = simple::detail::bool_result_column_dispatcher<op::max>;
   // A maximum over bool types is used to implement any()
   return cudf::type_dispatcher(
-    col.type(),
-    simple::detail::bool_result_column_dispatcher<cudf::reduction::op::max>{},
-    col,
-    offsets,
-    null_handling,
-    init,
-    stream,
-    mr);
+    col.type(), reducer{}, col, offsets, null_handling, init, stream, mr);
 }
 
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf
