@@ -165,7 +165,7 @@ aggregate_orc_metadata::select_stripes(
     "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
+    if (not user_specified_stripes.empty()) { return std::pair<uint64_t, size_type>{0, 0}; }
     return cudf::io::detail::skip_rows_num_rows_from_options(
       skip_rows_opt, num_rows_opt, get_num_rows());
   }();
@@ -195,7 +195,7 @@ aggregate_orc_metadata::select_stripes(
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    size_type count            = 0;
+    uint64_t count             = 0;
     size_type stripe_skip_rows = 0;
     // Iterate all source files, each source file has corelating metadata
     for (size_t src_file_idx = 0;

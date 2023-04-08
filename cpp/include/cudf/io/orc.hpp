@@ -58,7 +58,7 @@ class orc_reader_options {
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
   // Rows to skip from the start;
-  int64_t _skip_rows = 0;
+  uint64_t _skip_rows = 0;
   // Rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
 
@@ -124,7 +124,7 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  int64_t get_skip_rows() const { return _skip_rows; }
+  uint64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
@@ -197,9 +197,8 @@ class orc_reader_options {
    * @throw cudf::logic_error if a negative value is passed
    * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_skip_rows(int64_t rows)
+  void set_skip_rows(uint64_t rows)
   {
-    CUDF_EXPECTS(rows >= 0, "skip_rows cannot be negative");
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
     _skip_rows = rows;
   }
@@ -302,7 +301,7 @@ class orc_reader_options_builder {
    * @param rows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& skip_rows(int64_t rows)
+  orc_reader_options_builder& skip_rows(uint64_t rows)
   {
     options.set_skip_rows(rows);
     return *this;
