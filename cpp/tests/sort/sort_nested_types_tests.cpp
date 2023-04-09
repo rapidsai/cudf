@@ -244,6 +244,39 @@ TEST_F(NestedStructTest, StructsOfStructsHaveListsWithNulls)
   }
 }
 
+TEST_F(NestedStructTest, SimpleStructsOfListsOfStructsNoNulls)
+{
+  auto const input = [] {
+    auto const make_lists_of_structs = [] {
+      auto const get_structs = [] {
+        auto child0 = int32s_col{3, 2, 3, 3, 4, 2, 4, 4, 1, 0, 3, 0, 2, 5, 4};
+        auto child1 = int32s_col{0, 4, 3, 2, 1, 1, 5, 1, 5, 5, 4, 2, 4, 1, 3};
+        return structs_col{{child0, child1}};
+      };
+      return cudf::make_lists_column(
+        8, int32s_col{0, 3, 5, 6, 6, 8, 10, 12, 15}.release(), get_structs().release(), 0, {});
+    };
+
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.emplace_back(make_lists_of_structs());
+    children.emplace_back(make_lists_of_structs());
+
+    return cudf::make_structs_column(8, std::move(children), 0, {});
+  }();
+
+  {
+    auto const expected_order = int32s_col{3, 5, 2, 7, 0, 1, 6, 4};
+    auto const order          = cudf::sorted_order(cudf::table_view{{*input}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+
+  {
+    auto const expected_order = int32s_col{4, 6, 1, 0, 7, 2, 5, 3};
+    auto const order = cudf::sorted_order(cudf::table_view{{*input}}, {cudf::order::DESCENDING});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+}
+
 struct NestedListTest : public cudf::test::BaseFixture {
 };
 
@@ -353,5 +386,3 @@ TEST_F(NestedListTest, ListsOfListsOfStructsNoNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
   }
 }
-
-// TODO: Struct of list of struct
