@@ -121,6 +121,9 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                   list_indices.begin(),
                   result_begin);
 
+  // Reset null count, which was invalidated when calling to `mutable_view()`.
+  result->set_null_count(null_count);
+
   return result;
 }
 
