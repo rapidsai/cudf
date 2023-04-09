@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <sort/sort_column_impl.cuh>
+#include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
 

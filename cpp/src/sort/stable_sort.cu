@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <sort/sort_impl.cuh>
+#include "sort_impl.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/gather.hpp>
