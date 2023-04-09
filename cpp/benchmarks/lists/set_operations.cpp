@@ -39,9 +39,8 @@ auto generate_random_lists(cudf::size_type num_rows, cudf::size_type depth, doub
   return std::move(data_table->release().front());
 }
 
-enum class SetOperations { HAVE_OVERLAP, INTERSECT_DISTINCT };
-
-void nvbench_set_op(nvbench::state& state, SetOperations op)
+template <typename BenchFuncPtr>
+void nvbench_set_op(nvbench::state& state, BenchFuncPtr bfunc)
 {
   cudf::rmm_pool_raii pool_raii;
 
@@ -54,17 +53,11 @@ void nvbench_set_op(nvbench::state& state, SetOperations op)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    switch (op) {
-      case SetOperations::HAVE_OVERLAP:
-        cudf::lists::have_overlap(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs});
-        break;
-      case SetOperations::INTERSECT_DISTINCT:
-        cudf::lists::intersect_distinct(cudf::lists_column_view{*lhs},
-                                        cudf::lists_column_view{*rhs});
-        break;
-
-      default: CUDF_FAIL("Invalid set op.");
-    }
+    bfunc(cudf::lists_column_view{*lhs},
+          cudf::lists_column_view{*rhs},
+          cudf::null_equality::EQUAL,
+          cudf::nan_equality::ALL_EQUAL,
+          rmm::mr::get_current_device_resource());
   });
 }
 
@@ -72,12 +65,12 @@ void nvbench_set_op(nvbench::state& state, SetOperations op)
 
 void nvbench_have_overlap(nvbench::state& state)
 {
-  nvbench_set_op(state, SetOperations::HAVE_OVERLAP);
+  nvbench_set_op(state, &cudf::lists::have_overlap);
 }
 
 void nvbench_intersect_distinct(nvbench::state& state)
 {
-  nvbench_set_op(state, SetOperations::INTERSECT_DISTINCT);
+  nvbench_set_op(state, &cudf::lists::intersect_distinct);
 }
 
 NVBENCH_BENCH(nvbench_have_overlap)
