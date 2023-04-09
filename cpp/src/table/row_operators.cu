@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -172,7 +174,8 @@ table_view remove_struct_child_offsets(table_view table)
  */
 auto decompose_structs(table_view table,
                        host_span<order const> column_order         = {},
-                       host_span<null_order const> null_precedence = {})
+                       host_span<null_order const> null_precedence = {},
+                       bool decompose_lists                        = false)
 {
   auto linked_columns = detail::table_to_linked_columns(table);
 
@@ -191,10 +194,9 @@ auto decompose_structs(table_view table,
                               std::vector<detail::linked_column_view const*>* branch,
                               int depth) {
           branch->push_back(c);
-          if (c->type().id() == type_id::LIST) {
-            //            recursive_child(
-            //              c->children[lists_column_view::child_column_index].get(), branch, depth
-            //              + 1);
+          if (c->type().id() == type_id::LIST && decompose_lists) {
+            recursive_child(
+              c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
           } else if (c->type().id() == type_id::STRUCT) {
             for (size_t child_idx = 0; child_idx < c->children.size(); ++child_idx) {
               // When child_idx == 0, we also cut off the current branch if its first child is a
@@ -610,12 +612,24 @@ preprocessed_table::create(table_view const& lhs,
   [[maybe_unused]] auto [decomposed_rhs, unused0, unused1, verticalized_col_depths_rhs] =
     decompose_structs(rhs, column_order, null_precedence);
 
+  //  printf("line %d\n", __LINE__);
+  //  cudf::test::print(decomposed_lhs.column(0));
+
+  //  printf("line %d\n", __LINE__);
+  //  cudf::test::print(decomposed_rhs.column(0));
+
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
   auto [transformed_lhs,
         transformed_rhs_opt,
         structs_ranked_columns_lhs,
         structs_ranked_columns_rhs] =
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
+
+  //  printf("line %d\n", __LINE__);
+  //  cudf::test::print(transformed_lhs.column(0));
+
+  //  printf("line %d\n", __LINE__);
+  //  cudf::test::print(transformed_rhs_opt.value().column(0));
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(verticalized_col_depths_lhs),
@@ -694,7 +708,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
   auto [null_pushed_table, nullable_data] =
     structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
   auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
-  auto verticalized_t              = std::get<0>(decompose_structs(struct_offset_removed_table));
+  auto verticalized_t = std::get<0>(decompose_structs(struct_offset_removed_table, {}, {}, true));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
