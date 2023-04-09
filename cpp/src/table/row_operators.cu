@@ -475,17 +475,10 @@ std::
       }
     }
   } else if (lhs.type().id() == type_id::STRUCT) {
-    std::vector<column_view> new_children_lhs;
-    std::vector<column_view> new_children_rhs;
-    for (size_type child_idx = 0; child_idx < lhs.num_children(); ++child_idx) {
-      //
-    }
-    //    CUDF_EXPECTS(
-    //      std::all_of(lhs.child_begin(),
-    //                  lhs.child_end(),
-    //                  [](auto const& child) { return child.type().id() != type_id::LIST; }),
-    //      "Structs columns containing lists should be flattened before reaching this function.");
-    // TODO: check recursively.
+    CUDF_EXPECTS(std::all_of(lhs.child_begin(),
+                             lhs.child_end(),
+                             [](auto const& child) { return child.type().id() != type_id::LIST; }),
+                 "Structs columns should be decomposed before reaching this function.");
   }
 
   return {lhs, rhs, nullptr, nullptr};
