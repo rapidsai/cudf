@@ -59,27 +59,19 @@ struct byte_list_conversion_dispatcher {
 };
 
 template <typename T>
-static constexpr bool is_supported()
-{
-  return cudf::is_numeric<T>() || std::is_same_v<T, cudf::string_view>;
-}
-
-template <typename T>
-struct byte_list_conversion_fn<
-  T,
-  std::enable_if_t<is_supported<T>() && !std::is_same_v<T, cudf::string_view>>> {
+struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
   static std::unique_ptr<column> invoke(column_view const& input,
                                         flip_endianness configuration,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    size_type num_bytes = input.size() * sizeof(T);
-    auto byte_column    = make_numeric_column(
+    auto const num_bytes = static_cast<size_type>(input.size() * sizeof(T));
+    auto byte_column     = make_numeric_column(
       data_type{type_id::UINT8}, num_bytes, mask_state::UNALLOCATED, stream, mr);
 
-    char* d_chars      = reinterpret_cast<char*>(byte_column->mutable_view().data<uint8_t>());
-    char const* d_data = reinterpret_cast<char const*>(input.data<T>());
-    size_type mask     = sizeof(T) - 1;
+    auto const d_chars  = reinterpret_cast<char*>(byte_column->mutable_view().data<uint8_t>());
+    auto const d_data   = reinterpret_cast<char const*>(input.data<T>());
+    auto constexpr mask = static_cast<size_type>(sizeof(T) - 1);
 
     if (configuration == flip_endianness::YES) {
       thrust::for_each(rmm::exec_policy(stream),
@@ -92,9 +84,9 @@ struct byte_list_conversion_fn<
       thrust::copy_n(rmm::exec_policy(stream), d_data, num_bytes, d_chars);
     }
 
-    auto begin = thrust::make_constant_iterator(cudf::size_of(input.type()));
+    auto const it = thrust::make_constant_iterator(cudf::size_of(input.type()));
     auto offsets_column =
-      std::get<0>(cudf::detail::make_offsets_child_column(begin, begin + input.size(), stream, mr));
+      std::get<0>(cudf::detail::make_offsets_child_column(it, it + input.size(), stream, mr));
 
     auto result = make_lists_column(input.size(),
                                     std::move(offsets_column),
@@ -122,17 +114,16 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    strings_column_view input_strings(input);
-    auto strings_count = input_strings.size();
-    if (strings_count == 0) return cudf::empty_like(input);
+    if (input.size() == 0) { return cudf::empty_like(input); }
 
-    auto col_content = std::make_unique<column>(input, stream, mr)->release();
-    auto chars_contents =
-      col_content.children[strings_column_view::chars_column_index].release()->release();
-    auto chars_buffer = chars_contents.data.release();
-    auto num_chars    = chars_buffer->size();
-    auto uint8_col    = std::make_unique<column>(
-      data_type{type_id::UINT8}, num_chars, std::move(*chars_buffer), rmm::device_buffer{}, 0);
+    auto col_content     = std::make_unique<column>(input, stream, mr)->release();
+    auto chars_contents  = col_content.children[strings_column_view::chars_column_index]->release();
+    auto const num_chars = chars_contents.data->size();
+    auto uint8_col       = std::make_unique<column>(data_type{type_id::UINT8},
+                                              num_chars,
+                                              std::move(*(chars_contents.data)),
+                                              rmm::device_buffer{},
+                                              0);
 
     auto result = make_lists_column(
       input.size(),
