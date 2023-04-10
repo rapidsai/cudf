@@ -472,15 +472,11 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
   operator()(column_view const& column, host_span<column_name_info const> children_names) const
   {
-    std::vector<cudf::column_view> sliced_children;
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(column.num_children()),
-                   std::back_inserter(sliced_children),
-                   [structs_view = structs_column_view{column}](auto const idx) {
-                     return structs_view.get_sliced_child(idx);
-                   });
-
-    auto col_string = operator()(sliced_children.begin(), sliced_children.end(), children_names);
+    auto const child_it = cudf::detail::make_counting_transform_iterator(
+      0, [structs_view = structs_column_view{column}](auto const child_idx) {
+        return structs_view.get_sliced_child(child_idx);
+      });
+    auto col_string = operator()(child_it, child_it + column.num_children(), children_names);
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
                               column.null_count());
     return col_string;
