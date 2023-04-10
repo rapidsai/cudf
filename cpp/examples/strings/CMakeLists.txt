@@ -16,7 +16,7 @@ file(
 )
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CUDF_TAG branch-23.04)
+set(CUDF_TAG branch-23.06)
 CPMFindPackage(
   NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
   GIT_TAG ${CUDF_TAG}

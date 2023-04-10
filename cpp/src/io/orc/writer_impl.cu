@@ -52,17 +52,17 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
-#include <algorithm>
-#include <cstring>
-#include <numeric>
-#include <tuple>
-#include <utility>
-
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
+
+#include <algorithm>
+#include <cstring>
+#include <numeric>
+#include <tuple>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -331,47 +331,6 @@ class orc_column_view {
 size_type orc_table_view::num_rows() const noexcept
 {
   return columns.empty() ? 0 : columns.front().size();
-}
-
-orc_streams::orc_stream_offsets orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const
-{
-  std::vector<size_t> strm_offsets(streams.size());
-  size_t non_rle_data_size = 0;
-  size_t rle_data_size     = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    const auto& stream = streams[i];
-
-    auto const is_rle_data = [&]() {
-      // First stream is an index stream, don't check types, etc.
-      if (!stream.column_index().has_value()) return true;
-
-      auto const& column = columns[stream.column_index().value()];
-      // Dictionary encoded string column - dictionary characters or
-      // directly encoded string - column characters
-      if (column.orc_kind() == TypeKind::STRING &&
-          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
-        return false;
-      // Decimal data
-      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
-
-      // Everything else uses RLE
-      return true;
-    }();
-    // non-RLE and RLE streams are separated in the buffer that stores encoded data
-    // The computed offsets do not take the streams of the other type into account
-    if (is_rle_data) {
-      strm_offsets[i] = rle_data_size;
-      rle_data_size += (stream.length + 7) & ~7;
-    } else {
-      strm_offsets[i] = non_rle_data_size;
-      non_rle_data_size += stream.length;
-    }
-  }
-  non_rle_data_size = (non_rle_data_size + 7) & ~7;
-
-  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
 namespace {
@@ -1026,9 +985,6 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
-  auto const stream_offsets =
-    streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
-  rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
@@ -1104,75 +1060,81 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
-  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    auto const& column = orc_table.column(col_idx);
-    auto col_streams   = chunk_streams[col_idx];
-    for (auto const& stripe : segmentation.stripes) {
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto const& ck    = chunks[col_idx][rg_idx];
-        auto& strm        = col_streams[rg_idx];
+  // per-stripe, per-stream owning buffers
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> encoded_data(segmentation.num_stripes());
+  for (auto const& stripe : segmentation.stripes) {
+    std::generate_n(std::back_inserter(encoded_data[stripe.id]), streams.size(), [stream]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
 
-        for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
-          auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
+        auto const& column = orc_table.column(col_idx);
+        auto col_streams   = chunk_streams[col_idx];
+        auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
-          strm.ids[strm_type] = strm_id;
-          if (strm_id >= 0) {
+        std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+          col_streams[rg_idx].ids[strm_type]     = strm_id;
+          col_streams[rg_idx].lengths[strm_type] = 0;
+        });
+
+        // Calculate rowgroup sizes and stripe size
+        if (strm_id >= 0) {
+          size_t stripe_size = 0;
+          std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+            auto const& ck = chunks[col_idx][rg_idx];
+            auto& strm     = col_streams[rg_idx];
+
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
-              if (rg_idx_it == stripe.cbegin()) {
-                const int32_t dict_stride = column.dict_stride();
-                const auto stripe_dict    = column.host_stripe_dict(stripe.id);
+              if (rg_idx == *stripe.cbegin()) {
+                const auto stripe_dict = column.host_stripe_dict(stripe.id);
                 strm.lengths[strm_type] =
                   (strm_type == gpu::CI_DICTIONARY)
                     ? stripe_dict->dict_char_count
                     : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
-                if (stripe.id == 0) {
-                  strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
-                  // Dictionary lengths are encoded as RLE, which are all stored after non-RLE data:
-                  // include non-RLE data size in the offset only in that case
-                  if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
-                    strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
-                } else {
-                  auto const& strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
-                  strm.data_ptrs[strm_type] =
-                    strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
-                }
               } else {
-                strm.lengths[strm_type]   = 0;
-                strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
+                strm.lengths[strm_type] = 0;
               }
             } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                        ck.encoding_kind == DIRECT_V2) {
-              strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                               col_streams[rg_idx - 1].lengths[strm_type]);
+              strm.lengths[strm_type] =
+                std::max(column.host_dict_chunk(rg_idx)->string_char_count, 1u);
             } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                        (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
               // Pass-through
-              strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
-              strm.data_ptrs[strm_type] = nullptr;
-
+              strm.lengths[strm_type] = ck.num_rows * ck.dtype_len;
             } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
-              strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                               col_streams[rg_idx - 1].lengths[strm_type]);
+              strm.lengths[strm_type] = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
             } else {
               strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
-              // RLE encoded streams are stored after all non-RLE streams
-              strm.data_ptrs[strm_type] =
-                (rg_idx == 0) ? (encoded_data.data() + stream_offsets.non_rle_data_size +
-                                 stream_offsets.offsets[strm_id])
-                              : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                 col_streams[rg_idx - 1].lengths[strm_type]);
             }
-          } else {
-            strm.lengths[strm_type]   = 0;
+            // Allow extra space for alignment
+            stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
+          });
+
+          encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream);
+        }
+
+        // Set offsets
+        for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+          auto const rg_idx = *rg_idx_it;
+          auto const& ck    = chunks[col_idx][rg_idx];
+          auto& strm        = col_streams[rg_idx];
+
+          if (strm_id < 0 or (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                              (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
             strm.data_ptrs[strm_type] = nullptr;
+          } else {
+            if ((strm_type == gpu::CI_DICTIONARY) ||
+                (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
+              strm.data_ptrs[strm_type] = encoded_data[stripe.id][strm_id].data();
+            } else {
+              strm.data_ptrs[strm_type] = (rg_idx_it == stripe.cbegin())
+                                            ? encoded_data[stripe.id][strm_id].data()
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
+            }
           }
           auto const misalignment =
             reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
@@ -1201,41 +1163,67 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   }
   dictionaries.data.clear();
   dictionaries.index.clear();
-  stream.synchronize();
+  chunk_streams.device_to_host(stream, true /* device sync */);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
+// TODO: remove StripeInformation from this function and return strm_desc instead
 /**
  * @brief Returns stripe information after compacting columns' individual data
  * chunks into contiguous data streams.
  *
  * @param[in] num_index_streams Total number of index streams
  * @param[in] segmentation stripe and rowgroup ranges
- * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
+ * @param[in,out] enc_data ORC per-chunk streams of encoded data
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
  */
-std::vector<StripeInformation> gather_stripes(
-  size_t num_index_streams,
-  file_segmentation const& segmentation,
-  hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
-  hostdevice_2dvector<gpu::StripeStream>* strm_desc,
-  rmm::cuda_stream_view stream)
+std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
+                                              file_segmentation const& segmentation,
+                                              encoded_data* enc_data,
+                                              hostdevice_2dvector<gpu::StripeStream>* strm_desc,
+                                              rmm::cuda_stream_view stream)
 {
   if (segmentation.num_stripes() == 0) { return {}; }
+
+  // gathered stripes - per-stripe, per-stream (same as encoded_data.data)
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> gathered_stripes(enc_data->data.size());
+  for (auto& stripe_data : gathered_stripes) {
+    std::generate_n(std::back_inserter(stripe_data), enc_data->data[0].size(), [&]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
+  }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
-    for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
-      const auto& strm = (*enc_streams)[col_idx][stripe.first];
-
+    for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {
+      auto const& col_streams = (enc_data->streams)[col_idx];
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
-        const auto stream_id = strm.ids[k];
+        const auto stream_id = col_streams[0].ids[k];
         if (stream_id != -1) {
+          auto const actual_stripe_size = std::accumulate(
+            col_streams.begin() + stripe.first,
+            col_streams.begin() + stripe.first + stripe.size,
+            0ul,
+            [&](auto const& sum, auto const& strm) { return sum + strm.lengths[k]; });
+
+          auto const& allocated_stripe_size = enc_data->data[stripe.id][stream_id].size();
+          CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size,
+                       "Internal ORC writer error: insufficient allocation size for encoded data");
+          // Allocate buffers of the exact size as encoded data, smaller than the original buffers.
+          // Don't copying the data to exactly sized buffer when only one chunk is present to avoid
+          // performance overhead from the additional copy. When there are multiple chunks, they are
+          // copied anyway, to make them contiguous (i.e. gather them).
+          if (stripe.size > 1 and allocated_stripe_size > actual_stripe_size) {
+            gathered_stripes[stripe.id][stream_id] =
+              rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
+          }
+
           auto* ss           = &(*strm_desc)[stripe.id][stream_id - num_index_streams];
-          ss->stream_size    = 0;
+          ss->data_ptr       = gathered_stripes[stripe.id][stream_id].data();
+          ss->stream_size    = actual_stripe_size;
           ss->first_chunk_id = stripe.first;
           ss->num_chunks     = stripe.size;
           ss->column_id      = col_idx;
@@ -1251,9 +1239,18 @@ std::vector<StripeInformation> gather_stripes(
   }
 
   strm_desc->host_to_device(stream);
-  gpu::CompactOrcDataStreams(*strm_desc, *enc_streams, stream);
+  // TODO: use cub::DeviceMemcpy::Batched
+  gpu::CompactOrcDataStreams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host(stream);
-  enc_streams->device_to_host(stream, true);
+  enc_data->streams.device_to_host(stream, true);
+
+  // move the gathered stripes to encoded_data.data for lifetime management
+  for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
+    for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
+      if (not gathered_stripes[stripe_id][stream_id].is_empty())
+        enc_data->data[stripe_id][stream_id] = std::move(gathered_stripes[stripe_id][stream_id]);
+    }
+  }
 
   return stripes;
 }
@@ -2288,8 +2285,7 @@ convert_table_to_orc_data(table_view const& input,
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
-  auto stripes =
-    gather_stripes(num_index_streams, segmentation, &enc_data.streams, &strm_descs, stream);
+  auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
 
   if (num_rows == 0) {
     return {std::move(streams),
@@ -2370,7 +2366,7 @@ convert_table_to_orc_data(table_view const& input,
                                 stream);
 
     // deallocate encoded data as it is not needed anymore
-    enc_data.data = rmm::device_uvector<uint8_t>{0, stream};
+    enc_data.data.clear();
 
     strm_descs.device_to_host(stream);
     comp_results.device_to_host(stream, true);
