@@ -340,9 +340,8 @@ TEST_F(ByteCastTest, StringValuesWithNulls)
     // Set nulls by `set_null_mask` so the output column will have non-empty nulls.
     // This is intentional.
     auto const null_iter = cudf::test::iterators::nulls_at({2, 4});
-    output->set_null_mask(
-      cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()), 2);
-
+    output->set_null_mask(cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()),
+                          2);
     return output;
   }();
 
@@ -358,4 +357,38 @@ TEST_F(ByteCastTest, StringValuesWithNulls)
   auto const output_strings = cudf::byte_cast(*strings_col, cudf::flip_endianness::YES);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_strings->view(), strings_expected);
+}
+
+TEST_F(ByteCastTest, int32Empty)
+{
+  auto const input    = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  auto const expected = cudf::test::lists_column_wrapper<uint8_t>{};
+  auto const output   = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *output);
+}
+
+TEST_F(ByteCastTest, int32sAllNulls)
+{
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0}, cudf::test::iterators::all_nulls()};
+  auto const output = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  EXPECT_EQ(output->size(), 3);
+  EXPECT_EQ(output->child(cudf::lists_column_view::child_column_index).size(), 0);
+}
+
+TEST_F(ByteCastTest, StringEmpty)
+{
+  auto const input    = cudf::test::strings_column_wrapper{};
+  auto const expected = cudf::test::lists_column_wrapper<uint8_t>{};
+  auto const output   = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *output);
+}
+
+TEST_F(ByteCastTest, StringsAllNulls)
+{
+  auto const input =
+    cudf::test::strings_column_wrapper{{"", "", ""}, cudf::test::iterators::all_nulls()};
+  auto const output = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  EXPECT_EQ(output->size(), 3);
+  EXPECT_EQ(output->child(cudf::lists_column_view::child_column_index).size(), 0);
 }
