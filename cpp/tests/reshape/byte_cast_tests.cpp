@@ -341,7 +341,7 @@ TEST_F(ByteCastTest, StringValuesWithNulls)
     // This is intentional.
     auto const null_iter = cudf::test::iterators::nulls_at({2, 4});
     output->set_null_mask(
-      cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()));
+      cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()), 2);
 
     return output;
   }();
