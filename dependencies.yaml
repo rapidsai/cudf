@@ -393,20 +393,20 @@ dependencies:
           - *cupy_pip
   run_cudf_kafka:
     common:
-      - output_types: conda
-        packages:
-          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [requirements, pyproject]
         packages:
           - *cudf
-          - confluent-kafka>=1.9.0,<1.10.0a0
   run_custreamz:
     common:
+      - output_types: conda
+        packages:
+          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
+          - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
           - cudf_kafka==23.6.*
   test_cpp:
