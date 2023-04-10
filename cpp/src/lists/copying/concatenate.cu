@@ -127,12 +127,10 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   cudf::size_type null_count{0};
   if (has_nulls) {
     cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
-    null_count = std::transform_reduce(
-      columns.begin(),
-      columns.end(),
-      0,
-      std::plus{},
-      [](auto const& col) { return col.null_count(); });
+    null_count =
+      std::transform_reduce(columns.begin(), columns.end(), 0, std::plus{}, [](auto const& col) {
+        return col.null_count();
+      });
   }
 
   // assemble into outgoing list column
