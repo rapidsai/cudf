@@ -371,9 +371,12 @@ TEST_F(ByteCastTest, int32sAllNulls)
 {
   auto const input =
     cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0}, cudf::test::iterators::all_nulls()};
-  auto const output = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  auto const output     = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  auto const& out_child = output->child(cudf::lists_column_view::child_column_index);
   EXPECT_EQ(output->size(), 3);
-  EXPECT_EQ(output->child(cudf::lists_column_view::child_column_index).size(), 0);
+  EXPECT_EQ(output->null_count(), 3);
+  EXPECT_EQ(out_child.size(), 0);
+  EXPECT_EQ(out_child.type().id(), cudf::type_id::UINT8);
 }
 
 TEST_F(ByteCastTest, StringEmpty)
@@ -388,7 +391,10 @@ TEST_F(ByteCastTest, StringsAllNulls)
 {
   auto const input =
     cudf::test::strings_column_wrapper{{"", "", ""}, cudf::test::iterators::all_nulls()};
-  auto const output = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  auto const output     = cudf::byte_cast(input, cudf::flip_endianness::YES);
+  auto const& out_child = output->child(cudf::lists_column_view::child_column_index);
   EXPECT_EQ(output->size(), 3);
-  EXPECT_EQ(output->child(cudf::lists_column_view::child_column_index).size(), 0);
+  EXPECT_EQ(output->null_count(), 3);
+  EXPECT_EQ(out_child.size(), 0);
+  EXPECT_EQ(out_child.type().id(), cudf::type_id::UINT8);
 }
