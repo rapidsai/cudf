@@ -585,9 +585,17 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   [[maybe_unused]] auto [transformed_t, unused_0, structs_ranked_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, stream);
 
-  // Since the preprocessed_table is created alone, it is safe for two-table comparator
-  // only if not any transformation for lists-of-structs was performed.
-  bool const safe_for_two_table_comparator = structs_ranked_columns.size() == 0;
+  // Since the input table is preprocessed alone, it is safe to use for comparing against other
+  // table in two-table comparator only if:
+  //  - Not any transformation for lists-of-structs was performed, or.
+  //  - The input column does not have any floating-point column at any nested level.
+  std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
+    return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
+           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
+  };
+  auto const safe_for_two_table_comparator =
+    structs_ranked_columns.size() == 0 ||
+    std::none_of(input.begin(), input.end(), has_nested_floating_point);
 
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
