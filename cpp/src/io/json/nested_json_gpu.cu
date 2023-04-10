@@ -46,7 +46,7 @@
 
 // Debug print flag
 #ifndef NJP_DEBUG_PRINT
-//#define NJP_DEBUG_PRINT
+// #define NJP_DEBUG_PRINT
 #endif
 
 namespace {
@@ -1637,11 +1637,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
           parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
       }
 
+      auto [result_bitmask, null_count] = make_validity(json_col);
+
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  make_validity(json_col).first,
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   parsing_options(options).view(),
                                                   stream,
                                                   mr);
