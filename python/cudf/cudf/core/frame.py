@@ -91,6 +91,10 @@ class Frame(BinaryOperand, Scannable):
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
+    @property
+    def _has_nulls(self):
+        any(col.has_nulls() for col in self._data.values())
+
     def serialize(self):
         header = {
             "type-serialized": pickle.dumps(type(self)),

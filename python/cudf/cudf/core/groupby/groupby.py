@@ -25,7 +25,10 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_utils import jit_groupby_apply
+from cudf.core.udf.groupby_utils import (
+    _jit_groupby_eligible,
+    jit_groupby_apply,
+)
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -1144,11 +1147,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
         # Nulls are not yet supported
-        for colname in self.grouping.values._data.keys():
-            if self.obj._data[colname].has_nulls():
-                raise ValueError(
-                    "Nulls not yet supported with groupby JIT engine"
-                )
+        # TODO: don't check this twice under `engine='auto'`
+        if self.grouping.has_nulls:
+            raise ValueError("Nulls not yet supported with groupby JIT engine")
 
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
@@ -1198,7 +1199,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index = cudf.MultiIndex._from_data(index_data)
         return result
 
-    def apply(self, function, *args, engine="cudf"):
+    def apply(self, function, *args, engine="auto"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -1294,6 +1295,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
+        if engine == "auto":
+            if _jit_groupby_eligible(grouped_values, function, args):
+                engine = "jit"
+            else:
+                engine = "cudf"
         if engine == "jit":
             result = self._jit_groupby_apply(
                 function,
