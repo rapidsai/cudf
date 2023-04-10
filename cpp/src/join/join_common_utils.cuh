@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -101,27 +102,31 @@ class row_is_valid {
  *
  * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
  */
-template <typename Comparator = row_equality>
+template <typename DeviceComparator>
 class pair_equality {
  public:
-  pair_equality(table_device_view lhs,
-                table_device_view rhs,
-                nullate::DYNAMIC has_nulls,
-                null_equality nulls_are_equal = null_equality::EQUAL)
-    : _check_row_equality{has_nulls, lhs, rhs, nulls_are_equal}
+  pair_equality(DeviceComparator check_row_equality)
+    : _check_row_equality{std::move(check_row_equality)}
   {
   }
 
-  pair_equality(Comparator const d_eqcomp) : _check_row_equality{std::move(d_eqcomp)} {}
-
+  // The parameters are build/probe rather than left/right because the operator
+  // is called by cuco's kernels with parameters in this order (note that this
+  // is an implementation detail that we should eventually stop relying on by
+  // defining operators with suitable heterogeneous typing). Rather than
+  // converting to left/right semantics, we can operate directly on build/probe
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+    using experimental::row::lhs_index_type;
+    using experimental::row::rhs_index_type;
+
+    return lhs.first == rhs.first and
+           _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
   }
 
  private:
-  Comparator _check_row_equality;
+  DeviceComparator _check_row_equality;
 };
 
 /**
@@ -150,6 +155,8 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ *                           build
  * @param hash_table Build hash table.
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
@@ -157,24 +164,26 @@ get_trivial_left_join_indices(table_view const& left,
  *
  */
 template <typename MultimapType>
-void build_join_hash_table(cudf::table_view const& build,
-                           MultimapType& hash_table,
-                           null_equality const nulls_equal,
-                           [[maybe_unused]] bitmask_type const* bitmask,
-                           rmm::cuda_stream_view stream)
+void build_join_hash_table(
+  cudf::table_view const& build,
+  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
+  MultimapType& hash_table,
+  null_equality nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream)
 {
-  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+  auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
+  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
 
-  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+  auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  size_type const build_table_num_rows{build.num_rows()};
   if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
