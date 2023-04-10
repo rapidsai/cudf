@@ -339,10 +339,11 @@ __device__ void gpuDecodeStream(
  * additional values.
  */
 template <bool sizes_only>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
-                                                                volatile page_state_buffers_s* sb,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
+  volatile page_state_s* s,
+  [[maybe_unused]] volatile page_state_buffers_s* sb,
+  int target_pos,
+  int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -524,7 +525,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
  */
 template <bool sizes_only>
 __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
-                                              volatile page_state_buffers_s* sb,
+                                              [[maybe_unused]] volatile page_state_buffers_s* sb,
                                               int target_pos,
                                               int t)
 {
@@ -628,13 +629,11 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
 /**
  * @brief Output a boolean
  *
- * @param[in,out] s Page state input/output
  * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputBoolean(volatile page_state_s* s,
-                                        volatile page_state_buffers_s* sb,
+inline __device__ void gpuOutputBoolean(volatile page_state_buffers_s* sb,
                                         int src_pos,
                                         uint8_t* dst)
 {
@@ -2027,7 +2026,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
             gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == BOOLEAN) {
-          gpuOutputBoolean(s, sb, val_src_pos, static_cast<uint8_t*>(dst));
+          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
             case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
