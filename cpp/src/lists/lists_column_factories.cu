@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -82,6 +83,16 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                   stream,
                                   mr_final);
   return std::move(res->release()[0]);
+}
+
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
+  auto child   = make_empty_column(child_type);
+  return make_lists_column(
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
 }
 
 }  // namespace detail
