@@ -18,6 +18,7 @@ authors = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.8"
 dependencies = [
+    "confluent-kafka>=1.9.0,<1.10.0a0",
     "cudf==23.6.*",
     "cudf_kafka==23.6.*",
     "streamz",
