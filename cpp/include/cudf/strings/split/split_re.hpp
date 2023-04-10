@@ -85,57 +85,6 @@ std::unique_ptr<table> split_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Splits strings elements into a table of strings columns
- * using a regex pattern to delimit each string.
- *
- * Each element generates a vector of strings that are stored in corresponding
- * rows in the output table -- `table[col,row] = token[col] of strings[row]`
- * where `token` is a substring between delimiters.
- *
- * The number of rows in the output table will be the same as the number of
- * elements in the input column. The resulting number of columns will be the
- * maximum number of tokens found in any input row.
- *
- * The `pattern` is used to identify the delimiters within a string
- * and splitting stops when either `maxsplit` or the end of the string is reached.
- *
- * An empty input string will produce a corresponding empty string in the
- * corresponding row of the first column.
- * A null row will produce corresponding null rows in the output table.
- *
- * @code{.pseudo}
- * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = split_re(s, "[_ ]")
- * s1 is a table of strings columns:
- *     [ ["a", "a", "", "ab"],
- *       ["bc", "", "ab", "cd"],
- *       ["def", "bc", "cd", ""],
- *       ["g", null, null, null] ]
- * s2 = split_re(s, "[ _]", 1)
- * s2 is a table of strings columns:
- *     [ ["a", "a", "", "ab"],
- *       ["bc def_g", "_bc", "ab cd", "cd "] ]
- * @endcode
- *
- * @deprecated Use @link split_re split_re(strings_column_view const&,
- * regex_program const&, size_type, rmm::mr::device_memory_resource*) @endlink
- *
- * @throw cudf::logic_error if `pattern` is empty.
- *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
- */
-[[deprecated]] std::unique_ptr<table> split_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Splits strings elements into a table of strings columns using a
  * regex_program's pattern to delimit each string starting from the end of the string
  *
@@ -186,59 +135,6 @@ std::unique_ptr<table> split_re(
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Splits strings elements into a table of strings columns
- * using a regex pattern to delimit each string starting from the end of the string.
- *
- * Each element generates a vector of strings that are stored in corresponding
- * rows in the output table -- `table[col,row] = token[col] of string[row]`
- * where `token` is the substring between each delimiter.
- *
- * The number of rows in the output table will be the same as the number of
- * elements in the input column. The resulting number of columns will be the
- * maximum number of tokens found in any input row.
- *
- * Splitting occurs by traversing starting from the end of the input string.
- * The `pattern` is used to identify the delimiters within a string
- * and splitting stops when either `maxsplit` or the beginning of the string
- * is reached.
- *
- * An empty input string will produce a corresponding empty string in the
- * corresponding row of the first column.
- * A null row will produce corresponding null rows in the output table.
- *
- * @code{.pseudo}
- * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = rsplit_re(s, "[_ ]")
- * s1 is a table of strings columns:
- *     [ ["a", "a", "", "ab"],
- *       ["bc", "", "ab", "cd"],
- *       ["def", "bc", "cd", ""],
- *       ["g", null, null, null] ]
- * s2 = rsplit_re(s, "[ _]", 1)
- * s2 is a table of strings columns:
- *     [ ["a_bc def", "a_", "_ab", "ab"],
- *       ["g", "bc", "cd", "cd "] ]
- * @endcode
- *
- * @deprecated Use @link rsplit_re rsplit_re(strings_column_view const&,
- * regex_program const&, size_type, rmm::mr::device_memory_resource*) @endlink
- *
- * @throw cudf::logic_error if `pattern` is empty.
- *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
- */
-[[deprecated]] std::unique_ptr<table> rsplit_re(
-  strings_column_view const& input,
-  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -299,61 +195,6 @@ std::unique_ptr<column> split_record_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Splits strings elements into a list column of strings
- * using the given regex pattern to delimit each string.
- *
- * Each element generates an array of strings that are stored in an output
- * lists column -- `list[row] = [token1, token2, ...] found in input[row]`
- * where `token` is a substring between delimiters.
- *
- * The number of elements in the output column will be the same as the number of
- * elements in the input column. Each individual list item will contain the
- * new strings for that row. The resulting number of strings in each row can vary
- * from 0 to `maxsplit + 1`.
- *
- * The `pattern` is used to identify the delimiters within a string
- * and splitting stops when either `maxsplit` or the end of the string is reached.
- *
- * An empty input string will produce a corresponding empty list item output row.
- * A null row will produce a corresponding null output row.
- *
- * @code{.pseudo}
- * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = split_record_re(s, "[_ ]")
- * s1 is a lists column of strings:
- *     [ ["a", "bc", "def", "g"],
- *       ["a", "", "bc"],
- *       ["", "ab", "cd"],
- *       ["ab", "cd", ""] ]
- * s2 = split_record_re(s, "[ _]", 1)
- * s2 is a lists column of strings:
- *     [ ["a", "bc def_g"],
- *       ["a", "_bc"],
- *       ["", "ab cd"],
- *       ["ab", "cd "] ]
- * @endcode
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @deprecated Use @link split_record_re split_record_re(strings_column_view const&,
- * regex_program const&, size_type, rmm::mr::device_memory_resource*) @endlink
- *
- * @throw cudf::logic_error if `pattern` is empty.
- *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings.
- */
-[[deprecated]] std::unique_ptr<column> split_record_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Splits strings elements into a list column of strings using the given
  * regex_program to delimit each string starting from the end of the string
  *
@@ -408,63 +249,6 @@ std::unique_ptr<column> split_record_re(
 std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
   regex_program const& prog,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Splits strings elements into a list column of strings
- * using the given regex pattern to delimit each string starting from the end of the string.
- *
- * Each element generates a vector of strings that are stored in an output
- * lists column -- `list[row] = [token1, token2, ...] found in input[row]`
- * where `token` is a substring between delimiters.
- *
- * The number of elements in the output column will be the same as the number of
- * elements in the input column. Each individual list item will contain the
- * new strings for that row. The resulting number of strings in each row can vary
- * from 0 to `maxsplit + 1`.
- *
- * Splitting occurs by traversing starting from the end of the input string.
- * The `pattern` is used to identify the separation points within a string
- * and splitting stops when either `maxsplit` or the beginning of the string
- * is reached.
- *
- * An empty input string will produce a corresponding empty list item output row.
- * A null row will produce a corresponding null output row.
- *
- * @code{.pseudo}
- * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = rsplit_record_re(s, "[_ ]")
- * s1 is a lists column of strings:
- *     [ ["a", "bc", "def", "g"],
- *       ["a", "", "bc"],
- *       ["", "ab", "cd"],
- *       ["ab", "cd", ""] ]
- * s2 = rsplit_record_re(s, "[ _]", 1)
- * s2 is a lists column of strings:
- *     [ ["a_bc def", "g"],
- *       ["a_", "bc"],
- *       ["_ab", "cd"],
- *       ["ab_cd", ""] ]
- * @endcode
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @deprecated Use @link rsplit_record_re rsplit_record_re(strings_column_view const&,
- * regex_program const&, size_type, rmm::mr::device_memory_resource*) @endlink
- *
- * @throw cudf::logic_error if `pattern` is empty.
- *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings.
- */
-[[deprecated]] std::unique_ptr<column> rsplit_record_re(
-  strings_column_view const& input,
-  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
