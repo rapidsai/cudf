@@ -72,7 +72,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       columns.begin(),
       columns.end(),
       0,
-      [](auto x, auto y) { return x + y; },
+      std::plus{},
       [](auto const& col) { return col.null_count(); });
   }
 
