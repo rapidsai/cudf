@@ -33,7 +33,8 @@
 
 #include <vector>
 
-struct StringsSplitTest : public cudf::test::BaseFixture {};
+struct StringsSplitTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(StringsSplitTest, Split)
 {

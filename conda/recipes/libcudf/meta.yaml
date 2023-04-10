@@ -195,6 +195,7 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/dremel.hpp
         - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
         - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
+        - test -f $PREFIX/include/cudf/lists/detail/lists_column_factories.hpp
         - test -f $PREFIX/include/cudf/lists/detail/reverse.hpp
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
         - test -f $PREFIX/include/cudf/lists/detail/set_operations.hpp
@@ -205,7 +206,6 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/filling.hpp
         - test -f $PREFIX/include/cudf/lists/gather.hpp
         - test -f $PREFIX/include/cudf/lists/list_view.hpp
-        - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
         - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
         - test -f $PREFIX/include/cudf/lists/reverse.hpp
         - test -f $PREFIX/include/cudf/lists/set_operations.hpp
