@@ -42,8 +42,6 @@ auto generate_random_lists(cudf::size_type num_rows, cudf::size_type depth, doub
 template <typename BenchFuncPtr>
 void nvbench_set_op(nvbench::state& state, BenchFuncPtr bfunc)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const depth     = static_cast<cudf::size_type>(state.get_int64("depth"));
   auto const null_freq = state.get_float64("null_frequency");
