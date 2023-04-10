@@ -80,7 +80,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto col_v = column_view(s.type(),
                            1,
                            nullptr,
-                           static_cast<bitmask_type const*> s.validity_data(),
+                           reinterpret_cast<bitmask_type const*>(s.validity_data()),
                            static_cast<size_type>(!s.is_valid(stream)),
                            0,
                            {offsets_column->view(), chars_column_v});
