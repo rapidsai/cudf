@@ -104,7 +104,9 @@ struct quantile_index {
   }
 };
 
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 /* @brief computes a quantile value.
  *
  * Computes a value for a quantile by interpolating between two values on either
