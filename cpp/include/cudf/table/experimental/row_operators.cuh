@@ -956,7 +956,7 @@ class self_comparator {
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
       CUDF_EXPECTS(!d_t->_ranked_floating_point,
-                   "The input table has floating-point number and was preprocessed using a "
+                   "The input table has floating-point numbers and was preprocessed using a "
                    "different type of physical element comparator.");
     }
 
@@ -981,7 +981,7 @@ class self_comparator {
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
       CUDF_EXPECTS(!d_t->_ranked_floating_point,
-                   "The input table has floating-point number and was preprocessed using a "
+                   "The input table has floating-point numbers and was preprocessed using a "
                    "different type of physical element comparator.");
     }
 
@@ -1088,7 +1088,9 @@ class two_table_comparator {
     : d_left_table{std::move(left)}, d_right_table{std::move(right)}
   {
     CUDF_EXPECTS(
-      d_left_table->_ranked_floating_point && d_right_table->_ranked_floating_point,
+      d_left_table->_ranked_floating_point == d_right_table->_ranked_floating_point ||
+        (!d_left_table->_ranked_floating_point && d_left_table->_t->num_rows() == 0) ||
+        (!d_right_table->_ranked_floating_point && d_right_table->_t->num_rows() == 0),
       "The pre-generated preprocessed_table(s) are not be able to use for two_table_comparator.");
   }
 

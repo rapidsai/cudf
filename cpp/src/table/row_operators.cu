@@ -414,6 +414,8 @@ std::
 
   auto const default_mr = rmm::mr::get_current_device_resource();
 
+  // TODO: replace the entire input if its offsets is not zero
+
   if (lhs.type().id() == type_id::LIST) {
     // Should not use sliced child because we reuse the input's offset value and offsets child.
     auto const child_lhs = lhs.child(lists_column_view::child_column_index);
@@ -502,6 +504,11 @@ transform_lists_of_structs(table_view const& lhs,
                            std::optional<table_view> const& rhs,
                            rmm::cuda_stream_view stream)
 {
+  if (lhs.num_rows() == 0) {
+    return {
+      lhs, rhs, std::vector<std::unique_ptr<column>>{}, std::vector<std::unique_ptr<column>>{}};
+  }
+
   std::vector<column_view> transformed_lhs_cols;
   std::vector<column_view> transformed_rhs_cols;
   std::vector<std::unique_ptr<column>> ranks_cols_lhs;
@@ -520,6 +527,20 @@ transform_lists_of_structs(table_view const& lhs,
           rhs ? std::optional<table_view>{table_view{transformed_rhs_cols}} : std::nullopt,
           std::move(ranks_cols_lhs),
           std::move(ranks_cols_rhs)};
+}
+
+bool has_floating_point_in_struct(table_view const& input)
+{
+  std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
+    return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
+           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
+  };
+
+  return std::any_of(input.begin(), input.end(), [&](auto const& col) {
+    return col.type().id() == type_id::STRUCT
+             ? std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point)
+             : false;
+  });
 }
 
 }  // namespace
@@ -577,21 +598,10 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
-  // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
   [[maybe_unused]] auto [transformed_t, unused_0, structs_ranked_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, stream);
-
-  // Since the input table is preprocessed alone, it is safe to use for comparing against other
-  // table in two-table comparator only if:
-  //  - Not any transformation for lists-of-structs was performed, or.
-  //  - The input column does not have any floating-point column at any nested level.
-  std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
-    return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
-           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
-  };
   auto const ranked_floating_point =
-    structs_ranked_columns.size() == 0 ||
-    std::none_of(input.begin(), input.end(), has_nested_floating_point);
+    structs_ranked_columns.size() > 0 && has_floating_point_in_struct(input);
 
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
@@ -609,6 +619,8 @@ preprocessed_table::create(table_view const& lhs,
                            host_span<null_order const> null_precedence,
                            rmm::cuda_stream_view stream)
 {
+  check_shape_compatibility(lhs, rhs);
+
   auto [decomposed_lhs,
         new_column_order_lhs,
         new_null_precedence_lhs,
@@ -630,6 +642,11 @@ preprocessed_table::create(table_view const& lhs,
         structs_ranked_columns_rhs] =
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
 
+  auto const ranked_floating_point_lhs =
+    structs_ranked_columns_lhs.size() > 0 && has_floating_point_in_struct(lhs);
+  auto const ranked_floating_point_rhs =
+    structs_ranked_columns_rhs.size() > 0 && has_floating_point_in_struct(rhs);
+
   //  printf("line %d\n", __LINE__);
   //  cudf::test::print(transformed_lhs.column(0));
 
@@ -641,14 +658,14 @@ preprocessed_table::create(table_view const& lhs,
                                     std::move(structs_ranked_columns_lhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    true /*ranked_floating_point*/,
+                                    ranked_floating_point_lhs,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(verticalized_col_depths_rhs),
                                     std::move(structs_ranked_columns_rhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    true /*ranked_floating_point*/,
+                                    ranked_floating_point_rhs,
                                     stream)};
 }
 
@@ -696,7 +713,6 @@ two_table_comparator::two_table_comparator(table_view const& left,
                                            host_span<null_order const> null_precedence,
                                            rmm::cuda_stream_view stream)
 {
-  check_shape_compatibility(left, right);
   std::tie(d_left_table, d_right_table) =
     preprocessed_table::create(left, right, column_order, null_precedence, stream);
 }
