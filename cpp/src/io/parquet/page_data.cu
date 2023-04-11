@@ -1018,6 +1018,9 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->page.nesting_decode[thread_depth].start_depth;
         s->nesting_decode_cache[thread_depth].end_depth =
           s->page.nesting_decode[thread_depth].end_depth;
+        s->nesting_decode_cache[thread_depth].valid_count = 0;
+        s->nesting_decode_cache[thread_depth].value_count = 0;
+        s->nesting_decode_cache[thread_depth].null_count  = 0;
       }
       depth += blockDim.x;
     }
@@ -1025,16 +1028,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   if (!t) {
     s->nesting_info = can_use_decode_cache ? s->nesting_decode_cache : s->page.nesting_decode;
   }
-  __syncthreads();
 
   // zero counts
   int depth = 0;
   while (depth < s->page.num_output_nesting_levels) {
     int const thread_depth = depth + t;
     if (thread_depth < s->page.num_output_nesting_levels) {
-      s->nesting_info[thread_depth].valid_count = 0;
-      s->nesting_info[thread_depth].value_count = 0;
-      s->nesting_info[thread_depth].null_count  = 0;
+      s->page.nesting_decode[thread_depth].valid_count = 0;
+      s->page.nesting_decode[thread_depth].value_count = 0;
+      s->page.nesting_decode[thread_depth].null_count  = 0;
     }
     depth += blockDim.x;
   }
