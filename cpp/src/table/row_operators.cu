@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf_test/column_utilities.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -138,12 +136,13 @@ table_view remove_struct_child_offsets(table_view table)
  *  |   |
  *  i   f
  *
- * When list columns are present, the decomposition is performed similarly to pure structs but list
- * parent columns are NOT pruned
+ * In the case of structs column with a lists column as its first child such as
+ * `Struct<List<int>, float>`, after decomposition we get three columns `Struct<>`,
+ * `List<int>`, and `float`.
  *
- * // TODO: stop with list.
- *
- * For example, if the original table has a column `List<Struct<int, float>>`,
+ * When list columns are present, depending on the input flag `decompose_lists`, the decomposition
+ * can be performed similarly to pure structs but list parent columns are NOT pruned. For example,
+ * if the original table has a column `List<Struct<int, float>>`,
  *
  *    L
  *    |
@@ -162,20 +161,17 @@ table_view remove_struct_child_offsets(table_view table)
  * The list parents are still needed to define the range of elements in the leaf that belong to the
  * same row.
  *
- * In the case of structs column with a lists column as its first child such as
- * `Struct<List<int>, float>`, after decomposition we get three columns `Struct<>`,
- * `List<int>`, and `float`.
- *
  * @param table The table whose struct columns to decompose.
+ * @param decompose_lists Whether to decompose lists columns or output them unchanged
  * @param column_order The per-column order if using output with lexicographic comparison
  * @param null_precedence The per-column null precedence
  * @return A tuple containing a table with all struct columns decomposed, new corresponding column
  *         orders and null precedences and depths of the linearized branches
  */
 auto decompose_structs(table_view table,
+                       bool decompose_lists,
                        host_span<order const> column_order         = {},
-                       host_span<null_order const> null_precedence = {},
-                       bool decompose_lists                        = false)
+                       host_span<null_order const> null_precedence = {})
 {
   auto linked_columns = detail::table_to_linked_columns(table);
 
@@ -329,6 +325,8 @@ void check_lex_compatibility(table_view const& input)
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }
@@ -577,7 +575,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   rmm::cuda_stream_view stream)
 {
   auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(input, column_order, null_precedence);
+    decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
   // Next, transform any (nested) lists-of-structs column into lists-of-integers column.
   [[maybe_unused]] auto [transformed_t, unused_0, structs_ranked_columns, unused_1] =
@@ -614,9 +612,10 @@ preprocessed_table::create(table_view const& lhs,
   auto [decomposed_lhs,
         new_column_order_lhs,
         new_null_precedence_lhs,
-        verticalized_col_depths_lhs] = decompose_structs(lhs, column_order, null_precedence);
+        verticalized_col_depths_lhs] =
+    decompose_structs(lhs, false /*no decompose lists*/, column_order, null_precedence);
   [[maybe_unused]] auto [decomposed_rhs, unused0, unused1, verticalized_col_depths_rhs] =
-    decompose_structs(rhs, column_order, null_precedence);
+    decompose_structs(rhs, false /*no decompose lists*/, column_order, null_precedence);
 
   //  printf("line %d\n", __LINE__);
   //  cudf::test::print(decomposed_lhs.column(0));
@@ -714,7 +713,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
   auto [null_pushed_table, nullable_data] =
     structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
   auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
-  auto verticalized_t = std::get<0>(decompose_structs(struct_offset_removed_table, {}, {}, true));
+  auto verticalized_t =
+    std::get<0>(decompose_structs(struct_offset_removed_table, true /*decompose lists*/));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
