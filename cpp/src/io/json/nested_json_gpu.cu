@@ -42,6 +42,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <limits>
 #include <stack>
 
 // Debug print flag
@@ -1017,6 +1018,11 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
+  // Transduce() writes symbol offsets that may be as large json_in.size()-1
+  CUDF_EXPECTS(
+    json_in.size() == 0 || (json_in.size() - 1) <= std::numeric_limits<SymbolOffsetT>::max(),
+    "Given JSON input is too large");
+
   // Range of encapsulating function that comprises:
   // -> DFA simulation for filtering out brackets and braces inside of quotes
   // -> Logical stack to infer the stack context
@@ -1076,6 +1082,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  // Transduce() writes symbol offsets that may be as large json_in.size()-1
+  CUDF_EXPECTS(
+    json_in.size() == 0 || (json_in.size() - 1) <= std::numeric_limits<SymbolOffsetT>::max(),
+    "Given JSON input is too large");
+
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
@@ -1083,13 +1094,13 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream]() {
-    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     // Memory holding the top-of-stack stack context for the input
     rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
     // Identify what is the stack context for each input character (JSON-root, struct, or list)
     get_stack_context(json_in, stack_op_indices.data(), stream);
 
+    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
     thrust::transform(rmm::exec_policy(stream),
                       zip_in,
@@ -1125,7 +1136,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
+  rmm::device_scalar<std::size_t> num_written_tokens{stream};
   rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
 
