@@ -956,7 +956,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
     return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
-  const auto [rows_to_skip, rows_to_read, selected_stripes] =
+  auto const [rows_to_skip, rows_to_read, selected_stripes] =
     _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
 
   auto const tz_table = compute_timezone_table(selected_stripes, stream);
