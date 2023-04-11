@@ -613,13 +613,13 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behavior and so
   // this test has to hardcode test values which are < -1 second.
   // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
-  using namespace cudf::test;
-  auto timestamps_ns = fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
-    -131968727238000000,
-    -1530705634500000000,
-    -1674638741932929000,
-  };
-  table_view expected({timestamps_ns});
+  auto timestamps_ns =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+      -131968727238000000,
+      -1530705634500000000,
+      -1674638741932929000,
+    };
+  cudf::table_view expected({timestamps_ns});
 
   auto filepath = temp_env->get_temp_filepath("OrcNegTimestamp.orc");
   cudf::io::orc_writer_options out_opts =
