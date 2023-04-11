@@ -27,16 +27,24 @@
 // We disable warning 611 because some Arrow subclasses of
 // `arrow::fs::FileSystem` only partially override the `Equals` method,
 // triggering warning 611-D from nvcc.
+#ifdef __CUDACC__
 #pragma nv_diag_suppress 611
+#endif
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
+#ifdef __CUDACC__
 #pragma nv_diag_default 611
+#endif
 
 // We disable warning 2810 to workaround the compile issue (warning treated as error):
 // result.h(263): error #2810-D: ignoring return value type with "nodiscard" attribute
+#ifdef __CUDACC__
 #pragma nv_diag_suppress 2810
+#endif
 #include <arrow/result.h>
+#ifdef __CUDACC__
 #pragma nv_diag_default 2810
+#endif
 
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>

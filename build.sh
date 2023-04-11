@@ -257,7 +257,7 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf || hasArg cudfjar; then
+if buildAll || hasArg libcudf || hasArg cudf || hasArg cudfjar; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
         CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
         if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then
