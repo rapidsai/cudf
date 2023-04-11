@@ -116,9 +116,10 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
         // convert to binary
         auto const string_col = make_strings_column(*buffer._strings, stream, buffer.mr);
         auto const num_rows   = string_col->size();
+        auto const null_count = string_col->null_count();
         auto col_content      = string_col->release();
 
-        // convert to uint8 column, strings are currently stores as int8
+        // convert to uint8 column, strings are currently stored as int8
         auto contents =
           col_content.children[strings_column_view::chars_column_index].release()->release();
         auto data      = contents.data.release();
@@ -128,6 +129,8 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                                   data->size(),
                                                   std::move(*data),
                                                   std::move(*null_mask),
+                                                  // TODO: Is there a way to know this null count
+                                                  // without directly summing set bits in the mask?
                                                   UNKNOWN_NULL_COUNT);
 
         if (schema_info != nullptr) {
@@ -139,7 +142,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
           num_rows,
           std::move(col_content.children[strings_column_view::offsets_column_index]),
           std::move(uint8_col),
-          UNKNOWN_NULL_COUNT,
+          null_count,
           std::move(*col_content.null_mask));
       }
 
