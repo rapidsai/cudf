@@ -105,7 +105,6 @@ def _groupby_apply_kernel_string_from_template(frame, args):
 
 
 def _get_groupby_apply_kernel(frame, func, args):
-    breakpoint()
     np_field_types = np.dtype(
         list(
             _supported_dtypes_from_frame(
