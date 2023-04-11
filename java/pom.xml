@@ -166,7 +166,7 @@
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <CUDF_USE_PER_THREAD_DEFAULT_STREAM>OFF</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
-        <GPU_ARCHS>ALL</GPU_ARCHS>
+        <GPU_ARCHS>RAPIDS</GPU_ARCHS>
         <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
