@@ -35,7 +35,7 @@ std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
   // Limit the number of rows to the end of the input
   return {rows_to_skip,
           static_cast<size_type>(
-            std::min(num_rows_opt.value(), num_source_rows - rows_to_skip))};
+            std::min<uint64_t>(num_rows_opt.value(), num_source_rows - rows_to_skip))};
 }
 
 }  // namespace cudf::io::detail
