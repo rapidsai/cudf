@@ -125,13 +125,8 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
         auto data      = contents.data.release();
         auto null_mask = contents.null_mask.release();
 
-        auto uint8_col = std::make_unique<column>(data_type{type_id::UINT8},
-                                                  data->size(),
-                                                  std::move(*data),
-                                                  std::move(*null_mask),
-                                                  // TODO: Is there a way to know this null count
-                                                  // without directly summing set bits in the mask?
-                                                  UNKNOWN_NULL_COUNT);
+        auto uint8_col = std::make_unique<column>(
+          data_type{type_id::UINT8}, data->size(), std::move(*data), std::move(*null_mask), 0);
 
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
