@@ -955,9 +955,9 @@ class self_comparator {
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(
-        d_t->_structs_ranked_columns.size() == 0,
-        "The input table was preprocessed using a different type of physical element comparator.");
+      CUDF_EXPECTS(!d_t->_ranked_floating_point,
+                   "The input table has floating-point number and was preprocessed using a "
+                   "different type of physical element comparator.");
     }
 
     return less_comparator{
@@ -980,9 +980,9 @@ class self_comparator {
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(
-        d_t->_structs_ranked_columns.size() == 0,
-        "The input table was preprocessed using a different type of physical element comparator.");
+      CUDF_EXPECTS(!d_t->_ranked_floating_point,
+                   "The input table has floating-point number and was preprocessed using a "
+                   "different type of physical element comparator.");
     }
 
     return less_equivalent_comparator{
