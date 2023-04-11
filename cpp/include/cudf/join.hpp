@@ -282,10 +282,13 @@ class hash_join {
    * undefined.
    *
    * @param build The build table, from which the hash table is built
+   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   *        any table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   hash_join(cudf::table_view const& build,
+            std::optional<bool> has_nulls,
             null_equality compare_nulls,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
