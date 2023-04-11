@@ -284,7 +284,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
                                      std::move(chars_column),
-                                     UNKNOWN_NULL_COUNT,
+                                     array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 
   return num_rows == array.length()
@@ -324,7 +324,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
                                 std::move(*(column_contents.null_mask)),
-                                UNKNOWN_NULL_COUNT);
+                                array.null_count());
 }
 
 template <>
@@ -357,7 +357,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   }
 
   return make_structs_column(
-    array.length(), move(child_columns), UNKNOWN_NULL_COUNT, std::move(out_mask), stream, mr);
+    array.length(), move(child_columns), array.null_count(), std::move(out_mask), stream, mr);
 }
 
 template <>
@@ -381,7 +381,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   auto out_col        = make_lists_column(num_rows,
                                    std::move(offsets_column),
                                    std::move(child_column),
-                                   UNKNOWN_NULL_COUNT,
+                                   array.null_count(),
                                    std::move(*get_mask_buffer(array, stream, mr)),
                                    stream,
                                    mr);
