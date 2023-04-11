@@ -683,18 +683,18 @@ struct preprocessed_table {
    * `lexicographic::two_table_comparator` to avoid preprocessing again.
    *
    * Note that the output of this factory function cannot be used in `two_table_comparator` if the
-   * input table contains lists-of-structs. In such cases, please use the overload
-   * `preprocessed_table::create(table_view const&, table_view const&,...)`.
+   * input table contains lists-of-structs having floating-point children column. In such cases,
+   * please use the overload `preprocessed_table::create(table_view const&, table_view const&,...)`.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If it is nullptr, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If it is nullptr, then null precedence
+   *        would be `null_order::BEFORE` for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
-   * @return A shared pointer to a preprocessed table
+   * @return A shared pointer to a preprocessed table.
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     host_span<order const> column_order,
@@ -708,17 +708,17 @@ struct preprocessed_table {
    * can be passed to the constructor of `lexicographic::self_comparator` or
    * `lexicographic::two_table_comparator` to avoid preprocessing again.
    *
-   * This factory function performs some extra operations to guarantee that its output can be safely
-   * used in `two_table_comparator` for all cases.
+   * This factory function performs some extra operations to guarantee that its output can be used
+   * in `two_table_comparator` for all cases.
    *
    * @param lhs The lhs table to preprocess
    * @param rhs The rhs table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If it is nullptr, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If it is nullptr, then null precedence
+   *        would be `null_order::BEFORE` for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    * @return A pair of shared pointers to the preprocessed tables
    */
@@ -734,23 +734,30 @@ struct preprocessed_table {
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
   /**
-   *  TODO
-   * @brief create_preprocessed_table
-   * @param input
-   * @param flattened_input_aux_data
-   * @param transformed_aux_data
-   * @param column_order
-   * @param null_precedence
-   * @param safe_for_two_table_comparator
-   * @param stream
+   * @brief Create the output preprocessed table from intermediate preprocessing results
+   *
+   * @param preprocessed_input The table resulted from preprocessing
+   * @param verticalized_col_depths The depths of each column resulting from decomposing struct
+   *        columns in the original input table
+   * @param structs_ranked_columns Store the intermediate results from transforming the child
+   *        columns of lists-of-structs columns into integer columns using `cudf::rank()`
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   *        values compare to all other for every column. If it is nullptr, then null precedence
+   *        would be `null_order::BEFORE` for all columns.
+   * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
+   *        any lists-of-structs column having floating-point children using `cudf::rank`.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    */
   static std::shared_ptr<preprocessed_table> create_preprocessed_table(
-    table_view const& input,
+    table_view const& preprocessed_input,
     std::vector<int>&& verticalized_col_depths,
     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
     host_span<order const> column_order,
     host_span<null_order const> null_precedence,
-    bool safe_for_two_table_comparator,
+    bool ranked_floating_point,
     rmm::cuda_stream_view stream);
 
   /**
@@ -761,24 +768,24 @@ struct preprocessed_table {
    *
    * @param table The table to preprocess
    * @param column_order Optional, device array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If it is nullptr, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If it is nullptr, then null precedence
+   *        would be `null_order::BEFORE` for all columns.
    * @param depths The depths of each column resulting from decomposing struct columns.
    * @param dremel_data The dremel data for each list column. The length of this object is the
-   * number of list columns in the table.
+   *        number of list columns in the table.
    * @param dremel_device_views Device views into the dremel_data structs contained in the
-   * `dremel_data` parameter. For columns that are not list columns, this uvector will should
-   * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
-   * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
-   * of list columns).
+   *        `dremel_data` parameter. For columns that are not list columns, this uvector will should
+   *        contain an empty `dremel_device_view`. As such, this uvector has as many elements as
+   *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
+   *        long as the number of list columns).
    * @param structs_ranked_columns Store the intermediate results from transforming the child
-   * columns of lists-of-structs columns into integer columns using `cudf::rank()` and will be used
-   * for row comparison.
-   * @param safe_for_two_table_comparator Flat indicating if the preprocessed table is safe to use
-   * for two-table comparator.
+   *        columns of lists-of-structs columns into integer columns using `cudf::rank()` and will
+   *        be used for row comparison.
+   * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
+   *        any lists-of-structs column having floating-point children using `cudf::rank`.
    */
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -787,14 +794,14 @@ struct preprocessed_table {
                      std::vector<detail::dremel_data>&& dremel_data,
                      rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
                      std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-                     bool safe_for_two_table_comparator);
+                     bool ranked_floating_point);
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-                     bool safe_for_two_table_comparator);
+                     bool ranked_floating_point);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -861,11 +868,12 @@ struct preprocessed_table {
   std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 
   // Intermediate columns generated from transforming the child columns of lists-of-structs columns
-  // into integer columns using `cudf::rank()`, also need to be kept alive.
+  // into integer columns using `cudf::rank()`, need to be kept alive.
   std::vector<std::unique_ptr<column>> _structs_ranked_columns;
 
-  // A flag indicating if the preprocessed table is safe to use for two-table comparator.
-  bool const _safe_for_two_table_comparator;
+  // Flag to record if the input table was preprocessed to transform any lists-of-structs column
+  // having at least one floating-point child (at any nested level) using `cudf::rank`.
+  bool const _ranked_floating_point;
 };
 
 /**
@@ -1080,7 +1088,7 @@ class two_table_comparator {
     : d_left_table{std::move(left)}, d_right_table{std::move(right)}
   {
     CUDF_EXPECTS(
-      d_left_table->_safe_for_two_table_comparator && d_right_table->_safe_for_two_table_comparator,
+      d_left_table->_ranked_floating_point && d_right_table->_ranked_floating_point,
       "The pre-generated preprocessed_table(s) are not be able to use for two_table_comparator.");
   }
 

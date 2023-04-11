@@ -532,7 +532,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
-  bool safe_for_two_table_comparator,
+  bool ranked_floating_point,
   rmm::cuda_stream_view stream)
 {
   //  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
@@ -558,7 +558,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(structs_ranked_columns),
-                             safe_for_two_table_comparator));
+                             ranked_floating_point));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
@@ -566,7 +566,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(structs_ranked_columns),
-                             safe_for_two_table_comparator));
+                             ranked_floating_point));
   }
 }
 
@@ -591,7 +591,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
            std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
   };
-  auto const safe_for_two_table_comparator =
+  auto const ranked_floating_point =
     structs_ranked_columns.size() == 0 ||
     std::none_of(input.begin(), input.end(), has_nested_floating_point);
 
@@ -600,7 +600,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                                    std::move(structs_ranked_columns),
                                    new_column_order,
                                    new_null_precedence,
-                                   safe_for_two_table_comparator,
+                                   ranked_floating_point,
                                    stream);
 }
 
@@ -642,14 +642,14 @@ preprocessed_table::create(table_view const& lhs,
                                     std::move(structs_ranked_columns_lhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    true /*safe_for_two_table_comparator*/,
+                                    true /*ranked_floating_point*/,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(verticalized_col_depths_rhs),
                                     std::move(structs_ranked_columns_rhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    true /*safe_for_two_table_comparator*/,
+                                    true /*ranked_floating_point*/,
                                     stream)};
 }
 
@@ -661,7 +661,7 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-  bool safe_for_two_table_comparator)
+  bool ranked_floating_point)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -669,7 +669,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _structs_ranked_columns(std::move(structs_ranked_columns)),
-    _safe_for_two_table_comparator(safe_for_two_table_comparator)
+    _ranked_floating_point(ranked_floating_point)
 {
 }
 
@@ -679,7 +679,7 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
-  bool safe_for_two_table_comparator)
+  bool ranked_floating_point)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -687,7 +687,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data{},
     _dremel_device_views{},
     _structs_ranked_columns(std::move(structs_ranked_columns)),
-    _safe_for_two_table_comparator(safe_for_two_table_comparator)
+    _ranked_floating_point(ranked_floating_point)
 {
 }
 
