@@ -5,45 +5,17 @@ from enum import IntEnum
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp cimport aggregation as libcudf_aggregation
-from cudf._lib.cpp.aggregation cimport (
-    groupby_aggregation,
-    make_all_aggregation,
-    make_any_aggregation,
-    make_argmax_aggregation,
-    make_argmin_aggregation,
-    make_collect_list_aggregation,
-    make_collect_set_aggregation,
-    make_count_aggregation,
-    make_covariance_aggregation,
-    make_max_aggregation,
-    make_mean_aggregation,
-    make_median_aggregation,
-    make_min_aggregation,
-    make_nth_element_aggregation,
-    make_nunique_aggregation,
-    make_product_aggregation,
-    make_quantile_aggregation,
-    make_rank_aggregation,
-    make_std_aggregation,
-    make_sum_aggregation,
-    make_udf_aggregation,
-    make_variance_aggregation,
+from cudf._lib.cpp.types cimport (
+    interpolation as interpolation_t,
+    null_policy,
+    size_type,
 )
-from cudf._lib.cpp.types cimport interpolation as interpolation_t, size_type
 
 from cudf._lib.pylibcudf.types import Interpolation, NullPolicy
 
-from cudf._lib.cpp.types cimport null_policy
 from cudf._lib.pylibcudf.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_policy,
-)
-
-import pandas as pd
-
-from cudf._lib.cpp.aggregation cimport (
-    underlying_type_t_correlation_type,
-    underlying_type_t_rank_method,
 )
 
 
@@ -58,20 +30,20 @@ cdef class Aggregation:
             "Use one of the factory functions."
         )
 
+
 class CorrelationType(IntEnum):
     PEARSON = (
-        <underlying_type_t_correlation_type>
+        <libcudf_aggregation.underlying_type_t_correlation_type>
         libcudf_aggregation.correlation_type.PEARSON
     )
     KENDALL = (
-        <underlying_type_t_correlation_type>
+        <libcudf_aggregation.underlying_type_t_correlation_type>
         libcudf_aggregation.correlation_type.KENDALL
     )
     SPEARMAN = (
-        <underlying_type_t_correlation_type>
+        <libcudf_aggregation.underlying_type_t_correlation_type>
         libcudf_aggregation.correlation_type.SPEARMAN
     )
-
 
 
 cdef class GroupbyAggregation(Aggregation):
@@ -220,7 +192,7 @@ cdef class GroupbyAggregation(Aggregation):
     def quantile(cls, q=0.5, interpolation="linear"):
         cdef GroupbyAggregation obj = cls.__new__(cls)
 
-        if not pd.api.types.is_list_like(q):
+        if not isinstance(q, list):
             q = [q]
 
         cdef vector[double] c_q = q
@@ -279,7 +251,7 @@ cdef class GroupbyAggregation(Aggregation):
         cdef GroupbyAggregation obj = cls.__new__(cls)
         cdef libcudf_aggregation.correlation_type c_method = (
             <libcudf_aggregation.correlation_type> (
-                <underlying_type_t_correlation_type> (
+                <libcudf_aggregation.underlying_type_t_correlation_type> (
                     CorrelationType[method.upper()]
                 )
             )
