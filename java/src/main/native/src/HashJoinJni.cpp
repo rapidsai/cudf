@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <optional>
+
 #include <cudf/join.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -27,7 +29,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HashJoin_create(JNIEnv *env, jclass,
     cudf::jni::auto_set_device(env);
     auto tview = reinterpret_cast<cudf::table_view const *>(j_table);
     auto nulleq = j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto hash_join_ptr = new cudf::hash_join(*tview, nulleq);
+    auto hash_join_ptr = new cudf::hash_join(*tview, std::nullopt, nulleq);
     return reinterpret_cast<jlong>(hash_join_ptr);
   }
   CATCH_STD(env, 0);
