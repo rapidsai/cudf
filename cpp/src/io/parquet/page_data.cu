@@ -111,6 +111,59 @@ struct page_state_buffers_s {
   uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
 };
 
+struct delta_binary_state_s {
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
+  uint32_t block_size;         // usually 128, must be multiple of 128
+  uint32_t mini_block_count;   // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
+  uint32_t value_count;        // total values encoded in the block
+  int64_t last_value;          // last value decoded, initialized to first_value from header
+                               // should be int128_t, but in all likelihood we'll never see
+                               // an int96 with this encoding
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
+
+  int64_t cur_min_delta;         // min delta for the block
+  uint32_t cur_mb;               // index of the current mini-block within the block
+  uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
+  uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
+
+  uint64_t value[non_zero_buffer_size];  // circular buffer of delta values
+};
+
+struct delta_byte_array_state_s {
+  delta_binary_state_s prefixes;          // state of decoder for prefix lengths
+  delta_binary_state_s suffixes;          // state of decoder for suffix lengths
+  uint64_t offset[non_zero_buffer_size];  // circular buffer for string output offsets
+};
+
+/**
+ * @brief Returns pointers to start and end of page data (after header and definition/repetition
+ * level info)
+ *
+ * @param page The page to get bounds for
+ * @return Pair of pointers pointing to start and end of page data
+ */
+constexpr std::pair<uint8_t const* const, uint8_t const* const> page_data_bounds(PageInfo* page)
+{
+  // page_data should be at the start of the rep/def level data (if present)
+  uint8_t const* cur       = page->page_data;
+  uint8_t const* const end = cur + page->uncompressed_page_size;
+
+  if (page->flags & gpu::PAGEINFO_FLAGS_V2) {
+    cur += page->def_lvl_bytes + page->rep_lvl_bytes;
+  } else {
+    // have 4 bytes len, len bytes, 4 bytes len, len bytes
+    int len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+    cur += len;
+    len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+    cur += len;
+  }
+
+  return {cur, end};
+}
+
 /**
  * @brief Returns whether or not a page spans either the beginning or the end of the
  * specified row bounds
