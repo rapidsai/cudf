@@ -1396,7 +1396,9 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind k,
                                                               F&& f,
@@ -1478,7 +1480,9 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 
 template <typename Element>
 struct dispatch_aggregation {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <aggregation::Kind k, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(F&& f, Ts&&... args) const
   {
@@ -1487,7 +1491,9 @@ struct dispatch_aggregation {
 };
 
 struct dispatch_source {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <typename Element, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
   {
@@ -1511,7 +1517,9 @@ struct dispatch_source {
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(data_type type,
                                                                                aggregation::Kind k,

@@ -20,6 +20,7 @@
  */
 
 #include <io/csv/durations.hpp>
+#include <lists/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -437,15 +438,16 @@ struct column_to_strings_fn {
       };
       auto child_string = cudf::strings::detail::replace_nulls(
         child_string_with_null()->view(), narep, stream_, rmm::mr::get_current_device_resource());
-      auto const list_child_string =
-        column_view(column.type(),
-                    column.size(),
-                    column.head(),
-                    column.null_mask(),
-                    column.null_count(),
-                    column.offset(),
-                    {lists_column_view(column).offsets(), child_string->view()});
-      return strings::detail::join_list_elements(lists_column_view(list_child_string),
+      auto new_offsets = cudf::lists::detail::get_normalized_offsets(
+        lists_column_view(column), stream_, rmm::mr::get_current_device_resource());
+      auto const list_child_string = make_lists_column(
+        column.size(),
+        std::move(new_offsets),
+        std::move(child_string),
+        column.null_count(),
+        cudf::detail::copy_bitmask(column, stream_, rmm::mr::get_current_device_resource()),
+        stream_);
+      return strings::detail::join_list_elements(lists_column_view(*list_child_string),
                                                  string_scalar{","},
                                                  narep,
                                                  strings::separator_on_nulls::YES,
@@ -470,7 +472,11 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
   operator()(column_view const& column, host_span<column_name_info const> children_names) const
   {
-    auto col_string = operator()(column.child_begin(), column.child_end(), children_names);
+    auto const child_it = cudf::detail::make_counting_transform_iterator(
+      0, [structs_view = structs_column_view{column}](auto const child_idx) {
+        return structs_view.get_sliced_child(child_idx);
+      });
+    auto col_string = operator()(child_it, child_it + column.num_children(), children_names);
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
                               column.null_count());
     return col_string;

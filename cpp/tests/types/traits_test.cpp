@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,47 +47,34 @@ TYPED_TEST_SUITE(TypedTraitsTest, cudf::test::AllTypes);
 
 TEST_F(TraitsTest, NumericDataTypesAreNumeric)
 {
-  using namespace cudf::test;
-  EXPECT_TRUE(std::all_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
-    return cudf::is_numeric(cudf::data_type{type});
-  }));
+  EXPECT_TRUE(
+    std::all_of(cudf::test::numeric_type_ids.begin(),
+                cudf::test::numeric_type_ids.end(),
+                [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
 }
 
 TEST_F(TraitsTest, TimestampDataTypesAreNotNumeric)
 {
-  using namespace cudf::test;
   EXPECT_TRUE(
-    std::none_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_numeric(cudf::data_type{type});
-    }));
+    std::none_of(cudf::test::timestamp_type_ids.begin(),
+                 cudf::test::timestamp_type_ids.end(),
+                 [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
 }
-
-/*
-These types are not yet supported by the type dispatcher
-TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
-  using namespace cudf::test;
-  EXPECT_TRUE(std::none_of(
-      non_numeric_type_ids.begin(), non_numeric_type_ids.end(),
-      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
-}
-*/
 
 TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps)
 {
-  using namespace cudf::test;
   EXPECT_TRUE(
-    std::none_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_timestamp(cudf::data_type{type});
-    }));
+    std::none_of(cudf::test::numeric_type_ids.begin(),
+                 cudf::test::numeric_type_ids.end(),
+                 [](cudf::type_id type) { return cudf::is_timestamp(cudf::data_type{type}); }));
 }
 
 TEST_F(TraitsTest, TimestampDataTypesAreTimestamps)
 {
-  using namespace cudf::test;
   EXPECT_TRUE(
-    std::all_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_timestamp(cudf::data_type{type});
-    }));
+    std::all_of(cudf::test::timestamp_type_ids.begin(),
+                cudf::test::timestamp_type_ids.end(),
+                [](cudf::type_id type) { return cudf::is_timestamp(cudf::data_type{type}); }));
 }
 
 TYPED_TEST(TypedTraitsTest, RelationallyComparable)

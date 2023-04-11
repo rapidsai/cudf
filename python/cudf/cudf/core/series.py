@@ -511,7 +511,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         elif isinstance(data, pd.Index):
             if name is None:
                 name = data.name
-            data = data.values
+            data = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         elif isinstance(data, BaseIndex):
             if name is None:
                 name = data.name
