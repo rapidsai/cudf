@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/orc/aggregate_orc_metadata.hpp>
+#include "aggregate_orc_metadata.hpp"
 
 #include <io/utilities/row_selection.hpp>
 
