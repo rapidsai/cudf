@@ -527,7 +527,7 @@ transform_lists_of_structs(table_view const& lhs,
 }  // namespace
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
-  table_view const& input,
+  table_view const& preprocessed_input,
   std::vector<int>&& verticalized_col_depths,
   std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
   host_span<order const> column_order,
@@ -538,9 +538,9 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   //  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
   //    decompose_structs(input, column_order, null_precedence);
 
-  check_lex_compatibility(input);
+  check_lex_compatibility(preprocessed_input);
 
-  auto d_t = table_device_view::create(input, stream);
+  auto d_t = table_device_view::create(preprocessed_input, stream);
   auto d_column_order =
     detail::make_device_uvector_async(column_order, stream, rmm::mr::get_current_device_resource());
   auto d_null_precedence = detail::make_device_uvector_async(
@@ -548,8 +548,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
-  if (detail::has_nested_columns(input)) {
-    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(input, stream);
+  if (detail::has_nested_columns(preprocessed_input)) {
+    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
                              std::move(d_column_order),
