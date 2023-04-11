@@ -13,8 +13,6 @@ from cudf._lib.utils cimport columns_from_unique_ptr
 
 
 def make_timezone_transition_table(tzdir, tzname):
-    # TODO: libcudf needs the path to end with a '/' separator (but
-    # shouldn't).  Remove this if/when that no longer a requirement:
     cdef unique_ptr[table] c_result
     cdef string c_tzdir = tzdir.encode()
     cdef string c_tzname = tzname.encode()
