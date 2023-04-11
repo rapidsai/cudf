@@ -214,7 +214,7 @@ class orc_reader_options {
   void set_num_rows(size_type nrows)
   {
     CUDF_EXPECTS(nrows >= 0, "num_rows cannot be negative");
-    CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows along with stripes");
+    CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows and stripes");
     _num_rows = nrows;
   }
 

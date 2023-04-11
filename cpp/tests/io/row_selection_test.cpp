@@ -74,7 +74,7 @@ TEST_F(FromOptsTest, InputSize32BitOverflow)
   // Test that we can still select rows from such input
   auto const too_large_for_32bit = std::numeric_limits<int64_t>::max();
 
-  // no num_row
+  // no num_rows
   {
     auto [out_skip, out_num] =
       skip_rows_num_rows_from_options(too_large_for_32bit - 10, std::nullopt, too_large_for_32bit);
