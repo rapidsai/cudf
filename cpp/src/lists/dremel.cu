@@ -147,7 +147,7 @@ dremel_data get_encoding(column_view h_col,
                          col.size(),
                          col.head(),
                          col.null_mask(),
-                         UNKNOWN_NULL_COUNT,
+                         col.null_count(),
                          col.offset(),
                          std::move(children));
     };
