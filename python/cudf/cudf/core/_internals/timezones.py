@@ -4,11 +4,11 @@ import os
 import zoneinfo
 from functools import lru_cache
 
-from cudf._lib.timezone import build_timezone_transition_table
+from cudf._lib.timezone import make_timezone_transition_table
 from cudf.core.dataframe import DataFrame
 
 
-@lru_cache(maxsize=20)
+@lru_cache(maxsize=1024)
 def get_tz_data(zone_name):
     """
     Return timezone data (transition times and UTC offsets) for the
@@ -67,5 +67,5 @@ def _find_and_read_tzfile_tzdata(zone_name):
 
 
 def _read_tzfile_as_frame(tzdir, zone_name):
-    dt, offsets = build_timezone_transition_table(tzdir, zone_name)
+    dt, offsets = make_timezone_transition_table(tzdir, zone_name)
     return DataFrame._from_columns([dt, offsets], ["dt", "offsets"])
