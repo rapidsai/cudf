@@ -394,4 +394,49 @@ TEST_F(JsonWriterTest, NullList)
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 }
 
+TEST_F(JsonWriterTest, ChunkedNested)
+{
+  std::string const data = R"(
+{"a": 1, "b": -2, "c": {      }, "e": [{"f": 1}]}
+{"a": 2, "b": -2, "c": {      }, "e": null}
+{"a": 3, "b": -2, "c": {"d": 9}, "e": [{"f": 2}, null]}
+{"a": 4, "b": -2, "c": {"d": 16}, "e": [{"f": 3}, {"f": 4}, {"f": 5}]}
+{"a": 5, "b": -2, "c": {      }, "e": []}
+{"a": 6, "b": -2, "c": {"d": 36}, "e": [{"f": 6}]}
+{"a": 7, "b": -2, "c": {"d": 49}, "e": [{"f": 7}]}
+{"a": 8, "b": -2, "c": {"d": 64}, "e": [{"f": 8}]}
+{"a": 9, "b": -2, "c": {"d": 81}, "e": [{"f": 9}]}
+)";
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::table_view tbl_view            = result.tbl->view();
+  cudf::io::table_metadata mt{result.metadata};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(false)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null")
+                           .rows_per_chunk(8);
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected =
+    R"({"a":1,"b":-2,"c":{},"e":[{"f":1}]}
+{"a":2,"b":-2,"c":{}}
+{"a":3,"b":-2,"c":{"d":9},"e":[{"f":2},null]}
+{"a":4,"b":-2,"c":{"d":16},"e":[{"f":3},{"f":4},{"f":5}]}
+{"a":5,"b":-2,"c":{},"e":[]}
+{"a":6,"b":-2,"c":{"d":36},"e":[{"f":6}]}
+{"a":7,"b":-2,"c":{"d":49},"e":[{"f":7}]}
+{"a":8,"b":-2,"c":{"d":64},"e":[{"f":8}]}
+{"a":9,"b":-2,"c":{"d":81},"e":[{"f":9}]}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
