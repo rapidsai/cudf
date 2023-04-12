@@ -189,12 +189,8 @@ struct scan_functor<Op, cudf::struct_view> {
                               ->release();
 
     // Don't need to set a null mask because that will be handled at the caller.
-    return make_structs_column(input.size(),
-                               std::move(scanned_children),
-                               UNKNOWN_NULL_COUNT,
-                               rmm::device_buffer{0, stream, mr},
-                               stream,
-                               mr);
+    return make_structs_column(
+      input.size(), std::move(scanned_children), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
   }
 };
 
