@@ -282,13 +282,20 @@ class hash_join {
    * undefined.
    *
    * @param build The build table, from which the hash table is built
-   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
-   *        any table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   hash_join(cudf::table_view const& build,
-            std::optional<bool> has_nulls,
+            null_equality compare_nulls,
+            rmm::cuda_stream_view stream = cudf::get_default_stream());
+  /**
+   * @copydoc hash_join
+   *
+   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   *        any probe table that will be used later for join
+   */
+  hash_join(cudf::table_view const& build,
+            bool has_nulls,
             null_equality compare_nulls,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -302,6 +309,9 @@ class hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
@@ -325,6 +335,9 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
+   *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
    * as the the join keys .
@@ -347,6 +360,9 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
+   *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
    * as the the join keys .
@@ -365,6 +381,9 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
+   *
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
@@ -377,6 +396,9 @@ class hash_join {
    *
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
    *
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
@@ -392,6 +414,9 @@ class hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
    * and `probe` as the the join keys .

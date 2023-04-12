@@ -359,10 +359,10 @@ std::size_t get_full_join_size(
 
 template <typename Hasher>
 hash_join<Hasher>::hash_join(cudf::table_view const& build,
-                             std::optional<bool> has_nulls,
+                             bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
-  : _has_nulls(has_nulls.value_or(true)),
+  : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
     _hash_table{compute_hash_table_size(build.num_rows()),
@@ -381,8 +381,8 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
-  auto const row_bitmask = std::move(
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first);
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   cudf::detail::build_join_hash_table(_build,
                                       _preprocessed_build,
                                       _hash_table,
@@ -586,7 +586,15 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
 hash_join::~hash_join() = default;
 
 hash_join::hash_join(cudf::table_view const& build,
-                     std::optional<bool> has_nulls,
+                     null_equality compare_nulls,
+                     rmm::cuda_stream_view stream)
+  // If we cannot know beforehand about null existence then let's assume that there are nulls.
+  : hash_join(build, true /*has_nulls*/, compare_nulls, stream)
+{
+}
+
+hash_join::hash_join(cudf::table_view const& build,
+                     bool has_nulls,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   : _impl{std::make_unique<const impl_type>(build, has_nulls, compare_nulls, stream)}
