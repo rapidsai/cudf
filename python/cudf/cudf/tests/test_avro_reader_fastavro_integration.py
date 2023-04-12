@@ -227,6 +227,7 @@ def test_avro_compression(rows, codec):
 
     # N.B. rand_dataframe() is brutally slow for some reason.  Switching to
     #      np.random() speeds things up by a factor of 10.
+    #      See also: https://github.com/rapidsai/cudf/issues/13128
     df = rand_dataframe(
         [
             {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
@@ -612,6 +613,7 @@ def test_avro_reader_multiblock(
         # We don't use rand_dataframe() here, because it increases the
         # execution time of each test by a factor of 10 or more (it appears
         # to use a very costly approach to generating random data).
+        # See also: https://github.com/rapidsai/cudf/issues/13128
         values = np.random.rand(total_rows).astype(dtype)
 
     # The sync_interval is the number of bytes between sync blocks.  We know
