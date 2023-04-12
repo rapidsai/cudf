@@ -46,8 +46,8 @@ inner_join(table_view const& left_input,
   auto const left      = matched.second.front();
   auto const right     = matched.second.back();
   auto const has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                           ? cudf::hash_join::nullable_join::YES
-                           : cudf::hash_join::nullable_join::NO;
+                           ? cudf::nullable_join::YES
+                           : cudf::nullable_join::NO;
 
   // For `inner_join`, we can freely choose either the `left` or `right` table to use for
   // building/probing the hash map. Because building is typically more expensive than probing, we
@@ -80,8 +80,8 @@ left_join(table_view const& left_input,
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
   auto const has_nulls   = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                             ? cudf::hash_join::nullable_join::YES
-                             : cudf::hash_join::nullable_join::NO;
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
 
   cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
   return hj_obj.left_join(left, std::nullopt, stream, mr);
@@ -105,8 +105,8 @@ full_join(table_view const& left_input,
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
   auto const has_nulls   = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                             ? cudf::hash_join::nullable_join::YES
-                             : cudf::hash_join::nullable_join::NO;
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
 
   cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
   return hj_obj.full_join(left, std::nullopt, stream, mr);
