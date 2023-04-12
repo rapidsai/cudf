@@ -453,6 +453,11 @@ def test_alltypes_plain_avro():
     assert_eq(actual, expected)
 
 
+def multiblock_testname_ids(param):
+    (total_rows, num_rows, skip_rows, sync_interval) = param
+    return f"{total_rows=}-{num_rows=}-{skip_rows=}-{sync_interval=}"
+
+
 # The following values are used to test various boundary conditions associated
 # with multiblock avro files.  Each tuple consists of four values: total number
 # of rows to generate, number of rows to limit the result set to, number of
@@ -460,95 +465,87 @@ def test_alltypes_plain_avro():
 # number of rows (i.e. first and second tuple elements) are equal, it means
 # that all rows will be returned.  If the rows per block also equals the first
 # two numbers, it means that a single block will be used.
-total_rows_and_num_rows_and_skip_rows_and_rows_per_block = [
-    (10, 10, 9, 9),
-    (10, 10, 9, 5),
-    (10, 10, 9, 3),
-    (10, 10, 9, 2),
-    (10, 10, 9, 10),
-    (10, 10, 8, 2),
-    (10, 10, 5, 5),
-    (10, 10, 2, 9),
-    (10, 10, 2, 2),
-    (10, 10, 1, 9),
-    (10, 10, 1, 5),
-    (10, 10, 1, 2),
-    (10, 10, 1, 10),
-    (10, 10, 10, 9),
-    (10, 10, 10, 5),
-    (10, 10, 10, 2),
-    (10, 10, 10, 10),
-    (10, 10, 0, 9),
-    (10, 10, 0, 5),
-    (10, 10, 0, 2),
-    (10, 10, 0, 10),
-    (100, 100, 99, 10),
-    (100, 100, 90, 90),
-    (100, 100, 90, 89),
-    (100, 100, 90, 88),
-    (100, 100, 90, 87),
-    (100, 100, 90, 5),
-    (100, 100, 89, 90),
-    (100, 100, 87, 90),
-    (100, 100, 50, 7),
-    (100, 100, 50, 31),
-    (10, 1, 8, 9),
-    (100, 1, 99, 10),
-    (100, 1, 98, 10),
-    (100, 1, 97, 10),
-    (100, 3, 90, 87),
-    (100, 4, 90, 5),
-    (100, 2, 89, 90),
-    (100, 9, 87, 90),
-    (100, 20, 50, 7),
-    (100, 10, 50, 31),
-    (100, 20, 50, 31),
-    (100, 30, 50, 31),
-    (256, 256, 0, 256),
-    (256, 256, 0, 32),
-    (256, 256, 0, 31),
-    (256, 256, 0, 33),
-    (256, 256, 31, 32),
-    (256, 256, 32, 31),
-    (256, 256, 31, 33),
-    (512, 512, 0, 32),
-    (512, 512, 0, 31),
-    (512, 512, 0, 33),
-    (512, 512, 31, 32),
-    (512, 512, 32, 31),
-    (512, 512, 31, 33),
-    (1024, 1024, 0, 1),
-    (1024, 1024, 0, 3),
-    (1024, 1024, 0, 7),
-    (1024, 1024, 0, 8),
-    (1024, 1024, 0, 9),
-    (1024, 1024, 0, 15),
-    (1024, 1024, 0, 16),
-    (1024, 1024, 0, 17),
-    (1024, 1024, 0, 32),
-    (1024, 1024, 0, 31),
-    (1024, 1024, 0, 33),
-    (1024, 1024, 31, 32),
-    (1024, 1024, 32, 31),
-    (1024, 1024, 31, 33),
-    (16384, 16384, 0, 31),
-    (16384, 16384, 0, 32),
-    (16384, 16384, 0, 33),
-    (16384, 16384, 0, 16384),
-]
-
-total_rows_and_num_rows_and_skip_rows_and_rows_per_block_ids = [
-    f"total_rows={total_rows}-"
-    + (f"num_rows={num_rows}-" if num_rows != total_rows else "")
-    + f"skip_rows={skip_rows}-"
-    f"sync_interval={sync_interval}"
-    for (
-        total_rows,
-        num_rows,
-        skip_rows,
-        sync_interval,
-    ) in total_rows_and_num_rows_and_skip_rows_and_rows_per_block
-]
+@pytest.fixture(
+    ids=multiblock_testname_ids,
+    params=[
+        (10, 10, 9, 9),
+        (10, 10, 9, 5),
+        (10, 10, 9, 3),
+        (10, 10, 9, 2),
+        (10, 10, 9, 10),
+        (10, 10, 8, 2),
+        (10, 10, 5, 5),
+        (10, 10, 2, 9),
+        (10, 10, 2, 2),
+        (10, 10, 1, 9),
+        (10, 10, 1, 5),
+        (10, 10, 1, 2),
+        (10, 10, 1, 10),
+        (10, 10, 10, 9),
+        (10, 10, 10, 5),
+        (10, 10, 10, 2),
+        (10, 10, 10, 10),
+        (10, 10, 0, 9),
+        (10, 10, 0, 5),
+        (10, 10, 0, 2),
+        (10, 10, 0, 10),
+        (100, 100, 99, 10),
+        (100, 100, 90, 90),
+        (100, 100, 90, 89),
+        (100, 100, 90, 88),
+        (100, 100, 90, 87),
+        (100, 100, 90, 5),
+        (100, 100, 89, 90),
+        (100, 100, 87, 90),
+        (100, 100, 50, 7),
+        (100, 100, 50, 31),
+        (10, 1, 8, 9),
+        (100, 1, 99, 10),
+        (100, 1, 98, 10),
+        (100, 1, 97, 10),
+        (100, 3, 90, 87),
+        (100, 4, 90, 5),
+        (100, 2, 89, 90),
+        (100, 9, 87, 90),
+        (100, 20, 50, 7),
+        (100, 10, 50, 31),
+        (100, 20, 50, 31),
+        (100, 30, 50, 31),
+        (256, 256, 0, 256),
+        (256, 256, 0, 32),
+        (256, 256, 0, 31),
+        (256, 256, 0, 33),
+        (256, 256, 31, 32),
+        (256, 256, 32, 31),
+        (256, 256, 31, 33),
+        (512, 512, 0, 32),
+        (512, 512, 0, 31),
+        (512, 512, 0, 33),
+        (512, 512, 31, 32),
+        (512, 512, 32, 31),
+        (512, 512, 31, 33),
+        (1024, 1024, 0, 1),
+        (1024, 1024, 0, 3),
+        (1024, 1024, 0, 7),
+        (1024, 1024, 0, 8),
+        (1024, 1024, 0, 9),
+        (1024, 1024, 0, 15),
+        (1024, 1024, 0, 16),
+        (1024, 1024, 0, 17),
+        (1024, 1024, 0, 32),
+        (1024, 1024, 0, 31),
+        (1024, 1024, 0, 33),
+        (1024, 1024, 31, 32),
+        (1024, 1024, 32, 31),
+        (1024, 1024, 31, 33),
+        (16384, 16384, 0, 31),
+        (16384, 16384, 0, 32),
+        (16384, 16384, 0, 33),
+        (16384, 16384, 0, 16384),
+    ],
+)
+def total_rows_and_num_rows_and_skip_rows_and_rows_per_block(request):
+    return request.param
 
 
 # N.B. The float32 and float64 types are chosen specifically to exercise
@@ -563,11 +560,6 @@ total_rows_and_num_rows_and_skip_rows_and_rows_per_block_ids = [
     ids=["use_sync_interval", "ignore_sync_interval"],
 )
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
-@pytest.mark.parametrize(
-    "total_rows_and_num_rows_and_skip_rows_and_rows_per_block",
-    total_rows_and_num_rows_and_skip_rows_and_rows_per_block,
-    ids=total_rows_and_num_rows_and_skip_rows_and_rows_per_block_ids,
-)
 def test_avro_reader_multiblock(
     dtype,
     codec,
