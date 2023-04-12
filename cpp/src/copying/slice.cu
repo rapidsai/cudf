@@ -49,16 +49,14 @@ ColumnView slice(ColumnView const& input,
     children.emplace_back(input.child(index));
   }
 
-  size_type nulls =
-    input.null_count() == 0 ? 0 : cudf::detail::null_count(input.null_mask(), begin, end, stream);
-
-  return ColumnView(input.type(),
-                    end - begin,
-                    input.head(),
-                    input.null_mask(),
-                    nulls,
-                    input.offset() + begin,
-                    children);
+  return ColumnView(
+    input.type(),
+    end - begin,
+    input.head(),
+    input.null_mask(),
+    input.null_count() ? cudf::detail::null_count(input.null_mask(), begin, end, stream) : 0,
+    input.offset() + begin,
+    children);
 }
 
 template column_view slice<column_view>(column_view const&,
