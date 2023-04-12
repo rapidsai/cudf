@@ -48,10 +48,9 @@ namespace detail {
  * @return A device_uvector containing zeros
  */
 template <typename T>
-rmm::device_uvector<T> make_zeroed_device_uvector_async(
-  std::size_t size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_zeroed_device_uvector_async(std::size_t size,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<T> ret(size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
@@ -70,10 +69,9 @@ rmm::device_uvector<T> make_zeroed_device_uvector_async(
  * @return A device_uvector containing zeros
  */
 template <typename T>
-rmm::device_uvector<T> make_zeroed_device_uvector_sync(
-  std::size_t size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_zeroed_device_uvector_sync(std::size_t size,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<T> ret(size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
@@ -94,10 +92,9 @@ rmm::device_uvector<T> make_zeroed_device_uvector_sync(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_async(
-  host_span<T const> source_data,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
@@ -126,9 +123,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   return make_device_uvector_async(host_span<typename Container::value_type const>{c}, stream, mr);
 }
@@ -146,10 +141,9 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_async(
-  device_span<T const> source_data,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_device_uvector_async(device_span<T const> source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
@@ -178,9 +172,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   return make_device_uvector_async(
     device_span<typename Container::value_type const>{c}, stream, mr);
@@ -199,10 +191,9 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_sync(
-  host_span<T const> source_data,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_device_uvector_sync(host_span<T const> source_data,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
@@ -227,9 +218,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
-  Container const& c,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   return make_device_uvector_sync(host_span<typename Container::value_type const>{c}, stream, mr);
 }
@@ -247,10 +236,9 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_sync(
-  device_span<T const> source_data,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+rmm::device_uvector<T> make_device_uvector_sync(device_span<T const> source_data,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
@@ -275,9 +263,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
-  Container const& c,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  Container const& c, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
 }

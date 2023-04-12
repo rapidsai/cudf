@@ -125,7 +125,10 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
-    auto row_bitmask = cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first;
+    auto row_bitmask =
+      cudf::detail::bitmask_and(
+        table_view{nullable_columns}, stream, rmm::mr::get_current_device_resource())
+        .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
   }
@@ -204,27 +207,45 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
       auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
       auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
 
-      // Insert only rows that do not have any null at any level.
       auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_comparator_adapter{
-          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-        map.insert_if(haystack_it,
-                      haystack_it + haystack.num_rows(),
-                      thrust::counting_iterator<size_type>(0),  // stencil
-                      row_is_valid{row_bitmask_ptr},
-                      d_hasher,
-                      d_eqcomp,
-                      stream.value());
+        if (cudf::detail::has_nested_columns(haystack)) {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<true>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert_if(haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        thrust::counting_iterator<size_type>(0),  // stencil
+                        row_is_valid{row_bitmask_ptr},
+                        d_hasher,
+                        d_eqcomp,
+                        stream.value());
+        } else {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<false>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert_if(haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        thrust::counting_iterator<size_type>(0),  // stencil
+                        row_is_valid{row_bitmask_ptr},
+                        d_hasher,
+                        d_eqcomp,
+                        stream.value());
+        }
       };
 
+      // Insert only rows that do not have any null at any level.
       dispatch_nan_comparator(compare_nans, insert_map);
-
     } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
       auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_comparator_adapter{
-          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-        map.insert(
-          haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
+        if (cudf::detail::has_nested_columns(haystack)) {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<true>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert(
+            haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
+        } else {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<false>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert(
+            haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
+        }
       };
 
       dispatch_nan_comparator(compare_nans, insert_map);
@@ -247,14 +268,25 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
 
     auto const check_contains = [&](auto const value_comp) {
-      auto const d_eqcomp =
-        comparator.equal_to(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
-      map.contains(needles_it,
-                   needles_it + needles.num_rows(),
-                   contained.begin(),
-                   d_hasher,
-                   d_eqcomp,
-                   stream.value());
+      if (cudf::detail::has_nested_columns(haystack) or cudf::detail::has_nested_columns(needles)) {
+        auto const d_eqcomp =
+          comparator.equal_to<true>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
+        map.contains(needles_it,
+                     needles_it + needles.num_rows(),
+                     contained.begin(),
+                     d_hasher,
+                     d_eqcomp,
+                     stream.value());
+      } else {
+        auto const d_eqcomp =
+          comparator.equal_to<false>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
+        map.contains(needles_it,
+                     needles_it + needles.num_rows(),
+                     contained.begin(),
+                     d_hasher,
+                     d_eqcomp,
+                     stream.value());
+      }
     };
 
     dispatch_nan_comparator(compare_nans, check_contains);
@@ -293,15 +325,15 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
   // Flatten the input tables.
-  auto const flatten_nullability = has_any_nulls
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const haystack_flattened_tables =
-    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability);
-  auto const needles_flattened_tables =
-    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability);
-  auto const haystack_flattened = haystack_flattened_tables.flattened_columns();
-  auto const needles_flattened  = needles_flattened_tables.flattened_columns();
+  auto const flatten_nullability       = has_any_nulls
+                                           ? structs::detail::column_nullability::FORCE
+                                           : structs::detail::column_nullability::MATCH_INCOMING;
+  auto const haystack_flattened_tables = structs::detail::flatten_nested_columns(
+    haystack, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
+  auto const needles_flattened_tables = structs::detail::flatten_nested_columns(
+    needles, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
+  auto const haystack_flattened = haystack_flattened_tables->flattened_columns();
+  auto const needles_flattened  = needles_flattened_tables->flattened_columns();
   auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
   auto const needles_tdv_ptr    = table_device_view::create(needles_flattened, stream);
 

@@ -9,12 +9,13 @@ from contextlib import ExitStack
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import pandas as pd
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import build_categorical_column, column_empty, full
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -59,6 +60,7 @@ def _write_parquet(
     max_page_size_rows=None,
     partitions_info=None,
     storage_options=None,
+    force_nullable_schema=False,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -88,6 +90,7 @@ def _write_parquet(
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
+        "force_nullable_schema": force_nullable_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -125,6 +128,7 @@ def write_to_dataset(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     storage_options=None,
+    force_nullable_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -178,7 +182,6 @@ def write_to_dataset(
     max_page_size_rows: integer or None, default None
         Maximum number of rows of each page of the output.
         If None, 20000 will be used.
-
     storage_options : dict, optional, default None
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
@@ -186,6 +189,10 @@ def write_to_dataset(
         header options. For other URLs (e.g. starting with "s3://", and
         "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -223,6 +230,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
         )
 
     else:
@@ -243,6 +251,7 @@ def write_to_dataset(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
         )
 
     return metadata
@@ -269,6 +278,7 @@ def _process_dataset(
     filters=None,
     row_groups=None,
     categorical_partitions=True,
+    dataset_kwargs=None,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -296,8 +306,13 @@ def _process_dataset(
     dataset = ds.dataset(
         source=paths[0] if len(paths) == 1 else paths,
         filesystem=fs,
-        format="parquet",
-        partitioning="hive",
+        **(
+            dataset_kwargs
+            or {
+                "format": "parquet",
+                "partitioning": "hive",
+            }
+        ),
     )
 
     file_list = dataset.files
@@ -423,6 +438,7 @@ def read_parquet(
     categorical_partitions=True,
     open_file_options=None,
     bytes_per_thread=None,
+    dataset_kwargs=None,
     *args,
     **kwargs,
 ):
@@ -483,6 +499,7 @@ def read_parquet(
             filters=filters,
             row_groups=row_groups,
             categorical_partitions=categorical_partitions,
+            dataset_kwargs=dataset_kwargs,
         )
     elif filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
@@ -540,6 +557,7 @@ def read_parquet(
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
+        dataset_kwargs=dataset_kwargs,
         **kwargs,
     )
 
@@ -551,6 +569,7 @@ def _parquet_to_frame(
     row_groups=None,
     partition_keys=None,
     partition_categories=None,
+    dataset_kwargs=None,
     **kwargs,
 ):
 
@@ -562,6 +581,13 @@ def _parquet_to_frame(
             *args,
             row_groups=row_groups,
             **kwargs,
+        )
+
+    partition_meta = None
+    partitioning = (dataset_kwargs or {}).get("partitioning", None)
+    if hasattr(partitioning, "schema"):
+        partition_meta = cudf.DataFrame.from_arrow(
+            partitioning.schema.empty_table()
         )
 
     # For partitioned data, we need a distinct read for each
@@ -591,11 +617,12 @@ def _parquet_to_frame(
         )
         # Add partition columns to the last DataFrame
         for (name, value) in part_key:
+            _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = as_column(
-                    partition_categories[name].index(value),
-                    length=len(dfs[-1]),
+                codes = full(
+                    size=_len,
+                    fill_value=partition_categories[name].index(value),
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -607,7 +634,23 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                dfs[-1][name] = as_column(value, length=len(dfs[-1]))
+                _dtype = (
+                    partition_meta[name].dtype
+                    if partition_meta is not None
+                    else None
+                )
+                if pd.isna(value):
+                    dfs[-1][name] = column_empty(
+                        row_count=_len,
+                        dtype=_dtype,
+                        masked=True,
+                    )
+                else:
+                    dfs[-1][name] = full(
+                        size=_len,
+                        fill_value=value,
+                        dtype=_dtype,
+                    )
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.
@@ -677,6 +720,7 @@ def to_parquet(
     max_page_size_rows=None,
     storage_options=None,
     return_metadata=False,
+    force_nullable_schema=False,
     *args,
     **kwargs,
 ):
@@ -725,6 +769,7 @@ def to_parquet(
                 max_page_size_rows=max_page_size_rows,
                 return_metadata=return_metadata,
                 storage_options=storage_options,
+                force_nullable_schema=force_nullable_schema,
             )
 
         partition_info = (
@@ -749,6 +794,7 @@ def to_parquet(
             max_page_size_rows=max_page_size_rows,
             partitions_info=partition_info,
             storage_options=storage_options,
+            force_nullable_schema=force_nullable_schema,
         )
 
     else:
@@ -827,7 +873,10 @@ def _get_partitioned(
     metadata_file_paths = []
     for keys in part_names.itertuples(index=False):
         subdir = fs.sep.join(
-            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+            [
+                _hive_dirname(name, val)
+                for name, val in zip(partition_cols, keys)
+            ]
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -848,17 +897,21 @@ def _get_groups_and_offsets(
 ):
 
     if not (set(df._data) - set(partition_cols)):
-        raise ValueError("No data left to save outside partition columns")
+        warnings.warn("No data left to save outside partition columns")
 
-    part_names, part_offsets, _, grouped_df = df.groupby(
-        partition_cols
+    _, part_offsets, part_keys, grouped_df = df.groupby(
+        partition_cols,
+        dropna=False,
     )._grouped()
     if not preserve_index:
         grouped_df.reset_index(drop=True, inplace=True)
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_names.to_pandas().to_frame(index=False)
-
+    part_names = (
+        part_keys.take(part_offsets[:-1])
+        .to_pandas(nullable=True)
+        .to_frame(index=False)
+    )
     return part_names, grouped_df, part_offsets
 
 
@@ -1251,3 +1304,10 @@ def _default_open_file_options(
         )
     open_file_options["precache_options"] = precache_options
     return open_file_options
+
+
+def _hive_dirname(name, val):
+    # Simple utility to produce hive directory name
+    if pd.isna(val):
+        val = "__HIVE_DEFAULT_PARTITION__"
+    return f"{name}={val}"

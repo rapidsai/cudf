@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -12,7 +12,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
@@ -90,13 +89,13 @@ pandas_dtypes_alias_to_cudf_alias = {
     "boolean": "bool",
 }
 
-if PANDAS_GE_120:
-    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
-    pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
-    pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
+
+np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
+pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -260,6 +259,15 @@ def to_cudf_compatible_scalar(val, dtype=None):
         (dtype is None) and isinstance(val, str)
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
+
+        if isinstance(val, str) and val.endswith("\x00"):
+            # Numpy string dtypes are fixed width and use NULL to
+            # indicate the end of the string, so they cannot
+            # distinguish between "abc\x00" and "abc".
+            # https://github.com/numpy/numpy/issues/20118
+            # In this case, don't try going through numpy and just use
+            # the string value directly (cudf.DeviceScalar will DTRT)
+            return val
 
     if isinstance(val, datetime.datetime):
         val = np.datetime64(val)
@@ -572,6 +580,27 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
+    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            # TODO: As list dtypes allow casting
+            # to identical types, improve this logic of returning a
+            # common dtype, for example:
+            # ListDtype(int64) & ListDtype(int32) common
+            # dtype could be ListDtype(int64).
+            raise NotImplementedError(
+                "Finding a common type for `ListDtype` is currently "
+                "not supported"
+            )
+    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+        if len(dtypes) == 1:
+            return dtypes.get(0)
+        else:
+            raise NotImplementedError(
+                "Finding a common type for `StructDtype` is currently "
+                "not supported"
+            )
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately

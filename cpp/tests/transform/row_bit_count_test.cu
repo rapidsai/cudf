@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -397,7 +397,7 @@ std::unique_ptr<cudf::column> build_nested_column1(std::vector<bool> const& stru
   return cudf::make_lists_column(static_cast<cudf::size_type>(size),
                                  outer_offsets_col.release(),
                                  struct_column.release(),
-                                 cudf::UNKNOWN_NULL_COUNT,
+                                 0,
                                  rmm::device_buffer{});
 }
 
@@ -429,7 +429,7 @@ std::unique_ptr<cudf::column> build_nested_column2(std::vector<bool> const& stru
   return make_lists_column(static_cast<cudf::size_type>(size),
                            outer_offsets_col.release(),
                            outer_struct.release(),
-                           cudf::UNKNOWN_NULL_COUNT,
+                           0,
                            rmm::device_buffer{});
 }
 
@@ -514,7 +514,7 @@ TEST_F(RowBitCount, NestedTypes)
     auto l4            = cudf::make_lists_column(static_cast<cudf::size_type>(l4_size),
                                       l4_offsets_col.release(),
                                       innermost_struct.release(),
-                                      cudf::UNKNOWN_NULL_COUNT,
+                                      0,
                                       rmm::device_buffer{});
 
     // inner struct

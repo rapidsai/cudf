@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+
 import cupy as cp
 import numpy as np
 
@@ -10,6 +11,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import (
     Buffer,
+    CopyOnWriteBuffer,
     SpillableBuffer,
     acquire_spill_lock,
     as_buffer,
@@ -515,6 +517,13 @@ cdef class Column:
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype_itemsize)
                 )
+            elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
+                # TODO: In future, see if we can just pass on the
+                # CopyOnWriteBuffer reference to another column
+                # and still create a weak reference.
+                # With the current design that's not possible.
+                # https://github.com/rapidsai/cudf/issues/12734
+                data = data_owner.copy(deep=False)
             elif (
                 # This is an optimization of the most common case where
                 # from_column_view creates a "view" that is identical to
@@ -538,7 +547,10 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, SpillableBuffer):
+                if isinstance(data_owner, CopyOnWriteBuffer):
+                    data_owner.get_ptr(mode="write")
+                    # accessing the pointer marks it exposed.
+                elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(
                             f"{data_owner} is spilled, which invalidates "

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,8 @@ struct schema_entry {
   int32_t parent_idx   = -1;  // index of parent entry in schema array, negative if no parent
   int32_t num_children = 0;
   type_kind_e kind     = type_not_set;
-  std::string name     = "";
+  logicaltype_kind_e logical_kind = logicaltype_not_set;
+  std::string name                = "";
   std::vector<std::string> symbols;
 };
 

@@ -80,7 +80,9 @@ mixed_join(
       // Left and full joins all return all the row indices from
       // left with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
-      case join_kind::FULL_JOIN: return get_trivial_left_join_indices(left_conditional, stream);
+      case join_kind::FULL_JOIN:
+        return get_trivial_left_join_indices(
+          left_conditional, stream, rmm::mr::get_current_device_resource());
       // Inner joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
         return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -96,7 +98,8 @@ mixed_join(
                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        auto ret_flipped = get_trivial_left_join_indices(right_conditional, stream);
+        auto ret_flipped = get_trivial_left_join_indices(
+          right_conditional, stream, rmm::mr::get_current_device_resource());
         return std::pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -136,7 +139,8 @@ mixed_join(
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   build_join_hash_table(
     build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
   auto hash_table_view = hash_table.get_device_view();
@@ -384,7 +388,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   build_join_hash_table(
     build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
   auto hash_table_view = hash_table.get_device_view();

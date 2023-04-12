@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -318,6 +318,8 @@ TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
   CUDF_EXPECT_NO_THROW(cudf::stable_segmented_sort_by_key(input1, input1, segments));
 }
 
+// Test specifically verifies the patch added in https://github.com/rapidsai/cudf/pull/12234
+// This test will fail if the CUB bug fix is not available or the patch has not been applied.
 TEST_F(SegmentedSortInt, Bool)
 {
   cudf::test::fixed_width_column_wrapper<bool> col1{

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -588,7 +588,7 @@ class path_state : private parser {
         return path_operator{path_operator_type::CHILD_WILDCARD};
       } break;
 
-      default: CUDF_FAIL("Unrecognized JSONPath operator"); break;
+      default: CUDF_FAIL("Unrecognized JSONPath operator", std::invalid_argument); break;
     }
     return {path_operator_type::ERROR};
   }
@@ -624,7 +624,8 @@ class path_state : private parser {
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONPath query string");
+    CUDF_EXPECTS(
+      name.size_bytes() > 0, "Invalid empty name in JSONPath query string", std::invalid_argument);
 
     return true;
   }
@@ -672,11 +673,10 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
   } while (op.type != path_operator_type::END);
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
-  return is_empty
-           ? std::pair(thrust::nullopt, 0)
-           : std::pair(
-               thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
-               max_stack_depth);
+  return is_empty ? std::pair(thrust::nullopt, 0)
+                  : std::pair(thrust::make_optional(cudf::detail::make_device_uvector_sync(
+                                h_operators, stream, rmm::mr::get_current_device_resource())),
+                              max_stack_depth);
 }
 
 #define PARSE_TRY(_x)                                                       \

@@ -146,7 +146,6 @@ Computations / descriptive stats
    DataFrame.prod
    DataFrame.product
    DataFrame.quantile
-   DataFrame.quantiles
    DataFrame.rank
    DataFrame.round
    DataFrame.skew

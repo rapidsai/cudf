@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,12 +57,12 @@ static void BM_split(benchmark::State& state, split_type rt)
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
 {
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int constexpr min_rows   = 1 << 12;
+  int constexpr max_rows   = 1 << 24;
+  int constexpr row_mult   = 8;
+  int constexpr min_rowlen = 1 << 5;
+  int constexpr max_rowlen = 1 << 13;
+  int constexpr len_mult   = 2;
   for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
       // avoid generating combinations that exceed the cudf column limit

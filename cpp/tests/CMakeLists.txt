@@ -13,12 +13,32 @@
 # =============================================================================
 
 # ##################################################################################################
-# * compiler function -----------------------------------------------------------------------------
+# enable testing ################################################################################
+# ##################################################################################################
+enable_testing()
+
+include(rapids-test)
+rapids_test_init()
 
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
-  add_executable(${CMAKE_TEST_NAME} ${ARGN})
+  set(options)
+  set(one_value GPUS PERCENT)
+  set(multi_value)
+  cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+  if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
+    set(_CUDF_TEST_GPUS 1)
+    set(_CUDF_TEST_PERCENT 15)
+  endif()
+  if(NOT DEFINED _CUDF_TEST_GPUS)
+    set(_CUDF_TEST_GPUS 1)
+  endif()
+  if(NOT DEFINED _CUDF_TEST_PERCENT)
+    set(_CUDF_TEST_PERCENT 100)
+  endif()
+
+  add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
@@ -35,12 +55,12 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
-  add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-  install(
-    TARGETS ${CMAKE_TEST_NAME}
-    COMPONENT testing
-    DESTINATION bin/gtests/libcudf
-    EXCLUDE_FROM_ALL
+  rapids_test_add(
+    NAME ${CMAKE_TEST_NAME}
+    COMMAND ${CMAKE_TEST_NAME}
+    GPUS ${_CUDF_TEST_GPUS}
+    PERCENT ${_CUDF_TEST_PERCENT}
+    INSTALL_COMPONENT_SET testing
   )
 endfunction()
 
@@ -84,6 +104,7 @@ ConfigureTest(
   groupby/count_scan_tests.cpp
   groupby/count_tests.cpp
   groupby/covariance_tests.cpp
+  groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
@@ -111,6 +132,8 @@ ConfigureTest(
   groupby/sum_tests.cpp
   groupby/tdigest_tests.cu
   groupby/var_tests.cpp
+  GPUS 1
+  PERCENT 100
 )
 
 # ##################################################################################################
@@ -137,6 +160,8 @@ ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
 ConfigureTest(
   PARTITIONING_TEST partitioning/hash_partition_test.cpp partitioning/round_robin_test.cpp
   partitioning/partition_test.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -148,6 +173,8 @@ ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -161,6 +188,8 @@ ConfigureTest(
   reductions/segmented_reduction_tests.cpp
   reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -220,17 +249,41 @@ ConfigureTest(
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
-ConfigureTest(CSV_TEST io/csv_test.cpp)
-ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
-ConfigureTest(ORC_TEST io/orc_test.cpp)
-ConfigureTest(PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp)
-ConfigureTest(JSON_TEST io/json_test.cpp io/json_chunked_reader.cpp)
+ConfigureTest(
+  CSV_TEST io/csv_test.cpp
+  GPUS 1
+  PERCENT 30
+)
+ConfigureTest(
+  FILE_IO_TEST io/file_io_test.cpp
+  GPUS 1
+  PERCENT 30
+)
+ConfigureTest(
+  ORC_TEST io/orc_test.cpp
+  GPUS 1
+  PERCENT 30
+)
+ConfigureTest(
+  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  GPUS 1
+  PERCENT 30
+)
+ConfigureTest(
+  JSON_TEST io/json_test.cpp io/json_chunked_reader.cpp
+  GPUS 1
+  PERCENT 30
+)
 ConfigureTest(JSON_WRITER_TEST io/json_writer.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
-ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
+ConfigureTest(
+  DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
+  GPUS 1
+  PERCENT 30
+)
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
@@ -244,6 +297,8 @@ endif()
 ConfigureTest(
   SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
   sort/rank_test.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -274,6 +329,8 @@ ConfigureTest(
   copying/split_tests.cpp
   copying/utility_tests.cpp
   copying/reverse_tests.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -284,6 +341,7 @@ ConfigureTest(
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
+  utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp
   utilities_tests/type_check_tests.cpp
 )
@@ -316,7 +374,11 @@ ConfigureTest(DEVICE_ATOMICS_TEST device_atomics/device_atomics_test.cu)
 
 # ##################################################################################################
 # * transpose tests -------------------------------------------------------------------------------
-ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
+ConfigureTest(
+  TRANSPOSE_TEST transpose/transpose_test.cpp
+  GPUS 1
+  PERCENT 70
+)
 
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
@@ -357,6 +419,8 @@ ConfigureTest(
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -502,6 +566,8 @@ ConfigureTest(
   lists/sort_lists_tests.cpp
   lists/stream_compaction/apply_boolean_mask_tests.cpp
   lists/stream_compaction/distinct_tests.cpp
+  GPUS 1
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -509,7 +575,19 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
-# enable testing ################################################################################
-# ##################################################################################################
+# * stream identification tests -------------------------------------------------------------------
+ConfigureTest(
+  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+)
+# Note that this only works when the test is invoked via ctest. At the moment CI is running all
+# tests by manually invoking the executable, so we'll have to manually pass this environment
+# variable in that setup.
+set_tests_properties(
+  STREAM_IDENTIFICATION_TEST
+  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
+)
 
-enable_testing()
+# ##################################################################################################
+# Install tests ####################################################################################
+# ##################################################################################################
+rapids_test_install_relocatable(INSTALL_COMPONENT_SET testing DESTINATION bin/gtests/libcudf)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1268,9 +1268,6 @@ thrust::make_counting_iterator(10000));
                     thrust::make_counting_iterator(expected.num_columns()),
                     [&expected, &result](cudf::size_type i){
 
-        // printf("col: ");
-        // cudf::test::print(result.table.column(i));
-        // printf("\n");
         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i), result.table.column(i));
       });
     },

@@ -104,18 +104,39 @@ struct page_state_s {
  * specified row bounds
  *
  * @param s The page to be checked
- * @param min_row The starting row index
+ * @param start_row The starting row index
  * @param num_rows The number of rows
  *
  * @return True if the page spans the beginning or the end of the row bounds
  */
-inline __device__ bool is_bounds_page(page_state_s* const s, size_t min_row, size_t num_rows)
+inline __device__ bool is_bounds_page(page_state_s* const s, size_t start_row, size_t num_rows)
 {
   size_t const page_begin = s->col.start_row + s->page.chunk_row;
   size_t const page_end   = page_begin + s->page.num_rows;
-  size_t const begin      = min_row;
-  size_t const end        = min_row + num_rows;
+  size_t const begin      = start_row;
+  size_t const end        = start_row + num_rows;
+
   return ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end));
+}
+
+/**
+ * @brief Returns whether or not a page is completely contained within the specified
+ * row bounds
+ *
+ * @param s The page to be checked
+ * @param start_row The starting row index
+ * @param num_rows The number of rows
+ *
+ * @return True if the page is completely contained within the row bounds
+ */
+inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row, size_t num_rows)
+{
+  size_t const page_begin = s->col.start_row + s->page.chunk_row;
+  size_t const page_end   = page_begin + s->page.num_rows;
+  size_t const begin      = start_row;
+  size_t const end        = start_row + num_rows;
+
+  return page_begin >= begin && page_end <= end;
 }
 
 /**
@@ -307,7 +328,9 @@ __device__ void gpuDecodeStream(
  * @param[in] t Warp1 thread ID (0..31)
  *
  * @return A pair containing the new output position, and the total length of strings decoded (this
- * will only be valid on thread 0 and if sizes_only is true)
+ * will only be valid on thread 0 and if sizes_only is true). In the event that this function
+ * decodes strings beyond target_pos, the total length of strings returned will include these
+ * additional values.
  */
 template <bool sizes_only>
 __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
@@ -394,13 +417,9 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_st
     // if we're computing sizes, add the length(s)
     if constexpr (sizes_only) {
       int const len = [&]() {
-        if (t >= batch_len) { return 0; }
-        // we may end up decoding more indices than we asked for. so don't include those in the
-        // size calculation
-        if (pos + t >= target_pos) { return 0; }
-        // TODO:  refactor this with gpuGetStringData / gpuGetStringSize
+        if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
-        if (target_pos && dict_pos < (uint32_t)s->dict_size) {
+        if (dict_pos < (uint32_t)s->dict_size) {
           const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
           return src->second;
         }
@@ -491,6 +510,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
  *
  * @return Total length of strings processed
  */
+template <bool sizes_only>
 __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int target_pos, int t)
 {
   int pos       = s->dict_pos;
@@ -511,8 +531,10 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
       } else {
         len = 0;
       }
-      s->dict_idx[rolling_index(pos)] = k;
-      s->str_len[rolling_index(pos)]  = len;
+      if constexpr (!sizes_only) {
+        s->dict_idx[rolling_index(pos)] = k;
+        s->str_len[rolling_index(pos)]  = len;
+      }
       k += len;
       total_len += len;
       pos++;
@@ -1146,6 +1168,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->dict_bits = 0;
       s->dict_base = nullptr;
       s->dict_size = 0;
+      // NOTE:  if additional encodings are supported in the future, modifications must
+      // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
         case Encoding::RLE_DICTIONARY:
@@ -1582,6 +1606,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
     uint32_t const warp_row_count_mask = ballot(is_new_row);
     int const is_new_leaf = (d >= s->nesting_info[max_depth - 1].max_def_level) ? 1 : 0;
     uint32_t const warp_leaf_count_mask = ballot(is_new_leaf);
+
     // is this thread within row bounds? on the first pass we don't know the bounds, so we will be
     // computing the full size of the column.  on the second pass, we will know our actual row
     // bounds, so the computation will cap sizes properly.
@@ -1633,18 +1658,27 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   }
 }
 
-__device__ size_type gpuGetStringSize(page_state_s* s, int target_count, int t)
+/**
+ * @brief Returns the total size in bytes of string char data in the page.
+ *
+ * This function expects the dictionary position to be at 0 and will traverse
+ * the entire thing.
+ *
+ * @param s The local page info
+ * @param t Thread index
+ */
+__device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
 {
-  auto dict_target_pos = target_count;
+  size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   if (s->dict_base) {
-    auto const [new_target_pos, len] = gpuDecodeDictionaryIndices<true>(s, target_count, t);
-    dict_target_pos                  = new_target_pos;
+    auto const [new_target_pos, len] = gpuDecodeDictionaryIndices<true>(s, target_pos, t);
+    target_pos                       = new_target_pos;
     str_len                          = len;
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-    str_len = gpuInitStringDescriptors(s, target_count, t);
+    str_len = gpuInitStringDescriptors<true>(s, target_pos, t);
   }
-  if (!t) { *(volatile int32_t*)&s->dict_pos = dict_target_pos; }
+  if (!t) { *(volatile int32_t*)&s->dict_pos = target_pos; }
   return str_len;
 }
 
@@ -1728,10 +1762,11 @@ __global__ void __launch_bounds__(block_size)
       auto const thread_depth = depth + t;
       if (thread_depth < s->page.num_output_nesting_levels) {
         // if we are not a bounding page (as checked above) then we are either
-        // returning 0 rows from the page (completely outside the bounds) or all
-        // rows in the page (completely within the bounds)
+        // returning all rows/values from this page, or 0 of them
         pp->nesting[thread_depth].batch_size =
-          s->num_rows == 0 ? 0 : pp->nesting[thread_depth].size;
+          (s->num_rows == 0 && !is_page_contained(s, min_row, num_rows))
+            ? 0
+            : pp->nesting[thread_depth].size;
       }
       depth += blockDim.x;
     }
@@ -1773,14 +1808,14 @@ __global__ void __launch_bounds__(block_size)
 
       // process what we got back
       gpuUpdatePageSizes(s, actual_input_count, t, !is_base_pass);
-      if (compute_string_sizes) {
-        auto const str_len = gpuGetStringSize(s, s->input_leaf_count, t);
-        if (!t) { s->page.str_bytes += str_len; }
-      }
-
       target_input_count = actual_input_count + batch_size;
       __syncwarp();
     }
+
+    // retrieve total string size.
+    // TODO: investigate if it is possible to do this with a separate warp at the same time levels
+    // are being decoded above.
+    if (compute_string_sizes) { s->page.str_bytes = gpuDecodeTotalPageStringSize(s, t); }
   }
 
   // update output results:
@@ -1838,7 +1873,19 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  if (s->num_rows == 0 && !(has_repetition && is_bounds_page(s, min_row, num_rows))) { return; }
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
+                                               is_page_contained(s, min_row, num_rows)))) {
+    return;
+  }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
@@ -1879,7 +1926,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       } else if ((s->col.data_type & 7) == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-        gpuInitStringDescriptors(s, src_target_pos, t & 0x1f);
+        gpuInitStringDescriptors<false>(s, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {

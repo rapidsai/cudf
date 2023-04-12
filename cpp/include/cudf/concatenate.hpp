@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,8 +40,7 @@ namespace cudf {
  *
  * @param views host_span of column views whose bitmasks will be concatenated
  * @param mr Device memory resource used for allocating the new device_buffer
- * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
- * the column views in the views vector
+ * @return A `device_buffer` containing the bitmasks of all the column views in the views vector
  */
 rmm::device_buffer concatenate_masks(
   host_span<column_view const> views,
@@ -50,8 +49,8 @@ rmm::device_buffer concatenate_masks(
 /**
  * @brief Concatenates multiple columns into a single column.
  *
- * @throws cudf::logic_error
- * If types of the input columns mismatch
+ * @throws cudf::logic_error If types of the input columns mismatch
+ * @throws std::overflow_error If the the total number of output rows exceeds cudf::size_type
  *
  * @param columns_to_concat host_span of column views to be concatenated into a single column
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -80,8 +79,8 @@ std::unique_ptr<column> concatenate(
  * column_view tc1 = (t->view()).column(1); //Contains {0,1,2,3,4,5,6,7}
  * ```
  *
- * @throws cudf::logic_error
- * If number of columns mismatch
+ * @throws cudf::logic_error If number of columns mismatch
+ * @throws std::overflow_error If the the total number of output rows exceeds cudf::size_type
  *
  * @param tables_to_concat host_span of table views to be concatenated into a single table
  * @param mr Device memory resource used to allocate the returned table's device memory

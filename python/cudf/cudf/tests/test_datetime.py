@@ -22,6 +22,15 @@ from cudf.testing._utils import (
     expect_warning_if,
 )
 
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
+]
+
 
 def data1():
     return pd.date_range("20010101", "20020215", freq="400h", name="times")
@@ -984,6 +993,23 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
             lfunc_args_and_kwargs=([other_scalars, psr],),
             rfunc_args_and_kwargs=([other_scalars, gsr],),
         )
+
+
+@pytest.mark.parametrize("data", ["20110101", "20120101", "20130101"])
+@pytest.mark.parametrize("other_scalars", ["20110101", "20120101", "20130101"])
+@pytest.mark.parametrize("op", _cmpops)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+def test_datetime_series_cmpops_with_scalars(data, other_scalars, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expect = op(psr, other_scalars)
+    got = op(gsr, other_scalars)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

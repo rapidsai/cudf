@@ -157,9 +157,6 @@ auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stre
 
 void BM_NESTED_JSON(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   auto const default_options = cudf::io::json_reader_options{};
 
@@ -174,7 +171,8 @@ void BM_NESTED_JSON(nvbench::state& state)
     cudf::io::json::detail::device_parse_nested_json(
       cudf::device_span<char const>{input->data(), static_cast<size_t>(input->size())},
       default_options,
-      cudf::get_default_stream());
+      cudf::get_default_stream(),
+      rmm::mr::get_current_device_resource());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -189,9 +187,6 @@ NVBENCH_BENCH(BM_NESTED_JSON)
 
 void BM_NESTED_JSON_DEPTH(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   auto const depth{cudf::size_type(state.get_int64("depth"))};
 
@@ -208,7 +203,7 @@ void BM_NESTED_JSON_DEPTH(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     cudf::io::json::detail::device_parse_nested_json(
-      input, default_options, cudf::get_default_stream());
+      input, default_options, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
