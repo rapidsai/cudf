@@ -36,6 +36,8 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow==10.0.1.*
+- libcurand-dev=10.3.0.86
+- libcurand=10.3.0.86
 - librdkafka=1.7.0
 - librmm==23.4.*
 - mimesis>=4.1.0
