@@ -26,6 +26,7 @@ from cudf._lib.strings_udf import (
 )
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
+from cudf.core.udf._nrt_cuda import numba_cuda_runtime
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
@@ -426,6 +427,15 @@ def _setup_numba_linker(path):
         )
 
 
+def include_nrt_ptx(linker_new):
+    def inner(*args, **kwargs):
+        res = linker_new(*args, **kwargs)
+        res.add_ptx(numba_cuda_runtime)
+        return res
+
+    return inner
+
+
 def maybe_patch_numba_linker(
     driver_version, runtime_version, ptx_toolkit_version
 ):
@@ -441,9 +451,11 @@ def maybe_patch_numba_linker(
         )
         if _numba_version_ok:
             logger.debug("Patching Numba Linker")
-            Linker.new = new_patched_linker
+            Linker.new = include_nrt_ptx(new_patched_linker)
         else:
             logger.debug("Cannot patch Numba Linker - unsupported version")
+    else:
+        Linker.new = include_nrt_ptx(Linker.new)
 
 
 @initfunc
