@@ -304,9 +304,9 @@ struct device_value_accessor {
   /**
    * @brief constructor
    *
-   * @param[in] _col column device view of cudf column
+   * @param[in] col_ column device view of cudf column
    */
-  __device__ device_value_accessor(column_device_view const& _col) : col{_col}
+  __device__ device_value_accessor(column_device_view const& col_) : col{col_}
   {
     cudf_assert(type_id_matches_device_storage_type<T>(col.type().id()) &&
                 "the data type mismatch");
@@ -390,7 +390,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto preceding_calculator =
+  auto const preceding_calculator =
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      orderby_device_view = *p_orderby_device_view,
@@ -413,8 +413,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
     //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
     // Otherwise, NULLS LAST ordering. Start at 0.
-    auto group_start      = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
+    auto const group_start      = nulls_begin_idx == 0 ? nulls_end_idx : 0;
+    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
 
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + group_start,
@@ -423,9 +423,9 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
+  auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto following_calculator =
+  auto const following_calculator =
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      num_rows            = input.size(),
@@ -446,8 +446,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     //  2. NO NULLS: Binary search also ends at num_rows.
     // Otherwise, NULLS LAST ordering. End at nulls_begin_idx.
 
-    auto group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
+    auto const group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
+    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
     return (thrust::upper_bound(
               thrust::seq, d_orderby + idx, d_orderby + group_end, highest_in_window) -
@@ -455,7 +455,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream);
+  auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -478,7 +478,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
   // For each group, the null values are clustered at the beginning or the end of the group.
   // These nulls cannot participate, except in their own window.
 
-  auto num_groups = group_offsets.size() - 1;
+  auto const num_groups = group_offsets.size() - 1;
 
   if (orderby_column.has_nulls()) {
     auto null_start = rmm::device_uvector<size_type>(num_groups, stream);
@@ -530,7 +530,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
   } else {
     // The returned vectors have num_groups items, but the input offsets have num_groups+1
     // Drop the last element using a span
-    auto group_offsets_span =
+    auto const group_offsets_span =
       cudf::device_span<cudf::size_type const>(group_offsets.data(), num_groups);
 
     // When there are no nulls, just copy the input group offsets to the output.
@@ -560,7 +560,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto preceding_calculator =
+  auto const preceding_calculator =
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -568,10 +568,10 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
      d_nulls_end         = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    auto nulls_begin = d_nulls_begin[group_label];
-    auto nulls_end   = d_nulls_end[group_label];
+    auto const group_label = d_group_labels[idx];
+    auto const group_start = d_group_offsets[group_label];
+    auto const nulls_begin = d_nulls_begin[group_label];
+    auto const nulls_end   = d_nulls_end[group_label];
 
     if (preceding_window_is_unbounded) { return idx - group_start + 1; }
 
@@ -589,9 +589,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     //  1. NULLS FIRST ordering: Search must begin at nulls_end.
     //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
     // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
-    auto search_start = nulls_begin == group_start ? nulls_end : group_start;
-
-    auto lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
+    auto const search_start     = nulls_begin == group_start ? nulls_end : group_start;
+    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, preceding_window);
 
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + search_start,
@@ -600,9 +599,9 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
+  auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto following_calculator =
+  auto const following_calculator =
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -610,12 +609,13 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
      d_nulls_end         = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
-                                                          // is capped with `input.size()`.
-    auto nulls_begin = d_nulls_begin[group_label];
-    auto nulls_end   = d_nulls_end[group_label];
+    auto const group_label = d_group_labels[idx];
+    auto const group_start = d_group_offsets[group_label];
+    auto const group_end =
+      d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+                                         // is capped with `input.size()`.
+    auto const nulls_begin = d_nulls_begin[group_label];
+    auto const nulls_end   = d_nulls_end[group_label];
 
     if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
@@ -633,9 +633,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     //  1. NULLS FIRST ordering: Search ends at group_end.
     //  2. NO NULLS: Search ends at group_end.
     // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
-    auto search_end = nulls_begin == group_start ? group_end : nulls_begin;
-
-    auto highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
+    auto const search_end        = nulls_begin == group_start ? group_end : nulls_begin;
+    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
     return (thrust::upper_bound(
               thrust::seq, d_orderby + idx, d_orderby + search_end, highest_in_window) -
@@ -643,7 +642,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream);
+  auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -668,7 +667,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto preceding_calculator =
+  auto const preceding_calculator =
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      orderby_device_view = *p_orderby_device_view,
@@ -691,8 +690,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     //  1. NULLS FIRST ordering: Binary search starts where nulls_end_idx.
     //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
     // Otherwise, NULLS LAST ordering. Start at 0.
-    auto group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
+    auto const group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
+    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
     return ((d_orderby + idx) -
             thrust::lower_bound(thrust::seq,
@@ -703,9 +702,9 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
+  auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto following_calculator =
+  auto const following_calculator =
     [nulls_begin_idx     = h_nulls_begin_idx,
      nulls_end_idx       = h_nulls_end_idx,
      num_rows            = input.size(),
@@ -726,8 +725,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     //  2. NO NULLS: Search also ends at num_rows.
     // Otherwise, NULLS LAST ordering: End at nulls_begin_idx.
 
-    auto group_end        = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
+    auto const group_end        = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
+    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
 
     return (thrust::upper_bound(thrust::seq,
                                 d_orderby + idx,
@@ -738,7 +737,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream);
+  auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -763,7 +762,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
-  auto preceding_calculator =
+  auto const preceding_calculator =
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -771,10 +770,10 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
      d_nulls_end         = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    auto nulls_begin = d_nulls_begin[group_label];
-    auto nulls_end   = d_nulls_end[group_label];
+    auto const group_label = d_group_labels[idx];
+    auto const group_start = d_group_offsets[group_label];
+    auto const nulls_begin = d_nulls_begin[group_label];
+    auto const nulls_end   = d_nulls_end[group_label];
 
     if (preceding_window_is_unbounded) { return (idx - group_start) + 1; }
 
@@ -791,8 +790,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     //  1. NULLS FIRST ordering: Search must begin at nulls_end.
     //  2. NO NULLS: Search must begin at group_start (which also equals nulls_end.)
     // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
-    auto search_start      = nulls_begin == group_start ? nulls_end : group_start;
-    auto highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
+    auto const search_start      = nulls_begin == group_start ? nulls_end : group_start;
+    auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
     return ((d_orderby + idx) -
             thrust::lower_bound(thrust::seq,
@@ -803,9 +802,9 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
+  auto const preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
-  auto following_calculator =
+  auto const following_calculator =
     [d_group_offsets     = group_offsets.data(),
      d_group_labels      = group_labels.data(),
      orderby_device_view = *p_orderby_device_view,
@@ -813,11 +812,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
      d_nulls_end         = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    auto group_end   = d_group_offsets[group_label + 1];
-    auto nulls_begin = d_nulls_begin[group_label];
-    auto nulls_end   = d_nulls_end[group_label];
+    auto const group_label = d_group_labels[idx];
+    auto const group_start = d_group_offsets[group_label];
+    auto const group_end   = d_group_offsets[group_label + 1];
+    auto const nulls_begin = d_nulls_begin[group_label];
+    auto const nulls_end   = d_nulls_end[group_label];
 
     if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
@@ -834,8 +833,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     //  1. NULLS FIRST ordering: Search ends at group_end.
     //  2. NO NULLS: Search ends at group_end.
     // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
-    auto search_end       = nulls_begin == group_start ? group_end : nulls_begin;
-    auto lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
+    auto const search_end       = nulls_begin == group_start ? group_end : nulls_begin;
+    auto const lowest_in_window = compute_lowest_in_window(d_orderby, idx, following_window);
 
     return (thrust::upper_bound(thrust::seq,
                                 d_orderby + idx,
@@ -846,7 +845,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream);
+  auto const following_column = expand_to_column(following_calculator, input.size(), stream);
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     CUDF_FAIL("Ranged rolling window does NOT (yet) support UDF.");
