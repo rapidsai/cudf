@@ -73,8 +73,8 @@ struct hash_join {
   hash_join& operator=(hash_join&&) = delete;
 
  private:
-  bool const _is_empty;                    ///< true if `_hash_table` is empty
-  bool const _has_nulls;                   ///< true if there is any nulls
+  bool const _is_empty;   ///< true if `_hash_table` is empty
+  bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
