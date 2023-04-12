@@ -57,7 +57,7 @@ class parquet_reader_options {
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  // Number of rows to skip from the start
+  // Number of rows to skip from the start; Parquet stores the number of rows as int64_t
   int64_t _skip_rows = 0;
   // Number of rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;

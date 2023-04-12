@@ -57,7 +57,7 @@ class orc_reader_options {
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
-  // Rows to skip from the start;
+  // Rows to skip from the start; ORC stores the number of rows as uint64_t
   uint64_t _skip_rows = 0;
   // Rows to read; `nullopt` is all
   std::optional<size_type> _num_rows;
