@@ -1028,6 +1028,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   if (!t) {
     s->nesting_info = can_use_decode_cache ? s->nesting_decode_cache : s->page.nesting_decode;
   }
+  __syncthreads();
 
   // zero counts
   int depth = 0;
