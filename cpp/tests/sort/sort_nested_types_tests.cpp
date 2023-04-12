@@ -305,6 +305,38 @@ TEST_F(NestedListTest, SimpleListsOfStructsNoNulls)
   }
 }
 
+TEST_F(NestedListTest, SlicedListsOfStructsNoNulls)
+{
+  auto constexpr dont_care{0};
+  auto const input_original = [] {
+    auto const get_structs = [] {
+      auto child0 =
+        int32s_col{dont_care, dont_care, 3, 2, 3, 3, 4, 2, 4, 4, 1, 0, 3, 0, 2, 5, 4, dont_care};
+      auto child1 =
+        int32s_col{dont_care, dont_care, 0, 4, 3, 2, 1, 1, 5, 1, 5, 5, 4, 2, 4, 1, 3, dont_care};
+      return structs_col{{child0, child1}};
+    };
+    return cudf::make_lists_column(11,
+                                   int32s_col{0, 1, 2, 5, 7, 8, 8, 10, 12, 14, 17, 18}.release(),
+                                   get_structs().release(),
+                                   0,
+                                   {});
+  }();
+  auto const input = cudf::slice(*input_original, {2, 10})[0];
+
+  {
+    auto const expected_order = int32s_col{3, 5, 2, 7, 0, 1, 6, 4};
+    auto const order          = cudf::sorted_order(cudf::table_view{{input}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+
+  {
+    auto const expected_order = int32s_col{4, 6, 1, 0, 7, 2, 5, 3};
+    auto const order = cudf::sorted_order(cudf::table_view{{input}}, {cudf::order::DESCENDING});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, order->view());
+  }
+}
+
 TEST_F(NestedListTest, ListsOfEqualStructsNoNulls)
 {
   auto const input = [] {
