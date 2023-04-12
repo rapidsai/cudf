@@ -39,6 +39,9 @@ namespace cudf {
 namespace detail {
 namespace {
 
+// Data type of the output data column after conversion.
+data_type constexpr output_type{data_type{type_id::UINT8}};
+
 template <typename T, typename Enable = void>
 struct byte_list_conversion_fn {
   template <typename... Args>
@@ -67,16 +70,16 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                         rmm::mr::device_memory_resource* mr)
   {
     if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(data_type{type_id::UINT8}, stream, mr);
+      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
     }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
-        input.size(), data_type{type_id::UINT8}, stream, mr);
+        input.size(), output_type, stream, mr);
     }
 
     auto const num_bytes = static_cast<size_type>(input.size() * sizeof(T));
-    auto byte_column     = make_numeric_column(
-      data_type{type_id::UINT8}, num_bytes, mask_state::UNALLOCATED, stream, mr);
+    auto byte_column =
+      make_numeric_column(output_type, num_bytes, mask_state::UNALLOCATED, stream, mr);
 
     auto const d_inp = reinterpret_cast<char const*>(input.data<T>());
     auto const d_out = byte_column->mutable_view().data<char>();
@@ -124,21 +127,18 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                                         rmm::mr::device_memory_resource* mr)
   {
     if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(data_type{type_id::UINT8}, stream, mr);
+      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
     }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
-        input.size(), data_type{type_id::UINT8}, stream, mr);
+        input.size(), output_type, stream, mr);
     }
 
     auto col_content     = std::make_unique<column>(input, stream, mr)->release();
     auto chars_contents  = col_content.children[strings_column_view::chars_column_index]->release();
     auto const num_chars = chars_contents.data->size();
-    auto uint8_col       = std::make_unique<column>(data_type{type_id::UINT8},
-                                              num_chars,
-                                              std::move(*(chars_contents.data)),
-                                              rmm::device_buffer{},
-                                              0);
+    auto uint8_col       = std::make_unique<column>(
+      output_type, num_chars, std::move(*(chars_contents.data)), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
       input.size(),
