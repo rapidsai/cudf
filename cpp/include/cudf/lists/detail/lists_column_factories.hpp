@@ -40,6 +40,19 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Create an empty lists column
+ *
+ * A list column requires a child type and so cannot be created with `make_empty_column`.
+ *
+ * @param child_type The type used for the empty child column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf
