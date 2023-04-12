@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <lists/utilities.hpp>
+
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -393,35 +397,50 @@ namespace {
  * @param lhs The input lhs column to transform
  * @param rhs The input rhs column to transform (if available)
  * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * // TODO
  * @return A pair of new column_view representing the transformed input and the generated rank
  *         (size_type) column(s) which need to be kept alive
  */
-std::
-  tuple<column_view, std::optional<column_view>, std::unique_ptr<column>, std::unique_ptr<column>>
-  transform_lists_of_structs(column_view const& lhs,
-                             std::optional<column_view> const& rhs,
-                             rmm::cuda_stream_view stream)
+std::tuple<column_view,
+           std::optional<column_view>,
+           std::vector<std::unique_ptr<column>>,
+           std::vector<std::unique_ptr<column>>>
+transform_lists_of_structs(column_view const& lhs,
+                           std::optional<column_view> const& rhs,
+                           rmm::cuda_stream_view stream)
 {
-  auto const make_transformed_input = [&](auto const& input, auto const& new_child) {
-    return column_view{data_type{type_id::LIST},
-                       input.size(),
-                       nullptr,
-                       input.null_mask(),
-                       input.null_count(),
-                       input.offset(),
-                       {input.child(lists_column_view::offsets_column_index), new_child}};
-  };
-
   auto const default_mr = rmm::mr::get_current_device_resource();
 
-  // TODO: replace the entire input if its offsets is not zero
+  auto const make_transformed_input =
+    [&](auto const& input,
+        auto const& new_child) -> std::pair<column_view, std::unique_ptr<column>> {
+    auto new_offsets      = input.offset() == 0 ? nullptr
+                                                : cudf::lists::detail::get_normalized_offsets(
+                                               lists_column_view{input}, stream, default_mr);
+    auto const offsets_cv = input.offset() == 0
+                              ? input.child(lists_column_view::offsets_column_index)
+                              : new_offsets->view();
+    return std::pair{column_view{data_type{type_id::LIST},
+                                 input.size(),
+                                 nullptr,
+                                 input.null_mask(),
+                                 input.null_count(),
+                                 0,
+                                 {offsets_cv, new_child}},
+                     std::move(new_offsets)};
+  };
+
+  std::vector<std::unique_ptr<column>> out_cols_lhs;
+  std::vector<std::unique_ptr<column>> out_cols_rhs;
 
   if (lhs.type().id() == type_id::LIST) {
     // Should not use sliced child because we reuse the input's offset value and offsets child.
-    auto const child_lhs = lhs.child(lists_column_view::child_column_index);
+    auto const child_lhs = cudf::lists_column_view{lhs}.get_sliced_child(stream);
     auto const child_rhs =
-      rhs ? std::optional<column_view>{rhs.value().child(lists_column_view::child_column_index)}
-          : std::nullopt;
+      rhs
+        ? std::optional<column_view>{cudf::lists_column_view{rhs.value()}.get_sliced_child(stream)}
+        : std::nullopt;
 
     if (child_lhs.type().id() == type_id::STRUCT) {
       if (rhs) {
@@ -439,12 +458,18 @@ std::
           ranks->view(),
           {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.value().size()},
           stream);
-        auto child_lhs_ranks = std::make_unique<column>(ranks_slices.front());
-        auto child_rhs_ranks = std::make_unique<column>(ranks_slices.back());
-        auto transformed_lhs = make_transformed_input(lhs, child_lhs_ranks->view());
-        auto transformed_rhs = make_transformed_input(rhs.value(), child_rhs_ranks->view());
-        return {
-          transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
+
+        out_cols_lhs.emplace_back(std::make_unique<column>(ranks_slices.front()));
+        auto [transformed_lhs, new_offsets_lhs] =
+          make_transformed_input(lhs, out_cols_lhs.back()->view());
+        if (new_offsets_lhs) { out_cols_lhs.emplace_back(std::move(new_offsets_lhs)); }
+
+        out_cols_rhs.emplace_back(std::make_unique<column>(ranks_slices.back()));
+        auto [transformed_rhs, new_offsets_rhs] =
+          make_transformed_input(rhs.value(), out_cols_rhs.back()->view());
+        if (new_offsets_rhs) { out_cols_rhs.emplace_back(std::move(new_offsets_rhs)); }
+
+        return {transformed_lhs, transformed_rhs, std::move(out_cols_lhs), std::move(out_cols_rhs)};
       } else {
         // Dense ranks should be used instead of first rank.
         // Consider this example: input = [ [{0, "a"}, {3, "c"}], [{0, "a"}, {2, "b"}] ].
@@ -459,19 +484,44 @@ std::
                                                   false /*percentage*/,
                                                   stream,
                                                   default_mr);
-        auto transformed_lhs = make_transformed_input(lhs, child_lhs_ranks->view());
-        return {std::move(transformed_lhs), std::nullopt, std::move(child_lhs_ranks), nullptr};
+        printf("line %d\n", __LINE__);
+        cudf::test::print(child_lhs);
+
+        out_cols_lhs.emplace_back(std::move(child_lhs_ranks));
+        auto [transformed_lhs, new_offsets_lhs] =
+          make_transformed_input(lhs, out_cols_lhs.back()->view());
+        if (new_offsets_lhs) { out_cols_lhs.emplace_back(std::move(new_offsets_lhs)); }
+
+        return {std::move(transformed_lhs),
+                std::nullopt,
+                std::move(out_cols_lhs),
+                std::move(out_cols_rhs)};
       }
     } else if (child_lhs.type().id() == type_id::LIST) {
-      auto [new_child_lhs, new_child_rhs_opt, child_lhs_ranks, child_rhs_ranks] =
+      auto [new_child_lhs, new_child_rhs_opt, out_cols_child_lhs, out_cols_child_rhs] =
         transform_lists_of_structs(child_lhs, child_rhs, stream);
-      if (child_lhs_ranks || child_rhs_ranks) {
-        auto transformed_lhs = make_transformed_input(lhs, new_child_lhs);
-        auto transformed_rhs = rhs ? std::optional<column_view>{make_transformed_input(
-                                       rhs.value(), new_child_rhs_opt.value())}
-                                   : std::nullopt;
-        return {
-          transformed_lhs, transformed_rhs, std::move(child_lhs_ranks), std::move(child_rhs_ranks)};
+      out_cols_lhs.insert(out_cols_lhs.end(),
+                          std::make_move_iterator(out_cols_child_lhs.begin()),
+                          std::make_move_iterator(out_cols_child_lhs.end()));
+      out_cols_rhs.insert(out_cols_rhs.end(),
+                          std::make_move_iterator(out_cols_child_rhs.begin()),
+                          std::make_move_iterator(out_cols_child_rhs.end()));
+
+      if (out_cols_child_lhs.size() > 0 || out_cols_child_rhs.size() > 0) {
+        auto [transformed_lhs, new_offsets_lhs] = make_transformed_input(lhs, new_child_lhs);
+        if (new_offsets_lhs) { out_cols_lhs.emplace_back(std::move(new_offsets_lhs)); }
+        if (!rhs) {
+          return {transformed_lhs, std::nullopt, std::move(out_cols_lhs), std::move(out_cols_rhs)};
+        } else {
+          auto [transformed_rhs, new_offsets_rhs] =
+            make_transformed_input(rhs.value(), new_child_rhs_opt.value());
+          if (new_offsets_rhs) { out_cols_rhs.emplace_back(std::move(new_offsets_rhs)); }
+
+          return {transformed_lhs,
+                  std::optional<column_view>{transformed_rhs},
+                  std::move(out_cols_lhs),
+                  std::move(out_cols_rhs)};
+        }
       }
     }
   } else if (lhs.type().id() == type_id::STRUCT) {
@@ -481,7 +531,7 @@ std::
                  "Structs columns should be decomposed before reaching this function.");
   }
 
-  return {lhs, rhs, nullptr, nullptr};
+  return {lhs, rhs, std::move(out_cols_lhs), std::move(out_cols_rhs)};
 }
 
 /**
@@ -509,22 +559,29 @@ transform_lists_of_structs(table_view const& lhs,
       lhs, rhs, std::vector<std::unique_ptr<column>>{}, std::vector<std::unique_ptr<column>>{}};
   }
 
-  std::vector<column_view> transformed_lhs_cols;
-  std::vector<column_view> transformed_rhs_cols;
+  std::vector<column_view> transformed_lhs_cvs;
+  std::vector<column_view> transformed_rhs_cvs;
   std::vector<std::unique_ptr<column>> ranks_cols_lhs;
   std::vector<std::unique_ptr<column>> ranks_cols_rhs;
-  for (size_type child_idx = 0; child_idx < lhs.num_columns(); ++child_idx) {
-    auto const& col                                                   = lhs.column(child_idx);
-    auto [transformed_lhs, transformed_rhs_opt, ranks_lhs, ranks_rhs] = transform_lists_of_structs(
-      col, rhs ? std::optional<column_view>{rhs.value().column(child_idx)} : std::nullopt, stream);
-    transformed_lhs_cols.push_back(transformed_lhs);
-    if (rhs) { transformed_rhs_cols.push_back(transformed_rhs_opt.value()); }
-    if (ranks_lhs) { ranks_cols_lhs.emplace_back(std::move(ranks_lhs)); }
-    if (ranks_rhs) { ranks_cols_rhs.emplace_back(std::move(ranks_rhs)); }
+  for (size_type col_idx = 0; col_idx < lhs.num_columns(); ++col_idx) {
+    auto const& lhs_col = lhs.column(col_idx);
+    auto const rhs_col_opt =
+      rhs ? std::optional<column_view>{rhs.value().column(col_idx)} : std::nullopt;
+
+    auto [transformed_lhs, transformed_rhs_opt, out_cols_lhs, out_cols_rhs] =
+      transform_lists_of_structs(lhs_col, rhs_col_opt, stream);
+    transformed_lhs_cvs.push_back(transformed_lhs);
+    if (rhs) { transformed_rhs_cvs.push_back(transformed_rhs_opt.value()); }
+    ranks_cols_lhs.insert(ranks_cols_lhs.end(),
+                          std::make_move_iterator(out_cols_lhs.begin()),
+                          std::make_move_iterator(out_cols_lhs.end()));
+    ranks_cols_rhs.insert(ranks_cols_rhs.end(),
+                          std::make_move_iterator(out_cols_rhs.begin()),
+                          std::make_move_iterator(out_cols_rhs.end()));
   }
 
-  return {table_view{transformed_lhs_cols},
-          rhs ? std::optional<table_view>{table_view{transformed_rhs_cols}} : std::nullopt,
+  return {table_view{transformed_lhs_cvs},
+          rhs ? std::optional<table_view>{table_view{transformed_rhs_cvs}} : std::nullopt,
           std::move(ranks_cols_lhs),
           std::move(ranks_cols_rhs)};
 }
