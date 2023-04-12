@@ -289,7 +289,7 @@ class hash_join {
             null_equality compare_nulls,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
   /**
-   * @copydoc hash_join
+   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
    * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
    *        any probe table that will be used later for join
