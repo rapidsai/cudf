@@ -1041,7 +1041,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   }
 
   {
-    cudf::hash_join hash_join(empty1, true, cudf::null_equality::EQUAL);
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
 
     auto output_size                         = hash_join.inner_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1080,7 +1080,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   }
 
   {
-    cudf::hash_join hash_join(empty1, true, cudf::null_equality::EQUAL);
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
 
     auto output_size                         = hash_join.left_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1119,7 +1119,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   }
 
   {
-    cudf::hash_join hash_join(empty1, true, cudf::null_equality::EQUAL);
+    cudf::hash_join hash_join(empty1, cudf::null_equality::EQUAL);
 
     auto output_size                         = hash_join.full_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1485,7 +1485,7 @@ TEST_F(JoinTest, HashJoinWithNullsOneSide)
     return Table{std::move(cols)};
   }();
 
-  auto const hash_join   = cudf::hash_join(t0, true, cudf::null_equality::EQUAL);
+  auto const hash_join   = cudf::hash_join(t0, cudf::null_equality::EQUAL);
   auto constexpr invalid = std::numeric_limits<int32_t>::min();  // invalid index sentinel
 
   auto const sort_result = [](auto const& result) {
