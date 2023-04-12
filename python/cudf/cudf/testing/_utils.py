@@ -23,6 +23,7 @@ from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
+from cudf.api.types import is_scalar
 
 supported_numpy_dtypes = [
     "bool",
@@ -371,7 +372,9 @@ def assert_column_memory_ne(
 
 def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
     # Wrapper around pd.Series using a float64 default dtype for empty data.
-    if dtype is None and (data is None or len(data) == 0):
+    if dtype is None and (
+        data is None or (not is_scalar(data) and len(data) == 0)
+    ):
         dtype = "float64"
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
