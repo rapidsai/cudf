@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import datetime
 import io
 import pathlib
 from typing import Optional
 
 import fastavro
+import pandas as pd
 import pytest
 
 import cudf
@@ -427,7 +427,10 @@ def test_alltypes_plain_avro():
     # our corresponding read_avro()-returned data frame.
 
     data = [{column: row[column] for column in columns} for row in records]
-    expected = cudf.DataFrame(data)
+
+    # discard timezone information as we don't support it:
+    expected = pd.DataFrame(data)
+    expected["timestamp_col"].dt.tz_localize(None)
 
     # The fastavro.reader supports the `'logicalType': 'timestamp-micros'` used
     # by the 'timestamp_col' column, which is converted into Python
