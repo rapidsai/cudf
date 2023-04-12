@@ -19,7 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -59,25 +59,6 @@ struct byte_list_conversion_dispatcher {
   }
 };
 
-auto make_empty_or_all_nulls(size_type null_count,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
-{
-  auto offsets = [&] {
-    if (null_count == 0) { return make_empty_column(type_id::INT32); }
-    auto offsets_buff =
-      cudf::detail::make_zeroed_device_uvector_async<offset_type>(null_count + 1, stream, mr);
-    return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
-  }();
-  auto child     = make_empty_column(type_id::UINT8);
-  auto null_mask = null_count == 0
-                     ? rmm::device_buffer{}
-                     : cudf::detail::create_null_mask(null_count, mask_state::ALL_NULL, stream, mr);
-
-  return make_lists_column(
-    null_count, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr);
-}
-
 template <typename T>
 struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
   static std::unique_ptr<column> invoke(column_view const& input,
@@ -85,8 +66,12 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    if (input.size() == 0 || input.size() == input.null_count()) {
-      return make_empty_or_all_nulls(input.null_count(), stream, mr);
+    if (input.size() == 0) {
+      return cudf::lists::detail::make_empty_lists_column(data_type{type_id::UINT8}, stream, mr);
+    }
+    if (input.size() == input.null_count()) {
+      return cudf::lists::detail::make_all_nulls_lists_column(
+        input.size(), data_type{type_id::UINT8}, stream, mr);
     }
 
     auto const num_bytes = static_cast<size_type>(input.size() * sizeof(T));
@@ -138,8 +123,12 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    if (input.size() == 0 || input.size() == input.null_count()) {
-      return make_empty_or_all_nulls(input.null_count(), stream, mr);
+    if (input.size() == 0) {
+      return cudf::lists::detail::make_empty_lists_column(data_type{type_id::UINT8}, stream, mr);
+    }
+    if (input.size() == input.null_count()) {
+      return cudf::lists::detail::make_all_nulls_lists_column(
+        input.size(), data_type{type_id::UINT8}, stream, mr);
     }
 
     auto col_content     = std::make_unique<column>(input, stream, mr)->release();
