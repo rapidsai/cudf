@@ -84,7 +84,7 @@ avro_decode_row(schemadesc_s const* schema,
                 device_span<string_index_pair const> global_dictionary,
                 bool* skipped_row)
 {
-  // `row_idx` depicts the offset of the decoded row in the destination
+  // `dst_row` depicts the offset of the decoded row in the destination
   // `dataptr` array, adjusted for skip rows, if applicable.  For example,
   // if `row` == 5 and `first_row` == 3, then this is the second row we'll
   // be storing (5-3).  If `first_row` is greater than `row`, this routine
@@ -92,8 +92,8 @@ avro_decode_row(schemadesc_s const* schema,
   // *not* actually store the row in the destination `dataptr` array.  This
   // is enforced by all writes to the destination memory being guarded in the
   // following fashion:
-  //    if (dataptr != nullptr && row_idx > 0) {
-  //      static_cast<int32_t*>(dataptr)[row_idx] = static_cast<int32_t>(v);
+  //    if (dataptr != nullptr && dst_row > 0) {
+  //      static_cast<int32_t*>(dataptr)[dst_row] = static_cast<int32_t>(v);
   //    }
   // The actual value is calculated by subtracting the first row from this given
   // row value, and then adding the absolute row offset.  The row offset is
@@ -101,13 +101,13 @@ avro_decode_row(schemadesc_s const* schema,
   // processing multiple blocks, i.e. this block could only have 10 rows, but
   // it's the 3rd block (where each block has 10 rows), so we need to write to
   // the 30th row in the destination array.
-  const ptrdiff_t row_idx =
+  const ptrdiff_t dst_row =
     (row >= first_row && row < end_row ? static_cast<ptrdiff_t>((row - first_row) + row_offset)
                                        : -1);
-  // Critical invariant checks: row_idx should be -1 or greater, and
+  // Critical invariant checks: dst_row should be -1 or greater, and
   // *skipped_row should always be true at this point (we set it to false only
   // if we write the decoded value to the destination array).
-  if (row_idx < -1) { CUDF_UNREACHABLE("row_idx should be -1 or greater"); }
+  if (dst_row < -1) { CUDF_UNREACHABLE("dst_row should be -1 or greater"); }
   if (*skipped_row != true) { CUDF_UNREACHABLE("skipped_row should be true"); }
 
   uint32_t array_start = 0, array_repeat_count = 0;
@@ -142,8 +142,8 @@ avro_decode_row(schemadesc_s const* schema,
     void* dataptr = schema[i].dataptr;
     switch (kind) {
       case type_null:
-        if (dataptr != nullptr && row_idx >= 0) {
-          atomicAnd(static_cast<uint32_t*>(dataptr) + (row_idx >> 5), ~(1 << (row_idx & 0x1f)));
+        if (dataptr != nullptr && dst_row >= 0) {
+          atomicAnd(static_cast<uint32_t*>(dataptr) + (dst_row >> 5), ~(1 << (dst_row & 0x1f)));
           atomicAdd(&schema_g[i].count, 1);
           *skipped_row = false;
         }
@@ -151,16 +151,16 @@ avro_decode_row(schemadesc_s const* schema,
 
       case type_int: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (dataptr != nullptr && row_idx >= 0) {
-          static_cast<int32_t*>(dataptr)[row_idx] = static_cast<int32_t>(v);
+        if (dataptr != nullptr && dst_row >= 0) {
+          static_cast<int32_t*>(dataptr)[dst_row] = static_cast<int32_t>(v);
           *skipped_row                            = false;
         }
       } break;
 
       case type_long: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (dataptr != nullptr && row_idx >= 0) {
-          static_cast<int64_t*>(dataptr)[row_idx] = v;
+        if (dataptr != nullptr && dst_row >= 0) {
+          static_cast<int64_t*>(dataptr)[dst_row] = v;
           *skipped_row                            = false;
         }
       } break;
@@ -182,15 +182,15 @@ avro_decode_row(schemadesc_s const* schema,
           count = (size_t)v;
           cur += count;
         }
-        if (dataptr != nullptr && row_idx >= 0) {
-          static_cast<string_index_pair*>(dataptr)[row_idx].first  = ptr;
-          static_cast<string_index_pair*>(dataptr)[row_idx].second = count;
+        if (dataptr != nullptr && dst_row >= 0) {
+          static_cast<string_index_pair*>(dataptr)[dst_row].first  = ptr;
+          static_cast<string_index_pair*>(dataptr)[dst_row].second = count;
           *skipped_row                                             = false;
         }
       } break;
 
       case type_float:
-        if (dataptr != nullptr && row_idx >= 0) {
+        if (dataptr != nullptr && dst_row >= 0) {
           uint32_t v;
           if (cur + 3 < end) {
             v = unaligned_load32(cur);
@@ -198,7 +198,7 @@ avro_decode_row(schemadesc_s const* schema,
           } else {
             v = 0;
           }
-          static_cast<uint32_t*>(dataptr)[row_idx] = v;
+          static_cast<uint32_t*>(dataptr)[dst_row] = v;
           *skipped_row                             = false;
         } else {
           cur += 4;
@@ -206,7 +206,7 @@ avro_decode_row(schemadesc_s const* schema,
         break;
 
       case type_double:
-        if (dataptr != nullptr && row_idx >= 0) {
+        if (dataptr != nullptr && dst_row >= 0) {
           uint64_t v;
           if (cur + 7 < end) {
             v = unaligned_load64(cur);
@@ -214,7 +214,7 @@ avro_decode_row(schemadesc_s const* schema,
           } else {
             v = 0;
           }
-          static_cast<uint64_t*>(dataptr)[row_idx] = v;
+          static_cast<uint64_t*>(dataptr)[dst_row] = v;
           *skipped_row                             = false;
         } else {
           cur += 8;
@@ -222,9 +222,9 @@ avro_decode_row(schemadesc_s const* schema,
         break;
 
       case type_boolean:
-        if (dataptr != nullptr && row_idx >= 0) {
+        if (dataptr != nullptr && dst_row >= 0) {
           uint8_t v                               = (cur < end) ? *cur : 0;
-          static_cast<uint8_t*>(dataptr)[row_idx] = (v) ? 1 : 0;
+          static_cast<uint8_t*>(dataptr)[dst_row] = (v) ? 1 : 0;
           *skipped_row                            = false;
         }
         cur++;
@@ -274,16 +274,16 @@ avro_decode_row(schemadesc_s const* schema,
         // be correct:
         //
         // int64_t v = avro_decode_zigzag_varint(cur, end);
-        // if (dataptr != nullptr && row_idx >= 0) {
-        //   static_cast<int64_t*>(dataptr)[row_idx] = v;
+        // if (dataptr != nullptr && dst_row >= 0) {
+        //   static_cast<int64_t*>(dataptr)[dst_row] = v;
         //   *skipped_row = false;
         // }
       } break;
 
       case type_date: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
-        if (dataptr != nullptr && row_idx >= 0) {
-          static_cast<int32_t*>(dataptr)[row_idx] = static_cast<int32_t>(v);
+        if (dataptr != nullptr && dst_row >= 0) {
+          static_cast<int32_t*>(dataptr)[dst_row] = static_cast<int32_t>(v);
           *skipped_row                            = false;
         }
       } break;

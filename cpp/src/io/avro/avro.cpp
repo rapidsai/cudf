@@ -115,7 +115,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   //
   // A row offset is also maintained, and added to each block.  This reflects
   // the absolute offset that needs to be added to any given row in order to
-  // get the row's index within the destination array.  See `row_idx` in
+  // get the row's index within the destination array.  See `dst_row` in
   // `avro_decode_row()` for more information.
   //
   // N.B. "object" and "row" are used interchangeably here; "object" is
