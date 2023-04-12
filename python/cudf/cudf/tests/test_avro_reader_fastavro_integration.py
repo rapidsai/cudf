@@ -576,7 +576,7 @@ def test_avro_reader_multiblock(
     assert total_rows >= num_rows
     assert rows_per_block <= total_rows
 
-    limit_rows = not (num_rows == total_rows)
+    limit_rows = num_rows != total_rows
     if limit_rows:
         assert total_rows >= num_rows + skip_rows
 
@@ -596,10 +596,8 @@ def test_avro_reader_multiblock(
         # bytes per row is 6 + 1 = 7.
         bytes_per_row = len(values[0]) + 1
         assert bytes_per_row == 7, bytes_per_row
-
     else:
         assert dtype in ("float32", "float64")
-        bytes_per_row = 4 if dtype == "float32" else 8
         avro_type = "float" if dtype == "float32" else "double"
 
         # We don't use rand_dataframe() here, because it increases the
@@ -607,6 +605,7 @@ def test_avro_reader_multiblock(
         # to use a very costly approach to generating random data).
         # See also: https://github.com/rapidsai/cudf/issues/13128
         values = np.random.rand(total_rows).astype(dtype)
+        bytes_per_row = values.dtype.itemsize
 
     # The sync_interval is the number of bytes between sync blocks.  We know
     # how many bytes we need per row, so we can calculate the number of bytes
