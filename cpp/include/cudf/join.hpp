@@ -310,7 +310,7 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
@@ -335,7 +335,7 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
@@ -360,7 +360,7 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
@@ -381,7 +381,7 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return The exact number of output when performing an inner join between two tables with
@@ -397,7 +397,7 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return The exact number of output when performing a left join between two tables with `build`
@@ -415,7 +415,7 @@ class hash_join {
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
    *
-   * @throw cudf::logic_error If the input probe table has nulls while this hash_join class was not
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
    * constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
