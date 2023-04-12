@@ -90,7 +90,7 @@ struct hash_join {
    *
    * @param build The build table, from which the hash table is built.
    * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
-   *        any probe table that will be used later for join.
+   *        any `probe` table that will be used later for join.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
