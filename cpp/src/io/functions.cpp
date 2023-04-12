@@ -418,7 +418,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 /**
  * @copydoc cudf::io::write_orc
  */
-void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
+void write_orc(orc_writer_options const& options)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -428,7 +428,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream(), mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table());
 }
@@ -436,8 +436,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
-orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options,
-                                       rmm::mr::device_memory_resource* mr)
+orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -445,7 +444,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream(), mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
 }
 
 /**
@@ -512,8 +511,7 @@ table_input_metadata::table_input_metadata(table_view const& table)
 /**
  * @copydoc cudf::io::write_parquet
  */
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -521,7 +519,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream(), mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -570,15 +568,14 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
-parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,
-                                               rmm::mr::device_memory_resource* mr)
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options)
 {
   namespace io_detail = cudf::io::detail;
 
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream(), mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
 }
 
 /**
