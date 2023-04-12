@@ -334,13 +334,9 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
   __shared__ __align__(8) schemadesc_s g_shared_schema[max_shared_schema_len];
   __shared__ __align__(8) block_desc_s blk_g[num_warps];
 
-  bool skipped_row;
   schemadesc_s* schema;
   block_desc_s* const blk = &blk_g[threadIdx.y];
   uint32_t block_id       = blockIdx.x * num_warps + threadIdx.y;
-  size_t cur_row, first_row, end_row;
-  uint32_t rows_remaining;
-  const uint8_t *cur, *end;
 
   // Fetch schema into shared mem if possible
   if (schema_len <= max_shared_schema_len) {
@@ -357,12 +353,12 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
   __syncthreads();
   if (block_id >= blocks.size()) { return; }
 
-  cur            = avro_data + blk->offset;
-  end            = cur + blk->size;
-  first_row      = blk->first_row + blk->row_offset;
-  cur_row        = blk->row_offset;
-  end_row        = first_row + blk->num_rows;
-  rows_remaining = blk->num_rows;
+  const uint8_t* cur      = avro_data + blk->offset;
+  const uint8_t* end      = cur + blk->size;
+  size_t first_row        = blk->first_row + blk->row_offset;
+  size_t cur_row          = blk->row_offset;
+  size_t end_row          = first_row + blk->num_rows;
+  uint32_t rows_remaining = blk->num_rows;
 
   while (cur < end) {
     uint32_t nrows;
@@ -382,8 +378,8 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
     }
 
     if (threadIdx.x < nrows) {
-      skipped_row = true;
-      cur         = avro_decode_row(schema,
+      bool skipped_row = true;
+      cur              = avro_decode_row(schema,
                             schema_g,
                             schema_len,
                             first_row,
