@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,13 +93,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
                   SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -108,13 +106,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
                   SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
