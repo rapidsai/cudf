@@ -257,6 +257,16 @@ std::unique_ptr<cudf::table> cross_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief The enum class to specify if any of the input join tables (`build` table and any later
+ * `probe` table) has nulls.
+ *
+ * This is used upon hash_join object construction to specify the existence of nulls in all the
+ * possible input tables. If such null existence is unknown, `YES` should be used as the default
+ * option.
+ */
+enum class nullable_join : bool { YES, NO };
+
+/**
  * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
  * member functions.
  *
@@ -290,20 +300,10 @@ class hash_join {
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief The enum class to specify if any of the input join tables (`build` table and any later
-   * `probe` table) has nulls.
-   *
-   * This is used upon hash_join object construction to specify the existence of nulls in all the
-   * possible input tables. If such null existence is unknown, `YES` should be used as the default
-   * option.
-   */
-  enum class nullable_join : bool { YES, NO };
-
-  /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
    * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
-   *        any probe table that will be used later for join
+   *        any `probe` table that will be used later for join
    */
   hash_join(cudf::table_view const& build,
             nullable_join has_nulls,
