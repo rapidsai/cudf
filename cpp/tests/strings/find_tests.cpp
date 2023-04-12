@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@ TEST_F(StringsFindTest, Find)
     cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 4, -1, -1, 1, -1},
                                                              {1, 1, 0, 1, 1, 1});
     auto results = cudf::strings::find(strings_view, cudf::string_scalar("é"));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::rfind(strings_view, cudf::string_scalar("é"));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
