@@ -295,8 +295,8 @@ endif()
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
-  sort/rank_test.cpp
+  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp sort/sort_test.cpp
+  sort/stable_sort_tests.cpp sort/rank_test.cpp
   GPUS 1
   PERCENT 70
 )
