@@ -1340,7 +1340,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, false, cudf::null_equality::EQUAL);
+  cudf::hash_join hash_join(t1, cudf::hash_join::nullable_join::NO, cudf::null_equality::EQUAL);
 
   {
     CVector cols0;
@@ -1429,9 +1429,11 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
 
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
+  auto const has_nulls = cudf::has_nested_nulls(t0) || cudf::has_nested_nulls(t1)
+                           ? cudf::hash_join::nullable_join::YES
+                           : cudf::hash_join::nullable_join::NO;
 
-  auto hash_join = cudf::hash_join(
-    t1, cudf::has_nested_nulls(t0) || cudf::has_nested_nulls(t1), cudf::null_equality::EQUAL);
+  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL);
 
   {
     auto output_size = hash_join.left_join_size(t0);
@@ -1577,7 +1579,8 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
     cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::get_default_stream().value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
-  cudf::hash_join hash_join(tview, false, cudf::null_equality::UNEQUAL);
+  cudf::hash_join hash_join(
+    tview, cudf::hash_join::nullable_join::NO, cudf::null_equality::UNEQUAL);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }

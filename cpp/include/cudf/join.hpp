@@ -288,6 +288,17 @@ class hash_join {
   hash_join(cudf::table_view const& build,
             null_equality compare_nulls,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief The enum class to specify if any of the input join tables (`build` table and any later
+   * `probe` table) has nulls.
+   *
+   * This is used upon hash_join object construction to specify the existence of nulls in all the
+   * possible input tables. If such null existence is unknown, `YES` should be used as the default
+   * option.
+   */
+  enum class nullable_join : bool { YES, NO };
+
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
@@ -295,7 +306,7 @@ class hash_join {
    *        any probe table that will be used later for join
    */
   hash_join(cudf::table_view const& build,
-            bool has_nulls,
+            nullable_join has_nulls,
             null_equality compare_nulls,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 

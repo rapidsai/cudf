@@ -589,15 +589,16 @@ hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   // If we cannot know beforehand about null existence then let's assume that there are nulls.
-  : hash_join(build, true /*has_nulls*/, compare_nulls, stream)
+  : hash_join(build, nullable_join::YES, compare_nulls, stream)
 {
 }
 
 hash_join::hash_join(cudf::table_view const& build,
-                     bool has_nulls,
+                     nullable_join has_nulls,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<const impl_type>(build, has_nulls, compare_nulls, stream)}
+  : _impl{std::make_unique<const impl_type>(
+      build, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }
 
