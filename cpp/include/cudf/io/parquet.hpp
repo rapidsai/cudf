@@ -1020,15 +1020,11 @@ class parquet_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
- * @param mr Device memory resource to use for device memory allocation
- *
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in parquet_writer_options (empty blob otherwise).
  */
 
-std::unique_ptr<std::vector<uint8_t>> write_parquet(
-  parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options);
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -1552,11 +1548,8 @@ class parquet_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
-   * @param[in] mr Device memory resource to use for device memory allocation
    */
-  parquet_chunked_writer(
-    chunked_parquet_writer_options const& options,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  parquet_chunked_writer(chunked_parquet_writer_options const& options);
 
   /**
    * @brief Writes table to output.
