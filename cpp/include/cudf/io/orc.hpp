@@ -801,10 +801,8 @@ class orc_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
- * @param mr Device memory resource to use for device memory allocation
  */
-void write_orc(orc_writer_options const& options,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+void write_orc(orc_writer_options const& options);
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -1163,10 +1161,8 @@ class orc_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
-   * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(chunked_orc_writer_options const& options,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  orc_chunked_writer(chunked_orc_writer_options const& options);
 
   /**
    * @brief Writes table to output.
