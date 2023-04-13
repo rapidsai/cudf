@@ -5227,7 +5227,10 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash(
-        self, seeds=None, n: int = 4, method: str = "murmur3"
+        self,
+        seeds: Optional[cudf.Series] = None,
+        n: int = 4,
+        method: str = "murmur3",
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
@@ -5262,6 +5265,8 @@ class StringMethods(ColumnMethods):
         """
         if seeds is None:
             seeds = column.as_column(0, dtype=np.uint32, length=1)
+        elif not isinstance(seeds, cudf.Series):
+            raise ValueError("Must provide a Series of seeds")
         else:
             seeds = seeds._column
         return self._return_or_inplace(
