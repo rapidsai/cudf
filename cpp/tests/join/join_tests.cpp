@@ -1340,7 +1340,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, cudf::null_equality::EQUAL);
+  cudf::hash_join hash_join(t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL);
 
   {
     CVector cols0;
@@ -1429,8 +1429,11 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
 
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
+  auto const has_nulls = cudf::has_nested_nulls(t0) || cudf::has_nested_nulls(t1)
+                           ? cudf::nullable_join::YES
+                           : cudf::nullable_join::NO;
 
-  auto hash_join = cudf::hash_join(t1, cudf::null_equality::EQUAL);
+  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL);
 
   {
     auto output_size = hash_join.left_join_size(t0);
@@ -1463,6 +1466,110 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   }
 }
 
+TEST_F(JoinTest, HashJoinWithNullsOneSide)
+{
+  auto const t0 = [] {
+    column_wrapper<int32_t> col0{2, 2, 0, 4, 3};
+    column_wrapper<int32_t> col1{1, 10, 1, 2, 1};
+    CVector cols;
+    cols.emplace_back(col0.release());
+    cols.emplace_back(col1.release());
+    return Table{std::move(cols)};
+  }();
+
+  auto const t1 = [] {
+    column_wrapper<int32_t> col0{1, 2, 3, 4, 5, 2, 2, 0, 4, 3, 1, 2, 3, 4, 5};
+    column_wrapper<int32_t> col1{{1, 2, 3, 4, 5, 1, 0, 1, 2, 1, 1, 2, 3, 4, 5},
+                                 cudf::test::iterators::null_at(6)};
+    CVector cols;
+    cols.emplace_back(col0.release());
+    cols.emplace_back(col1.release());
+    return Table{std::move(cols)};
+  }();
+
+  auto const hash_join   = cudf::hash_join(t0, cudf::null_equality::EQUAL);
+  auto constexpr invalid = std::numeric_limits<int32_t>::min();  // invalid index sentinel
+
+  auto const sort_result = [](auto const& result) {
+    auto const left_cv  = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
+                                           static_cast<cudf::size_type>(result.first->size()),
+                                           result.first->data()};
+    auto const right_cv = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
+                                            static_cast<cudf::size_type>(result.second->size()),
+                                            result.second->data()};
+    auto sorted_left    = cudf::sort(cudf::table_view{{left_cv}});
+    auto sorted_right   = cudf::sort(cudf::table_view{{right_cv}});
+    return std::pair{std::move(sorted_left), std::move(sorted_right)};
+  };
+
+  {
+    auto const output_size = hash_join.left_join_size(t1);
+    auto const result      = hash_join.left_join(t1, std::optional<std::size_t>{output_size});
+    auto const [sorted_left_indices, sorted_right_indices] = sort_result(result);
+
+    auto const expected_left_indices =
+      column_wrapper<int32_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+    auto const expected_right_indices = column_wrapper<int32_t>{invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                0,
+                                                                2,
+                                                                3,
+                                                                4};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_left_indices, sorted_left_indices->get_column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_right_indices, sorted_right_indices->get_column(0));
+  }
+
+  {
+    auto const output_size = hash_join.inner_join_size(t1);
+    auto const result      = hash_join.inner_join(t1, std::optional<std::size_t>{output_size});
+    auto const [sorted_left_indices, sorted_right_indices] = sort_result(result);
+
+    auto const expected_left_indices  = column_wrapper<int32_t>{5, 7, 8, 9};
+    auto const expected_right_indices = column_wrapper<int32_t>{0, 2, 3, 4};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_left_indices, sorted_left_indices->get_column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_right_indices, sorted_right_indices->get_column(0));
+  }
+
+  {
+    auto const output_size = hash_join.full_join_size(t1);
+    auto const result      = hash_join.full_join(t1, std::optional<std::size_t>{output_size});
+    auto const [sorted_left_indices, sorted_right_indices] = sort_result(result);
+
+    auto const expected_left_indices =
+      column_wrapper<int32_t>{invalid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+    auto const expected_right_indices = column_wrapper<int32_t>{invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                invalid,
+                                                                0,
+                                                                1,
+                                                                2,
+                                                                3,
+                                                                4};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_left_indices, sorted_left_indices->get_column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_right_indices, sorted_right_indices->get_column(0));
+  }
+}
+
 TEST_F(JoinTest, HashJoinLargeOutputSize)
 {
   // self-join a table of zeroes to generate an output row count that would overflow int32_t
@@ -1472,7 +1579,7 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
     cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::get_default_stream().value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
-  cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);
+  cudf::hash_join hash_join(tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }
