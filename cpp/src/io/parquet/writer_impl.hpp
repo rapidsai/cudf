@@ -65,13 +65,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -80,13 +78,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -217,39 +213,35 @@ class writer::impl {
   size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
 
  private:
-  // TODO : figure out if we want to keep this. It is currently unused.
-  rmm::mr::device_memory_resource* _mr = nullptr;
-  // Cuda stream to be used
-  rmm::cuda_stream_view stream;
+  // Cuda stream to be used.
+  rmm::cuda_stream_view _stream;
 
-  Compression compression_             = Compression::UNCOMPRESSED;
-  size_t max_row_group_size            = default_row_group_size_bytes;
-  size_type max_row_group_rows         = default_row_group_size_rows;
-  size_t max_page_size_bytes           = default_max_page_size_bytes;
-  size_type max_page_size_rows         = default_max_page_size_rows;
-  statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
-  dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
-  size_t max_dictionary_size_          = default_max_dictionary_size;
-  bool int96_timestamps                = false;
-  int32_t column_index_truncate_length = default_column_index_truncate_length;
-  std::optional<size_type> max_page_fragment_size_;
-  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  std::unique_ptr<aggregate_writer_metadata> md;
-  // File footer key-value metadata. Written during write_chunked_end()
-  std::vector<std::map<std::string, std::string>> kv_md;
-  // optional user metadata
-  std::unique_ptr<table_input_metadata> table_meta;
-  // to track if the output has been written to sink
-  bool closed = false;
-  // To track if the last write(table) call completed successfully
-  bool last_write_successful = false;
-  // current write position for rowgroups/chunks
-  std::vector<std::size_t> current_chunk_offset;
-  // special parameter only used by detail::write() to indicate that we are guaranteeing
-  // a single table write.  this enables some internal optimizations.
-  bool const single_write_mode = true;
+  // Writer options.
+  Compression const _compression;
+  size_t const _max_row_group_size;
+  size_type const _max_row_group_rows;
+  size_t const _max_page_size_bytes;
+  size_type const _max_page_size_rows;
+  statistics_freq const _stats_granularity;
+  dictionary_policy const _dict_policy;
+  size_t const _max_dictionary_size;
+  std::optional<size_type> const _max_page_fragment_size;
+  bool const _int96_timestamps;
+  int32_t const _column_index_truncate_length;
+  std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
+  bool const _single_write_mode = true;  // Special parameter only used by `write()` to indicate
+                                         // that we are guaranteeing a single table write.
+                                         // This enables some internal optimizations.
+  std::vector<std::unique_ptr<data_sink>> const _out_sink;
 
-  std::vector<std::unique_ptr<data_sink>> out_sink_;
+  // Internal states, filled during `write()` and written to sink during `write` and `close()`.
+  std::unique_ptr<table_input_metadata> _table_meta;
+  std::unique_ptr<aggregate_writer_metadata> _agg_meta;
+  std::vector<std::size_t> _current_chunk_offset;  // To track if the last write(table) call
+                                                   // completed successfully current write
+                                                   // position for rowgroups/chunks.
+  bool _last_write_successful = false;
+  bool _closed                = false;  // To track if the output has been written to sink.
 };
 
 }  // namespace parquet
