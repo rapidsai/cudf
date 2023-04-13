@@ -122,11 +122,10 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
         // convert to uint8 column, strings are currently stored as int8
         auto contents =
           col_content.children[strings_column_view::chars_column_index].release()->release();
-        auto data      = contents.data.release();
-        auto null_mask = contents.null_mask.release();
+        auto data = contents.data.release();
 
         auto uint8_col = std::make_unique<column>(
-          data_type{type_id::UINT8}, data->size(), std::move(*data), std::move(*null_mask), 0);
+          data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
 
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
