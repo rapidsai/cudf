@@ -869,7 +869,7 @@ struct preprocessed_table {
 
   // Intermediate columns generated from transforming the child columns of lists-of-structs columns
   // into integer columns using `cudf::rank()`, need to be kept alive.
-  std::vector<std::unique_ptr<column>> _structs_ranked_columns;
+  std::vector<std::unique_ptr<column>> _structs_transformed_columns;
 
   // Flag to record if the input table was preprocessed to transform any lists-of-structs column
   // having at least one floating-point child (at any nested level) using `cudf::rank`.
