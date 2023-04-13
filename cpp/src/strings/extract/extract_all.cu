@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -122,13 +123,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
-                             make_empty_column(type_id::STRING),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
   }
 
   // Convert counts into offsets.
