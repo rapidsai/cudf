@@ -2603,9 +2603,7 @@ TEST_F(ParquetReaderTest, UserBounds)
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
   }
 
-  // trying to read 0 rows should result in reading the whole file
-  // at the moment we get back 4.  when that bug gets fixed, this
-  // test can be flipped.
+  // trying to read 0 rows should result in empty columns
   {
     srand(31337);
     auto expected = create_random_fixed_table<int>(4, 4, false);

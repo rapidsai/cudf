@@ -359,11 +359,11 @@ std::size_t get_full_join_size(
 
 template <typename Hasher>
 hash_join<Hasher>::hash_join(cudf::table_view const& build,
+                             bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
-  : _is_empty{build.num_rows() == 0},
-    _composite_bitmask{
-      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first},
+  : _has_nulls(has_nulls),
+    _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
     _hash_table{compute_hash_table_size(build.num_rows()),
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
@@ -381,11 +381,14 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
   cudf::detail::build_join_hash_table(_build,
                                       _preprocessed_build,
                                       _hash_table,
+                                      _has_nulls,
                                       _nulls_equal,
-                                      static_cast<bitmask_type const*>(_composite_bitmask.data()),
+                                      reinterpret_cast<bitmask_type const*>(row_bitmask.data()),
                                       stream);
 }
 
@@ -434,19 +437,21 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   // Return directly if build table is empty
   if (_is_empty) { return 0; }
 
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.");
+
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
-  return cudf::detail::compute_join_output_size(
-    _build,
-    probe,
-    _preprocessed_build,
-    preprocessed_probe,
-    _hash_table,
-    cudf::detail::join_kind::INNER_JOIN,
-    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
-    _nulls_equal,
-    stream);
+  return cudf::detail::compute_join_output_size(_build,
+                                                probe,
+                                                _preprocessed_build,
+                                                preprocessed_probe,
+                                                _hash_table,
+                                                cudf::detail::join_kind::INNER_JOIN,
+                                                _has_nulls,
+                                                _nulls_equal,
+                                                stream);
 }
 
 template <typename Hasher>
@@ -458,19 +463,21 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.");
+
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
-  return cudf::detail::compute_join_output_size(
-    _build,
-    probe,
-    _preprocessed_build,
-    preprocessed_probe,
-    _hash_table,
-    cudf::detail::join_kind::LEFT_JOIN,
-    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
-    _nulls_equal,
-    stream);
+  return cudf::detail::compute_join_output_size(_build,
+                                                probe,
+                                                _preprocessed_build,
+                                                preprocessed_probe,
+                                                _hash_table,
+                                                cudf::detail::join_kind::LEFT_JOIN,
+                                                _has_nulls,
+                                                _nulls_equal,
+                                                stream);
 }
 
 template <typename Hasher>
@@ -483,19 +490,21 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.");
+
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
-  return cudf::detail::get_full_join_size(
-    _build,
-    probe,
-    _preprocessed_build,
-    preprocessed_probe,
-    _hash_table,
-    cudf::has_nested_nulls(probe) || cudf::has_nested_nulls(_build),
-    _nulls_equal,
-    stream,
-    mr);
+  return cudf::detail::get_full_join_size(_build,
+                                          probe,
+                                          _preprocessed_build,
+                                          preprocessed_probe,
+                                          _hash_table,
+                                          _has_nulls,
+                                          _nulls_equal,
+                                          stream,
+                                          mr);
 }
 
 template <typename Hasher>
@@ -514,20 +523,22 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
 
   CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe_table),
+               "Probe table has nulls while build table was not hashed with null check.");
+
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
-  auto join_indices = cudf::detail::probe_join_hash_table(
-    _build,
-    probe_table,
-    _preprocessed_build,
-    preprocessed_probe,
-    _hash_table,
-    join,
-    cudf::has_nested_nulls(probe_table) || cudf::has_nested_nulls(_build),
-    _nulls_equal,
-    output_size,
-    stream,
-    mr);
+  auto join_indices = cudf::detail::probe_join_hash_table(_build,
+                                                          probe_table,
+                                                          _preprocessed_build,
+                                                          preprocessed_probe,
+                                                          _hash_table,
+                                                          join,
+                                                          _has_nulls,
+                                                          _nulls_equal,
+                                                          output_size,
+                                                          stream,
+                                                          mr);
 
   if (join == cudf::detail::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
@@ -553,6 +564,9 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
   CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
                "Mismatch in number of columns to be joined on");
 
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.");
+
   if (is_trivial_join(probe, _build, join)) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
@@ -574,7 +588,17 @@ hash_join::~hash_join() = default;
 hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<const impl_type>(build, compare_nulls, stream)}
+  // If we cannot know beforehand about null existence then let's assume that there are nulls.
+  : hash_join(build, nullable_join::YES, compare_nulls, stream)
+{
+}
+
+hash_join::hash_join(cudf::table_view const& build,
+                     nullable_join has_nulls,
+                     null_equality compare_nulls,
+                     rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<const impl_type>(
+      build, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }
 

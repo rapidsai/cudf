@@ -25,6 +25,12 @@ dlpack_version:
 librdkafka_version:
   - ">=1.9.0,<1.10.0a0"
 
+libcurand_host_version:
+  - "=10.3.0.86"
+
+libcurand_run_version:
+  - ">=10.2.5.43,<10.3.1"
+
 fmt_version:
   - ">=9.1.0,<10"
 
