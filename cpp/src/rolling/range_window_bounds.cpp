@@ -62,23 +62,28 @@ struct range_scalar_constructor {
 
 }  // namespace
 
-range_window_bounds::range_window_bounds(bool is_unbounded_, std::unique_ptr<scalar> range_scalar_)
-  : _is_unbounded{is_unbounded_}, _range_scalar{std::move(range_scalar_)}
+range_window_bounds::range_window_bounds(extent extent_, std::unique_ptr<scalar> range_scalar_)
+  : _extent{extent_}, _range_scalar{std::move(range_scalar_)}
 {
   CUDF_EXPECTS(_range_scalar.get(), "Range window scalar cannot be null.");
-  CUDF_EXPECTS(_is_unbounded || _range_scalar->is_valid(),
+  CUDF_EXPECTS(_extent == extent::UNBOUNDED || _extent == extent::CURRENT_ROW || _range_scalar->is_valid(),
                "Bounded Range window scalar must be valid.");
 }
 
 range_window_bounds range_window_bounds::unbounded(data_type type)
 {
-  return range_window_bounds(true, make_default_constructed_scalar(type));
+  return range_window_bounds(extent::UNBOUNDED, make_default_constructed_scalar(type));
+}
+
+range_window_bounds range_window_bounds::current_row(data_type type)
+{
+  return range_window_bounds(extent::CURRENT_ROW, make_default_constructed_scalar(type));
 }
 
 range_window_bounds range_window_bounds::get(scalar const& boundary)
 {
   return range_window_bounds{
-    false, cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
+    extent::BOUNDED, cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
 }
 
 }  // namespace cudf

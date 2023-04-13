@@ -30,10 +30,8 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -45,6 +43,7 @@ template <typename T>
 using decimals_column = cudf::test::fixed_point_column_wrapper<T>;
 using ints_column     = fwcw<int32_t>;
 using bigints_column  = fwcw<int64_t>;
+using strings_column  = cudf::test::strings_column_wrapper;
 using column_ptr      = std::unique_ptr<cudf::column>;
 
 struct BaseGroupedRollingRangeOrderByDecimalTest : public cudf::test::BaseFixture {
@@ -62,12 +61,12 @@ template <typename DecimalT>
 struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrderByDecimalTest {
   using Rep = typename DecimalT::rep;
 
-  auto make_fixed_point_range_bounds(typename DecimalT::rep value, numeric::scale_type scale) const
+  [[nodiscard]] auto make_fixed_point_range_bounds(typename DecimalT::rep value, numeric::scale_type scale) const
   {
     return cudf::range_window_bounds::get(*cudf::make_fixed_point_scalar<DecimalT>(value, scale));
   }
 
-  auto make_unbounded_fixed_point_range_bounds() const
+  [[nodiscard]] auto make_unbounded_fixed_point_range_bounds() const
   {
     return cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_to_id<DecimalT>()});
   }
@@ -76,7 +75,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
   /// the same effective values:           [0, 100,   200,   300,   ... 1100,   1200,   1300]
   /// For scale == -2, the rep values are: [0, 10000, 20000, 30000, ... 110000, 120000, 130000]
   /// For scale ==  2, the rep values are: [0, 1,     2,     3,     ... 11,     12,     13]
-  column_ptr generate_order_by_column(numeric::scale_type scale) const
+  [[nodiscard]] column_ptr generate_order_by_column(numeric::scale_type scale) const
   {
     auto const begin = thrust::make_transform_iterator(
       thrust::make_counting_iterator<Rep>(0),
@@ -92,7 +91,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
    * Keeping the effective range bounds value identical ensures that
    * the expected result from grouped_rolling remains the same.
    */
-  Rep rescale_range_value(Rep const& value_at_scale_0, numeric::scale_type new_scale) const
+  [[nodiscard]] Rep rescale_range_value(Rep const& value_at_scale_0, numeric::scale_type new_scale) const
   {
     // Scale  ->   Rep (for value == 200)
     //  -2    ->       20000
@@ -286,4 +285,48 @@ TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, UnboundedRanges)
     this->run_test_unbounded_preceding_to_current_row(order_by_column_scale);
     this->run_test_current_row_to_unbounded_following(order_by_column_scale);
   }
+}
+
+struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
+    // Stand-in for std::pow(10, n), but for integral return.
+    static constexpr std::array<int32_t, 6> pow10{1, 10, 100, 1000, 10000, 100000};
+    // Test data.
+    column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
+    column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
+    cudf::size_type const num_rows = grouping_keys->size();
+};
+
+TEST_F(GroupedRollingRangeOrderByStringTest, Basics)
+{
+  std::cout << "Hello, World!" << std::endl;
+
+  auto orderby = strings_column{ "A", "A", "A", "B", "B", "B", "C", "C", "C", "C", "D", "D", "E", "E" }.release();
+  //                             <------- Group 0 --------->   <---- Group 1 -->   <--- Group 2 --->
+
+  auto const unbounded_preceding = cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_id::STRING});
+  auto const unbounded_following = cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_id::STRING});
+  auto const current_row = cudf::range_window_bounds::current_row(cudf::data_type{cudf::type_id::STRING});
+
+
+  auto const actual_output = cudf::grouped_range_rolling_window(cudf::table_view{{*grouping_keys}},
+                                                                *orderby,
+                                                                cudf::order::ASCENDING,
+                                                                *agg_values,
+                                                                current_row,
+                                                                unbounded_following,
+                                                                1,
+                                                                *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+
+//  std::cout << "result_unbound_to_unbound: " << std::endl;
+//  cudf::test::print(*actual_output);
+
+//  std::cout << "result_unbound_to_current_row: " << std::endl;
+//  cudf::test::print(*actual_output);
+
+  std::cout << "result_current_row_to_unbound: " << std::endl;
+  cudf::test::print(*actual_output);
+
+//  std::cout << "Strings column: " << std::endl;
+//  cudf::test::print(*strings);
+
 }
