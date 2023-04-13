@@ -273,7 +273,7 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
       host_data.begin(),
       [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
   }
-  return std::make_pair(std::move(host_data), bitmask_to_host(c));
+  return {std::move(host_data), bitmask_to_host(c)};
 }
 
 }  // namespace cudf::test

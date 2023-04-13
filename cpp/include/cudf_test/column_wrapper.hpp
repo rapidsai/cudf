@@ -256,7 +256,7 @@ std::pair<std::vector<bitmask_type>, cudf::size_type> make_null_mask_vector(Vali
     }
   }
 
-  return std::make_pair(std::move(null_mask), null_count);
+  return {std::move(null_mask), null_count};
 }
 
 /**
@@ -280,7 +280,7 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
   auto d_mask                  = rmm::device_buffer{null_mask.data(),
                                    null_mask.size() * sizeof(decltype(null_mask.front())),
                                    cudf::get_default_stream()};
-  return std::make_pair(std::move(d_mask), null_count);
+  return {std::move(d_mask), null_count};
 }
 
 /**
