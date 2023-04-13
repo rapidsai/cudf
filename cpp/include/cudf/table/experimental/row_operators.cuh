@@ -690,9 +690,9 @@ struct preprocessed_table {
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
    *        are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   *        values compare to all other for every column. If it is nullptr, then null precedence
-   *        would be `null_order::BEFORE` for all columns.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    * @return A shared pointer to a preprocessed table.
    */
@@ -716,9 +716,9 @@ struct preprocessed_table {
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
    *        are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   *        values compare to all other for every column. If it is nullptr, then null precedence
-   *        would be `null_order::BEFORE` for all columns.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    * @return A pair of shared pointers to the preprocessed tables
    */
@@ -744,9 +744,9 @@ struct preprocessed_table {
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
    *        are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   *        values compare to all other for every column. If it is nullptr, then null precedence
-   *        would be `null_order::BEFORE` for all columns.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
    *        any lists-of-structs column having floating-point children using `cudf::rank`.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
