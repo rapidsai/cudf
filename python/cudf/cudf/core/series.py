@@ -592,9 +592,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
-        if index is not None:
-            if not isinstance(index, BaseIndex):
-                index = as_index(index)
+        if index is not None and not isinstance(index, BaseIndex):
+            index = as_index(index)
 
         assert isinstance(data, ColumnBase)
 
