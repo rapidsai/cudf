@@ -56,6 +56,19 @@ struct feature_status_parameters {
 };
 
 /**
+ * @brief Equality operator overload. Required to use `feature_status_parameters` as a map key.
+ */
+inline bool operator==(const feature_status_parameters& lhs, const feature_status_parameters& rhs)
+{
+  return lhs.lib_major_version == rhs.lib_major_version and
+         lhs.lib_minor_version == rhs.lib_minor_version and
+         lhs.lib_patch_version == rhs.lib_patch_version and
+         lhs.are_all_integrations_enabled == rhs.are_all_integrations_enabled and
+         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled and
+         lhs.compute_capability_major == rhs.compute_capability_major;
+}
+
+/**
  * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
  * Result cab depend on nvCOMP version and environment variables.
