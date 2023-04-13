@@ -610,22 +610,36 @@ transform_lists_of_structs(table_view const& lhs,
 }
 
 /**
- * @brief Check if there is any structs column in the input table has child that is a floating-point
- * column.
+ * @brief Check if there is any lists-of-structs column in the input table that has a floating-point
+ * column nested inside it.
  *
  * @param input The tables to check
  * @return The check result
  */
-bool has_floating_point_in_struct(table_view const& input)
+bool lists_of_structs_have_floating_point(table_view const& input)
 {
+  // Check if any (nested) column is floating-point type.
   std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
     return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
            std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
   };
 
   return std::any_of(input.begin(), input.end(), [&](auto const& col) {
-    return col.type().id() == type_id::STRUCT &&
-           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
+    // We are looking for lists-of-structs.
+    if (col.type().id() != type_id::LIST) { return false; }
+
+    auto const child = col.child(lists_column_view::child_column_index);
+    if (child.type().id() == type_id::STRUCT &&
+        std::any_of(child.child_begin(), child.child_end(), has_nested_floating_point)) {
+      return true;
+    }
+    if (child.type().id() == type_id::LIST &&
+        lists_of_structs_have_floating_point(table_view{{child}})) {
+      return true;
+    }
+
+    // Found a lists of some-type other than STRUCT or LIST.
+    return false;
   });
 }
 
@@ -640,9 +654,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   bool ranked_floating_point,
   rmm::cuda_stream_view stream)
 {
-  //  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-  //    decompose_structs(input, column_order, null_precedence);
-
   check_lex_compatibility(preprocessed_input);
 
   auto d_t = table_device_view::create(preprocessed_input, stream);
@@ -687,7 +698,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   [[maybe_unused]] auto [transformed_t, unused_0, structs_transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, stream);
   auto const ranked_floating_point =
-    structs_transformed_columns.size() > 0 && has_floating_point_in_struct(input);
+    structs_transformed_columns.size() > 0 && lists_of_structs_have_floating_point(input);
 
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
@@ -729,9 +740,9 @@ preprocessed_table::create(table_view const& lhs,
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
 
   auto const ranked_floating_point_lhs =
-    structs_transformed_columns_lhs.size() > 0 && has_floating_point_in_struct(lhs);
+    structs_transformed_columns_lhs.size() > 0 && lists_of_structs_have_floating_point(lhs);
   auto const ranked_floating_point_rhs =
-    structs_transformed_columns_rhs.size() > 0 && has_floating_point_in_struct(rhs);
+    structs_transformed_columns_rhs.size() > 0 && lists_of_structs_have_floating_point(rhs);
 
   //  printf("line %d\n", __LINE__);
   //  cudf::test::print(transformed_lhs.column(0));
