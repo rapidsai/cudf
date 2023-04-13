@@ -609,6 +609,13 @@ transform_lists_of_structs(table_view const& lhs,
           std::move(out_cols_rhs)};
 }
 
+/**
+ * @brief Check if there is any structs column in the input table has child that is a floating-point
+ * column.
+ *
+ * @param input The tables to check
+ * @return The check result
+ */
 bool has_floating_point_in_struct(table_view const& input)
 {
   std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
@@ -617,9 +624,8 @@ bool has_floating_point_in_struct(table_view const& input)
   };
 
   return std::any_of(input.begin(), input.end(), [&](auto const& col) {
-    return col.type().id() == type_id::STRUCT
-             ? std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point)
-             : false;
+    return col.type().id() == type_id::STRUCT &&
+           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
   });
 }
 
