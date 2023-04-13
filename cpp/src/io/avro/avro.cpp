@@ -67,12 +67,8 @@ std::string container::get_encoded()
 bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
 {
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
-  uint32_t sig4, max_block_size, num_rows, row_offset;
-  size_t total_object_count;
-  uint64_t sync_marker[2];
-  bool valid_sync_markers;
 
-  sig4 = get_raw<uint8_t>();
+  uint32_t sig4 = get_raw<uint8_t>();
   sig4 |= get_raw<uint8_t>() << 8;
   sig4 |= get_raw<uint8_t>() << 16;
   sig4 |= get_raw<uint8_t>() << 24;
@@ -100,11 +96,11 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->sync_marker[0] = get_raw<uint64_t>();
   md->sync_marker[1] = get_raw<uint64_t>();
 
+  // Initialize remaining metadata fields.
   md->metadata_size  = m_cur - m_base;
   md->skip_rows      = first_row;
   md->total_num_rows = 0;
-  max_block_size     = 0;
-  total_object_count = 0;
+
   // Enumerate the blocks in this file.  Each block starts with a count of
   // objects (rows) in the block (uint64_t), and then the total size in bytes
   // of the block (uint64_t).  We walk each block and do the following:
@@ -125,6 +121,25 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   //      md->block_list) that precede the block containing the first row
   //      we're interested in.
   //
+
+  // Number of rows in the current block.
+  uint32_t num_rows = 0;
+
+  // Absolute row offset of the current block relative to all blocks selected by
+  // the skip rows/limit rows constraints, if any.  Otherwise, absolute row
+  // offset relative to all blocks.
+  uint32_t row_offset = 0;
+
+  // Maximum block size in bytes encountered whilst processing all blocks
+  // selected by the skip rows/limit rows constraints, if any.  Otherwise,
+  // maximum block size across all blocks.
+  uint32_t max_block_size = 0;
+
+  // Accumulates the total number of rows across all blocks selected by the skip
+  // rows/limit rows constraints, if any.  Otherwise, total number of rows across
+  // all blocks.
+  size_t total_object_count = 0;
+
   // N.B. The 18 below is (presumably) intended to account for the two 64-bit
   //      object count and block size integers (16 bytes total), and then an
   //      additional two bytes to represent the smallest possible row size.
@@ -160,8 +175,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
         // this block*.
         m_start = m_cur;
         total_object_count -= first_row;
-        num_rows   = total_object_count;
-        row_offset = 0;
+        num_rows = total_object_count;
+        CUDF_EXPECTS(row_offset == 0, "Invariant check failed: row_offset != 0");
         if ((max_num_rows > 0) && (max_num_rows < total_object_count)) { num_rows = max_num_rows; }
         md->block_list.emplace_back(m_cur - m_base, block_size, row_offset, first_row, num_rows);
         first_row = 0;
@@ -183,9 +198,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     // Read the next sync markers and ensure they match the first ones we
     // encountered.  If they don't, we have to assume the data is corrupted,
     // and thus, we terminate processing immediately.
-    sync_marker[0] = get_raw<uint64_t>();
-    sync_marker[1] = get_raw<uint64_t>();
-    valid_sync_markers =
+    const uint64_t sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    bool valid_sync_markers =
       ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
     if (!valid_sync_markers) { return false; }
   }
