@@ -367,7 +367,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     // this utility calls the functor to build the offsets and chars columns;
-    // the bitmask and null-count may be updated by parse failures
+    // the bitmask and null count may be updated by parse failures
     auto [offsets, chars] = cudf::strings::detail::make_strings_children(
       string_parse<decltype(str_tuples)>{
         str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options},
