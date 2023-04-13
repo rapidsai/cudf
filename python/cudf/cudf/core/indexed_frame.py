@@ -447,7 +447,7 @@ class IndexedFrame(Frame):
         if self._data.nrows > 0 and self._data.nrows != len(self._index):
             raise ValueError(
                 f"Length of values ({self._data.nrows}) does not "
-                f"match, length of index ({len(self._index)})"
+                f"match length of index ({len(self._index)})"
             )
 
     def copy(self: T, deep: bool = True) -> T:
