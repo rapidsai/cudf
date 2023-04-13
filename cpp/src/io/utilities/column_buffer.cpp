@@ -241,13 +241,8 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
       auto child = empty_like(buffer.children[0], child_info, stream, mr);
 
       // make the final list column
-      return make_lists_column(0,
-                               std::move(offsets),
-                               std::move(child),
-                               buffer._null_count,
-                               std::move(buffer._null_mask),
-                               stream,
-                               mr);
+      return make_lists_column(
+        0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
     } break;
 
     case type_id::STRUCT: {
@@ -265,12 +260,8 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
                        return empty_like(col, child_info, stream, mr);
                      });
 
-      return make_structs_column(0,
-                                 std::move(output_children),
-                                 buffer._null_count,
-                                 std::move(buffer._null_mask),
-                                 stream,
-                                 mr);
+      return make_structs_column(
+        0, std::move(output_children), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
     } break;
 
     default: return cudf::make_empty_column(buffer.type);

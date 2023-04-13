@@ -294,11 +294,12 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
-TYPED_TEST(groupby_structs_test, lists_are_unsupported)
+TYPED_TEST(groupby_structs_test, lists_as_keys)
 {
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
+  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
 
   // clang-format off
   auto values   = fwcw<V> {     0,      1,      2,      3,       4  };
@@ -307,5 +308,12 @@ TYPED_TEST(groupby_structs_test, lists_are_unsupported)
   // clang-format on
   auto keys = cudf::test::structs_column_wrapper{{member_0, member_1}};
 
-  EXPECT_THROW(test_sum_agg(keys, values, keys, values), cudf::logic_error);
+  // clang-format off
+  auto expected_values   = fwcw<R> {     3,      5,      2 };
+  auto expected_member_0 = lcw<M0> { {1,1},  {2,2},  {3,3} };
+  auto expected_member_1 = fwcw<M1>{     1,      2,      3 };
+  // clang-format on
+  auto expected_keys = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1}};
+
+  test_sum_agg(keys, values, expected_keys, expected_values);
 }

@@ -73,10 +73,10 @@ struct hash_join {
   hash_join& operator=(hash_join&&) = delete;
 
  private:
-  bool const _is_empty;                         ///< true if `_hash_table` is empty
-  rmm::device_buffer const _composite_bitmask;  ///< Bitmask to denote whether a row is valid
-  cudf::null_equality const _nulls_equal;       ///< whether to consider nulls as equal
-  cudf::table_view _build;                      ///< input table to build the hash map
+  bool const _is_empty;   ///< true if `_hash_table` is empty
+  bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
+  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
+  cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
   map_type _hash_table;   ///< hash table built on `_build`
@@ -89,10 +89,13 @@ struct hash_join {
    * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
    *
    * @param build The build table, from which the hash table is built.
+   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   *        any `probe` table that will be used later for join.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   hash_join(cudf::table_view const& build,
+            bool has_nulls,
             cudf::null_equality compare_nulls,
             rmm::cuda_stream_view stream);
 

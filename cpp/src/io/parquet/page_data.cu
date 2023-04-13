@@ -339,10 +339,11 @@ __device__ void gpuDecodeStream(
  * additional values.
  */
 template <bool sizes_only>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
-                                                                volatile page_state_buffers_s* sb,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
+  volatile page_state_s* s,
+  [[maybe_unused]] volatile page_state_buffers_s* sb,
+  int target_pos,
+  int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -524,7 +525,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
  */
 template <bool sizes_only>
 __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
-                                              volatile page_state_buffers_s* sb,
+                                              [[maybe_unused]] volatile page_state_buffers_s* sb,
                                               int target_pos,
                                               int t)
 {
@@ -628,13 +629,11 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
 /**
  * @brief Output a boolean
  *
- * @param[in,out] s Page state input/output
  * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputBoolean(volatile page_state_s* s,
-                                        volatile page_state_buffers_s* sb,
+inline __device__ void gpuOutputBoolean(volatile page_state_buffers_s* sb,
                                         int src_pos,
                                         uint8_t* dst)
 {
@@ -995,7 +994,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   int chunk_idx;
 
   // Fetch page info
-  if (!t) s->page = *p;
+  if (!t) {
+    s->page         = *p;
+    s->nesting_info = nullptr;
+  }
   __syncthreads();
 
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
@@ -1890,6 +1892,26 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+// Copies null counts back to `nesting_decode` at the end of scope
+struct null_count_back_copier {
+  page_state_s* s;
+  int t;
+  __device__ ~null_count_back_copier()
+  {
+    if (s->nesting_info != nullptr and s->nesting_info == s->nesting_decode_cache) {
+      int depth = 0;
+      while (depth < s->page.num_output_nesting_levels) {
+        int const thread_depth = depth + t;
+        if (thread_depth < s->page.num_output_nesting_levels) {
+          s->page.nesting_decode[thread_depth].null_count =
+            s->nesting_decode_cache[thread_depth].null_count;
+        }
+        depth += blockDim.x;
+      }
+    }
+  }
+};
+
 /**
  * @brief Kernel for co the column data stored in the pages
  *
@@ -1914,6 +1936,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
@@ -2027,7 +2050,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
             gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == BOOLEAN) {
-          gpuOutputBoolean(s, sb, val_src_pos, static_cast<uint8_t*>(dst));
+          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
             case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
@@ -2065,19 +2088,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
     }
     __syncthreads();
-  }
-
-  // if we are using the nesting decode cache, copy null count back
-  if (s->nesting_info == s->nesting_decode_cache) {
-    int depth = 0;
-    while (depth < s->page.num_output_nesting_levels) {
-      int const thread_depth = depth + t;
-      if (thread_depth < s->page.num_output_nesting_levels) {
-        s->page.nesting_decode[thread_depth].null_count =
-          s->nesting_decode_cache[thread_depth].null_count;
-      }
-      depth += blockDim.x;
-    }
   }
 }
 
