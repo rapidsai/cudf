@@ -40,7 +40,7 @@ namespace detail {
 namespace {
 
 // Data type of the output data column after conversion.
-data_type constexpr output_type{data_type{type_id::UINT8}};
+constexpr data_type output_type{type_id::UINT8};
 
 template <typename T, typename Enable = void>
 struct byte_list_conversion_fn {
@@ -89,7 +89,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_bytes),
                        [d_inp, d_out] __device__(auto index) {
-                         auto constexpr mask = static_cast<size_type>(sizeof(T) - 1);
+                         constexpr auto mask = static_cast<size_type>(sizeof(T) - 1);
                          d_out[index]        = d_inp[index + mask - ((index & mask) << 1)];
                        });
     } else {
