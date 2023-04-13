@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -93,6 +94,22 @@ std::unique_ptr<column> make_empty_lists_column(data_type child_type,
   auto child   = make_empty_column(child_type);
   return make_lists_column(
     0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
+}
+
+std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
+                                                    data_type child_type,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = [&] {
+    auto offsets_buff =
+      cudf::detail::make_zeroed_device_uvector_async<offset_type>(size + 1, stream, mr);
+    return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
+  }();
+  auto child     = make_empty_column(child_type);
+  auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  return make_lists_column(
+    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
 }
 
 }  // namespace detail
