@@ -539,9 +539,10 @@ transform_lists_of_structs(column_view const& lhs,
       }
     }
     // else == child is not STRUCT or LIST: just go to the end of this function, no transformation.
-  } else if (lhs.type().id() == type_id::STRUCT) {
-    // Any structs-of-lists should be decomposed into empty struct type `Struct<>` before being
-    // processed by this function.
+  }
+  // Any structs-of-lists should be decomposed into empty struct type `Struct<>` before being
+  // processed by this function.
+  else if (lhs.type().id() == type_id::STRUCT) {
     CUDF_EXPECTS(std::all_of(lhs.child_begin(),
                              lhs.child_end(),
                              [](auto const& child) { return child.type().id() != type_id::LIST; }),
@@ -625,6 +626,16 @@ bool lists_of_structs_have_floating_point(table_view const& input)
   };
 
   return std::any_of(input.begin(), input.end(), [&](auto const& col) {
+    // Any structs-of-lists should be decomposed into empty struct type `Struct<>` before being
+    // processed by this function.
+    if (col.type().id() == type_id::STRUCT) {
+      CUDF_EXPECTS(
+        std::all_of(col.child_begin(),
+                    col.child_end(),
+                    [](auto const& child) { return child.type().id() != type_id::LIST; }),
+        "Structs columns should be decomposed before reaching this function.");
+    }
+
     // We are looking for lists-of-structs.
     if (col.type().id() != type_id::LIST) { return false; }
 
@@ -697,8 +708,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 
   [[maybe_unused]] auto [transformed_t, unused_0, structs_transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, stream);
-  auto const ranked_floating_point =
-    structs_transformed_columns.size() > 0 && lists_of_structs_have_floating_point(input);
+  auto const ranked_floating_point = structs_transformed_columns.size() > 0 &&
+                                     lists_of_structs_have_floating_point(decomposed_input);
 
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
@@ -739,10 +750,10 @@ preprocessed_table::create(table_view const& lhs,
         structs_transformed_columns_rhs] =
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
 
-  auto const ranked_floating_point_lhs =
-    structs_transformed_columns_lhs.size() > 0 && lists_of_structs_have_floating_point(lhs);
-  auto const ranked_floating_point_rhs =
-    structs_transformed_columns_rhs.size() > 0 && lists_of_structs_have_floating_point(rhs);
+  auto const ranked_floating_point_lhs = structs_transformed_columns_lhs.size() > 0 &&
+                                         lists_of_structs_have_floating_point(decomposed_lhs);
+  auto const ranked_floating_point_rhs = structs_transformed_columns_rhs.size() > 0 &&
+                                         lists_of_structs_have_floating_point(decomposed_rhs);
 
   //  printf("line %d\n", __LINE__);
   //  cudf::test::print(transformed_lhs.column(0));
