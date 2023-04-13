@@ -59,14 +59,14 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, 
  * @param[in] schema_len Number of schema entries
  * @param[in] first_row First row to start saving decoded data
  * @param[in] row Current row
- * @param[in] end_row One past the last row to decode
+ * @param[in] end_row One past the last row to save
  * @param[in] row_offset Absolute row offset of this row in the
  *                       destination data.
  * @param[in] cur Current input data pointer
  * @param[in] end End of input data
  * @param[in] global_Dictionary Global dictionary entries
  * @param[out] skipped_row Whether the row was skipped; set to false
- *                         if the row was decoded (caller should ensure
+ *                         if the row was saved (caller should ensure
  *                         this is initialized to true)
  *
  * @return data pointer at the end of the row (start of next row)
@@ -94,6 +94,7 @@ avro_decode_row(schemadesc_s const* schema,
   // following fashion:
   //    if (dataptr != nullptr && dst_row > 0) {
   //      static_cast<int32_t*>(dataptr)[dst_row] = static_cast<int32_t>(v);
+  //      *skipped_row = false;
   //    }
   // The actual value is calculated by subtracting the first row from this given
   // row value, and then adding the absolute row offset.  The row offset is
