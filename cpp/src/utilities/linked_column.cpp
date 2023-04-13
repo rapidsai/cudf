@@ -45,12 +45,6 @@ linked_column_view::operator column_view() const
                      std::vector<column_view>(child_it, child_it + children.size()));
 }
 
-/**
- * @brief Converts all column_views of a table into linked_column_views
- *
- * @param table table of columns to convert
- * @return Vector of converted linked_column_views
- */
 LinkedColVector table_to_linked_columns(table_view const& table)
 {
   auto linked_it = thrust::make_transform_iterator(
