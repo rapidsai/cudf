@@ -27,12 +27,11 @@ void nvbench_inner_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(
-      left_input,
-      cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input),
-      compare_nulls,
-      stream);
-    return hj_obj.inner_join(right_input, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
+    return hj_obj.inner_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -48,12 +47,11 @@ void nvbench_left_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(
-      left_input,
-      cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input),
-      compare_nulls,
-      stream);
-    return hj_obj.left_join(right_input, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
+    return hj_obj.left_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -69,12 +67,11 @@ void nvbench_full_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(
-      left_input,
-      cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input),
-      compare_nulls,
-      stream);
-    return hj_obj.full_join(right_input, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
+    return hj_obj.full_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
