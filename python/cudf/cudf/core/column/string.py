@@ -5264,13 +5264,15 @@ class StringMethods(ColumnMethods):
         dtype: list
         """
         if seeds is None:
-            seeds = column.as_column(0, dtype=np.uint32, length=1)
-        elif not isinstance(seeds, cudf.Series):
-            raise ValueError("Must provide a Series of seeds")
+            seeds_column = column.as_column(0, dtype=np.uint32, length=1)
+        elif isinstance(seeds, cudf.Series) and seeds.dtype == np.uint32:
+            seeds_column = seeds._column
         else:
-            seeds = seeds._column
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(seeds)}"
+            )
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds, n, method)
+            libstrings.minhash(self._column, seeds_column, n, method)
         )
 
 

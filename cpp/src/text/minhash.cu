@@ -59,8 +59,8 @@ struct minhash_fn {
 
   __device__ void operator()(cudf::size_type idx)
   {
-    auto const str_idx  = idx / cudf::detail::warp_size;
-    auto const lane_idx = idx % cudf::detail::warp_size;
+    auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+    auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
 
     if (d_strings.is_null(str_idx)) { return; }
 
@@ -114,6 +114,11 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
   CUDF_EXPECTS(hash_function == cudf::hash_id::HASH_MURMUR3,
                "Only murmur3 hash algorithm supported",
                std::invalid_argument);
+  CUDF_EXPECTS(
+    (static_cast<std::size_t>(input.size()) * seeds.size()) <
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "The number of seeds times the number of input rows must not exceed maximum of size_type",
+    std::invalid_argument);
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
@@ -127,10 +132,11 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                           mr);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
-                     input.size() * cudf::detail::warp_size,
-                     minhash_fn{*d_strings, seeds, width, d_hashes});
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator(std::size_t{0}),
+    static_cast<std::size_t>(input.size()) * static_cast<std::size_t>(cudf::detail::warp_size),
+    minhash_fn{*d_strings, seeds, width, d_hashes});
 
   if (seeds.size() == 1) {
     hashes->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr),
