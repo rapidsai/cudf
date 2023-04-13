@@ -346,7 +346,7 @@ __device__ inline size_type string_view::find_impl(const char* str,
                                                    size_type count) const
 {
   auto const nchars = length();
-  if (!str || pos < 0 || pos >= nchars) return npos;
+  if (!str || pos < 0 || pos > nchars) return npos;
   if (count < 0) count = nchars;
 
   // use iterator to help reduce character/byte counting
