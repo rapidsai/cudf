@@ -341,11 +341,12 @@ cdef orc_reader_options make_orc_reader_options(
         orc_reader_options.builder(src)
         .stripes(strps)
         .skip_rows(skip_rows)
-        .num_rows(num_rows)
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
         .build()
     )
+    if num_rows >= 0:
+        opts.set_num_rows(num_rows)
 
     cdef vector[string] c_column_names
     if column_names is not None:
