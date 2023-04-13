@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <algorithm>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -29,6 +28,7 @@
 
 #include <thrust/transform.h>
 
+#include <algorithm>
 #include <memory>
 
 namespace cudf {
