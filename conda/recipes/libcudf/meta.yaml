@@ -45,7 +45,8 @@ requirements:
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
-    - libcurand-dev
+    - libcurand {{ libcurand_host_version }}
+    - libcurand-dev {{ libcurand_host_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -386,6 +387,7 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
+        - libcurand {{ libcurand_run_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
