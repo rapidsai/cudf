@@ -335,7 +335,7 @@ using const_device_iterator =
   thrust::transform_iterator<device_value_accessor<T>, thrust::counting_iterator<size_type>>;
 
 /// This is a stand-in for the `cudf::column_device_view::begin<T>()`, which is `__host__` only.
-/// For range window functions, one might need to iterate over the `oby` column, per row.
+/// For range window functions, one might need to iterate over the order-by column, per row.
 template <typename T, CUDF_ENABLE_IF(cudf::column_device_view::has_element_accessor<T>())>
 [[nodiscard]] __device__ const_device_iterator<T> begin(cudf::column_device_view const& col)
 {
