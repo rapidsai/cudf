@@ -4939,14 +4939,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
         expected = getattr(pdf, op)(**kwargs)
         got = getattr(gdf, op)(**kwargs)
 
-        if len(got) == 0:
-            assert_eq(
-                expected.reset_index(drop=True),
-                got.reset_index(drop=True),
-                check_exact=False,
-            )
-        else:
-            assert_eq(expected, got, check_dtype=False)
+        assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
