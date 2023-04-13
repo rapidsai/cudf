@@ -739,8 +739,8 @@ struct preprocessed_table {
    * @param preprocessed_input The table resulted from preprocessing
    * @param verticalized_col_depths The depths of each column resulting from decomposing struct
    *        columns in the original input table
-   * @param structs_transformed_columns Store the intermediate results from transforming the child
-   *        columns of lists-of-structs columns into integer columns using `cudf::rank()`
+   * @param structs_transformed_columns Store the intermediate columns generated from transforming
+   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`.
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
    *        are sorted in ascending order.
@@ -781,9 +781,8 @@ struct preprocessed_table {
    *        contain an empty `dremel_device_view`. As such, this uvector has as many elements as
    *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
    *        long as the number of list columns).
-   * @param structs_transformed_columns Store the intermediate results from transforming the child
-   *        columns of lists-of-structs columns into integer columns using `cudf::rank()` and will
-   *        be used for row comparison.
+   * @param structs_transformed_columns Store the intermediate columns generated from transforming
+   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`.
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
    *        any lists-of-structs column having floating-point children using `cudf::rank`.
    */
@@ -867,8 +866,8 @@ struct preprocessed_table {
   std::optional<std::vector<detail::dremel_data>> _dremel_data;
   std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 
-  // Intermediate columns generated from transforming the child columns of lists-of-structs columns
-  // into columns of `size_type` type using `cudf::rank()`, need to be kept alive.
+  // Intermediate columns generated from transforming lists-of-structs columns into
+  // lists-of-integers columns using `cudf::rank()`, need to be kept alive.
   std::vector<std::unique_ptr<column>> _structs_transformed_columns;
 
   // Flag to record if the input table was preprocessed to transform any lists-of-structs column

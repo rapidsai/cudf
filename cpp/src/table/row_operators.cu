@@ -715,11 +715,12 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
+  // Unused variables are generated for rhs table which is not available here.
   [[maybe_unused]] auto [transformed_t, unused_0, structs_transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
+
   auto const ranked_floating_point = structs_transformed_columns.size() > 0 &&
                                      lists_of_structs_have_floating_point(decomposed_input);
-
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
                                    std::move(structs_transformed_columns),
@@ -743,14 +744,11 @@ preprocessed_table::create(table_view const& lhs,
         new_null_precedence_lhs,
         verticalized_col_depths_lhs] =
     decompose_structs(lhs, false /*no decompose lists*/, column_order, null_precedence);
+
+  // Unused variables are new column order and null order for rhs, which are the same as for lhs
+  // so we don't need them.
   [[maybe_unused]] auto [decomposed_rhs, unused0, unused1, verticalized_col_depths_rhs] =
     decompose_structs(rhs, false /*no decompose lists*/, column_order, null_precedence);
-
-  //  printf("line %d\n", __LINE__);
-  //  cudf::test::print(decomposed_lhs.column(0));
-
-  //  printf("line %d\n", __LINE__);
-  //  cudf::test::print(decomposed_rhs.column(0));
 
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
   auto [transformed_lhs,
@@ -759,16 +757,12 @@ preprocessed_table::create(table_view const& lhs,
         structs_transformed_columns_rhs] =
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, new_null_precedence_lhs, stream);
 
+  // This should be the same for both lhs and rhs but not all the time, such as when one table
+  // has 0 rows  so we check separately for each of them.
   auto const ranked_floating_point_lhs = structs_transformed_columns_lhs.size() > 0 &&
                                          lists_of_structs_have_floating_point(decomposed_lhs);
   auto const ranked_floating_point_rhs = structs_transformed_columns_rhs.size() > 0 &&
                                          lists_of_structs_have_floating_point(decomposed_rhs);
-
-  //  printf("line %d\n", __LINE__);
-  //  cudf::test::print(transformed_lhs.column(0));
-
-  //  printf("line %d\n", __LINE__);
-  //  cudf::test::print(transformed_rhs_opt.value().column(0));
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(verticalized_col_depths_lhs),
