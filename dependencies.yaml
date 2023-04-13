@@ -263,21 +263,34 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "11.2"
+              cuda: "11.8"
             packages:
-              - cudatoolkit=11.2
-          - matrix:
-              cuda: "11.4"
-            packages:
-              - cudatoolkit=11.4
+              - cudatoolkit=11.8
+              - libcurand-dev=10.3.0.86
+              - libcurand=10.3.0.86
           - matrix:
               cuda: "11.5"
             packages:
               - cudatoolkit=11.5
+                # Can't hard pin the version since 11.x is missing many
+                # packages for specific versions
+              - libcurand-dev>=10.2.6.48,<=10.2.7.107
+              - libcurand>=10.2.6.48,<=10.2.7.107
           - matrix:
-              cuda: "11.8"
+              cuda: "11.4"
             packages:
-              - cudatoolkit=11.8
+              - cudatoolkit=11.4
+              - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
+              - &libcurand114 libcurand>=10.2.5.43,<=10.2.5.120
+          - matrix:
+              cuda: "11.2"
+            packages:
+              - cudatoolkit=11.2
+                # The NVIDIA channel doesn't publish pkgs older than 11.4 for
+                # these libs, so 11.2 uses 11.4 packages (the oldest
+                # available).
+              - *libcurand_dev114
+              - *libcurand114
   develop:
     common:
       - output_types: [conda, requirements]
