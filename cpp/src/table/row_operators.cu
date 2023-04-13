@@ -394,6 +394,7 @@ namespace {
  *
  * @param lhs The input lhs column to transform
  * @param rhs The input rhs column to transform (if available)
+ * @param column_null_order The flag indicating how nulls compare to non-null values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple consisting of new column_view representing the transformed input, along with
  *         their ranks column(s) (of `size_type` type) and possibly new list offsets generated
@@ -405,6 +406,7 @@ std::tuple<column_view,
            std::vector<std::unique_ptr<column>>>
 transform_lists_of_structs(column_view const& lhs,
                            std::optional<column_view> const& rhs_opt,
+                           null_order column_null_order,
                            rmm::cuda_stream_view stream)
 {
   auto const default_mr = rmm::mr::get_current_device_resource();
@@ -443,18 +445,17 @@ transform_lists_of_structs(column_view const& lhs,
   // With dense rank, `transformed_input = [ [0, 2], [0, 1] ]`, producing correct comparison.
   //
   // In addition, since the ranked structs column(s) are nested child column instead of
-  // top-level column, the column order and null order should be fixed to the same values in all
-  // situations.
+  // top-level column, the column order should be fixed to the same values in all situations.
   // For example, with the same input above, using the fixed values for column order
-  // (`order::ASCENDING`) and null order (`null_order::BEFORE`), we have
-  // `transformed_input = [ [0, 2], [0, 1] ]`. Sorting of `transformed_input` will produce the
-  // same result as sorting `input` regardless of sorting order (ASC or DESC).
+  // (`order::ASCENDING`), we have `transformed_input = [ [0, 2], [0, 1] ]`. Sorting of
+  // `transformed_input` will produce the same result as sorting `input` regardless of sorting
+  // order (ASC or DESC).
   auto const compute_ranks = [&](column_view const& input) {
     return cudf::detail::rank(input,
                               rank_method::DENSE,
                               order::ASCENDING,
                               null_policy::EXCLUDE,
-                              null_order::BEFORE,
+                              column_null_order,
                               false /*percentage*/,
                               stream,
                               default_mr);
@@ -510,7 +511,7 @@ transform_lists_of_structs(column_view const& lhs,
 
       // Recursively call transformation on the child column.
       auto [new_child_lhs, new_child_rhs_opt, out_cols_child_lhs, out_cols_child_rhs] =
-        transform_lists_of_structs(child_lhs, child_rhs_opt, stream);
+        transform_lists_of_structs(child_lhs, child_rhs_opt, column_null_order, stream);
 
       // Only transform the current pair of columns if their children have been transformed.
       if (out_cols_child_lhs.size() > 0 || out_cols_child_rhs.size() > 0) {
@@ -562,6 +563,9 @@ transform_lists_of_structs(column_view const& lhs,
  *
  * @param lhs The input lhs table to transform
  * @param rhs The input rhs table to transform (if available)
+ * @param null_precedence Optional, an array having the same length as the number of columns in
+ *        the input tables that indicates how null values compare to all other. If it is empty,
+ *        the order `null_order::BEFORE` will be used for all columns.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple consisting of new table_view representing the transformed input, along with
  *         the ranks column (of `size_type` type) and possibly new list offsets generated during the
@@ -573,6 +577,7 @@ std::tuple<table_view,
            std::vector<std::unique_ptr<column>>>
 transform_lists_of_structs(table_view const& lhs,
                            std::optional<table_view> const& rhs,
+                           host_span<null_order const> null_precedence,
                            rmm::cuda_stream_view stream)
 {
   if (lhs.num_rows() == 0 && (!rhs || rhs.value().num_rows() == 0)) {
@@ -591,7 +596,11 @@ transform_lists_of_structs(table_view const& lhs,
       rhs ? std::optional<column_view>{rhs.value().column(col_idx)} : std::nullopt;
 
     auto [transformed_lhs, transformed_rhs_opt, curr_out_cols_lhs, curr_out_cols_rhs] =
-      transform_lists_of_structs(lhs_col, rhs_col_opt, stream);
+      transform_lists_of_structs(
+        lhs_col,
+        rhs_col_opt,
+        null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
+        stream);
 
     transformed_lhs_cvs.push_back(transformed_lhs);
     if (rhs) { transformed_rhs_cvs.push_back(transformed_rhs_opt.value()); }
@@ -649,7 +658,7 @@ bool lists_of_structs_have_floating_point(table_view const& input)
       return true;
     }
 
-    // Found a lists of some-type other than STRUCT or LIST.
+    // Found a lists column of some-type other than STRUCT or LIST.
     return false;
   });
 }
@@ -707,7 +716,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
   [[maybe_unused]] auto [transformed_t, unused_0, structs_transformed_columns, unused_1] =
-    transform_lists_of_structs(decomposed_input, std::nullopt, stream);
+    transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
   auto const ranked_floating_point = structs_transformed_columns.size() > 0 &&
                                      lists_of_structs_have_floating_point(decomposed_input);
 
@@ -748,7 +757,7 @@ preprocessed_table::create(table_view const& lhs,
         transformed_rhs_opt,
         structs_transformed_columns_lhs,
         structs_transformed_columns_rhs] =
-    transform_lists_of_structs(decomposed_lhs, decomposed_rhs, stream);
+    transform_lists_of_structs(decomposed_lhs, decomposed_rhs, new_null_precedence_lhs, stream);
 
   auto const ranked_floating_point_lhs = structs_transformed_columns_lhs.size() > 0 &&
                                          lists_of_structs_have_floating_point(decomposed_lhs);
