@@ -35,8 +35,7 @@ enum class TreeType {
 };
 
 template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
-class AST : public cudf::benchmark {
-};
+class AST : public cudf::benchmark {};
 
 template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 static void BM_ast_transform(benchmark::State& state)

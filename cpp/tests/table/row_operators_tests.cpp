@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct RowOperatorTestForNAN : public cudf::test::BaseFixture {
-};
+struct RowOperatorTestForNAN : public cudf::test::BaseFixture {};
 
 TEST_F(RowOperatorTestForNAN, NANEquality)
 {

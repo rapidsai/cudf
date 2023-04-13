@@ -34,8 +34,7 @@
 
 using namespace cudf::test::iterators;
 
-struct JSONTypeCastTest : public cudf::test::BaseFixture {
-};
+struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
 struct to_thrust_pair_fn {

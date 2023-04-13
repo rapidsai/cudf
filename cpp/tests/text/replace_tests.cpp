@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct TextReplaceTest : public cudf::test::BaseFixture {
-};
+struct TextReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextReplaceTest, ReplaceTokens)
 {

@@ -23,8 +23,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct IsElementValidTest : public cudf::test::BaseFixture {
-};
+struct IsElementValidTest : public cudf::test::BaseFixture {};
 
 TEST_F(IsElementValidTest, IsElementValidBasic)
 {

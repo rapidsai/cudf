@@ -22,8 +22,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 template <bool stable>
-class Sort : public cudf::benchmark {
-};
+class Sort : public cudf::benchmark {};
 
 template <bool stable>
 static void BM_sort(benchmark::State& state, bool nulls)

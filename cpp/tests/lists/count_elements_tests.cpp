@@ -25,15 +25,13 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct ListsElementsTest : public cudf::test::BaseFixture {
-};
+struct ListsElementsTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 template <typename T>
-class ListsElementsNumericsTest : public ListsElementsTest {
-};
+class ListsElementsNumericsTest : public ListsElementsTest {};
 
 TYPED_TEST_SUITE(ListsElementsNumericsTest, NumericTypesNotBool);
 

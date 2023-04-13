@@ -44,8 +44,7 @@ struct string_view_to_pair {
 };
 }  // namespace
 
-class StringsFactory : public cudf::benchmark {
-};
+class StringsFactory : public cudf::benchmark {};
 
 static void BM_factory(benchmark::State& state)
 {

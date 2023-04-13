@@ -384,8 +384,7 @@ void test(testdata::test_case<T> test_case)
 // ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantileTest : public cudf::test::BaseFixture {
-};
+struct QuantileTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(QuantileTest, TestTypes);
@@ -418,8 +417,7 @@ TYPED_TEST(QuantileTest, TestEmpty)
 }
 
 template <typename T>
-struct QuantileUnsupportedTypesTest : public cudf::test::BaseFixture {
-};
+struct QuantileUnsupportedTypesTest : public cudf::test::BaseFixture {};
 
 // TODO add tests for FixedPointTypes
 using UnsupportedTestTypes = cudf::test::RemoveIf<
@@ -448,8 +446,7 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
-struct QuantileDictionaryTest : public cudf::test::BaseFixture {
-};
+struct QuantileDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(QuantileDictionaryTest, TestValid)
 {

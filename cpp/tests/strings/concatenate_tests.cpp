@@ -24,8 +24,7 @@
 
 #include <vector>
 
-struct StringsConcatenateTest : public cudf::test::BaseFixture {
-};
+struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {

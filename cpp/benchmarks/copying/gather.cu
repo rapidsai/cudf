@@ -26,8 +26,7 @@
 #include <thrust/reverse.h>
 #include <thrust/shuffle.h>
 
-class Gather : public cudf::benchmark {
-};
+class Gather : public cudf::benchmark {};
 
 template <class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state)

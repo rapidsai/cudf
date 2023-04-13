@@ -70,8 +70,7 @@ constexpr auto lowest()
 }
 
 template <typename T>
-struct ShiftTestsTyped : public cudf::test::BaseFixture {
-};
+struct ShiftTestsTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ShiftTestsTyped, cudf::test::FixedWidthTypes);
 
@@ -196,8 +195,7 @@ TYPED_TEST(ShiftTestsTyped, MismatchFillValueDtypes)
   EXPECT_THROW(cudf::shift(input, 5, fill), cudf::logic_error);
 }
 
-struct ShiftTests : public cudf::test::BaseFixture {
-};
+struct ShiftTests : public cudf::test::BaseFixture {};
 
 TEST_F(ShiftTests, StringsShiftTest)
 {

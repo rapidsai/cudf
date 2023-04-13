@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct TextGenerateNgramsTest : public cudf::test::BaseFixture {
-};
+struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextGenerateNgramsTest, Ngrams)
 {

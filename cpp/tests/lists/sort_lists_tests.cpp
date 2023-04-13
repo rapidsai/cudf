@@ -33,8 +33,7 @@ auto generate_sorted_lists(cudf::lists_column_view const& input,
 }
 
 template <typename T>
-struct SortLists : public cudf::test::BaseFixture {
-};
+struct SortLists : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 TYPED_TEST_SUITE(SortLists, TypesForTest);

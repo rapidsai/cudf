@@ -33,8 +33,7 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 constexpr int32_t null{0};
 }  // namespace
 
-struct ListConcatenateRowsTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListConcatenateRowsTest, InvalidInput)
 {
@@ -59,8 +58,7 @@ TEST_F(ListConcatenateRowsTest, InvalidInput)
 }
 
 template <typename T>
-struct ListConcatenateRowsTypedTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
@@ -331,9 +329,9 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputNoNull)
   auto const col3         = cudf::slice(col_original->view(), {2, 5})[0];
   auto const col4         = cudf::slice(col_original->view(), {3, 6})[0];
   auto const expected     = ListsCol{
-    {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
-    {2, 3, 3, 4, 5, 6, 5, 6},
-    {3, 4, 5, 6, 5, 6, 7}}.release();
+        {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
+        {2, 3, 3, 4, 5, 6, 5, 6},
+        {3, 4, 5, 6, 5, 6, 7}}.release();
   auto const results = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
@@ -480,8 +478,7 @@ TEST_F(ListConcatenateRowsTest, StringsColumnsWithEmptyListTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
-struct ListConcatenateRowsNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsNestedTypesTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListConcatenateRowsNestedTypesTest, Identity)
 {

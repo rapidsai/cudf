@@ -28,8 +28,7 @@
 #include <algorithm>
 #include <numeric>
 
-struct DropNullsTest : public cudf::test::BaseFixture {
-};
+struct DropNullsTest : public cudf::test::BaseFixture {};
 
 TEST_F(DropNullsTest, WholeRowIsNull)
 {
@@ -206,8 +205,7 @@ TEST_F(DropNullsTest, StringColWithNull)
 }
 
 template <typename T>
-struct DropNullsTestAll : public cudf::test::BaseFixture {
-};
+struct DropNullsTestAll : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(DropNullsTestAll, cudf::test::NumericTypes);
 

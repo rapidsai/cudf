@@ -404,8 +404,7 @@ TYPED_TEST(ScanTest, LeadingNulls)
                   null_policy::INCLUDE);
 }
 
-class ScanStringsTest : public ScanTest<cudf::string_view> {
-};
+class ScanStringsTest : public ScanTest<cudf::string_view> {};
 
 TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
@@ -456,8 +455,7 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 }
 
 template <typename T>
-struct ScanChronoTest : public cudf::test::BaseFixture {
-};
+struct ScanChronoTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanChronoTest, cudf::test::ChronoTypes);
 
@@ -499,8 +497,7 @@ TYPED_TEST(ScanChronoTest, ChronoMinMax)
 }
 
 template <typename T>
-struct ScanDurationTest : public cudf::test::BaseFixture {
-};
+struct ScanDurationTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanDurationTest, cudf::test::DurationTypes);
 
@@ -526,8 +523,7 @@ TYPED_TEST(ScanDurationTest, Sum)
     cudf::logic_error);
 }
 
-struct StructScanTest : public cudf::test::BaseFixture {
-};
+struct StructScanTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructScanTest, StructScanMinMaxNoNull)
 {

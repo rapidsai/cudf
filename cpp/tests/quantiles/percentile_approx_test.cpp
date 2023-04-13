@@ -320,8 +320,7 @@ using PercentileApproxTypes =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 
 template <typename T>
-struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {
-};
+struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(PercentileApproxInputTypesTest, PercentileApproxTypes);
 
 TYPED_TEST(PercentileApproxInputTypesTest, Simple)
@@ -368,8 +367,7 @@ TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
                            {10, cudf::test::default_ulp * 6}});
 }
 
-struct PercentileApproxTest : public cudf::test::BaseFixture {
-};
+struct PercentileApproxTest : public cudf::test::BaseFixture {};
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {

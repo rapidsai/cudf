@@ -24,8 +24,7 @@
 
 #include <vector>
 
-struct DictionaryGatherTest : public cudf::test::BaseFixture {
-};
+struct DictionaryGatherTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryGatherTest, Gather)
 {

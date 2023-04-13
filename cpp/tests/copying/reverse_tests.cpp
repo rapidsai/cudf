@@ -35,8 +35,7 @@
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 template <typename T>
-class ReverseTypedTestFixture : public cudf::test::BaseFixture {
-};
+class ReverseTypedTestFixture : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReverseTypedTestFixture, cudf::test::AllTypes);
 TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
@@ -131,8 +130,7 @@ TYPED_TEST(ReverseTypedTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
-class ReverseStringTestFixture : public cudf::test::BaseFixture {
-};
+class ReverseStringTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(ReverseStringTestFixture, ReverseNullable)
 {

@@ -28,8 +28,7 @@
 #include <nvtext/ngrams_tokenize.hpp>
 #include <nvtext/tokenize.hpp>
 
-class TextTokenize : public cudf::benchmark {
-};
+class TextTokenize : public cudf::benchmark {};
 
 enum class tokenize_type { single, multi, count, count_multi, ngrams, characters };
 

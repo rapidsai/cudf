@@ -25,8 +25,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct ValidIfTest : public cudf::test::BaseFixture {
-};
+struct ValidIfTest : public cudf::test::BaseFixture {};
 
 struct odds_valid {
   __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }

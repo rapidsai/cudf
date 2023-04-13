@@ -25,8 +25,7 @@
 
 namespace kafka = cudf::io::external::kafka;
 
-struct KafkaDatasourceTest : public ::testing::Test {
-};
+struct KafkaDatasourceTest : public ::testing::Test {};
 
 TEST_F(KafkaDatasourceTest, MissingGroupID)
 {

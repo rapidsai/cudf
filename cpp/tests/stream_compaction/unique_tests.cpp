@@ -52,8 +52,7 @@ using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
 using strings_col = cudf::test::strings_column_wrapper;
 using structs_col = cudf::test::structs_column_wrapper;
 
-struct Unique : public cudf::test::BaseFixture {
-};
+struct Unique : public cudf::test::BaseFixture {};
 
 TEST_F(Unique, StringKeyColumn)
 {
@@ -476,7 +475,7 @@ TEST_F(Unique, ListsOfStructsKeepAny)
                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
                                       cudf::UNKNOWN_NULL_COUNT,
                                       0,
-                                      {offsets, structs});
+                                              {offsets, structs});
 
   auto const idx     = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
   auto const input   = cudf::table_view{{idx, keys}};
@@ -558,7 +557,7 @@ TEST_F(Unique, ListsOfStructsKeepFirstLastNone)
                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
                                       cudf::UNKNOWN_NULL_COUNT,
                                       0,
-                                      {offsets, structs});
+                                              {offsets, structs});
 
   auto const idx     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   auto const input   = cudf::table_view{{idx, keys}};

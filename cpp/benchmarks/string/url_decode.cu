@@ -79,8 +79,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
   return result_col;
 }
 
-class UrlDecode : public cudf::benchmark {
-};
+class UrlDecode : public cudf::benchmark {};
 
 void BM_url_decode(benchmark::State& state, int esc_seq_pct)
 {

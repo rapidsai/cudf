@@ -25,12 +25,10 @@
 
 #include <limits>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class StringsFixedPointConvertTest : public StringsConvertTest {
-};
+class StringsFixedPointConvertTest : public StringsConvertTest {};
 
 TYPED_TEST_SUITE(StringsFixedPointConvertTest, cudf::test::FixedPointTypes);
 

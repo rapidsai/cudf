@@ -25,8 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-class ReplaceNans : public cudf::benchmark {
-};
+class ReplaceNans : public cudf::benchmark {};
 
 template <typename type>
 static void BM_replace_nans(benchmark::State& state, bool include_nulls)

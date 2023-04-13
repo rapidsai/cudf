@@ -323,7 +323,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     // Return user metadata
     out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
     out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                              out_metadata.per_file_user_data[0].end()};
+                                       out_metadata.per_file_user_data[0].end()};
 
     // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);

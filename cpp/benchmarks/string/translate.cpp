@@ -30,8 +30,7 @@
 
 #include <algorithm>
 
-class StringTranslate : public cudf::benchmark {
-};
+class StringTranslate : public cudf::benchmark {};
 
 using entry_type = std::pair<cudf::char_utf8, cudf::char_utf8>;
 

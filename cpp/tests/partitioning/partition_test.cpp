@@ -231,8 +231,7 @@ TYPED_TEST(PartitionTest, EmptyPartitions)
 }
 
 template <typename T>
-class PartitionTestFixedPoint : public cudf::test::BaseFixture {
-};
+class PartitionTestFixedPoint : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
 
@@ -281,8 +280,7 @@ TYPED_TEST(PartitionTestFixedPoint, Partition2)
   run_partition_test(cudf::table_view{{input}}, map, 3, cudf::table_view{{expected}}, offsets);
 }
 
-struct PartitionTestNotTyped : public cudf::test::BaseFixture {
-};
+struct PartitionTestNotTyped : public cudf::test::BaseFixture {};
 
 TEST_F(PartitionTestNotTyped, ListOfStringsEmpty)
 {

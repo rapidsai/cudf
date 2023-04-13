@@ -23,8 +23,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
-class ReductionDictionary : public cudf::benchmark {
-};
+class ReductionDictionary : public cudf::benchmark {};
 
 template <typename T>
 void BM_reduction_dictionary(benchmark::State& state,

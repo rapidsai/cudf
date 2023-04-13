@@ -26,8 +26,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-struct DropNANsTest : public cudf::test::BaseFixture {
-};
+struct DropNANsTest : public cudf::test::BaseFixture {};
 
 TEST_F(DropNANsTest, MixedNANsAndNull)
 {

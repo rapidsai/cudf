@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct StringsTranslateTest : public cudf::test::BaseFixture {
-};
+struct StringsTranslateTest : public cudf::test::BaseFixture {};
 
 std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const char* to)
 {

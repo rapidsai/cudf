@@ -200,8 +200,7 @@ struct AgentDFA {
     };
   };
 
-  struct TempStorage : cub::Uninitialized<_TempStorage> {
-  };
+  struct TempStorage : cub::Uninitialized<_TempStorage> {};
 
   //------------------------------------------------------------------------------
   // MEMBER VARIABLES

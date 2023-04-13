@@ -22,8 +22,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class HashBenchmark : public cudf::benchmark {
-};
+class HashBenchmark : public cudf::benchmark {};
 
 enum contains_nulls { no_nulls, nulls };
 

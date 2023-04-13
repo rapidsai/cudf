@@ -158,8 +158,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
 }  // namespace
 
 template <typename T>
-class TransposeTest : public cudf::test::BaseFixture {
-};
+class TransposeTest : public cudf::test::BaseFixture {};
 
 // Using std::string here instead of cudf::test::StringTypes allows us to
 // use std::vector<T> utilities in this file just like the fixed-width types.
@@ -191,8 +190,7 @@ TYPED_TEST(TransposeTest, EmptyTable) { run_test<TypeParam>(0, 0, false); }
 
 TYPED_TEST(TransposeTest, EmptyColumns) { run_test<TypeParam>(10, 0, false); }
 
-class TransposeTestError : public cudf::test::BaseFixture {
-};
+class TransposeTestError : public cudf::test::BaseFixture {};
 
 TEST_F(TransposeTestError, MismatchedColumns)
 {

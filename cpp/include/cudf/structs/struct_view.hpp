@@ -27,7 +27,6 @@ namespace cudf {
  * a struct with fields of arbitrary types (including primitives, lists,
  * and other structs)
  */
-class struct_view {
-};
+class struct_view {};
 
 }  // namespace cudf

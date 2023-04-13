@@ -23,8 +23,7 @@
 using TestingTypes = cudf::test::NumericTypes;
 
 template <typename T>
-struct NumericPairIteratorTest : public IteratorTest<T> {
-};
+struct NumericPairIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }

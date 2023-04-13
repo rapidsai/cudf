@@ -23,8 +23,7 @@
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-struct ReplaceNaNsErrorTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNaNsErrorTest : public cudf::test::BaseFixture {};
 
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceNaNsErrorTest, SizeMismatch)
@@ -63,8 +62,7 @@ TEST_F(ReplaceNaNsErrorTest, NonFloatType)
 }
 
 template <typename T>
-struct ReplaceNaNsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNaNsTest : public cudf::test::BaseFixture {};
 
 using test_types = cudf::test::Types<float, double>;
 

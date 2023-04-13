@@ -42,9 +42,9 @@ struct pair_column_aggregation_hash {
 
 class result_cache {
  public:
-  result_cache()                    = delete;
-  ~result_cache()                   = default;
-  result_cache(result_cache const&) = delete;
+  result_cache()                                     = delete;
+  ~result_cache()                                    = default;
+  result_cache(result_cache const&)                  = delete;
   result_cache& operator=(const result_cache& other) = delete;
 
   result_cache(size_t num_columns) : _cache(num_columns) {}

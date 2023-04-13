@@ -22,8 +22,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringCase : public cudf::benchmark {
-};
+class StringCase : public cudf::benchmark {};
 
 static void BM_case(benchmark::State& state)
 {

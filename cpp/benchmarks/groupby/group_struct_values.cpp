@@ -74,8 +74,7 @@ void BM_groupby_min_struct(benchmark::State& state)
   }
 }
 
-class Groupby : public cudf::benchmark {
-};
+class Groupby : public cudf::benchmark {};
 
 #define MIN_RANGE 10'000
 #define MAX_RANGE 10'000'000

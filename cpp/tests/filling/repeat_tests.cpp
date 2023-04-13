@@ -240,8 +240,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
-class RepeatErrorTestFixture : public cudf::test::BaseFixture {
-};
+class RepeatErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(RepeatErrorTestFixture, LengthMismatch)
 {

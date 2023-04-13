@@ -24,8 +24,7 @@
 
 #include <vector>
 
-struct DictionaryScatterTest : public cudf::test::BaseFixture {
-};
+struct DictionaryScatterTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryScatterTest, Scatter)
 {

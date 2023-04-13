@@ -26,8 +26,7 @@
 
 #include <vector>
 
-struct TextEditDistanceTest : public cudf::test::BaseFixture {
-};
+struct TextEditDistanceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextEditDistanceTest, EditDistance)
 {

@@ -22,8 +22,7 @@
 #include <cudf_test/type_lists.hpp>
 
 template <typename T>
-class EncodeNumericTests : public cudf::test::BaseFixture {
-};
+class EncodeNumericTests : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -83,8 +82,7 @@ TYPED_TEST(EncodeNumericTests, UnorderedWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }
 
-struct EncodeStringTest : public cudf::test::BaseFixture {
-};
+struct EncodeStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(EncodeStringTest, SimpleNoNulls)
 {

@@ -23,8 +23,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-class StringDateTime : public cudf::benchmark {
-};
+class StringDateTime : public cudf::benchmark {};
 
 enum class direction { to, from };
 

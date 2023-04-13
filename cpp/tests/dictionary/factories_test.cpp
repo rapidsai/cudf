@@ -23,8 +23,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-struct DictionaryFactoriesTest : public cudf::test::BaseFixture {
-};
+struct DictionaryFactoriesTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryFactoriesTest, CreateFromColumnViews)
 {

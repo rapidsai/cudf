@@ -45,8 +45,7 @@ using NumericTypesNotBool =
 using SignedNumericTypesNotBool =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-struct BinTestFixture : public cudf::test::BaseFixture {
-};
+struct BinTestFixture : public cudf::test::BaseFixture {};
 
 /*
  * Test error cases.
@@ -144,8 +143,7 @@ struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
 };
 
 template <typename T>
-struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
-};
+struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {};
 
 TYPED_TEST_SUITE(ExceptionCasesBinTestFixture, NumericTypesNotBool);
 
@@ -176,8 +174,7 @@ TYPED_TEST(ExceptionCasesBinTestFixture, TestInputWithNulls)
 
 // Test that nan values are assigned the NULL label.
 template <typename T>
-struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
-};
+struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {};
 
 TYPED_TEST_SUITE(NaNBinTestFixture, FloatingPointTypes);
 
@@ -328,8 +325,7 @@ TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers1024) { this->test(
  */
 
 template <typename T>
-struct FixedPointBinTestFixture : public BinTestFixture {
-};
+struct FixedPointBinTestFixture : public BinTestFixture {};
 
 TYPED_TEST_SUITE(FixedPointBinTestFixture, FixedPointTypes);
 

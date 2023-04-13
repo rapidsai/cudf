@@ -20,8 +20,7 @@
 
 #include <cudf/filling.hpp>
 
-class Repeat : public cudf::benchmark {
-};
+class Repeat : public cudf::benchmark {};
 
 template <class TypeParam, bool nulls>
 void BM_repeat(benchmark::State& state)

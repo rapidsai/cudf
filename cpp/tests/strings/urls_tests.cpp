@@ -26,8 +26,7 @@
 #include <random>
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, UrlEncode)
 {

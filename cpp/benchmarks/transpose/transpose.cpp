@@ -42,8 +42,7 @@ static void BM_transpose(benchmark::State& state)
   }
 }
 
-class Transpose : public cudf::benchmark {
-};
+class Transpose : public cudf::benchmark {};
 
 #define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                                \
   BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { BM_transpose(state); } \

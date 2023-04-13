@@ -30,8 +30,7 @@
 #include <thrust/random.h>
 #include <thrust/shuffle.h>
 
-class StringCopy : public cudf::benchmark {
-};
+class StringCopy : public cudf::benchmark {};
 
 enum copy_type { gather, scatter };
 

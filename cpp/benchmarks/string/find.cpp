@@ -30,8 +30,7 @@
 
 enum FindAPI { find, find_multi, contains, starts_with, ends_with };
 
-class StringFindScalar : public cudf::benchmark {
-};
+class StringFindScalar : public cudf::benchmark {};
 
 static void BM_find_scalar(benchmark::State& state, FindAPI find_api)
 {

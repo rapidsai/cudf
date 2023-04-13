@@ -43,8 +43,7 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::TimestampTypes>;
 
 template <typename T>
-struct TypedStructSearchTest : public cudf::test::BaseFixture {
-};
+struct TypedStructSearchTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TypedStructSearchTest, TestTypes);
 
 namespace {
@@ -362,8 +361,7 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
 }
 
 template <typename T>
-struct TypedStructContainsTestScalarNeedle : public cudf::test::BaseFixture {
-};
+struct TypedStructContainsTestScalarNeedle : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TypedStructContainsTestScalarNeedle, TestTypes);
 
 TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInput)
@@ -608,8 +606,7 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNulls)
 }
 
 template <typename T>
-struct TypedStructContainsTestColumnNeedles : public cudf::test::BaseFixture {
-};
+struct TypedStructContainsTestColumnNeedles : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedStructContainsTestColumnNeedles, TestTypes);
 

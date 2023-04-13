@@ -24,8 +24,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
-class Quantiles : public cudf::benchmark {
-};
+class Quantiles : public cudf::benchmark {};
 
 static void BM_quantiles(benchmark::State& state, bool nulls)
 {

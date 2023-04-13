@@ -22,8 +22,7 @@
 
 #include <vector>
 
-struct DictionaryDecodeTest : public cudf::test::BaseFixture {
-};
+struct DictionaryDecodeTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryDecodeTest, StringColumn)
 {

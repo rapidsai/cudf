@@ -25,8 +25,7 @@
 #include <cudf/utilities/error.hpp>
 
 template <typename T>
-struct TileTest : public cudf::test::BaseFixture {
-};
+struct TileTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TileTest, cudf::test::AllTypes);
 

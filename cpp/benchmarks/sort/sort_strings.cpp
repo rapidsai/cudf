@@ -22,8 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class Sort : public cudf::benchmark {
-};
+class Sort : public cudf::benchmark {};
 
 static void BM_sort(benchmark::State& state)
 {

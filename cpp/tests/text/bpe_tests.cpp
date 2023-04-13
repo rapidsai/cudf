@@ -24,8 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-struct TextBPETokenize : public cudf::test::BaseFixture {
-};
+struct TextBPETokenize : public cudf::test::BaseFixture {};
 
 TEST_F(TextBPETokenize, BytePairEncoding)
 {

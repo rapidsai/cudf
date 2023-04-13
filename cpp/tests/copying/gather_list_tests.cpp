@@ -29,8 +29,7 @@
 #include <cudf/table/table_view.hpp>
 
 template <typename T>
-class GatherTestListTyped : public cudf::test::BaseFixture {
-};
+class GatherTestListTyped : public cudf::test::BaseFixture {};
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FixedPointTypes,
                                                   cudf::test::FloatingPointTypes,
@@ -38,8 +37,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_SUITE(GatherTestListTyped, FixedWidthTypesNotBool);
 
-class GatherTestList : public cudf::test::BaseFixture {
-};
+class GatherTestList : public cudf::test::BaseFixture {};
 
 // to disambiguate between {} == 0 and {} == List{0}
 // Also, see note about compiler issues when declaring nested

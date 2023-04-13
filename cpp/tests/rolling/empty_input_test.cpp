@@ -77,12 +77,10 @@ auto following_column()
 
 }  // namespace
 
-struct RollingEmptyInputTest : cudf::test::BaseFixture {
-};
+struct RollingEmptyInputTest : cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedRollingEmptyInputTest : RollingEmptyInputTest {
-};
+struct TypedRollingEmptyInputTest : RollingEmptyInputTest {};
 
 TYPED_TEST_SUITE(TypedRollingEmptyInputTest, cudf::test::FixedWidthTypes);
 

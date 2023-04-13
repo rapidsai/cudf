@@ -22,8 +22,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
-class Reduction : public cudf::benchmark {
-};
+class Reduction : public cudf::benchmark {};
 
 template <typename type>
 void BM_reduction(benchmark::State& state)

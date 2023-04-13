@@ -26,8 +26,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-struct JoinStringsTest : public cudf::test::BaseFixture {
-};
+struct JoinStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(JoinStringsTest, Join)
 {

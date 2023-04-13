@@ -79,8 +79,7 @@ static void BM_subword_tokenizer(benchmark::State& state)
   }
 }
 
-class Subword : public cudf::benchmark {
-};
+class Subword : public cudf::benchmark {};
 
 #define SUBWORD_BM_BENCHMARK_DEFINE(name)                                                        \
   BENCHMARK_DEFINE_F(Subword, name)(::benchmark::State & state) { BM_subword_tokenizer(state); } \

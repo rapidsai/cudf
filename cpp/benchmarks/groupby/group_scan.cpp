@@ -25,8 +25,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 
-class Groupby : public cudf::benchmark {
-};
+class Groupby : public cudf::benchmark {};
 
 void BM_basic_sum_scan(benchmark::State& state)
 {

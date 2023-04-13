@@ -26,8 +26,7 @@
 
 #include <vector>
 
-struct DictionaryRemoveKeysTest : public cudf::test::BaseFixture {
-};
+struct DictionaryRemoveKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryRemoveKeysTest, StringsColumn)
 {

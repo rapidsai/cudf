@@ -27,8 +27,7 @@
 #include <algorithm>
 #include <random>
 
-class DurationsToString : public cudf::benchmark {
-};
+class DurationsToString : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_from_durations(benchmark::State& state)
 {
@@ -48,8 +47,7 @@ void BM_convert_from_durations(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * source_size * sizeof(TypeParam));
 }
 
-class StringToDurations : public cudf::benchmark {
-};
+class StringToDurations : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_to_durations(benchmark::State& state)
 {

@@ -36,8 +36,7 @@
 #include <vector>
 
 template <typename T>
-class MergeTest_ : public cudf::test::BaseFixture {
-};
+class MergeTest_ : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MergeTest_, cudf::test::FixedWidthTypes);
 
@@ -693,8 +692,7 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
-class MergeTest : public cudf::test::BaseFixture {
-};
+class MergeTest : public cudf::test::BaseFixture {};
 
 TEST_F(MergeTest, KeysWithNulls)
 {
@@ -877,8 +875,7 @@ TEST_F(MergeTest, StructsNestedWithNulls)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;

@@ -39,11 +39,11 @@ namespace cudf {
  */
 class table {
  public:
-  table()        = default;
-  ~table()       = default;
-  table(table&&) = default;  ///< Move constructor
+  table()                        = default;
+  ~table()                       = default;
+  table(table&&)                 = default;  ///< Move constructor
   table& operator=(table const&) = delete;
-  table& operator=(table&&) = delete;
+  table& operator=(table&&)      = delete;
 
   /**
    * @brief Construct a new table by copying the contents of another table.

@@ -41,12 +41,10 @@ using strings = strings_column_wrapper;
 
 auto constexpr X = int32_t{0};  // Placeholder for NULL.
 
-struct ApplyBooleanMaskTest : public BaseFixture {
-};
+struct ApplyBooleanMaskTest : public BaseFixture {};
 
 template <typename T>
-struct ApplyBooleanMaskTypedTest : ApplyBooleanMaskTest {
-};
+struct ApplyBooleanMaskTypedTest : ApplyBooleanMaskTest {};
 
 TYPED_TEST_SUITE(ApplyBooleanMaskTypedTest, cudf::test::NumericTypes);
 

@@ -416,7 +416,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // TransformInputIterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
-                    detail::RemapEmptyStack<StackOpT>{empty_stack}};
+                     detail::RemapEmptyStack<StackOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
 
   // Inclusive scan to match pop operations with the latest push operation of that level

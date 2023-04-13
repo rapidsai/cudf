@@ -26,8 +26,7 @@
 
 #include <vector>
 
-struct StringsStripTest : public cudf::test::BaseFixture {
-};
+struct StringsStripTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsStripTest, StripLeft)
 {

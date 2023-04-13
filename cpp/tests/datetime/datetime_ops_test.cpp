@@ -70,8 +70,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
                cudf::logic_error);
 }
 
-struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
-};
+struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
 
 TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
 {
@@ -529,8 +528,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
 using ValidMonthIntegerType = cudf::test::Types<int16_t, int32_t>;
 
 template <typename T>
-struct TypedAddMonthsTest : public cudf::test::BaseFixture {
-};
+struct TypedAddMonthsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedAddMonthsTest, ValidMonthIntegerType);
 

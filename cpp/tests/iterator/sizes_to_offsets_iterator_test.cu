@@ -32,8 +32,7 @@
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
-struct SizesToOffsetsIteratorTestTyped : public cudf::test::BaseFixture {
-};
+struct SizesToOffsetsIteratorTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SizesToOffsetsIteratorTestTyped, TestingTypes);
 
@@ -71,8 +70,7 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
   EXPECT_EQ(last.value(stream), expected_reduce);
 }
 
-struct SizesToOffsetsIteratorTest : public cudf::test::BaseFixture {
-};
+struct SizesToOffsetsIteratorTest : public cudf::test::BaseFixture {};
 
 TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
 {

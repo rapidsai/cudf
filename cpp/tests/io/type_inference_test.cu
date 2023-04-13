@@ -35,8 +35,7 @@ using cudf::io::parse_options;
 using cudf::io::detail::infer_data_type;
 
 // Base test fixture for tests
-struct TypeInference : public cudf::test::BaseFixture {
-};
+struct TypeInference : public cudf::test::BaseFixture {};
 
 TEST_F(TypeInference, Basic)
 {

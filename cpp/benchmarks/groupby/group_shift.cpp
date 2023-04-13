@@ -24,8 +24,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-class Groupby : public cudf::benchmark {
-};
+class Groupby : public cudf::benchmark {};
 
 void BM_group_shift(benchmark::State& state)
 {

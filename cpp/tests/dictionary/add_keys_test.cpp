@@ -23,8 +23,7 @@
 
 #include <vector>
 
-struct DictionaryAddKeysTest : public cudf::test::BaseFixture {
-};
+struct DictionaryAddKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryAddKeysTest, StringsColumn)
 {

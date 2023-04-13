@@ -33,8 +33,7 @@ enum class TreeType {
 };
 
 template <typename key_type, TreeType tree_type, bool reuse_columns>
-class BINARYOP : public cudf::benchmark {
-};
+class BINARYOP : public cudf::benchmark {};
 
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)

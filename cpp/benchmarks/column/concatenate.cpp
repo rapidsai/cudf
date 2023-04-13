@@ -31,8 +31,7 @@
 #include <algorithm>
 #include <vector>
 
-class Concatenate : public cudf::benchmark {
-};
+class Concatenate : public cudf::benchmark {};
 
 template <typename T, bool Nullable>
 static void BM_concatenate(benchmark::State& state)
@@ -110,8 +109,7 @@ static void BM_concatenate_tables(benchmark::State& state)
 CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, false)
 CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, true)
 
-class ConcatenateStrings : public cudf::benchmark {
-};
+class ConcatenateStrings : public cudf::benchmark {};
 
 template <bool Nullable>
 static void BM_concatenate_strings(benchmark::State& state)

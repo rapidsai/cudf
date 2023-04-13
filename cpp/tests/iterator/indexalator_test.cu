@@ -27,8 +27,7 @@
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
-struct IndexalatorTest : public IteratorTest<T> {
-};
+struct IndexalatorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(IndexalatorTest, TestingTypes);
 

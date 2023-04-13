@@ -118,8 +118,7 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
   this->run_test(input_column, expected_column->view());
 }
 
-struct NaNsToNullFailTest : public cudf::test::BaseFixture {
-};
+struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
 
 TEST_F(NaNsToNullFailTest, StringType)
 {

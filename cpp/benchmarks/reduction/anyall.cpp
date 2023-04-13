@@ -24,8 +24,7 @@
 
 #include <memory>
 
-class Reduction : public cudf::benchmark {
-};
+class Reduction : public cudf::benchmark {};
 
 template <typename type>
 void BM_reduction_anyall(benchmark::State& state,

@@ -55,12 +55,10 @@ std::unique_ptr<cudf::table> get_cudf_table()
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-struct FromArrowTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -329,8 +327,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
 struct FromArrowTestSlice
   : public FromArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {

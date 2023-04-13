@@ -70,8 +70,7 @@ static void BM_shift(benchmark::State& state)
   }
 }
 
-class Shift : public cudf::benchmark {
-};
+class Shift : public cudf::benchmark {};
 
 #define SHIFT_BM_BENCHMARK_DEFINE(name, use_validity, shift_factor) \
   BENCHMARK_DEFINE_F(Shift, name)(::benchmark::State & state)       \

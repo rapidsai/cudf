@@ -189,8 +189,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   this->test(source_slice, expected_slice, target_slice, source_begin, source_end, target_begin);
 }
 
-class CopyRangeTestFixture : public cudf::test::BaseFixture {
-};
+class CopyRangeTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(CopyRangeTestFixture, CopyWithNullsString)
 {
@@ -363,8 +362,7 @@ TEST_F(CopyRangeTestFixture, CopyDictionary)
   }
 }
 
-class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {
-};
+class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
 {
@@ -469,8 +467,7 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
 }
 
 template <typename T>
-struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {
-};
+struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
 

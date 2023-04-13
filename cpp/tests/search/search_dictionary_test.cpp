@@ -21,8 +21,7 @@
 
 #include <cudf/search.hpp>
 
-struct DictionarySearchTest : public cudf::test::BaseFixture {
-};
+struct DictionarySearchTest : public cudf::test::BaseFixture {};
 
 using cudf::numeric_scalar;
 using cudf::size_type;

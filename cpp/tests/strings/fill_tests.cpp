@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct StringsFillTest : public cudf::test::BaseFixture {
-};
+struct StringsFillTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFillTest, Fill)
 {

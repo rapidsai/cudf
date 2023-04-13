@@ -24,8 +24,7 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-class TextNGrams : public cudf::benchmark {
-};
+class TextNGrams : public cudf::benchmark {};
 
 enum class ngrams_type { tokens, characters };
 

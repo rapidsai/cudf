@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct TextStemmerTest : public cudf::test::BaseFixture {
-};
+struct TextStemmerTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextStemmerTest, PorterStemmer)
 {

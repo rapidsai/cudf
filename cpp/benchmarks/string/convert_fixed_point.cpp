@@ -33,8 +33,7 @@ std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 
 }  // anonymous namespace
 
-class StringsToFixedPoint : public cudf::benchmark {
-};
+class StringsToFixedPoint : public cudf::benchmark {};
 
 template <typename fixed_point_type>
 void convert_to_fixed_point(benchmark::State& state)
@@ -54,8 +53,7 @@ void convert_to_fixed_point(benchmark::State& state)
                           (strings_view.chars_size() + rows * cudf::size_of(dtype)));
 }
 
-class StringsFromFixedPoint : public cudf::benchmark {
-};
+class StringsFromFixedPoint : public cudf::benchmark {};
 
 template <typename fixed_point_type>
 void convert_from_fixed_point(benchmark::State& state)

@@ -23,8 +23,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-class CopyIfElse : public cudf::benchmark {
-};
+class CopyIfElse : public cudf::benchmark {};
 
 template <class TypeParam>
 static void BM_copy_if_else(benchmark::State& state, bool nulls)

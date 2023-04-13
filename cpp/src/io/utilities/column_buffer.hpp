@@ -85,11 +85,11 @@ struct column_buffer {
   }
 
   // move constructor
-  column_buffer(column_buffer&& col) = default;
+  column_buffer(column_buffer&& col)            = default;
   column_buffer& operator=(column_buffer&& col) = default;
 
   // copy constructor
-  column_buffer(column_buffer const& col) = delete;
+  column_buffer(column_buffer const& col)            = delete;
   column_buffer& operator=(column_buffer const& col) = delete;
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for

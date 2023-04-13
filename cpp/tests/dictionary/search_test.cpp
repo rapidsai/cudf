@@ -20,8 +20,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-struct DictionarySearchTest : public cudf::test::BaseFixture {
-};
+struct DictionarySearchTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySearchTest, StringsColumn)
 {

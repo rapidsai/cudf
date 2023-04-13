@@ -25,8 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringCombine : public cudf::benchmark {
-};
+class StringCombine : public cudf::benchmark {};
 
 static void BM_combine(benchmark::State& state)
 {

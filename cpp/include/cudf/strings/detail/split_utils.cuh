@@ -43,7 +43,7 @@ struct whitespace_string_tokenizer {
    */
   __device__ bool next_token()
   {
-    if (itr != d_str.begin()) {  // skip these 2 lines the first time through
+    if (itr != d_str.begin()) {            // skip these 2 lines the first time through
       ++itr;
       start_position = itr.byte_offset();  // end_position + 1;
     }

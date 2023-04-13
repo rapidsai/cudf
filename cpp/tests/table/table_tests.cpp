@@ -39,8 +39,7 @@ using column_view = cudf::column_view;
 using TView       = cudf::table_view;
 using Table       = cudf::table;
 
-struct TableTest : public cudf::test::BaseFixture {
-};
+struct TableTest : public cudf::test::BaseFixture {};
 
 TEST_F(TableTest, EmptyColumnedTable)
 {

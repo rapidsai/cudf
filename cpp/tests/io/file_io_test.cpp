@@ -22,8 +22,7 @@
 #include <type_traits>
 
 // Base test fixture for tests
-struct CuFileIOTest : public cudf::test::BaseFixture {
-};
+struct CuFileIOTest : public cudf::test::BaseFixture {};
 
 TEST_F(CuFileIOTest, SliceSize)
 {

@@ -31,8 +31,7 @@ constexpr int32_t XXX{0};   // Mark for null struct elements
 using structs_col = cudf::test::structs_column_wrapper;
 
 template <typename T>
-struct TypedStructScalarScatterTest : public cudf::test::BaseFixture {
-};
+struct TypedStructScalarScatterTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedStructScalarScatterTest, cudf::test::FixedWidthTypes);
 

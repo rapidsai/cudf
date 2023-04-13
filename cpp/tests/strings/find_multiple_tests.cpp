@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct StringsFindMultipleTest : public cudf::test::BaseFixture {
-};
+struct StringsFindMultipleTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindMultipleTest, FindMultiple)
 {

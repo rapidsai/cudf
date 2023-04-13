@@ -25,8 +25,7 @@
 
 #include <memory>
 
-class Reduction : public cudf::benchmark {
-};
+class Reduction : public cudf::benchmark {};
 
 template <typename type>
 void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregation> const& agg)

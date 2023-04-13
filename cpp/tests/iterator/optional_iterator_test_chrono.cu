@@ -17,8 +17,7 @@
 using TestingTypes = cudf::test::ChronoTypes;
 
 template <typename T>
-struct ChronoOptionalIteratorTest : public IteratorTest<T> {
-};
+struct ChronoOptionalIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(ChronoOptionalIteratorTest, TestingTypes);
 TYPED_TEST(ChronoOptionalIteratorTest, nonull_optional_iterator)

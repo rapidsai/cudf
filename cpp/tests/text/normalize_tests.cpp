@@ -29,8 +29,7 @@
 
 #include <vector>
 
-struct TextNormalizeTest : public cudf::test::BaseFixture {
-};
+struct TextNormalizeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextNormalizeTest, NormalizeSpaces)
 {

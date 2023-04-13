@@ -23,20 +23,16 @@
 
 #include <limits>
 
-struct RoundTests : public cudf::test::BaseFixture {
-};
+struct RoundTests : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsFixedPointTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsFixedPointTypes : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {};
 
 using IntegerTypes = cudf::test::Types<int16_t, int32_t, int64_t>;
 

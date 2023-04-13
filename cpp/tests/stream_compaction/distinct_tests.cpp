@@ -54,11 +54,9 @@ using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
-struct DistinctKeepAny : public cudf::test::BaseFixture {
-};
+struct DistinctKeepAny : public cudf::test::BaseFixture {};
 
-struct DistinctKeepFirstLastNone : public cudf::test::BaseFixture {
-};
+struct DistinctKeepFirstLastNone : public cudf::test::BaseFixture {};
 
 TEST_F(DistinctKeepAny, StringKeyColumn)
 {
@@ -890,7 +888,7 @@ TEST_F(DistinctKeepAny, ListsOfStructs)
                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
                                       cudf::UNKNOWN_NULL_COUNT,
                                       0,
-                                      {offsets, structs});
+                                              {offsets, structs});
 
   auto const idx     = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
   auto const input   = cudf::table_view{{idx, keys}};
@@ -974,7 +972,7 @@ TEST_F(DistinctKeepFirstLastNone, ListsOfStructs)
                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
                                       cudf::UNKNOWN_NULL_COUNT,
                                       0,
-                                      {offsets, structs});
+                                              {offsets, structs});
 
   auto const idx     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   auto const input   = cudf::table_view{{idx, keys}};
@@ -1068,7 +1066,7 @@ TEST_F(DistinctKeepAny, SlicedListsOfStructs)
                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
                                       cudf::UNKNOWN_NULL_COUNT,
                                       0,
-                                      {offsets, structs});
+                                              {offsets, structs});
 
   auto const idx            = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
   auto const input_original = cudf::table_view{{idx, keys}};

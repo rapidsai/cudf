@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {
-};
+struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextNgramsTokenizeTest, Tokenize)
 {

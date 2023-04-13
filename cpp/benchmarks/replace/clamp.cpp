@@ -25,8 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-class ReplaceClamp : public cudf::benchmark {
-};
+class ReplaceClamp : public cudf::benchmark {};
 
 template <typename type>
 static void BM_clamp(benchmark::State& state, bool include_nulls)

@@ -29,8 +29,7 @@
 
 #include <vector>
 
-struct StringsPadTest : public cudf::test::BaseFixture {
-};
+struct StringsPadTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsPadTest, Padding)
 {
@@ -105,8 +104,7 @@ TEST_F(StringsPadTest, ZeroSizeStringsColumn)
   cudf::test::expect_column_empty(results->view());
 }
 
-class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(PadParameters, Padding)
 {

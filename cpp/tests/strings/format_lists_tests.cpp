@@ -23,8 +23,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
 
-struct StringsFormatListsTest : public cudf::test::BaseFixture {
-};
+struct StringsFormatListsTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFormatListsTest, EmptyList)
 {

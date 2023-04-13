@@ -31,8 +31,7 @@
 
 #include <vector>
 
-struct CompoundColumnTest : public cudf::test::BaseFixture {
-};
+struct CompoundColumnTest : public cudf::test::BaseFixture {};
 
 template <typename ColumnDeviceView>
 struct checker_for_level1 {

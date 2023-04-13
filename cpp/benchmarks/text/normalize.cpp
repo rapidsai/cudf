@@ -24,8 +24,7 @@
 
 #include <nvtext/normalize.hpp>
 
-class TextNormalize : public cudf::benchmark {
-};
+class TextNormalize : public cudf::benchmark {};
 
 static void BM_normalize(benchmark::State& state, bool to_lower)
 {

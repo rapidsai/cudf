@@ -42,8 +42,7 @@ std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 }
 }  // anonymous namespace
 
-class StringsToNumeric : public cudf::benchmark {
-};
+class StringsToNumeric : public cudf::benchmark {};
 
 template <typename NumericType>
 void convert_to_number(benchmark::State& state)
@@ -68,8 +67,7 @@ void convert_to_number(benchmark::State& state)
                           (strings_view.chars_size() + rows * sizeof(NumericType)));
 }
 
-class StringsFromNumeric : public cudf::benchmark {
-};
+class StringsFromNumeric : public cudf::benchmark {};
 
 template <typename NumericType>
 void convert_from_number(benchmark::State& state)

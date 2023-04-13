@@ -24,8 +24,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-class ReductionScan : public cudf::benchmark {
-};
+class ReductionScan : public cudf::benchmark {};
 
 template <typename type>
 static void BM_reduction_scan(benchmark::State& state, bool include_nulls)

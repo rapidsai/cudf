@@ -26,8 +26,7 @@
 #include <cudf/types.hpp>
 
 template <typename T>
-struct QuantilesTest : public cudf::test::BaseFixture {
-};
+struct QuantilesTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::AllTypes;
 

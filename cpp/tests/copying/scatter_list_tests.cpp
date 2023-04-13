@@ -26,13 +26,11 @@
 #include <cudf/table/table_view.hpp>
 
 template <typename T>
-class TypedScatterListsTest : public cudf::test::BaseFixture {
-};
+class TypedScatterListsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedScatterListsTest, cudf::test::FixedWidthTypes);
 
-class ScatterListsTest : public cudf::test::BaseFixture {
-};
+class ScatterListsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST(TypedScatterListsTest, ListsOfFixedWidth)
 {

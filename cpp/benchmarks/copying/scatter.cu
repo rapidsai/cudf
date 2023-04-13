@@ -26,8 +26,7 @@
 #include <thrust/reverse.h>
 #include <thrust/shuffle.h>
 
-class Scatter : public cudf::benchmark {
-};
+class Scatter : public cudf::benchmark {};
 
 template <class TypeParam, bool coalesce>
 void BM_scatter(benchmark::State& state)

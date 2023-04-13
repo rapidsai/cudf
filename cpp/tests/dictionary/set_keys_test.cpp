@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct DictionarySetKeysTest : public cudf::test::BaseFixture {
-};
+struct DictionarySetKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySetKeysTest, StringsKeys)
 {

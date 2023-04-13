@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct StringsReverseTest : public cudf::test::BaseFixture {
-};
+struct StringsReverseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsReverseTest, Reverse)
 {

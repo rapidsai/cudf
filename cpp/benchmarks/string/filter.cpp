@@ -33,8 +33,7 @@
 
 enum FilterAPI { filter, filter_chars, strip };
 
-class StringFilterChars : public cudf::benchmark {
-};
+class StringFilterChars : public cudf::benchmark {};
 
 static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {

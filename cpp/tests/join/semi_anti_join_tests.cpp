@@ -37,8 +37,7 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using column_vector  = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
-struct JoinTest : public cudf::test::BaseFixture {
-};
+struct JoinTest : public cudf::test::BaseFixture {};
 
 namespace {
 // This function is a wrapper around cudf's join APIs that takes the gather map

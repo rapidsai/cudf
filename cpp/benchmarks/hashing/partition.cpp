@@ -22,8 +22,7 @@
 
 #include <algorithm>
 
-class Hashing : public cudf::benchmark {
-};
+class Hashing : public cudf::benchmark {};
 
 template <class T>
 void BM_hash_partition(benchmark::State& state)

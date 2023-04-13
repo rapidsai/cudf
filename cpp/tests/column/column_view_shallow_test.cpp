@@ -75,8 +75,7 @@ std::unique_ptr<cudf::column> example_column()
 }
 
 template <typename T>
-struct ColumnViewShallowTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewShallowTests : public cudf::test::BaseFixture {};
 
 using AllTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::CompoundTypes>;
 TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);

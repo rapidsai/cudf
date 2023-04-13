@@ -26,8 +26,7 @@
 
 using namespace cudf::test::iterators;
 
-struct StringsListsConcatenateTest : public cudf::test::BaseFixture {
-};
+struct StringsListsConcatenateTest : public cudf::test::BaseFixture {};
 
 namespace {
 using STR_LISTS = cudf::test::lists_column_wrapper<cudf::string_view>;

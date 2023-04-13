@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct StringsCaseTest : public cudf::test::BaseFixture {
-};
+struct StringsCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCaseTest, ToLower)
 {

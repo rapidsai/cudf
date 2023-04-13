@@ -34,8 +34,7 @@
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-struct TextSubwordTest : public cudf::test::BaseFixture {
-};
+struct TextSubwordTest : public cudf::test::BaseFixture {};
 
 // Create a fake hashed vocab text file for the tests in this source file.
 // The vocab only includes the following words:

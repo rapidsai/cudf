@@ -21,8 +21,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 // This is the main test fixture
-struct ReplaceTest : public cudf::test::BaseFixture {
-};
+struct ReplaceTest : public cudf::test::BaseFixture {};
 
 template <typename T>
 void normalize_nans_and_zeros_test_internal(

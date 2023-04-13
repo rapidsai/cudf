@@ -26,8 +26,7 @@
 
 #include <random>
 
-class TextReplace : public cudf::benchmark {
-};
+class TextReplace : public cudf::benchmark {};
 
 static void BM_replace(benchmark::State& state)
 {

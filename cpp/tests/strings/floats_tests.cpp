@@ -27,8 +27,7 @@
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IsFloat)
 {

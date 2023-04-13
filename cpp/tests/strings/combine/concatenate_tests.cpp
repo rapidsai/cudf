@@ -29,8 +29,7 @@
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct StringsCombineTest : public cudf::test::BaseFixture {
-};
+struct StringsCombineTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCombineTest, Concatenate)
 {
@@ -166,8 +165,7 @@ TEST_F(StringsCombineTest, SingleColumnErrorCheck)
   EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0}}), cudf::logic_error);
 }
 
-struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {
-};
+struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
 {

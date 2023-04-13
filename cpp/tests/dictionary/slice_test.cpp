@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct DictionarySliceTest : public cudf::test::BaseFixture {
-};
+struct DictionarySliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySliceTest, SliceColumn)
 {

@@ -477,12 +477,10 @@ using void_t = void;
  * @brief Compile-time reflection to check if `Element` type has a `rep()` member.
  */
 template <typename Element, typename = void>
-struct has_rep_member : std::false_type {
-};
+struct has_rep_member : std::false_type {};
 
 template <typename Element>
-struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> : std::true_type {
-};
+struct has_rep_member<Element, void_t<decltype(std::declval<Element>().rep())>> : std::true_type {};
 
 /**
  * @brief Pair accessor for scalar's representation value and validity.

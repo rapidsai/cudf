@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct MergeDictionaryTest : public cudf::test::BaseFixture {
-};
+struct MergeDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(MergeDictionaryTest, Merge1Column)
 {

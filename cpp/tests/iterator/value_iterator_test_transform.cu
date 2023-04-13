@@ -18,8 +18,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct TransformedIteratorTest : public IteratorTest<int8_t> {
-};
+struct TransformedIteratorTest : public IteratorTest<int8_t> {};
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by transform_iterator and

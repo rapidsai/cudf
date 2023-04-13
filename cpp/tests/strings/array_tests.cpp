@@ -30,8 +30,7 @@
 
 #include <vector>
 
-struct StringsColumnTest : public cudf::test::BaseFixture {
-};
+struct StringsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsColumnTest, Sort)
 {
@@ -55,8 +54,7 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 }
 
 class SliceParmsTest : public StringsColumnTest,
-                       public testing::WithParamInterface<cudf::size_type> {
-};
+                       public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(SliceParmsTest, Slice)
 {

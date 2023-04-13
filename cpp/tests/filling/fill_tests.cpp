@@ -276,8 +276,7 @@ TEST_F(FillStringTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture {
-};
+class FillErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
@@ -364,8 +363,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 }
 
 template <typename T>
-class FixedPointAllReps : public cudf::test::BaseFixture {
-};
+class FixedPointAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
 

@@ -27,8 +27,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-struct SampleTest : public cudf::test::BaseFixture {
-};
+struct SampleTest : public cudf::test::BaseFixture {};
 
 TEST_F(SampleTest, FailCaseRowMultipleSampling)
 {
@@ -84,8 +83,7 @@ TEST_F(SampleTest, TestReproducibilityWithSeed)
 
 struct SampleBasicTest : public SampleTest,
                          public ::testing::WithParamInterface<
-                           std::tuple<cudf::size_type, cudf::sample_with_replacement>> {
-};
+                           std::tuple<cudf::size_type, cudf::sample_with_replacement>> {};
 
 TEST_P(SampleBasicTest, CombinationOfParameters)
 {

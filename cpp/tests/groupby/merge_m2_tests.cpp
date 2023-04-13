@@ -97,8 +97,7 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
 }  // namespace
 
 template <class T>
-struct GroupbyMergeM2TypedTest : public cudf::test::BaseFixture {
-};
+struct GroupbyMergeM2TypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
                                      cudf::test::FloatingPointTypes>;

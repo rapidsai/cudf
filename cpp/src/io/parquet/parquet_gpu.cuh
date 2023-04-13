@@ -36,8 +36,7 @@ using map_type = cuco::static_map<size_type, size_type>;
  * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
  * declaration of this struct somewhere else.
  */
-struct slot_type : public map_type::pair_atomic_type {
-};
+struct slot_type : public map_type::pair_atomic_type {};
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32

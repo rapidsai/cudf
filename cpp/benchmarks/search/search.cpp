@@ -24,8 +24,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 
-class Search : public cudf::benchmark {
-};
+class Search : public cudf::benchmark {};
 
 void BM_column(benchmark::State& state, bool nulls)
 {

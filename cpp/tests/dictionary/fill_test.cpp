@@ -24,8 +24,7 @@
 
 #include <vector>
 
-struct DictionaryFillTest : public cudf::test::BaseFixture {
-};
+struct DictionaryFillTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryFillTest, StringsColumn)
 {

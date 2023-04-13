@@ -31,8 +31,7 @@
 
 #include <thrust/copy.h>
 
-struct ColumnDeviceViewTest : public cudf::test::BaseFixture {
-};
+struct ColumnDeviceViewTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnDeviceViewTest, Sample)
 {

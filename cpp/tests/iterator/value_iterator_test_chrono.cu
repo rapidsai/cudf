@@ -20,8 +20,7 @@
 using TestingTypes = cudf::test::ChronoTypes;
 
 template <typename T>
-struct ChronoValueIteratorTest : public IteratorTest<T> {
-};
+struct ChronoValueIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(ChronoValueIteratorTest, TestingTypes);
 TYPED_TEST(ChronoValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }
