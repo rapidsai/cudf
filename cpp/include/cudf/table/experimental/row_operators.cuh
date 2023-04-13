@@ -739,7 +739,7 @@ struct preprocessed_table {
    * @param preprocessed_input The table resulted from preprocessing
    * @param verticalized_col_depths The depths of each column resulting from decomposing struct
    *        columns in the original input table
-   * @param structs_ranked_columns Store the intermediate results from transforming the child
+   * @param structs_transformed_columns Store the intermediate results from transforming the child
    *        columns of lists-of-structs columns into integer columns using `cudf::rank()`
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
@@ -754,7 +754,7 @@ struct preprocessed_table {
   static std::shared_ptr<preprocessed_table> create_preprocessed_table(
     table_view const& preprocessed_input,
     std::vector<int>&& verticalized_col_depths,
-    std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+    std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
     host_span<order const> column_order,
     host_span<null_order const> null_precedence,
     bool ranked_floating_point,
@@ -781,7 +781,7 @@ struct preprocessed_table {
    *        contain an empty `dremel_device_view`. As such, this uvector has as many elements as
    *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
    *        long as the number of list columns).
-   * @param structs_ranked_columns Store the intermediate results from transforming the child
+   * @param structs_transformed_columns Store the intermediate results from transforming the child
    *        columns of lists-of-structs columns into integer columns using `cudf::rank()` and will
    *        be used for row comparison.
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
@@ -793,14 +793,14 @@ struct preprocessed_table {
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<detail::dremel_data>&& dremel_data,
                      rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-                     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+                     std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
                      bool ranked_floating_point);
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
-                     std::vector<std::unique_ptr<column>>&& structs_ranked_columns,
+                     std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
                      bool ranked_floating_point);
 
   /**
@@ -868,7 +868,7 @@ struct preprocessed_table {
   std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 
   // Intermediate columns generated from transforming the child columns of lists-of-structs columns
-  // into integer columns using `cudf::rank()`, need to be kept alive.
+  // into columns of `size_type` type using `cudf::rank()`, need to be kept alive.
   std::vector<std::unique_ptr<column>> _structs_transformed_columns;
 
   // Flag to record if the input table was preprocessed to transform any lists-of-structs column

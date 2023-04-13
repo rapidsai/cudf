@@ -387,7 +387,7 @@ namespace {
  * @brief Transform any nested lists-of-structs column into lists-of-integers column.
  *
  * For a lists-of-structs column at any nested level, its child structs column will be replaced by a
- * size_type column computed as its ranks.
+ * `size_type` column computed as its ranks.
  *
  * If the input column is not lists-of-structs, or does not contain lists-of-structs at any nested
  * level, the input will be passed through without any changes.
@@ -396,8 +396,8 @@ namespace {
  * @param rhs The input rhs column to transform (if available)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple consisting of new column_view representing the transformed input, along with
- *         their ranks (size_type column(s)) and possibly new list offsets generated during the
- *         transformation process
+ *         their ranks column(s) (of `size_type` type) and possibly new list offsets generated
+ * during the transformation process
  */
 std::tuple<column_view,
            std::optional<column_view>,
@@ -512,6 +512,7 @@ transform_lists_of_structs(column_view const& lhs,
       auto [new_child_lhs, new_child_rhs_opt, out_cols_child_lhs, out_cols_child_rhs] =
         transform_lists_of_structs(child_lhs, child_rhs_opt, stream);
 
+      // Only transform the current pair of columns if their children have been transformed.
       if (out_cols_child_lhs.size() > 0 || out_cols_child_rhs.size() > 0) {
         out_cols_lhs.insert(out_cols_lhs.end(),
                             std::make_move_iterator(out_cols_child_lhs.begin()),
@@ -552,16 +553,18 @@ transform_lists_of_structs(column_view const& lhs,
 }
 
 /**
- * @brief Transform any lists-of-structs column in the given table(s) into lists-of-integers column.
+ * @brief Transform any nested lists-of-structs column in the given table(s) into lists-of-integers
+ * column.
  *
- * If the rhs table is specified, its shape should be pre-checked to match with lhs table using
- * `check_shape_compatibility` before being passed into this function.
+ * If the rhs table is specified, its shape should be pre-checked to match with the shape of lhs
+ * table using `check_shape_compatibility` before being passed into this function.
  *
  * @param lhs The input lhs table to transform
  * @param rhs The input rhs table to transform (if available)
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A pair of new table_view representing the transformed input and the generated rank
- *         (size_type) column(s) which need to be kept alive
+ * @return A tuple consisting of new table_view representing the transformed input, along with
+ *         the ranks column (of `size_type` type) and possibly new list offsets generated during the
+ *         transformation process
  */
 std::tuple<table_view,
            std::optional<table_view>,
@@ -571,36 +574,39 @@ transform_lists_of_structs(table_view const& lhs,
                            std::optional<table_view> const& rhs,
                            rmm::cuda_stream_view stream)
 {
-  if (lhs.num_rows() == 0) {
+  if (lhs.num_rows() == 0 && (!rhs || rhs.value().num_rows() == 0)) {
     return {
       lhs, rhs, std::vector<std::unique_ptr<column>>{}, std::vector<std::unique_ptr<column>>{}};
   }
 
   std::vector<column_view> transformed_lhs_cvs;
   std::vector<column_view> transformed_rhs_cvs;
-  std::vector<std::unique_ptr<column>> ranks_cols_lhs;
-  std::vector<std::unique_ptr<column>> ranks_cols_rhs;
+  std::vector<std::unique_ptr<column>> out_cols_lhs;
+  std::vector<std::unique_ptr<column>> out_cols_rhs;
+
   for (size_type col_idx = 0; col_idx < lhs.num_columns(); ++col_idx) {
     auto const& lhs_col = lhs.column(col_idx);
     auto const rhs_col_opt =
       rhs ? std::optional<column_view>{rhs.value().column(col_idx)} : std::nullopt;
 
-    auto [transformed_lhs, transformed_rhs_opt, out_cols_lhs, out_cols_rhs] =
+    auto [transformed_lhs, transformed_rhs_opt, curr_out_cols_lhs, curr_out_cols_rhs] =
       transform_lists_of_structs(lhs_col, rhs_col_opt, stream);
+
     transformed_lhs_cvs.push_back(transformed_lhs);
     if (rhs) { transformed_rhs_cvs.push_back(transformed_rhs_opt.value()); }
-    ranks_cols_lhs.insert(ranks_cols_lhs.end(),
-                          std::make_move_iterator(out_cols_lhs.begin()),
-                          std::make_move_iterator(out_cols_lhs.end()));
-    ranks_cols_rhs.insert(ranks_cols_rhs.end(),
-                          std::make_move_iterator(out_cols_rhs.begin()),
-                          std::make_move_iterator(out_cols_rhs.end()));
+
+    out_cols_lhs.insert(out_cols_lhs.end(),
+                        std::make_move_iterator(curr_out_cols_lhs.begin()),
+                        std::make_move_iterator(curr_out_cols_lhs.end()));
+    out_cols_rhs.insert(out_cols_rhs.end(),
+                        std::make_move_iterator(curr_out_cols_rhs.begin()),
+                        std::make_move_iterator(curr_out_cols_rhs.end()));
   }
 
   return {table_view{transformed_lhs_cvs},
           rhs ? std::optional<table_view>{table_view{transformed_rhs_cvs}} : std::nullopt,
-          std::move(ranks_cols_lhs),
-          std::move(ranks_cols_rhs)};
+          std::move(out_cols_lhs),
+          std::move(out_cols_rhs)};
 }
 
 bool has_floating_point_in_struct(table_view const& input)
