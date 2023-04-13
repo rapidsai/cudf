@@ -57,7 +57,7 @@ struct minhash_fn {
   cudf::size_type width;
   cudf::hash_value_type* d_hashes;
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ void operator()(std::size_t idx)
   {
     auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
     auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
