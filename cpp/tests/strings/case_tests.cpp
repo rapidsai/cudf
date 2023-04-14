@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ TEST_F(StringsCaseTest, ToLower)
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::to_lower(strings_view);
+  // cudf::test::print(results->view());
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -200,6 +201,26 @@ TEST_F(StringsCaseTest, MultiCharLower)
 
   auto results = cudf::strings::to_lower(strings_view);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsCaseTest, Ascii)
+{
+  // there's only one of these
+  cudf::test::strings_column_wrapper input{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- "
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- "
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- "
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
