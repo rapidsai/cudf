@@ -374,51 +374,6 @@ class ProtobufReader {
   uint8_t const* const m_base;
   uint8_t const* m_cur;
   uint8_t const* const m_end;
-
- public:
-  /**
-   * @brief Returns a field reader object of correct type, based on the `field_value`
-   * type.
-   *
-   * @tparam Type of the field (inferred from `field_value` type)
-   * @param field_number The field number of the field to be read
-   * @param field_value Reference to the object the field reader will write to
-   * @return the field reader object of the right type
-   */
-  template <typename T>
-  static auto make_field_reader(int field_number, T& field_value)
-  {
-    return field_reader<T>(field_number, field_value);
-  }
-
-  /**
-   * @brief Returns a reader object for packed fields, based on the `field_value` type.
-   *
-   * @tparam Type of the field (inferred from `field_value` type)
-   * @param field_number The field number of the field to be read
-   * @param field_value Reference to the object the field reader will write to
-   * @return the packed field reader object of the right type
-   */
-  template <typename T>
-  static auto make_packed_field_reader(int field_number, T& field_value)
-  {
-    return packed_field_reader<T>(field_number, field_value);
-  }
-
-  /**
-   * @brief Returns a field reader that does not decode data, with type based on the `field_value`
-   * type.
-   *
-   * @tparam Type of the field (inferred from `field_value` type)
-   * @param field_number The field number of the field to be read
-   * @param field_value Reference to the object the field reader will write to
-   * @return the raw field reader object of the right type
-   */
-  template <typename T>
-  static auto make_raw_field_reader(int field_number, T& field_value)
-  {
-    return raw_field_reader<T>(field_number, field_value);
-  }
 };
 
 template <>

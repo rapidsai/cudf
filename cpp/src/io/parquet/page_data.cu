@@ -1088,7 +1088,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   int chunk_idx;
 
   // Fetch page info
-  if (!t) s->page = *p;
+  if (!t) {
+    s->page         = *p;
+    s->nesting_info = nullptr;
+  }
   __syncthreads();
 
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
@@ -2792,6 +2795,26 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
   restore_decode_cache(s);
 }
 
+// Copies null counts back to `nesting_decode` at the end of scope
+struct null_count_back_copier {
+  page_state_s* s;
+  int t;
+  __device__ ~null_count_back_copier()
+  {
+    if (s->nesting_info != nullptr and s->nesting_info == s->nesting_decode_cache) {
+      int depth = 0;
+      while (depth < s->page.num_output_nesting_levels) {
+        int const thread_depth = depth + t;
+        if (thread_depth < s->page.num_output_nesting_levels) {
+          s->page.nesting_decode[thread_depth].null_count =
+            s->nesting_decode_cache[thread_depth].null_count;
+        }
+        depth += blockDim.x;
+      }
+    }
+  }
+};
+
 /**
  * @brief Kernel for decoding the column data stored in the pages
  *
@@ -2816,6 +2839,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   // these encodings handled by different kernels
   if (pages[page_idx].encoding == Encoding::DELTA_BINARY_PACKED ||
