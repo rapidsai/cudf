@@ -57,10 +57,10 @@ class parquet_reader_options {
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  // Number of rows to skip from the start
-  size_type _skip_rows = 0;
-  // Number of rows to read; -1 is all
-  size_type _num_rows = -1;
+  // Number of rows to skip from the start; Parquet stores the number of rows as int64_t
+  int64_t _skip_rows = 0;
+  // Number of rows to read; `nullopt` is all
+  std::optional<size_type> _num_rows;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -136,14 +136,15 @@ class parquet_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] int64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
    *
-   * @return Number of rows to read
+   * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
+   * is read until the end)
    */
-  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
+  [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read, if set.
@@ -210,7 +211,7 @@ class parquet_reader_options {
    *
    * @param val Number of rows to skip from start
    */
-  void set_skip_rows(size_type val);
+  void set_skip_rows(int64_t val);
 
   /**
    * @brief Sets number of rows to read.
@@ -314,7 +315,7 @@ class parquet_reader_options_builder {
    * @param val Number of rows to skip from start
    * @return this for chaining
    */
-  parquet_reader_options_builder& skip_rows(size_type val)
+  parquet_reader_options_builder& skip_rows(int64_t val)
   {
     options.set_skip_rows(val);
     return *this;
