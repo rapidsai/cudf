@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ struct metadata : public FileMetaData {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
-  size_type num_rows;
+  int64_t num_rows;
   size_type num_row_groups;
 
   /**
@@ -88,7 +88,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] size_type calc_num_rows() const;
+  [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
    * @brief Sums up the number of row groups of each source
@@ -169,10 +169,10 @@ class aggregate_reader_metadata {
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
    *         starting row
    */
-  [[nodiscard]] std::tuple<size_type, size_type, std::vector<row_group_info>> select_row_groups(
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
-    size_type row_start,
-    size_type row_count) const;
+    int64_t row_start,
+    std::optional<size_type> const& row_count) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns

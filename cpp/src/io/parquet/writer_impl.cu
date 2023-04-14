@@ -806,7 +806,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
                                               parent.size(),
                                               parent.head(),
                                               parent.null_mask(),
-                                              UNKNOWN_NULL_COUNT,
+                                              parent.null_count(),
                                               parent.offset(),
                                               children);
 
