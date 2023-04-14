@@ -40,10 +40,17 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 template <typename T>
-void expect_equivolent(host_span<T> a, host_span<T> b)
+void expect_equivalent(host_span<T> a, host_span<T> b)
 {
   EXPECT_EQ(a.size(), b.size());
   EXPECT_EQ(a.data(), b.data());
+}
+
+template <typename T>
+void expect_equivalent(hostdevice_span<T> a, hostdevice_span<T> b)
+{
+  EXPECT_EQ(a.size(), b.size());
+  EXPECT_EQ(a.host_ptr(), b.host_ptr());
 }
 
 template <typename Iterator1, typename T>
@@ -61,10 +68,16 @@ void expect_match(std::string expected, host_span<T> input)
   return expect_match(expected.begin(), expected.size(), input);
 }
 
-std::string const hello_wold_message = "hello world";
+template <typename T>
+void expect_match(std::string expected, hostdevice_span<T> input)
+{
+  return expect_match(expected.begin(), expected.size(), host_span<T>(input));
+}
+
+std::string const hello_world_message = "hello world";
 std::vector<char> create_hello_world_message()
 {
-  return std::vector<char>(hello_wold_message.begin(), hello_wold_message.end());
+  return std::vector<char>(hello_world_message.begin(), hello_world_message.end());
 }
 
 class SpanTest : public cudf::test::BaseFixture {
@@ -75,7 +88,7 @@ TEST(SpanTest, CanCreateFullSubspan)
   auto message            = create_hello_world_message();
   auto const message_span = host_span<char>(message.data(), message.size());
 
-  expect_equivolent(message_span, message_span.subspan(0, message_span.size()));
+  expect_equivalent(message_span, message_span.subspan(0, message_span.size()));
 }
 
 TEST(SpanTest, CanTakeFirst)
@@ -308,6 +321,136 @@ TEST(MdSpanTest, CanGetCount)
 
   EXPECT_EQ(host_2dspan<int const>{vector}.count(), 11ul * 23);
   EXPECT_EQ(device_2dspan<int const>{vector}.count(), 11ul * 23);
+}
+
+auto get_test_hostdevice_vector()
+{
+  auto v = hostdevice_vector<char>(0, 11, cudf::get_default_stream());
+  for (auto c : create_hello_world_message()) {
+    v.push_back(c);
+  }
+
+  return v;
+}
+
+TEST(HostDeviceSpanTest, CanCreateFullSubspan)
+{
+  auto message = get_test_hostdevice_vector();
+  auto const message_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+  expect_equivalent(message_span, message.subspan(0, message_span.size()));
+}
+
+TEST(HostDeviceSpanTest, CanCreateHostSpan)
+{
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = host_span<char>(message.host_ptr(), message.size());
+  auto const hd_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+  expect_equivalent(message_span, cudf::host_span<char>(hd_span));
+}
+
+TEST(HostDeviceSpanTest, CanTakeSubspanFull)
+{
+  auto message = get_test_hostdevice_vector();
+  auto const message_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+  expect_match("hello world", message_span.subspan(0, 11));
+}
+
+TEST(HostDeviceSpanTest, CanTakeSubspanPartial)
+{
+  auto message = get_test_hostdevice_vector();
+  auto const message_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+  expect_match("lo w", message_span.subspan(3, 4));
+}
+
+TEST(HostDeviceSpanTest, CanGetData)
+{
+  auto message = get_test_hostdevice_vector();
+  auto const message_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+  EXPECT_EQ(message.host_ptr(), message_span.host_ptr());
+}
+
+TEST(HostDeviceSpanTest, CanGetSize)
+{
+  auto message = get_test_hostdevice_vector();
+  auto const message_span =
+    hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto const empty_span = hostdevice_span<char>();
+
+  EXPECT_EQ(static_cast<size_t>(11), message_span.size());
+  EXPECT_EQ(static_cast<size_t>(0), empty_span.size());
+}
+
+TEST(HostDeviceSpanTest, CanGetSizeBytes)
+{
+  auto doubles     = std::vector<double>({6, 3, 2});
+  auto doubles_hdv = hostdevice_vector<double>(0, 3, cudf::get_default_stream());
+  for (auto d : doubles) {
+    doubles_hdv.push_back(d);
+  }
+  auto const doubles_span = hostdevice_span<double>(doubles_hdv);
+  auto const empty_span   = hostdevice_span<double>();
+
+  EXPECT_EQ(static_cast<size_t>(24), doubles_span.size_bytes());
+  EXPECT_EQ(static_cast<size_t>(0), empty_span.size_bytes());
+}
+
+TEST(HostDeviceSpanTest, CanCopySpan)
+{
+  auto message = get_test_hostdevice_vector();
+  hostdevice_span<char> message_span_copy;
+
+  {
+    auto const message_span =
+      hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+
+    message_span_copy = message_span;
+  }
+
+  EXPECT_EQ(message.host_ptr(), message_span_copy.host_ptr());
+  EXPECT_EQ(message.device_ptr(), message_span_copy.device_ptr());
+  EXPECT_EQ(message.size(), message_span_copy.size());
+}
+
+TEST(HostDeviceSpanTest, CanSendToDevice)
+{
+  auto message = get_test_hostdevice_vector();
+
+  message.host_to_device(cudf::get_default_stream(), true);
+
+  char d_message[12];
+  cudaMemcpy(d_message, message.device_ptr(), 11, cudaMemcpyDefault);
+  d_message[11] = '\0';
+
+  EXPECT_EQ(11, strlen(d_message));
+  EXPECT_EQ(std::string(d_message), hello_world_message);
+}
+
+__global__ void simple_device_char_kernel(device_span<char> result)
+{
+  const char* str = "world hello";
+  for (int offset = 0; offset < result.size(); ++offset) {
+    result.data()[offset] = str[offset];
+  }
+}
+
+TEST(HostDeviceSpanTest, CanGetFromDevice)
+{
+  auto message = get_test_hostdevice_vector();
+  message.host_to_device(cudf::get_default_stream(), true);
+  simple_device_char_kernel<<<1, 1, 0, cudf::get_default_stream()>>>(message);
+
+  message.device_to_host(cudf::get_default_stream(), true);
+  expect_match("world hello", hostdevice_span<char>(message));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

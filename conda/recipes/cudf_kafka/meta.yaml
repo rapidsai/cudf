@@ -48,7 +48,6 @@ requirements:
   run:
     - python
     - libcudf_kafka ={{ version }}
-    - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf ={{ version }}
 
 test:
