@@ -740,7 +740,7 @@ struct preprocessed_table {
    * @param verticalized_col_depths The depths of each column resulting from decomposing struct
    *        columns in the original input table
    * @param structs_transformed_columns Store the intermediate columns generated from transforming
-   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`.
+   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`
    * @param column_order Optional, host array the same length as a row that indicates the desired
    *        ascending/descending order of each column in a row. If empty, it is assumed all columns
    *        are sorted in ascending order.
@@ -749,8 +749,8 @@ struct preprocessed_table {
    *        the order `null_order::BEFORE` will be used for all columns.
    * @param preprocessed_id A randomly generated ID number
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
-   *        any lists-of-structs column having floating-point children using `cudf::rank`.
-   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   *        any lists-of-structs column having floating-point children using `cudf::rank`
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
    */
   static std::shared_ptr<preprocessed_table> create_preprocessed_table(
     table_view const& preprocessed_input,
@@ -784,10 +784,10 @@ struct preprocessed_table {
    *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
    *        long as the number of list columns).
    * @param structs_transformed_columns Store the intermediate columns generated from transforming
-   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`.
+   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`
    * @param preprocessed_id A randomly generated ID number
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
-   *        any lists-of-structs column having floating-point children using `cudf::rank`.
+   *        any lists-of-structs column having floating-point children using `cudf::rank`
    */
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -907,13 +907,13 @@ class self_comparator {
    *
    * @param t The table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If empty, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If empty, then null precedence would be
+   *        `null_order::BEFORE` for all columns.
    * @param stream The stream to construct this object on. Not the stream that will be used for
-   * comparisons using this object.
+   *        comparisons using this object.
    */
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
@@ -942,9 +942,9 @@ class self_comparator {
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
    * @note The operator overloads in sub-class `element_comparator` are templated via the
-   *        `type_dispatcher` to help select an overload instance for each column in a table.
-   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
-   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *       `type_dispatcher` to help select an overload instance for each column in a table.
+   *       So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *       but it will be a runtime error if template parameter `has_nested_columns != true`.
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
@@ -1072,13 +1072,13 @@ class two_table_comparator {
    * @param left The left table to compare
    * @param right The right table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If empty, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If empty, then null precedence would be
+   *        `null_order::BEFORE` for all columns.
    * @param stream The stream to construct this object on. Not the stream that will be used for
-   * comparisons using this object.
+   *        comparisons using this object.
    */
   two_table_comparator(table_view const& left,
                        table_view const& right,
@@ -1128,9 +1128,9 @@ class two_table_comparator {
    * `j` of the left table.
    *
    * @note The operator overloads in sub-class `element_comparator` are templated via the
-   *        `type_dispatcher` to help select an overload instance for each column in a table.
-   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
-   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *       `type_dispatcher` to help select an overload instance for each column in a table.
+   *       So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *       but it will be a runtime error if template parameter `has_nested_columns != true`.
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
@@ -1154,8 +1154,8 @@ class two_table_comparator {
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_ranked_floating_point,
-                   "The input table has floating-point numbers and was preprocessed using a "
+      CUDF_EXPECTS(!d_left_table->_ranked_floating_point && !d_right_table->_ranked_floating_point,
+                   "The input tables have floating-point numbers and was preprocessed using a "
                    "different type of physical element comparator.");
     }
 
@@ -1179,8 +1179,8 @@ class two_table_comparator {
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_ranked_floating_point,
-                   "The input table has floating-point numbers and was preprocessed using a "
+      CUDF_EXPECTS(!d_left_table->_ranked_floating_point && !d_right_table->_ranked_floating_point,
+                   "The input tables have floating-point numbers and was preprocessed using a "
                    "different type of physical element comparator.");
     }
 
