@@ -662,8 +662,9 @@ def from_dataframe(
 
     Parameters
     ----------
-    df: Object supporting dataframe interchange protocol
-    allow_copy
+    df : DataFrameObject
+        Object supporting dataframe interchange protocol
+    allow_copy : bool
         If ``True``, allow copying of the data. If ``False``, a
         ``TypeError`` is raised if data copying is required to
         construct the ``DataFrame`` (e.g., if ``df`` lives in CPU
