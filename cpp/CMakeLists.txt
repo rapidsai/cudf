@@ -395,6 +395,7 @@ add_library(
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
+  src/io/utilities/row_selection.cpp
   src/io/utilities/trie.cu
   src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
