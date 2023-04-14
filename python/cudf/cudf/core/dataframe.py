@@ -1168,14 +1168,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mask = arg
             if is_list_like(mask):
                 dtype = None
-                if len(mask) == 0:
-                    if not PANDAS_GE_200:
-                        # An explicit dtype is needed to avoid pandas
-                        # warnings from empty sets of columns. This
-                        # shouldn't be needed in pandas 2.0, we don't
-                        # need to specify a dtype when we know we're not
-                        # trying to match any columns so the default is fine.
-                        dtype = "float64"
+                if len(mask) == 0 and not PANDAS_GE_200:
+                    # An explicit dtype is needed to avoid pandas
+                    # warnings from empty sets of columns. This
+                    # shouldn't be needed in pandas 2.0, we don't
+                    # need to specify a dtype when we know we're not
+                    # trying to match any columns so the default is fine.
+                    dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
