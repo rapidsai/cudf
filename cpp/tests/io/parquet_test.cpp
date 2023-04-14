@@ -183,14 +183,11 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
   auto child             = cudf::make_lists_column(
     child_offsets_size, child_offsets.release(), child_data.release(), 0, rmm::device_buffer{});
 
-  int offsets_size = static_cast<cudf::column_view>(offsets).size() - 1;
+  int offsets_size             = static_cast<cudf::column_view>(offsets).size() - 1;
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + offsets_size);
   return include_validity
            ? cudf::make_lists_column(
-               offsets_size,
-               offsets.release(),
-               std::move(child),
-               cudf::UNKNOWN_NULL_COUNT,
-               cudf::test::detail::make_null_mask(valids, valids + offsets_size))
+               offsets_size, offsets.release(), std::move(child), null_count, std::move(null_mask))
            : cudf::make_lists_column(
                offsets_size, offsets.release(), std::move(child), 0, rmm::device_buffer{});
 }
@@ -2704,12 +2701,11 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     c1_offset_iter, c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<float> c1_floats(
     values, values + (num_rows * floats_per_row), valids);
-  auto _c1 = cudf::make_lists_column(num_rows,
-                                     c1_offsets.release(),
-                                     c1_floats.release(),
-                                     cudf::UNKNOWN_NULL_COUNT,
-                                     cudf::test::detail::make_null_mask(valids, valids + num_rows));
-  auto c1  = cudf::purge_nonempty_nulls(*_c1);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+  auto _c1 = cudf::make_lists_column(
+    num_rows, c1_offsets.release(), c1_floats.release(), null_count, std::move(null_mask));
+  auto c1 = cudf::purge_nonempty_nulls(*_c1);
 
   // list<list<int>>
   auto c2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
@@ -2732,12 +2728,9 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 200; });
   std::vector<bool> c3_valids(num_rows);
   std::copy(_c3_valids, _c3_valids + num_rows, c3_valids.begin());
-  auto _c3_list =
-    cudf::make_lists_column(num_rows,
-                            offsets.release(),
-                            string_col.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+  auto _c3_list                   = cudf::make_lists_column(
+    num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
   auto c3_list = cudf::purge_nonempty_nulls(*_c3_list);
   cudf::test::fixed_width_column_wrapper<int> c3_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> c3_floats(values, values + num_rows, valids);

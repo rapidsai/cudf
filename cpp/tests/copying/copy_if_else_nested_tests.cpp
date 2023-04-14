@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,24 +347,20 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
   auto lhs_strings = strings{{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}, null_at_4};
   auto lhs_structs = structs{{lhs_ints, lhs_strings}}.release();
   auto lhs_offsets = offsets{0, 2, 4, 6, 10, 10}.release();
-  auto const lhs =
-    cudf::make_lists_column(5,
-                            std::move(lhs_offsets),
-                            std::move(lhs_structs),
-                            1,
-                            cudf::test::detail::make_null_mask(null_at_4, null_at_4 + 5));
+
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_at_4, null_at_4 + 5);
+  auto const lhs               = cudf::make_lists_column(
+    5, std::move(lhs_offsets), std::move(lhs_structs), null_count, std::move(null_mask));
 
   auto rhs_ints = ints{{0, 11, 22, 33, 44, 55, 66, 77, 88, 99}, null_at_6};
   auto rhs_strings =
     strings{{"00", "11", "22", "33", "44", "55", "66", "77", "88", "99"}, null_at_7};
   auto rhs_structs = structs{{rhs_ints, rhs_strings}, null_at_8};
   auto rhs_offsets = offsets{0, 0, 4, 6, 8, 10};
-  auto const rhs =
-    cudf::make_lists_column(5,
-                            rhs_offsets.release(),
-                            rhs_structs.release(),
-                            1,
-                            cudf::test::detail::make_null_mask(null_at_0, null_at_0 + 5));
+
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(null_at_0, null_at_0 + 5);
+  auto const rhs                  = cudf::make_lists_column(
+    5, rhs_offsets.release(), rhs_structs.release(), null_count, std::move(null_mask));
 
   auto selector_column = bools{1, 0, 1, 0, 1}.release();
 
@@ -376,12 +372,10 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
     strings{{"0", "1", "00", "11", "22", "33", "", "5", "66", ""}, null_at_6_9};
   auto expected_structs = structs{{expected_ints, expected_strings}};
   auto expected_offsets = offsets{0, 2, 6, 8, 10, 10};
-  auto const expected =
-    cudf::make_lists_column(5,
-                            expected_offsets.release(),
-                            expected_structs.release(),
-                            1,
-                            cudf::test::detail::make_null_mask(null_at_4, null_at_4 + 5));
+
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(null_at_4, null_at_4 + 5);
+  auto const expected             = cudf::make_lists_column(
+    5, expected_offsets.release(), expected_structs.release(), null_count, std::move(null_mask));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected->view());
 }
