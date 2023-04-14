@@ -33,8 +33,15 @@ aws s3 cp s3://rapidsai-docs/librmm/${VERSION_NUMBER}/html/rmm.tag . || echo "Fa
 doxygen Doxyfile
 popd
 
-rapids-logger "Build Sphinx docs"
+rapids-logger "Build cuDF Sphinx docs"
 pushd docs/cudf
+sphinx-build -b dirhtml source _html
+sphinx-build -b text source _text
+popd
+
+
+rapids-logger "Build dask-cuDF Sphinx docs"
+pushd docs/dask_cudf
 sphinx-build -b dirhtml source _html
 sphinx-build -b text source _text
 popd
@@ -45,4 +52,6 @@ if [[ ${RAPIDS_BUILD_TYPE} == "branch" ]]; then
   aws s3 sync --no-progress --delete cpp/doxygen/html "s3://rapidsai-docs/libcudf/${VERSION_NUMBER}/html"
   aws s3 sync --no-progress --delete docs/cudf/_html "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/html"
   aws s3 sync --no-progress --delete docs/cudf/_text "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/txt"
+  aws s3 sync --no-progress --delete docs/dask_cudf/_html "s3://rapidsai-docs/dask-cudf/${VERSION_NUMBER}/html"
+  aws s3 sync --no-progress --delete docs/dask_cudf/_text "s3://rapidsai-docs/dask-cudf/${VERSION_NUMBER}/txt"
 fi

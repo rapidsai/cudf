@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.04.00
+  VERSION 23.06.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -395,6 +395,7 @@ add_library(
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
+  src/io/utilities/row_selection.cpp
   src/io/utilities/trie.cu
   src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
@@ -464,6 +465,7 @@ add_library(
   src/reductions/segmented/max.cu
   src/reductions/segmented/mean.cu
   src/reductions/segmented/min.cu
+  src/reductions/segmented/nunique.cu
   src/reductions/segmented/product.cu
   src/reductions/segmented/reductions.cpp
   src/reductions/segmented/std.cu
@@ -603,6 +605,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp

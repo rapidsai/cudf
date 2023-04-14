@@ -126,6 +126,10 @@ ConfigureBench(SCATTER_BENCH copying/scatter.cu)
 ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists.cu)
 
 # ##################################################################################################
+# * Other list-related operartions benchmark ------------------------------------------------------
+ConfigureNVBench(SET_OPS_NVBENCH lists/set_operations.cpp)
+
+# ##################################################################################################
 # * contiguous_split benchmark  -------------------------------------------------------------------
 ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split.cu)
 
@@ -150,6 +154,7 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+  stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -191,7 +196,7 @@ ConfigureBench(
 )
 ConfigureNVBench(
   REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
-  reduction/segment_reduce.cu
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################

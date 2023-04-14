@@ -121,6 +121,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                   list_indices.begin(),
                   result_begin);
 
+  // Reset null count, which was invalidated when calling to `mutable_view()`.
   result->set_null_count(null_count);
 
   return result;
@@ -181,8 +182,10 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                   stream,
                                   mr);
 
-  return null_count == 0 ? std::move(output)
-                         : cudf::detail::purge_nonempty_nulls(output->view(), stream, mr);
+  if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
+    return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+  }
+  return output;
 }
 
 std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
@@ -263,8 +266,10 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                   stream,
                                   mr);
 
-  return null_count == 0 ? std::move(output)
-                         : cudf::detail::purge_nonempty_nulls(output->view(), stream, mr);
+  if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
+    return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
+  }
+  return output;
 }
 
 }  // namespace detail

@@ -70,8 +70,8 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_type skip_rows,
-                           size_type num_rows,
+  table_with_metadata read(int64_t skip_rows,
+                           std::optional<size_type> const& num_rows,
                            bool uses_custom_row_bounds,
                            host_span<std::vector<size_type> const> row_group_indices);
 
@@ -120,13 +120,13 @@ class reader::impl {
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
    * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read, or `-1` to read all rows
+   * @param num_rows Number of rows to read, or `std::nullopt` to read all rows
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
    */
-  void prepare_data(size_type skip_rows,
-                    size_type num_rows,
+  void prepare_data(int64_t skip_rows,
+                    std::optional<size_type> const& num_rows,
                     bool uses_custom_row_bounds,
                     host_span<std::vector<size_type> const> row_group_indices);
 
