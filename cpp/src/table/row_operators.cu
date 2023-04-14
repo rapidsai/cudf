@@ -771,6 +771,9 @@ preprocessed_table::create(table_view const& lhs,
                                          lists_of_structs_have_floating_point(decomposed_lhs);
   auto const ranked_floating_point_rhs = structs_transformed_columns_rhs.size() > 0 &&
                                          lists_of_structs_have_floating_point(decomposed_rhs);
+
+  // The same ID will be assigned to all preprocessed_table(s) so we can know later if they are
+  // compatible to compare against each other.
   auto const preprocessed_id = generate_random_id();
 
   return {create_preprocessed_table(transformed_lhs,
