@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -513,8 +513,8 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
       cudf::detail::get_value<size_type>(lhs_row_indices, index, cudf::get_default_stream());
     auto const rhs_index =
       cudf::detail::get_value<size_type>(rhs_row_indices, index, cudf::get_default_stream());
-    auto diff_lhs = cudf::detail::slice(lhs, lhs_index, lhs_index + 1);
-    auto diff_rhs = cudf::detail::slice(rhs, rhs_index, rhs_index + 1);
+    auto diff_lhs = cudf::slice(lhs, {lhs_index, lhs_index + 1}).front();
+    auto diff_rhs = cudf::slice(rhs, {rhs_index, rhs_index + 1}).front();
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
            "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
            "] = " + to_string(diff_rhs, "");

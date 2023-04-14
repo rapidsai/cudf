@@ -97,8 +97,8 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_type skip_rows,
-                           size_type num_rows,
+  table_with_metadata read(int64_t skip_rows,
+                           std::optional<size_type> num_rows,
                            const std::vector<std::vector<size_type>>& stripes,
                            rmm::cuda_stream_view stream);
 
