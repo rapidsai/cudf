@@ -338,15 +338,15 @@ struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
+TEST_F(GroupedRollingRangeOrderByStringTest, Ascending_Partitioned_NoNulls)
 {
   // clang-format off
   auto const orderby =
-    strings_column{
-      "A", "A", "A", "B", "B", "B", // Group 0.
-      "C", "C", "C", "C",           // Group 1.
-      "D", "D", "E", "E"            // Group 2.
-    }.release();
+      strings_column{
+          "A", "A", "A", "B", "B", "B", // Group 0.
+          "C", "C", "C", "C",           // Group 1.
+          "D", "D", "E", "E"            // Group 2.
+      }.release();
   // clang-format on
 
   // Partitioned cases.
@@ -368,6 +368,18 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *get_count_over_partitioned_window(*orderby, cudf::order::ASCENDING, current_row, current_row),
     ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
+}
+
+TEST_F(GroupedRollingRangeOrderByStringTest, Ascending_NoParts_NoNulls)
+{
+  // clang-format off
+  auto const orderby =
+      strings_column{
+          "A", "A", "A", "B", "B", "B",
+          "C", "C", "C", "C",
+          "D", "D", "E", "E"
+      }.release();
+  // clang-format on
 
   // Un-partitioned cases.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
@@ -390,7 +402,7 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
                                       ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
 }
 
-TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNulls)
+TEST_F(GroupedRollingRangeOrderByStringTest, Ascending_Partitioned_WithNulls)
 {
   // clang-format off
   auto const orderby =
@@ -404,6 +416,7 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNulls)
       }.release();
   // clang-format on
 
+  // Partitioned cases.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *get_count_over_partitioned_window(
       *orderby, cudf::order::ASCENDING, unbounded_preceding, current_row),
@@ -424,7 +437,42 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNulls)
     ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
 }
 
-TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByDescendingNoNulls)
+TEST_F(GroupedRollingRangeOrderByStringTest, Ascending_NoParts_WithNulls)
+{
+  // Un-partitioned cases. Null values have to be clustered together.
+  // clang-format off
+  auto const orderby =
+      strings_column{
+          {
+              "X", "X", "X", "B", "B", "B",
+              "C", "C", "C", "C",
+              "D", "D", "E", "E"
+          },
+          cudf::test::iterators::nulls_at({0, 1, 2})
+      }.release();
+  // clang-format on
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::ASCENDING, unbounded_preceding, current_row),
+    ints_column{3, 3, 3, 6, 6, 6, 10, 10, 10, 10, 12, 12, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::ASCENDING, current_row, unbounded_following),
+    ints_column{14, 14, 14, 11, 11, 11, 8, 8, 8, 8, 4, 4, 2, 2});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::ASCENDING, unbounded_preceding, unbounded_following),
+    ints_column{14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*get_count_over_unpartitioned_window(
+                                        *orderby, cudf::order::ASCENDING, current_row, current_row),
+                                      ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
+}
+
+TEST_F(GroupedRollingRangeOrderByStringTest, Descending_Partitioned_NoNulls)
 {
   // clang-format off
   auto const orderby =
@@ -435,6 +483,7 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByDescendingNoNulls)
       }.release();
   // clang-format on
 
+  // Partitioned cases.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *get_count_over_partitioned_window(
       *orderby, cudf::order::DESCENDING, unbounded_preceding, current_row),
@@ -455,7 +504,40 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByDescendingNoNulls)
     ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
 }
 
-TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByDescendingNulls)
+TEST_F(GroupedRollingRangeOrderByStringTest, Descending_NoParts_NoNulls)
+{
+  // Un-partitioned cases. Order-by column must be entirely in descending order.
+  // clang-format off
+  auto const orderby =
+      strings_column{
+          "E", "E", "E", "D", "D", "D",
+          "C", "C", "C", "C",
+          "B", "B", "A", "A"
+      }.release();
+  // clang-format on
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, unbounded_preceding, current_row),
+    ints_column{3, 3, 3, 6, 6, 6, 10, 10, 10, 10, 12, 12, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, current_row, unbounded_following),
+    ints_column{14, 14, 14, 11, 11, 11, 8, 8, 8, 8, 4, 4, 2, 2});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, unbounded_preceding, unbounded_following),
+    ints_column{14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, current_row, current_row),
+    ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
+}
+
+TEST_F(GroupedRollingRangeOrderByStringTest, Descending_Partitioned_WithNulls)
 {
   // clang-format off
   auto const orderby =
@@ -486,5 +568,41 @@ TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByDescendingNulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *get_count_over_partitioned_window(*orderby, cudf::order::DESCENDING, current_row, current_row),
+    ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
+}
+
+TEST_F(GroupedRollingRangeOrderByStringTest, Descending_NoParts_WithNulls)
+{
+  // Order-by column must be ordered completely in descending.
+  // clang-format off
+  auto const orderby =
+      strings_column{
+          {
+              "X", "X", "X", "D", "D", "D",
+              "C", "C", "C", "C",
+              "B", "B", "A", "A"
+          },
+          cudf::test::iterators::nulls_at({0, 1, 2})
+      }.release();
+  // clang-format on
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, unbounded_preceding, current_row),
+    ints_column{3, 3, 3, 6, 6, 6, 10, 10, 10, 10, 12, 12, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, current_row, unbounded_following),
+    ints_column{14, 14, 14, 11, 11, 11, 8, 8, 8, 8, 4, 4, 2, 2});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, unbounded_preceding, unbounded_following),
+    ints_column{14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_unpartitioned_window(
+      *orderby, cudf::order::DESCENDING, current_row, current_row),
     ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
 }
