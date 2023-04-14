@@ -48,156 +48,154 @@ void ProtobufReader::skip_struct_field(int t)
 
 void ProtobufReader::read(PostScript& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.footerLength),
-                            make_field_reader(2, s.compression),
-                            make_field_reader(3, s.compressionBlockSize),
-                            make_packed_field_reader(4, s.version),
-                            make_field_reader(5, s.metadataLength),
-                            make_field_reader(8000, s.magic));
+  auto op = std::tuple(field_reader(1, s.footerLength),
+                       field_reader(2, s.compression),
+                       field_reader(3, s.compressionBlockSize),
+                       packed_field_reader(4, s.version),
+                       field_reader(5, s.metadataLength),
+                       field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(FileFooter& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.headerLength),
-                            make_field_reader(2, s.contentLength),
-                            make_field_reader(3, s.stripes),
-                            make_field_reader(4, s.types),
-                            make_field_reader(5, s.metadata),
-                            make_field_reader(6, s.numberOfRows),
-                            make_raw_field_reader(7, s.statistics),
-                            make_field_reader(8, s.rowIndexStride));
+  auto op = std::tuple(field_reader(1, s.headerLength),
+                       field_reader(2, s.contentLength),
+                       field_reader(3, s.stripes),
+                       field_reader(4, s.types),
+                       field_reader(5, s.metadata),
+                       field_reader(6, s.numberOfRows),
+                       raw_field_reader(7, s.statistics),
+                       field_reader(8, s.rowIndexStride));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeInformation& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.offset),
-                            make_field_reader(2, s.indexLength),
-                            make_field_reader(3, s.dataLength),
-                            make_field_reader(4, s.footerLength),
-                            make_field_reader(5, s.numberOfRows));
+  auto op = std::tuple(field_reader(1, s.offset),
+                       field_reader(2, s.indexLength),
+                       field_reader(3, s.dataLength),
+                       field_reader(4, s.footerLength),
+                       field_reader(5, s.numberOfRows));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(SchemaType& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            make_packed_field_reader(2, s.subtypes),
-                            make_field_reader(3, s.fieldNames),
-                            make_field_reader(4, s.maximumLength),
-                            make_field_reader(5, s.precision),
-                            make_field_reader(6, s.scale));
+  auto op = std::tuple(field_reader(1, s.kind),
+                       packed_field_reader(2, s.subtypes),
+                       field_reader(3, s.fieldNames),
+                       field_reader(4, s.maximumLength),
+                       field_reader(5, s.precision),
+                       field_reader(6, s.scale));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(UserMetadataItem& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.name), make_field_reader(2, s.value));
+  auto op = std::tuple(field_reader(1, s.name), field_reader(2, s.value));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeFooter& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.streams),
-                            make_field_reader(2, s.columns),
-                            make_field_reader(3, s.writerTimezone));
+  auto op = std::tuple(
+    field_reader(1, s.streams), field_reader(2, s.columns), field_reader(3, s.writerTimezone));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(Stream& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            make_field_reader(2, s.column_id),
-                            make_field_reader(3, s.length));
+  auto op =
+    std::tuple(field_reader(1, s.kind), field_reader(2, s.column_id), field_reader(3, s.length));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(ColumnEncoding& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind), make_field_reader(2, s.dictionarySize));
+  auto op = std::tuple(field_reader(1, s.kind), field_reader(2, s.dictionarySize));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(integer_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(double_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(string_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(bucket_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_packed_field_reader(1, s.count));
+  auto op = std::tuple(packed_field_reader(1, s.count));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(decimal_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(date_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum), make_field_reader(2, s.maximum));
+  auto op = std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(binary_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.sum));
+  auto op = std::tuple(field_reader(1, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum),
-                            make_field_reader(2, s.maximum),
-                            make_field_reader(3, s.minimum_utc),
-                            make_field_reader(4, s.maximum_utc));
+  auto op = std::tuple(field_reader(1, s.minimum),
+                       field_reader(2, s.maximum),
+                       field_reader(3, s.minimum_utc),
+                       field_reader(4, s.maximum_utc));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(column_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.number_of_values),
-                            make_field_reader(2, s.int_stats),
-                            make_field_reader(3, s.double_stats),
-                            make_field_reader(4, s.string_stats),
-                            make_field_reader(5, s.bucket_stats),
-                            make_field_reader(6, s.decimal_stats),
-                            make_field_reader(7, s.date_stats),
-                            make_field_reader(8, s.binary_stats),
-                            make_field_reader(9, s.timestamp_stats),
-                            make_field_reader(10, s.has_null));
+  auto op = std::tuple(field_reader(1, s.number_of_values),
+                       field_reader(2, s.int_stats),
+                       field_reader(3, s.double_stats),
+                       field_reader(4, s.string_stats),
+                       field_reader(5, s.bucket_stats),
+                       field_reader(6, s.decimal_stats),
+                       field_reader(7, s.date_stats),
+                       field_reader(8, s.binary_stats),
+                       field_reader(9, s.timestamp_stats),
+                       field_reader(10, s.has_null));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeStatistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_raw_field_reader(1, s.colStats));
+  auto op = std::tuple(raw_field_reader(1, s.colStats));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(Metadata& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.stripeStats));
+  auto op = std::tuple(field_reader(1, s.stripeStats));
   function_builder(s, maxlen, op);
 }
 
