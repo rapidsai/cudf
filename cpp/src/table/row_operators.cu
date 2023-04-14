@@ -34,6 +34,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <random>
+
 namespace cudf {
 namespace experimental {
 
@@ -663,6 +665,13 @@ bool lists_of_structs_have_floating_point(table_view const& input)
   });
 }
 
+uint64_t generate_random_id()
+{
+  auto gen = std::mt19937{std::random_device{}()};
+  std::uniform_int_distribution<uint64_t> dis;
+  return dis(gen);
+}
+
 }  // namespace
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
@@ -671,6 +680,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
+  uint64_t preprocessed_id,
   bool ranked_floating_point,
   rmm::cuda_stream_view stream)
 {
@@ -694,6 +704,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(structs_transformed_columns),
+                             preprocessed_id,
                              ranked_floating_point));
   } else {
     return std::shared_ptr<preprocessed_table>(
@@ -702,6 +713,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(structs_transformed_columns),
+                             preprocessed_id,
                              ranked_floating_point));
   }
 }
@@ -726,6 +738,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
                                    std::move(structs_transformed_columns),
                                    new_column_order,
                                    new_null_precedence,
+                                   generate_random_id(),
                                    ranked_floating_point,
                                    stream);
 }
@@ -763,12 +776,14 @@ preprocessed_table::create(table_view const& lhs,
                                          lists_of_structs_have_floating_point(decomposed_lhs);
   auto const ranked_floating_point_rhs = structs_transformed_columns_rhs.size() > 0 &&
                                          lists_of_structs_have_floating_point(decomposed_rhs);
+  auto const preprocessed_id = generate_random_id();
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(verticalized_col_depths_lhs),
                                     std::move(structs_transformed_columns_lhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
+                                    preprocessed_id,
                                     ranked_floating_point_lhs,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
@@ -776,6 +791,7 @@ preprocessed_table::create(table_view const& lhs,
                                     std::move(structs_transformed_columns_rhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
+                                    preprocessed_id,
                                     ranked_floating_point_rhs,
                                     stream)};
 }
@@ -788,6 +804,7 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
+  uint64_t preprocessed_id,
   bool ranked_floating_point)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
@@ -796,6 +813,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _structs_transformed_columns(std::move(structs_transformed_columns)),
+    _preprocessed_id(preprocessed_id),
     _ranked_floating_point(ranked_floating_point)
 {
 }
@@ -806,6 +824,7 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<null_order>&& null_precedence,
   rmm::device_uvector<size_type>&& depths,
   std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
+  uint64_t preprocessed_id,
   bool ranked_floating_point)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
@@ -814,6 +833,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data{},
     _dremel_device_views{},
     _structs_transformed_columns(std::move(structs_transformed_columns)),
+    _preprocessed_id(preprocessed_id),
     _ranked_floating_point(ranked_floating_point)
 {
 }
