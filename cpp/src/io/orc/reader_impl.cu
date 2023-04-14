@@ -933,8 +933,8 @@ std::unique_ptr<table> reader::impl::compute_timezone_table(
     {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream);
 }
 
-table_with_metadata reader::impl::read(size_type skip_rows,
-                                       size_type num_rows,
+table_with_metadata reader::impl::read(int64_t skip_rows,
+                                       std::optional<size_type> num_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
 {
@@ -956,7 +956,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes = _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
+  auto const [rows_to_skip, rows_to_read, selected_stripes] =
+    _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
 
   auto const tz_table = compute_timezone_table(selected_stripes, stream);
 
@@ -994,7 +995,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     }
 
     // If no rows or stripes to read, return empty columns
-    if (num_rows <= 0 || selected_stripes.empty()) {
+    if (rows_to_read == 0 || selected_stripes.empty()) {
       std::transform(selected_columns.levels[0].begin(),
                      selected_columns.levels[0].end(),
                      std::back_inserter(out_columns),
@@ -1023,11 +1024,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         _metadata.is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
-        (num_rows > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-         _metadata.get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
+        (rows_to_read > _metadata.get_row_index_stride() &&
+         !(_metadata.get_row_index_stride() & 7) && _metadata.get_row_index_stride() > 0 &&
+         num_columns * total_num_stripes < 8 * 128) &&
         // Only use if first row is aligned to a stripe boundary
         // TODO: Fix logic to handle unaligned rows
-        (skip_rows == 0);
+        (rows_to_skip == 0);
 
       // Logically view streams as columns
       std::vector<orc_stream_info> stream_info;
@@ -1126,7 +1128,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
               (level == 0)
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-            chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
+            chunk.column_num_rows = (level == 0) ? rows_to_read : _col_meta.num_child_rows[col_idx];
             chunk.parent_validity_info =
               (level == 0) ? column_validity_info{} : _col_meta.parent_column_data[col_idx];
             chunk.parent_null_count_prefix_sums =
@@ -1231,7 +1233,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
           }
           auto is_list_type = (column_types[i].id() == type_id::LIST);
-          auto n_rows       = (level == 0) ? num_rows : _col_meta.num_child_rows[i];
+          auto n_rows       = (level == 0) ? rows_to_read : _col_meta.num_child_rows[i];
           // For list column, offset column will be always size + 1
           if (is_list_type) n_rows++;
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
@@ -1241,7 +1243,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           auto const tz_table_dview = table_device_view::create(tz_table->view(), stream);
           decode_stream_data(chunks,
                              num_dict_entries,
-                             skip_rows,
+                             rows_to_skip,
                              *tz_table_dview,
                              row_groups,
                              _metadata.get_row_index_stride(),

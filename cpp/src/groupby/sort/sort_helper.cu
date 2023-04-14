@@ -90,7 +90,7 @@ size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
 column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 {
   auto sliced_key_sorted_order = [stream, this]() {
-    return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream));
+    return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream), stream);
   };
 
   if (_key_sorted_order) { return sliced_key_sorted_order(); }
@@ -261,7 +261,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
                                       mr);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
-  column_view gather_map = cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));
+  column_view gather_map =
+    cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream), stream);
 
   auto sorted_values_table = cudf::detail::gather(table_view({values}),
                                                   gather_map,
