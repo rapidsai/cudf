@@ -5738,7 +5738,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def _prepare_for_rowwise_op(self, method, skipna):
+    def _prepare_for_rowwise_op(self, method, skipna, numeric_only):
         """Prepare a DataFrame for CuPy-based row-wise operations."""
 
         if method not in _cupy_nan_methods_map and any(
@@ -5752,26 +5752,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             raise ValueError(msg)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
-
-        if not is_pure_dt:
+        if numeric_only:
             filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
 
-        if filtered._num_columns < self._num_columns:
-            # When we update our pandas compatibility target to 2.0, pandas
-            # will stop supporting numeric_only=None and users will have to
-            # specify True/False. At that time we should also top our implicit
-            # removal of non-numeric columns here.
-            assert Version(pd.__version__) < Version("2.0.0")
-            msg = (
-                "Row-wise operations currently only support int, float "
-                "and bool dtypes. Non numeric columns are ignored."
+        common_dtype = find_common_type(filtered.dtypes)
+        if (
+            not numeric_only
+            and is_string_dtype(common_dtype)
+            and any(not is_string_dtype(dt) for dt in filtered.dtypes)
+        ):
+            raise TypeError(
+                f"Cannot perform row-wise {method} across mixed-dtype columns,"
+                " try type-casting all the columns to same dtype."
             )
-            warnings.warn(msg)
 
         if not skipna and any(col.nullable for col in filtered._columns):
             mask = DataFrame(
@@ -5857,7 +5854,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(index=cudf.StringIndex([]))
+                return Series(index=self.index)
 
         axis = source._get_axis_from_axis_arg(axis)
 
@@ -6063,12 +6060,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Row-wise operations currently do not support `level`."
             )
 
-        numeric_only = kwargs.pop("numeric_only", None)
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "Row-wise operations currently do not "
-                "support `numeric_only=False`."
-            )
+        numeric_only = kwargs.pop("numeric_only", False)
 
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
@@ -6088,7 +6080,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
-            method, skipna
+            method, skipna, numeric_only
         )
         for col in prepared._data.names:
             if prepared._data[col].nullable:

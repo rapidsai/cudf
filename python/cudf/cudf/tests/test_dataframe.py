@@ -4890,7 +4890,9 @@ def test_df_constructor_dtype(dtype):
             {
                 "a": [1, 2, 3, 4],
                 "b": [7, np.NaN, 9, 10],
-                "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+                "c": cudf.Series(
+                    [np.NaN, np.NaN, np.NaN, np.NaN], nan_as_null=False
+                ),
                 "d": cudf.Series([None, None, None, None], dtype="int64"),
                 "e": [100, None, 200, None],
                 "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
@@ -4910,38 +4912,34 @@ def test_df_constructor_dtype(dtype):
     "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
 @pytest.mark.parametrize("skipna", [True, False])
-def test_rowwise_ops(data, op, skipna):
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_rowwise_ops(data, op, skipna, numeric_only):
     gdf = data
     pdf = gdf.to_pandas()
 
-    kwargs = {"axis": 1, "skipna": skipna}
+    kwargs = {"axis": 1, "skipna": skipna, "numeric_only": numeric_only}
     if op in ("var", "std"):
         kwargs["ddof"] = 0
 
-    with expect_warning_if(
-        not all(
-            (
-                (pdf[column].count() == 0)
-                if skipna
-                else (pdf[column].notna().count() == 0)
-            )
-            or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-            or cudf.api.types.is_bool_dtype(pdf[column].dtype)
-            for column in pdf
+    if not numeric_only and not all(
+        (
+            (pdf[column].count() == 0)
+            if skipna
+            else (pdf[column].notna().count() == 0)
         )
+        or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
+        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        for column in pdf
     ):
+        with pytest.raises(TypeError):
+            expected = getattr(pdf, op)(**kwargs)
+        with pytest.raises(TypeError):
+            got = getattr(gdf, op)(**kwargs)
+    else:
         expected = getattr(pdf, op)(**kwargs)
-    with expect_warning_if(
-        not all(
-            cudf.api.types.is_numeric_dtype(gdf[column].dtype)
-            or cudf.api.types.is_bool_dtype(gdf[column].dtype)
-            for column in gdf
-        ),
-        UserWarning,
-    ):
         got = getattr(gdf, op)(**kwargs)
 
-    assert_eq(expected, got, check_exact=False)
+        assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -4971,67 +4969,18 @@ def test_rowwise_ops_nullable_dtypes_all_null(op):
 
 
 @pytest.mark.parametrize(
-    "op,expected",
+    "op",
     [
-        (
-            "max",
-            cudf.Series(
-                [10.0, None, np.NaN, 2234.0, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "min",
-            cudf.Series(
-                [10.0, None, np.NaN, 13.0, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "sum",
-            cudf.Series(
-                [20.0, None, np.NaN, 2247.0, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "product",
-            cudf.Series(
-                [100.0, None, np.NaN, 29042.0, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "mean",
-            cudf.Series(
-                [10.0, None, np.NaN, 1123.5, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "var",
-            cudf.Series(
-                [0.0, None, np.NaN, 1233210.25, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
-        (
-            "std",
-            cudf.Series(
-                [0.0, None, np.NaN, 1110.5, None, np.NaN],
-                dtype="float64",
-                nan_as_null=False,
-            ),
-        ),
+        "max",
+        "min",
+        "sum",
+        "product",
+        "mean",
+        "var",
+        "std",
     ],
 )
-def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
+def test_rowwise_ops_nullable_dtypes_partial_null(op):
     gdf = cudf.DataFrame(
         {
             "a": [10, 11, 12, 13, 14, 15],
@@ -5044,10 +4993,12 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
 
     if op in ("var", "std"):
         got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+        expected = getattr(gdf.to_pandas(), op)(axis=1, ddof=0, skipna=False)
     else:
         got = getattr(gdf, op)(axis=1, skipna=False)
+        expected = getattr(gdf.to_pandas(), op)(axis=1, skipna=False)
 
-    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got.null_count, 2)
     assert_eq(got, expected)
 
 
@@ -5190,23 +5141,39 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 )
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
-def test_rowwise_ops_datetime_dtypes(data, op, skipna):
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
 
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    with expect_warning_if(
-        not all(cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes),
-        UserWarning,
+    if not numeric_only and not all(
+        cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes
     ):
-        got = getattr(gdf, op)(axis=1, skipna=skipna)
-    with expect_warning_if(
-        not all(pd.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes),
-        FutureWarning,
-    ):
-        expected = getattr(pdf, op)(axis=1, skipna=skipna)
+        with pytest.raises(TypeError):
+            got = getattr(gdf, op)(
+                axis=1, skipna=skipna, numeric_only=numeric_only
+            )
+        with pytest.raises(TypeError):
+            expected = getattr(pdf, op)(
+                axis=1, skipna=skipna, numeric_only=numeric_only
+            )
+    else:
+        got = getattr(gdf, op)(
+            axis=1, skipna=skipna, numeric_only=numeric_only
+        )
+        expected = getattr(pdf, op)(
+            axis=1, skipna=skipna, numeric_only=numeric_only
+        )
+        if got.dtype == cudf.dtype(
+            "datetime64[us]"
+        ) and expected.dtype == np.dtype("datetime64[ns]"):
+            # Workaround for a PANDAS-BUG:
+            # https://github.com/pandas-dev/pandas/issues/52524
+            assert_eq(got.astype("datetime64[ns]"), expected)
+        else:
 
-    assert_eq(got, expected)
+            assert_eq(got, expected, check_dtype=False)
 
 
 @pytest.mark.parametrize(
