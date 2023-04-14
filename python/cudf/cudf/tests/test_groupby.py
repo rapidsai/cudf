@@ -2538,7 +2538,8 @@ def test_groupby_fillna_method(nelem, method):
     gdf = cudf.from_pandas(pdf)
 
     expect = pdf.groupby(key_col).fillna(method=method)
-    got = gdf.groupby(key_col).fillna(method=method)
+    with expect_warning_if(method in {"pad", "backfill"}):
+        got = gdf.groupby(key_col).fillna(method=method)
 
     assert_groupby_results_equal(
         expect[value_cols], got[value_cols], sort=False
