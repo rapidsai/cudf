@@ -278,7 +278,7 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
 {
   auto [null_mask, null_count] = make_null_mask_vector(begin, end);
   auto d_mask                  = rmm::device_buffer{null_mask.data(),
-                                   null_mask.size() * sizeof(decltype(null_mask.front())),
+                                   cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
                                    cudf::get_default_stream()};
   return {std::move(d_mask), null_count};
 }
