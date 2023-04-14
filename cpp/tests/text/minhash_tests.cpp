@@ -22,7 +22,6 @@
 #include <nvtext/minhash.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -76,11 +75,9 @@ TEST_F(MinHashTest, MultiSeed)
 
   auto view = cudf::strings_column_view(input);
 
-  auto const seeds   = std::vector<cudf::hash_value_type>{0, 1, 2};
-  auto const d_seeds = cudf::detail::make_device_uvector_async(
-    seeds, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto seeds = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>({0, 1, 2});
 
-  auto results = nvtext::minhash(view, d_seeds);
+  auto results = nvtext::minhash(view, cudf::column_view(seeds));
 
   using LCW = cudf::test::lists_column_wrapper<cudf::hash_value_type>;
   // clang-format off
@@ -99,10 +96,8 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
   auto input    = cudf::test::strings_column_wrapper({"abcdéfgh", "", "", "stuvwxyz"}, validity);
   auto view     = cudf::strings_column_view(input);
 
-  auto const seeds   = std::vector<cudf::hash_value_type>{1, 2};
-  auto const d_seeds = cudf::detail::make_device_uvector_async(
-    seeds, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto results = nvtext::minhash(view, d_seeds);
+  auto seeds   = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>({1, 2});
+  auto results = nvtext::minhash(view, cudf::column_view(seeds));
 
   using LCW = cudf::test::lists_column_wrapper<cudf::hash_value_type>;
   LCW expected({LCW{484984072u, 1074168784u}, LCW{}, LCW{0u, 0u}, LCW{571652169u, 173528385u}},
@@ -124,6 +119,16 @@ TEST_F(MinHashTest, ErrorsTest)
   auto view  = cudf::strings_column_view(input);
   EXPECT_THROW(nvtext::minhash(view, 0, 0), std::invalid_argument);
   EXPECT_THROW(nvtext::minhash(view, 0, 0, cudf::hash_id::HASH_MD5), std::invalid_argument);
-  auto seeds = cudf::device_span<cudf::hash_value_type const>{};
-  EXPECT_THROW(nvtext::minhash(view, seeds), std::invalid_argument);
+  auto seeds = cudf::test::fixed_width_column_wrapper<
+    cudf::hash_value_type>();  // cudf::device_span<cudf::hash_value_type
+                               // const>{};
+  EXPECT_THROW(nvtext::minhash(view, cudf::column_view(seeds)), std::invalid_argument);
+
+  std::vector<std::string> h_input(50000, "");
+  input = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
+  view  = cudf::strings_column_view(input);
+
+  auto const zeroes = thrust::constant_iterator<cudf::hash_value_type>(0);
+  seeds = cudf::test::fixed_width_column_wrapper<cudf::hash_value_type>(zeroes, zeroes + 50000);
+  EXPECT_THROW(nvtext::minhash(view, cudf::column_view(seeds)), std::invalid_argument);
 }
