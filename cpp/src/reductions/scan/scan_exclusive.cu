@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,8 +91,8 @@ std::unique_ptr<column> scan_exclusive(const column_view& input,
   if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
-    output->set_null_mask(mask_scan(input, scan_type::EXCLUSIVE, stream, mr),
-                          cudf::UNKNOWN_NULL_COUNT);
+    auto [mask, null_count] = mask_scan(input, scan_type::EXCLUSIVE, stream, mr);
+    output->set_null_mask(mask, null_count);
   }
 
   return output;
