@@ -294,39 +294,38 @@ struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
     column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
     column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
     cudf::size_type const num_rows = grouping_keys->size();
+    cudf::size_type const min_periods = 1;
+
+    auto get_count_over_window(cudf::column_view const& order_by,
+                               cudf::order const& order,
+                               cudf::range_window_bounds const& preceding,
+                               cudf::range_window_bounds const& following) {
+      return cudf::grouped_range_rolling_window(cudf::table_view{{*grouping_keys}},
+                                                order_by,
+                                                order,
+                                                *agg_values,
+                                                preceding,
+                                                following,
+                                                min_periods,
+                                                *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+    }
 };
 
-TEST_F(GroupedRollingRangeOrderByStringTest, Basics)
+TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
 {
-  std::cout << "Hello, World!" << std::endl;
+  auto orderby = strings_column{
+    "A", "A", "A", "B", "B", "B", // Group 0.
+    "C", "C", "C", "C",           // Group 1.
+    "D", "D", "E", "E"            // Group 2.
+  }.release();
 
-  auto orderby = strings_column{ "A", "A", "A", "B", "B", "B", "C", "C", "C", "C", "D", "D", "E", "E" }.release();
-  //                             <------- Group 0 --------->   <---- Group 1 -->   <--- Group 2 --->
+  auto const string_type = cudf::data_type{cudf::type_id::STRING};
+  auto const unbounded_preceding = cudf::range_window_bounds::unbounded(string_type);
+  auto const unbounded_following = cudf::range_window_bounds::unbounded(string_type);
+  auto const current_row = cudf::range_window_bounds::current_row(string_type);
 
-  auto const unbounded_preceding = cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_id::STRING});
-  auto const unbounded_following = cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_id::STRING});
-  auto const current_row = cudf::range_window_bounds::current_row(cudf::data_type{cudf::type_id::STRING});
-
-
-  auto const actual_output = cudf::grouped_range_rolling_window(cudf::table_view{{*grouping_keys}},
-                                                                *orderby,
-                                                                cudf::order::ASCENDING,
-                                                                *agg_values,
-                                                                current_row,
-                                                                unbounded_following,
-                                                                1,
-                                                                *cudf::make_count_aggregation<cudf::rolling_aggregation>());
-
-//  std::cout << "result_unbound_to_unbound: " << std::endl;
-//  cudf::test::print(*actual_output);
-
-//  std::cout << "result_unbound_to_current_row: " << std::endl;
-//  cudf::test::print(*actual_output);
-
-  std::cout << "result_current_row_to_unbound: " << std::endl;
-  cudf::test::print(*actual_output);
-
-//  std::cout << "Strings column: " << std::endl;
-//  cudf::test::print(*strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+      *get_count_over_window(*orderby, cudf::order::ASCENDING, current_row, unbounded_following),
+      ints_column{6, 6, 6, 3, 3, 3, 4, 4, 4, 4, 4, 4, 2, 2});
 
 }
