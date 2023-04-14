@@ -605,6 +605,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
