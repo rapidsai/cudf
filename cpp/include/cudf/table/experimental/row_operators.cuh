@@ -953,8 +953,11 @@ class self_comparator {
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
-   * values rather than logical elements, defaults to `NaN` aware relational comparator that
-   * evaluates `NaN` as greater than all other values.
+   *         values rather than logical elements, defaults to `NaN` aware relational comparator
+   *         that evaluates `NaN` as greater than all other values.
+   * @throw cudf::logic_error if the input table were preprocessed to transform any
+   *        lists-of-structs column having floating-point children into lists-of-integers column,
+   *        but `PhysicalElementComparator` is not `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
@@ -1136,8 +1139,11 @@ class two_table_comparator {
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
-   * values rather than logical elements, defaults to `NaN` aware relational comparator that
-   * evaluates `NaN` as greater than all other values.
+   *         values rather than logical elements, defaults to `NaN` aware relational comparator
+   *         that evaluates `NaN` as greater than all other values.
+   * @throw cudf::logic_error if the input tables were preprocessed to transform any
+   *        lists-of-structs column having floating-point children into lists-of-integers column,
+   *        but `PhysicalElementComparator` is not `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
@@ -1145,8 +1151,14 @@ class two_table_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(!d_t->_ranked_floating_point,
+                   "The input table has floating-point numbers and was preprocessed using a "
+                   "different type of physical element comparator.");
+    }
+
     return less_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -1164,9 +1176,14 @@ class two_table_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(!d_t->_ranked_floating_point,
+                   "The input table has floating-point numbers and was preprocessed using a "
+                   "different type of physical element comparator.");
+    }
+
     return less_equivalent_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
