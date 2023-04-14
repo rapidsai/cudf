@@ -1960,7 +1960,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
-    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_sync(pages, stream);
+    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_sync(pages, _stream);
 
     // add column and offset indexes to metadata
     for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -1984,9 +1984,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                         _stream.value()));
 
           // experimental: add data sizes to parquet metadata.
-          auto cs = sizes_for_chunk(
-            single_streams_table.column(i), {h_pages.data() + curr_page_idx, ck.num_pages}, stream);
-          md->file(p).column_sizes.push_back(cs);
+          auto cs = sizes_for_chunk(single_streams_table.column(i),
+                                    {h_pages.data() + curr_page_idx, ck.num_pages},
+                                    _stream);
+          _agg_meta->file(p).column_sizes.push_back(cs);
 
           // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
@@ -2038,10 +2039,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
           buffer.resize(0);
           int32_t len = cpw.write(sizes);
           c.meta_data.key_value_metadata.push_back(KeyValue{
-            std::string(COL_META_SIZES_OFFSET), std::to_string(out_sink_[p]->bytes_written())});
+            std::string(COL_META_SIZES_OFFSET), std::to_string(_out_sink[p]->bytes_written())});
           c.meta_data.key_value_metadata.push_back(
             KeyValue{std::string(COL_META_SIZES_SIZE), std::to_string(len)});
-          out_sink_[p]->host_write(buffer.data(), buffer.size());
+          _out_sink[p]->host_write(buffer.data(), buffer.size());
         }
       }
 
