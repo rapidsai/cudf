@@ -920,3 +920,34 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 }
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
+{
+  auto constexpr num_rows = 100'000;
+
+  auto const sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto const validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
+  cudf::test::fixed_width_column_wrapper<int32_t> col{sequence, sequence + num_rows, validity};
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.push_back(col.release());
+  auto const expected = std::make_unique<cudf::table>(std::move(cols));
+
+  auto const filepath        = temp_env->get_temp_filepath("chunked_reader_null_count.parquet");
+  auto const page_limit_rows = num_rows / 5;
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .max_page_size_rows(page_limit_rows)  // 20k rows per page
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  auto const byte_limit = page_limit_rows * sizeof(int);
+  auto const read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
+
+  do {
+    // Every fourth row is null
+    EXPECT_EQ(reader.read_chunk().tbl->get_column(0).null_count(), page_limit_rows / 4);
+  } while (reader.has_next());
+}
