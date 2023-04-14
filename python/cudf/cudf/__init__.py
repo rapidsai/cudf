@@ -23,6 +23,7 @@ from cudf.core.cut import cut
 from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
 from cudf.core.dtypes import (
     CategoricalDtype,
+    DatetimeTZDtype,
     Decimal32Dtype,
     Decimal64Dtype,
     Decimal128Dtype,
