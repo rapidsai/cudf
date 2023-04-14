@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,11 +175,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
     auto col_view_new = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
   }
-  // set_null_count + new column_view = same hash. set_null_count(UNKNOWN_NULL_COUNT)
+  // set_null_count + new column_view = same hash.
   {
-    col->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-    auto col_view_new = cudf::column_view{*col};
-    EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
     col->set_null_count(col->size());
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new2));
@@ -344,11 +341,8 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
     auto col_view_new = cudf::column_view{*col};
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
   }
-  // set_null_count + new column_view = same hash. set_null_count(UNKNOWN_NULL_COUNT)
+  // set_null_count + new column_view = same hash.
   {
-    col->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-    auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
     col->set_null_count(col->size());
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new2));

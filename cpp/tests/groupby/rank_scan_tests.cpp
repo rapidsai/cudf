@@ -347,8 +347,9 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
     auto struct_column = cudf::test::structs_column_wrapper{nums_member, strings_member}.release();
     // Reset null-mask, a posteriori. Nulls will not be pushed down to children.
     auto const null_iter = nulls_at({1, 2, 11});
-    struct_column->set_null_mask(
-      cudf::test::detail::make_null_mask(null_iter, null_iter + num_rows));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(null_iter, null_iter + num_rows);
+    struct_column->set_null_mask(std::move(null_mask), null_count);
     return struct_column;
   };
 
