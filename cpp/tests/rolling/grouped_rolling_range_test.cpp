@@ -303,10 +303,10 @@ struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
     cudf::range_window_bounds::unbounded(string_type);
   cudf::range_window_bounds const current_row = cudf::range_window_bounds::current_row(string_type);
 
-  auto get_count_over_window(cudf::column_view const& order_by,
-                             cudf::order const& order,
-                             cudf::range_window_bounds const& preceding,
-                             cudf::range_window_bounds const& following)
+  [[nodiscard]] auto get_count_over_window(cudf::column_view const& order_by,
+                                           cudf::order const& order,
+                                           cudf::range_window_bounds const& preceding,
+                                           cudf::range_window_bounds const& following) const
   {
     return cudf::grouped_range_rolling_window(
       cudf::table_view{{*grouping_keys}},
@@ -323,7 +323,7 @@ struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
 TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
 {
   // clang-format off
-  auto orderby =
+  auto const orderby =
     strings_column{
       "A", "A", "A", "B", "B", "B", // Group 0.
       "C", "C", "C", "C",           // Group 1.
