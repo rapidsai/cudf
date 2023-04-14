@@ -412,6 +412,26 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
         rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
   }
+
+  // Test creating two_table_comparator using preprocessed_table(s).
+  {
+    auto const [preprocessed_lhs, preprocessed_rhs] =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        lhs, rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    EXPECT_NO_THROW(cudf::experimental::row::lexicographic::two_table_comparator(preprocessed_lhs,
+                                                                                 preprocessed_rhs));
+  }
+  {
+    auto const preprocessed_lhs =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    auto const preprocessed_rhs =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    EXPECT_THROW(cudf::experimental::row::lexicographic::two_table_comparator(preprocessed_lhs,
+                                                                              preprocessed_rhs),
+                 cudf::logic_error);
+  }
 }
 
 template <typename T>
