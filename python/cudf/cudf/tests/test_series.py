@@ -2106,3 +2106,44 @@ def test_series_copy(data, copy):
 
     assert_eq(psr, gsr)
     assert_eq(new_psr, new_gsr)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": 1, "b": 2, "c": 24, "d": 1010},
+        {"a": 1},
+    ],
+)
+@pytest.mark.parametrize(
+    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
+)
+def test_series_init_dict_with_index(data, index):
+    pandas_series = pd.Series(data, index=index)
+    cudf_series = cudf.Series(data, index=index)
+
+    assert_eq(pandas_series, cudf_series)
+
+
+@pytest.mark.parametrize("data", ["abc", None, 1, 3.7])
+@pytest.mark.parametrize(
+    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
+)
+def test_series_init_scalar_with_index(data, index):
+    pandas_series = _create_pandas_series(data, index=index)
+    cudf_series = cudf.Series(data, index=index)
+
+    assert_eq(
+        pandas_series,
+        cudf_series,
+        check_index_type=False if data is None and index is None else True,
+    )
+
+
+def test_series_init_error():
+    assert_exceptions_equal(
+        lfunc=pd.Series,
+        rfunc=cudf.Series,
+        lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
+        rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
+    )
