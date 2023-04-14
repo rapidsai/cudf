@@ -803,8 +803,6 @@ class DecimalDtype(_BaseDtype):
 
 
 class DatetimeTZDtype(_BaseDtype):
-    _metadata = ("unit", "tz")
-
     def __init__(self, unit, tz):
         """
         Type to represent timezone-aware datetime data.
