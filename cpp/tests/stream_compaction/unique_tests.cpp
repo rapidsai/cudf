@@ -467,14 +467,15 @@ TEST_F(Unique, ListsOfStructsKeepAny)
     return structs_col{{child1, child2}, nulls_at({0, 1, 2, 3, 4})};
   }();
 
-  auto const offsets      = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const null_it      = nulls_at({2, 3});
-  auto const nullmask_buf = cudf::test::detail::make_null_mask(null_it, null_it + 17);
-  auto const keys         = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+  auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+  auto const null_it = nulls_at({2, 3});
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 17);
+
+  auto const keys = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
                                       17,
                                       nullptr,
-                                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
-                                      cudf::UNKNOWN_NULL_COUNT,
+                                      static_cast<cudf::bitmask_type const*>(null_mask.data()),
+                                      null_count,
                                       0,
                                       {offsets, structs});
 
@@ -549,14 +550,15 @@ TEST_F(Unique, ListsOfStructsKeepFirstLastNone)
     return structs_col{{child1, child2}, nulls_at({0, 1, 2, 3, 4})};
   }();
 
-  auto const offsets      = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const null_it      = nulls_at({2, 3});
-  auto const nullmask_buf = cudf::test::detail::make_null_mask(null_it, null_it + 17);
-  auto const keys         = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+  auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+  auto const null_it = nulls_at({2, 3});
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 17);
+
+  auto const keys = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
                                       17,
                                       nullptr,
-                                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
-                                      cudf::UNKNOWN_NULL_COUNT,
+                                      static_cast<cudf::bitmask_type const*>(null_mask.data()),
+                                      null_count,
                                       0,
                                       {offsets, structs});
 
@@ -609,27 +611,25 @@ TEST_F(Unique, ListsOfEmptyStructsKeepAny)
   // 12. [{}, {}]
 
   auto const structs_null_it = nulls_at({0, 1, 2, 3, 4, 5, 6, 7});
-  auto const structs_nullmask_buf =
+  auto [structs_null_mask, structs_null_count] =
     cudf::test::detail::make_null_mask(structs_null_it, structs_null_it + 14);
   auto const structs =
     cudf::column_view(cudf::data_type(cudf::type_id::STRUCT),
                       14,
                       nullptr,
-                      static_cast<cudf::bitmask_type const*>(structs_nullmask_buf.data()),
-                      cudf::UNKNOWN_NULL_COUNT,
-                      0,
-                      {});
+                      static_cast<cudf::bitmask_type const*>(structs_null_mask.data()),
+                      structs_null_count);
 
   auto const offsets       = int32s_col{0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
   auto const lists_null_it = nulls_at({2, 3});
-  auto const lists_nullmask_buf =
+  auto [lists_null_mask, lists_null_count] =
     cudf::test::detail::make_null_mask(lists_null_it, lists_null_it + 13);
   auto const keys =
     cudf::column_view(cudf::data_type(cudf::type_id::LIST),
                       13,
                       nullptr,
-                      static_cast<cudf::bitmask_type const*>(lists_nullmask_buf.data()),
-                      cudf::UNKNOWN_NULL_COUNT,
+                      static_cast<cudf::bitmask_type const*>(lists_null_mask.data()),
+                      lists_null_count,
                       0,
                       {offsets, structs});
 
