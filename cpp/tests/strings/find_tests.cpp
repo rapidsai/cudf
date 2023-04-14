@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/attributes.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -214,6 +215,14 @@ TEST_F(StringsFindTest, EmptyTarget)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = cudf::strings::ends_with(strings_view, cudf::string_scalar(""));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_find({0, 0, 0, 0, 0, 0},
+                                                                        {1, 1, 0, 1, 1, 1});
+  results = cudf::strings::find(strings_view, cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_find);
+  auto expected_rfind = cudf::strings::count_characters(strings_view);
+  results             = cudf::strings::rfind(strings_view, cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_rfind);
 }
 
 TEST_F(StringsFindTest, AllEmpty)
