@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -29,6 +30,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
 #include <thrust/transform.h>
 
 #include <cmath>
@@ -185,6 +188,34 @@ auto two_table_equality(cudf::table_view lhs,
   return output;
 }
 
+template <typename PhysicalElementComparator>
+auto sort_table(
+  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  cudf::size_type num_rows,
+  bool has_nested,
+  PhysicalElementComparator comparator,
+  rmm::cuda_stream_view stream)
+{
+  auto output = cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<cudf::size_type>()),
+                                          num_rows,
+                                          cudf::mask_state::UNALLOCATED,
+                                          stream);
+  auto const out_begin = output->mutable_view().begin<cudf::size_type>();
+  thrust::sequence(rmm::exec_policy(stream), out_begin, out_begin + num_rows, 0);
+
+  auto const table_comparator =
+    cudf::experimental::row::lexicographic::self_comparator{preprocessed_input};
+  if (has_nested) {
+    auto const comp = table_comparator.less<true>(cudf::nullate::NO{}, comparator);
+    thrust::stable_sort(rmm::exec_policy(stream), out_begin, out_begin + num_rows, comp);
+  } else {
+    auto const comp = table_comparator.less<false>(cudf::nullate::NO{}, comparator);
+    thrust::stable_sort(rmm::exec_policy(stream), out_begin, out_begin + num_rows, comp);
+  }
+
+  return output;
+}
+
 TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorTwoTables)
 {
   using T = TypeParam;
@@ -228,6 +259,159 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorSameTable)
                     column_order,
                     cudf::experimental::row::lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorting_got->view());
+}
+
+TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
+{
+  using data_col   = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const col1 = data_col{5, 2, 7, 1, 3};
+  auto const col2 = data_col{};  // empty
+  auto const lhs  = cudf::table_view{{col1}};
+  auto const rhs  = cudf::table_view{{col2}};
+
+  auto const stream    = cudf::get_default_stream();
+  auto const test_sort = [stream](auto const& preprocessed,
+                                  auto const& input,
+                                  auto const& comparator,
+                                  auto const& expected) {
+    auto const output = sort_table(
+      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+  };
+
+  auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
+                                        auto const& preprocessed_rhs) {
+    auto const expected_lhs = int32s_col{3, 1, 4, 0, 2};
+    test_sort(preprocessed_lhs,
+              lhs,
+              cudf::experimental::row::lexicographic::physical_element_comparator{},
+              expected_lhs);
+    test_sort(preprocessed_lhs,
+              lhs,
+              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              expected_lhs);
+
+    auto const expected_rhs = int32s_col{};
+    test_sort(preprocessed_rhs,
+              rhs,
+              cudf::experimental::row::lexicographic::physical_element_comparator{},
+              expected_rhs);
+    test_sort(preprocessed_rhs,
+              rhs,
+              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              expected_rhs);
+  };
+
+  // Generate preprocessed data for both lhs and lhs at the same time.
+  // Switching order of lhs and rhs tables then sorting them using their preprocessed data should
+  // produce exactly the same result.
+  {
+    auto const [preprocessed_lhs, preprocessed_rhs /*empty*/] =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        lhs, rhs /*empty*/, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+  }
+  {
+    auto const [preprocessed_rhs /*empty*/, preprocessed_lhs] =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+  }
+}
+
+TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
+{
+  using data_col    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using strings_col = cudf::test::strings_column_wrapper;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const col1 = [] {
+    auto const get_structs = [] {
+      auto child0 = data_col{0, 3, 0, 2};
+      auto child1 = strings_col{"a", "c", "a", "b"};
+      return structs_col{{child0, child1}};
+    };
+    return cudf::make_lists_column(
+      2, int32s_col{0, 2, 4}.release(), get_structs().release(), 0, {});
+  }();
+  auto const col2 = [] {
+    auto const get_structs = [] {
+      auto child0 = data_col{};
+      auto child1 = strings_col{};
+      return structs_col{{child0, child1}};
+    };
+    return cudf::make_lists_column(0, int32s_col{}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const column_order = std::vector{cudf::order::ASCENDING};
+  auto const lhs          = cudf::table_view{{*col1}};
+  auto const rhs          = cudf::table_view{{*col2}};
+
+  auto const stream    = cudf::get_default_stream();
+  auto const test_sort = [stream](auto const& preprocessed,
+                                  auto const& input,
+                                  auto const& comparator,
+                                  auto const& expected) {
+    auto const output = sort_table(
+      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+  };
+
+  auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
+                                        auto const& preprocessed_rhs) {
+    auto const expected_lhs = int32s_col{1, 0};
+    test_sort(preprocessed_lhs,
+              lhs,
+              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              expected_lhs);
+
+    auto const expected_rhs = int32s_col{};
+    test_sort(preprocessed_rhs,
+              rhs,
+              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              expected_rhs);
+
+    if constexpr (std::is_floating_point_v<TypeParam>) {
+      EXPECT_THROW(test_sort(preprocessed_lhs,
+                             lhs,
+                             cudf::experimental::row::lexicographic::physical_element_comparator{},
+                             expected_lhs),
+                   cudf::logic_error);
+      EXPECT_THROW(test_sort(preprocessed_rhs,
+                             rhs,
+                             cudf::experimental::row::lexicographic::physical_element_comparator{},
+                             expected_rhs),
+                   cudf::logic_error);
+    } else {
+      test_sort(preprocessed_lhs,
+                lhs,
+                cudf::experimental::row::lexicographic::physical_element_comparator{},
+                expected_lhs);
+      test_sort(preprocessed_rhs,
+                rhs,
+                cudf::experimental::row::lexicographic::physical_element_comparator{},
+                expected_rhs);
+    }
+  };
+
+  // Generate preprocessed data for both lhs and lhs at the same time.
+  // Switching order of lhs and rhs tables then sorting them using their preprocessed data should
+  // produce exactly the same result.
+  {
+    auto const [preprocessed_lhs, preprocessed_rhs /*empty*/] =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        lhs, rhs /*empty*/, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+  }
+  {
+    auto const [preprocessed_rhs /*empty*/, preprocessed_lhs] =
+      cudf::experimental::row::lexicographic::preprocessed_table::create(
+        rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+  }
 }
 
 template <typename T>
