@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ reader::~reader() = default;
 table_with_metadata reader::read(parquet_reader_options const& options)
 {
   // if the user has specified custom row bounds
-  bool const uses_custom_row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
+  bool const uses_custom_row_bounds =
+    options.get_num_rows().has_value() || options.get_skip_rows() != 0;
   return _impl->read(options.get_skip_rows(),
                      options.get_num_rows(),
                      uses_custom_row_bounds,
