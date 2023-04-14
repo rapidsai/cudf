@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ TEST_F(JSONTypeCastTest, String)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto str_col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
@@ -108,7 +108,7 @@ TEST_F(JSONTypeCastTest, Int)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
@@ -145,7 +145,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);

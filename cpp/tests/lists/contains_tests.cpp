@@ -209,7 +209,6 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNullLists)
 TYPED_TEST(TypedContainsTest, SlicedLists)
 {
   // Test sliced List columns.
-  using namespace cudf;
   using T = TypeParam;
 
   auto search_space = cudf::test::lists_column_wrapper<T, int32_t>{{{0, 1, 2, 1},
@@ -335,12 +334,13 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
   auto search_key_one = create_scalar_search_key<T>(1);
@@ -377,12 +377,14 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 1, X, 1, 1, X, 1, 1, X, X, 1, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(
     8,
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+    null_count,
+    std::move(null_mask));
 
   // Search space: [ [x], [1,1], [x,1,1,x], [], x, [1,1,x], [x], [1,1,x,1] ]
   auto search_key_one = create_scalar_search_key<T>(1);
@@ -420,12 +422,13 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    strings.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              strings.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
   auto search_key_one = create_scalar_search_key<T>("1");
@@ -658,13 +661,14 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
 
   auto search_keys = cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 1};
@@ -696,13 +700,14 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
 
   auto search_keys =
@@ -735,13 +740,13 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
     {X, 0, 1, X, 1, 1, X, 1, 1, X, X, 0, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
-
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   auto search_keys =
     cudf::test::fixed_width_column_wrapper<T, int32_t>{{0, 1, 0, X, 0, 0, 1, 1}, null_at(3)};
@@ -773,12 +778,14 @@ TEST_F(ContainsTest, StringKeyVectorWithNullsInListsAndInSearchKeys)
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(
     8,
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     strings.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+    null_count,
+    std::move(null_mask));
 
   auto search_keys =
     cudf::test::strings_column_wrapper{{"1", "2", "3", "X", "2", "3", "1", "1"}, null_at(3)};
@@ -1202,12 +1209,10 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
     // clang-format on
     auto child               = cudf::test::structs_column_wrapper{{data1, data2}};
     auto const validity_iter = nulls_at({3, 10});
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
-      11,
-      offsets.release(),
-      child.release(),
-      2,
-      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11));
+      11, offsets.release(), child.release(), null_count, std::move(null_mask));
   }();
 
   auto const key = [] {
@@ -1516,12 +1521,10 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
     // clang-format on
     auto child = cudf::test::structs_column_wrapper{{data1, data2}, nulls_at({1, 10, 15, 24})};
     auto const validity_iter = nulls_at({3, 10});
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
-      11,
-      offsets.release(),
-      child.release(),
-      2,
-      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11));
+      11, offsets.release(), child.release(), null_count, std::move(null_mask));
   }();
 
   auto const keys_original = [] {

@@ -1426,13 +1426,10 @@ TEST_F(OrcWriterTest, TestMap)
   }
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
-  auto num_list_rows = static_cast<cudf::column_view>(offsets).size() - 1;
-  auto list_col =
-    cudf::make_lists_column(num_list_rows,
-                            offsets.release(),
-                            std::move(s_col),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            cudf::test::detail::make_null_mask(valids, valids + num_list_rows));
+  auto num_list_rows           = static_cast<cudf::column_view>(offsets).size() - 1;
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_list_rows);
+  auto list_col                = cudf::make_lists_column(
+    num_list_rows, offsets.release(), std::move(s_col), null_count, std::move(null_mask));
 
   table_view expected({*list_col});
 

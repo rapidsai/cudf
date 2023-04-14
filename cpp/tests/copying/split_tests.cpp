@@ -977,15 +977,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   // all nulls
   {
     std::vector<bool> struct_validity{false, false, false, false};
-    auto struct_column = cudf::make_structs_column(
-      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+    auto struct_column = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     std::vector<bool> expected_validity{false, false};
-    auto expected = cudf::make_structs_column(
-      2,
-      {},
-      2,
-      cudf::test::detail::make_null_mask(expected_validity.begin(), expected_validity.end()));
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(expected_validity.begin(), expected_validity.end());
+    auto expected = cudf::make_structs_column(2, {}, null_count, std::move(null_mask));
 
     // split
     std::vector<cudf::size_type> splits{2};
@@ -1014,15 +1013,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   // all nulls, empty output column
   {
     std::vector<bool> struct_validity{false, false, false, false};
-    auto struct_column = cudf::make_structs_column(
-      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+    auto struct_column = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     std::vector<bool> expected_validity0{false, false, false, false};
-    auto expected0 = cudf::make_structs_column(
-      4,
-      {},
-      4,
-      cudf::test::detail::make_null_mask(expected_validity0.begin(), expected_validity0.end()));
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(expected_validity0.begin(), expected_validity0.end());
+    auto expected0 = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     auto expected1 = cudf::make_structs_column(0, {}, 0, rmm::device_buffer{});
 
@@ -1332,7 +1330,8 @@ TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
   });
   cudf::size_type const num_rows = 2000000;
   auto col                       = cudf::sequence(num_rows, cudf::numeric_scalar<int8_t>{0});
-  col->set_null_mask(cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows));
+  auto [null_mask, null_count]   = cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows);
+  col->set_null_mask(std::move(null_mask), null_count);
 
   cudf::table_view t({*col});
   auto result   = cudf::contiguous_split(t, {num_rows / 2});
@@ -2034,12 +2033,12 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
   cudf::test::fixed_width_column_wrapper<int> outer_offsets_col(outer_offsets.begin(),
                                                                 outer_offsets.end());
   std::vector<bool> outer_validity{1, 1, 1, 0, 1, 1, 0};
-  auto outer_null_mask =
+  auto [outer_null_mask, null_count] =
     cudf::test::detail::make_null_mask(outer_validity.begin(), outer_validity.end());
   auto outer_list = make_lists_column(static_cast<cudf::size_type>(outer_validity.size()),
                                       outer_offsets_col.release(),
                                       struct_column.release(),
-                                      cudf::UNKNOWN_NULL_COUNT,
+                                      null_count,
                                       std::move(outer_null_mask));
 
   // split

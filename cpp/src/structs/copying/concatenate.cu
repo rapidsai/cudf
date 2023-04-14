@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,17 +65,18 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask =
     create_null_mask(total_length, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
+  cudf::size_type null_count{0};
   if (has_nulls) {
     cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
+    null_count =
+      std::transform_reduce(columns.begin(), columns.end(), 0, std::plus{}, [](auto const& col) {
+        return col.null_count();
+      });
   }
 
   // assemble into outgoing list column
-  return make_structs_column(total_length,
-                             std::move(children),
-                             has_nulls ? UNKNOWN_NULL_COUNT : 0,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return make_structs_column(
+    total_length, std::move(children), null_count, std::move(null_mask), stream, mr);
 }
 
 }  // namespace detail

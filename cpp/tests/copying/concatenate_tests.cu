@@ -847,11 +847,10 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
   expected_children.push_back(cudf::concatenate(age_col_vec));
   expected_children.push_back(cudf::concatenate(is_human_col_vec));
   std::vector<bool> struct_validity({1, 0, 1, 1, 1, 0});
-  auto expected = make_structs_column(
-    6,
-    std::move(expected_children),
-    2,
-    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+  auto expected =
+    make_structs_column(6, std::move(expected_children), null_count, std::move(null_mask));
 
   // concatenate as structs
   std::vector<cudf::test::structs_column_wrapper> src;
