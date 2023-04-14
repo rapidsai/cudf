@@ -61,7 +61,8 @@ template <typename DecimalT>
 struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrderByDecimalTest {
   using Rep = typename DecimalT::rep;
 
-  [[nodiscard]] auto make_fixed_point_range_bounds(typename DecimalT::rep value, numeric::scale_type scale) const
+  [[nodiscard]] auto make_fixed_point_range_bounds(typename DecimalT::rep value,
+                                                   numeric::scale_type scale) const
   {
     return cudf::range_window_bounds::get(*cudf::make_fixed_point_scalar<DecimalT>(value, scale));
   }
@@ -91,7 +92,8 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
    * Keeping the effective range bounds value identical ensures that
    * the expected result from grouped_rolling remains the same.
    */
-  [[nodiscard]] Rep rescale_range_value(Rep const& value_at_scale_0, numeric::scale_type new_scale) const
+  [[nodiscard]] Rep rescale_range_value(Rep const& value_at_scale_0,
+                                        numeric::scale_type new_scale) const
   {
     // Scale  ->   Rep (for value == 200)
     //  -2    ->       20000
@@ -288,44 +290,61 @@ TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, UnboundedRanges)
 }
 
 struct GroupedRollingRangeOrderByStringTest : public cudf::test::BaseFixture {
-    // Stand-in for std::pow(10, n), but for integral return.
-    static constexpr std::array<int32_t, 6> pow10{1, 10, 100, 1000, 10000, 100000};
-    // Test data.
-    column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
-    column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
-    cudf::size_type const num_rows = grouping_keys->size();
-    cudf::size_type const min_periods = 1;
+  // Test data.
+  column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
+  column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
+  cudf::size_type const num_rows = grouping_keys->size();
+  cudf::size_type const min_periods = 1;
 
-    auto get_count_over_window(cudf::column_view const& order_by,
-                               cudf::order const& order,
-                               cudf::range_window_bounds const& preceding,
-                               cudf::range_window_bounds const& following) {
-      return cudf::grouped_range_rolling_window(cudf::table_view{{*grouping_keys}},
-                                                order_by,
-                                                order,
-                                                *agg_values,
-                                                preceding,
-                                                following,
-                                                min_periods,
-                                                *cudf::make_count_aggregation<cudf::rolling_aggregation>());
-    }
+  cudf::data_type const string_type{cudf::type_id::STRING};
+  cudf::range_window_bounds const unbounded_preceding =
+    cudf::range_window_bounds::unbounded(string_type);
+  cudf::range_window_bounds const unbounded_following =
+    cudf::range_window_bounds::unbounded(string_type);
+  cudf::range_window_bounds const current_row = cudf::range_window_bounds::current_row(string_type);
+
+  auto get_count_over_window(cudf::column_view const& order_by,
+                             cudf::order const& order,
+                             cudf::range_window_bounds const& preceding,
+                             cudf::range_window_bounds const& following)
+  {
+    return cudf::grouped_range_rolling_window(
+      cudf::table_view{{*grouping_keys}},
+      order_by,
+      order,
+      *agg_values,
+      preceding,
+      following,
+      min_periods,
+      *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+  }
 };
 
 TEST_F(GroupedRollingRangeOrderByStringTest, StringOrderByAscendingNoNulls)
 {
-  auto orderby = strings_column{
-    "A", "A", "A", "B", "B", "B", // Group 0.
-    "C", "C", "C", "C",           // Group 1.
-    "D", "D", "E", "E"            // Group 2.
-  }.release();
-
-  auto const string_type = cudf::data_type{cudf::type_id::STRING};
-  auto const unbounded_preceding = cudf::range_window_bounds::unbounded(string_type);
-  auto const unbounded_following = cudf::range_window_bounds::unbounded(string_type);
-  auto const current_row = cudf::range_window_bounds::current_row(string_type);
+  // clang-format off
+  auto orderby =
+    strings_column{
+      "A", "A", "A", "B", "B", "B", // Group 0.
+      "C", "C", "C", "C",           // Group 1.
+      "D", "D", "E", "E"            // Group 2.
+    }.release();
+  // clang-format on
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      *get_count_over_window(*orderby, cudf::order::ASCENDING, current_row, unbounded_following),
-      ints_column{6, 6, 6, 3, 3, 3, 4, 4, 4, 4, 4, 4, 2, 2});
+    *get_count_over_window(*orderby, cudf::order::ASCENDING, unbounded_preceding, current_row),
+    ints_column{3, 3, 3, 6, 6, 6, 4, 4, 4, 4, 2, 2, 4, 4});
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_window(*orderby, cudf::order::ASCENDING, current_row, unbounded_following),
+    ints_column{6, 6, 6, 3, 3, 3, 4, 4, 4, 4, 4, 4, 2, 2});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_window(
+      *orderby, cudf::order::ASCENDING, unbounded_preceding, unbounded_following),
+    ints_column{6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *get_count_over_window(*orderby, cudf::order::ASCENDING, current_row, current_row),
+    ints_column{3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 2, 2, 2, 2});
 }
