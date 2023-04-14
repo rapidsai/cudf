@@ -400,7 +400,7 @@ namespace {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple consisting of new column_view representing the transformed input, along with
  *         their ranks column(s) (of `size_type` type) and possibly new list offsets generated
- * during the transformation process
+ *         during the transformation process
  */
 std::tuple<column_view,
            std::optional<column_view>,
