@@ -662,9 +662,9 @@ bool lists_of_structs_have_floating_point(table_view const& input)
 
 uint64_t generate_random_id()
 {
-  auto gen = std::mt19937{std::random_device{}()};
-  std::uniform_int_distribution<uint64_t> dis;
-  return dis(gen);
+  auto gen  = std::mt19937{std::random_device{}()};
+  auto dist = std::uniform_int_distribution<uint64_t>{};
+  return dist(gen);
 }
 
 }  // namespace
