@@ -582,11 +582,6 @@ transform_lists_of_structs(table_view const& lhs,
                            host_span<null_order const> null_precedence,
                            rmm::cuda_stream_view stream)
 {
-  if (lhs.num_rows() == 0 && (!rhs || rhs.value().num_rows() == 0)) {
-    return {
-      lhs, rhs, std::vector<std::unique_ptr<column>>{}, std::vector<std::unique_ptr<column>>{}};
-  }
-
   std::vector<column_view> transformed_lhs_cvs;
   std::vector<column_view> transformed_rhs_cvs;
   std::vector<std::unique_ptr<column>> out_cols_lhs;
