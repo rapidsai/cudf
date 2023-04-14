@@ -441,6 +441,15 @@ class IndexedFrame(Frame):
             results[name] = getattr(result_col, op)()
         return self._from_data(results, self._index)
 
+    def _check_data_index_length_match(self: T) -> None:
+        # Validate that the number of rows in the data matches the index if the
+        # data is not empty. This is a helper for the constructor.
+        if self._data.nrows > 0 and self._data.nrows != len(self._index):
+            raise ValueError(
+                f"Length of values ({self._data.nrows}) does not "
+                f"match length of index ({len(self._index)})"
+            )
+
     def copy(self: T, deep: bool = True) -> T:
         """Make a copy of this object's indices and data.
 
