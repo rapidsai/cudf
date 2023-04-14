@@ -57,13 +57,14 @@ TEST_F(ByteCastTest, int16ValuesWithNulls)
   cudf::test::fixed_width_column_wrapper<int16_t> const int16_col(
     {short(0), short(100), short(-100), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
 
-  auto int16_data     = cudf::test::fixed_width_column_wrapper<uint8_t>{0x00, 0x64, 0x80, 0x00};
-  auto int16_expected = cudf::make_lists_column(
+  auto int16_data = cudf::test::fixed_width_column_wrapper<uint8_t>{0x00, 0x64, 0x80, 0x00};
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5);
+  auto int16_expected          = cudf::make_lists_column(
     5,
     std::move(cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 2, 2, 4, 4}.release()),
     std::move(int16_data.release()),
-    3,
-    cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5));
+    null_count,
+    std::move(null_mask));
 
   auto const output_int16 = cudf::byte_cast(int16_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int16->view(), int16_expected->view());
@@ -103,12 +104,15 @@ TEST_F(ByteCastTest, int32ValuesWithNulls)
 
   auto int32_data = cudf::test::fixed_width_column_wrapper<uint8_t>{
     0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x9c, 0x7f, 0xff, 0xff, 0xff};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(even_validity, even_validity + 5);
+
   auto int32_expected = cudf::make_lists_column(
     5,
     std::move(cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 4, 4, 8, 8, 12}.release()),
     std::move(int32_data.release()),
-    2,
-    cudf::test::detail::make_null_mask(even_validity, even_validity + 5));
+    null_count,
+    std::move(null_mask));
 
   auto const output_int32 = cudf::byte_cast(int32_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int32->view(), int32_expected->view());
@@ -155,13 +159,14 @@ TEST_F(ByteCastTest, int64ValuesWithNulls)
 
   auto int64_data = cudf::test::fixed_width_column_wrapper<uint8_t>{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  auto int64_expected = cudf::make_lists_column(
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5);
+  auto int64_expected          = cudf::make_lists_column(
     5,
     std::move(
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 8, 8, 16, 16}.release()),
     std::move(int64_data.release()),
-    3,
-    cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5));
+    null_count,
+    std::move(null_mask));
 
   auto const output_int64 = cudf::byte_cast(int64_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int64->view(), int64_expected->view());
@@ -215,12 +220,14 @@ TEST_F(ByteCastTest, fp32ValuesWithNulls)
 
   auto fp32_data = cudf::test::fixed_width_column_wrapper<uint8_t>{
     0x00, 0x00, 0x00, 0x00, 0xc2, 0xc8, 0x00, 0x00, 0x7f, 0x7f, 0xff, 0xff};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(even_validity, even_validity + 5);
   auto fp32_expected = cudf::make_lists_column(
     5,
     std::move(cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 4, 4, 8, 8, 12}.release()),
     std::move(fp32_data.release()),
-    2,
-    cudf::test::detail::make_null_mask(even_validity, even_validity + 5));
+    null_count,
+    std::move(null_mask));
 
   auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp32->view(), fp32_expected->view());
@@ -284,13 +291,14 @@ TEST_F(ByteCastTest, fp64ValuesWithNulls)
 
   auto fp64_data = cudf::test::fixed_width_column_wrapper<uint8_t>{
     0x40, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  auto fp64_expected = cudf::make_lists_column(
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5);
+  auto fp64_expected           = cudf::make_lists_column(
     5,
     std::move(
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 8, 8, 16, 16}.release()),
     std::move(fp64_data.release()),
-    3,
-    cudf::test::detail::make_null_mask(odd_validity, odd_validity + 5));
+    null_count,
+    std::move(null_mask));
 
   auto const output_fp64 = cudf::byte_cast(fp64_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp64->view(), fp64_expected->view());
@@ -340,8 +348,9 @@ TEST_F(ByteCastTest, StringValuesWithNulls)
     // Set nulls by `set_null_mask` so the output column will have non-empty nulls.
     // This is intentional.
     auto const null_iter = cudf::test::iterators::nulls_at({2, 4});
-    output->set_null_mask(cudf::test::detail::make_null_mask(null_iter, null_iter + output->size()),
-                          2);
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(null_iter, null_iter + output->size());
+    output->set_null_mask(std::move(null_mask), null_count);
     return output;
   }();
 

@@ -1393,12 +1393,13 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
   auto list_null_mask = {1, 1, 0};
   auto num_lists      = lists_column_offsets->size() - 1;
-  auto lists_column   = make_lists_column(
-    num_lists,
-    std::move(lists_column_offsets),
-    std::move(struct_column),
-    1,
-    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
+  auto lists_column = cudf::make_lists_column(num_lists,
+                                              std::move(lists_column_offsets),
+                                              std::move(struct_column),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Check if child column is unchanged.
 
@@ -1465,24 +1466,27 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
   auto num_lists      = lists_column_offsets->size() - 1;
   auto list_null_mask = {1, 1, 0};
-  auto lists_column   = make_lists_column(
-    num_lists,
-    std::move(lists_column_offsets),
-    std::move(struct_column),
-    1,
-    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
+  auto lists_column = cudf::make_lists_column(num_lists,
+                                              std::move(lists_column_offsets),
+                                              std::move(struct_column),
+                                              null_count,
+                                              std::move(null_mask));
 
   auto lists_of_lists_column_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3}.release();
   auto num_lists_of_lists      = lists_of_lists_column_offsets->size() - 1;
   auto list_of_lists_null_mask = {1, 0};
+
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+    list_of_lists_null_mask.begin(), list_of_lists_null_mask.end());
   auto lists_of_lists_of_structs_column =
-    make_lists_column(num_lists_of_lists,
-                      std::move(lists_of_lists_column_offsets),
-                      std::move(lists_column),
-                      1,
-                      cudf::test::detail::make_null_mask(list_of_lists_null_mask.begin(),
-                                                         list_of_lists_null_mask.end()));
+    cudf::make_lists_column(num_lists_of_lists,
+                            std::move(lists_of_lists_column_offsets),
+                            std::move(lists_column),
+                            null_count,
+                            std::move(null_mask));
 
   // Check if child column is unchanged.
 

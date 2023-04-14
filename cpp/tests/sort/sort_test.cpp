@@ -311,8 +311,9 @@ TYPED_TEST(Sort, WithNullableStructColumn)
   auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols,
                          std::vector<bool> nulls) {
     cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
-    auto struct_ = struct_col.release();
-    struct_->set_null_mask(cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+    auto struct_                 = struct_col.release();
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
+    struct_->set_null_mask(std::move(null_mask), null_count);
     return struct_;
   };
 
