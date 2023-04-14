@@ -828,13 +828,11 @@ def _protocol_to_cudf_column_categorical(
     """
     Convert a categorical column to a Series instance
     """
-    ordered, is_dict, mapping = col.describe_categorical
+    ordered, is_dict, categories = col.describe_categorical
     if not is_dict:
         raise NotImplementedError(
             "Non-dictionary categoricals not supported yet"
         )
-
-    categories = as_column(mapping.values())
     buffers = col.get_buffers()
     assert buffers["data"] is not None, "data buffer should not be None"
     codes_buffer, codes_dtype = buffers["data"]

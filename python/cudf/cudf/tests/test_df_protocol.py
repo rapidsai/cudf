@@ -23,9 +23,16 @@ from cudf.core.df_protocol import (
 from cudf.testing._utils import assert_eq
 
 
-@pytest.fixture
-def pandas_df():
-    return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", None]})
+@pytest.fixture(
+    params=[
+        {"a": [1, 2, 3], "b": ["x", "y", "z"]},
+        {"a": [1, 2, None], "b": ["x", "y", "z"]},
+        {"a": [1, 2, 3], "b": pd.Categorical(["x", "y", None])},
+    ]
+)
+def pandas_df(request):
+    data = request.param
+    return pd.DataFrame(data)
 
 
 def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
@@ -275,5 +282,4 @@ def test_NA_mixed_dtype():
     reason="Pandas versions < 1.5.0 do not support interchange protocol",
 )
 def test_from_cpu_df(pandas_df):
-    df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
-    cudf.from_dataframe(df, allow_copy=True)
+    cudf.from_dataframe(pandas_df, allow_copy=True)
