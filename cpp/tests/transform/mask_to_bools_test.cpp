@@ -24,8 +24,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-struct MaskToBools : public cudf::test::BaseFixture {
-};
+struct MaskToBools : public cudf::test::BaseFixture {};
 
 TEST_F(MaskToBools, NullDataWithZeroLength)
 {
@@ -51,8 +50,7 @@ TEST_F(MaskToBools, ImproperBitRange)
 
 struct MaskToBoolsTest
   : public MaskToBools,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(MaskToBoolsTest, LargeDataSizeTest)
 {

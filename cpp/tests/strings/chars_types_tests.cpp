@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,10 @@
 
 #include <vector>
 
-struct StringsCharsTest : public cudf::test::BaseFixture {
-};
+struct StringsCharsTest : public cudf::test::BaseFixture {};
 
 class CharsTypes : public StringsCharsTest,
-                   public testing::WithParamInterface<cudf::strings::string_character_types> {
-};
+                   public testing::WithParamInterface<cudf::strings::string_character_types> {};
 
 TEST_P(CharsTypes, AllTypes)
 {
@@ -52,17 +50,17 @@ TEST_P(CharsTypes, AllTypes)
                                      "\t\r\n\f "};
 
   bool expecteds[] = {false, false, false, false, false, false, false, false,
-                      false, false, false, false, false, true,  false, false,  // decimal
+                      false, false, false, false, false, true,  false, false,   // decimal
                       false, false, false, false, false, false, false, false,
-                      false, true,  false, true,  false, true,  false, false,  // numeric
+                      false, true,  false, true,  false, true,  false, false,   // numeric
                       false, false, false, false, false, false, false, false,
-                      false, false, false, true,  false, true,  false, false,  // digit
+                      false, false, false, true,  false, true,  false, false,   // digit
                       true,  true,  false, true,  false, false, false, false,
-                      false, false, false, false, false, false, true,  false,  // alpha
+                      false, false, false, false, false, false, true,  false,   // alpha
                       false, false, false, false, false, false, false, false,
-                      false, false, false, false, false, false, false, true,  // space
+                      false, false, false, false, false, false, false, true,    // space
                       false, false, false, true,  false, false, false, false,
-                      false, false, false, false, false, false, false, false,  // upper
+                      false, false, false, false, false, false, false, false,   // upper
                       false, true,  false, false, false, false, false, false,
                       false, false, false, false, false, false, true,  false};  // lower
 

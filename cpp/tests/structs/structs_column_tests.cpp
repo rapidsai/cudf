@@ -48,12 +48,10 @@
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
 
-struct StructColumnWrapperTest : public cudf::test::BaseFixture {
-};
+struct StructColumnWrapperTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedStructColumnWrapperTest : public cudf::test::BaseFixture {
-};
+struct TypedStructColumnWrapperTest : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,

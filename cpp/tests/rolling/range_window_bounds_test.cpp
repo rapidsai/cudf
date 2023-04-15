@@ -26,12 +26,10 @@
 
 #include <vector>
 
-struct RangeWindowBoundsTest : public cudf::test::BaseFixture {
-};
+struct RangeWindowBoundsTest : public cudf::test::BaseFixture {};
 
 template <typename Timestamp>
-struct TimestampRangeWindowBoundsTest : RangeWindowBoundsTest {
-};
+struct TimestampRangeWindowBoundsTest : RangeWindowBoundsTest {};
 
 TYPED_TEST_SUITE(TimestampRangeWindowBoundsTest, cudf::test::TimestampTypes);
 
@@ -99,8 +97,7 @@ TYPED_TEST(TimestampRangeWindowBoundsTest, WrongRangeType)
 }
 
 template <typename T>
-struct NumericRangeWindowBoundsTest : RangeWindowBoundsTest {
-};
+struct NumericRangeWindowBoundsTest : RangeWindowBoundsTest {};
 
 using TypesForTest = cudf::test::IntegralTypesNotBool;
 
@@ -162,8 +159,7 @@ TYPED_TEST(NumericRangeWindowBoundsTest, WrongRangeType)
 }
 
 template <typename T>
-struct DecimalRangeBoundsTest : RangeWindowBoundsTest {
-};
+struct DecimalRangeBoundsTest : RangeWindowBoundsTest {};
 
 TYPED_TEST_SUITE(DecimalRangeBoundsTest, cudf::test::FixedPointTypes);
 

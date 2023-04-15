@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,8 +118,7 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
   this->run_test(input_column, expected_column->view());
 }
 
-struct NaNsToNullFailTest : public cudf::test::BaseFixture {
-};
+struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
 
 TEST_F(NaNsToNullFailTest, StringType)
 {

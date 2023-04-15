@@ -90,8 +90,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_strlen, max_strlen, len_mult);
 }
 
-class RepeatStrings : public cudf::benchmark {
-};
+class RepeatStrings : public cudf::benchmark {};
 
 #define REPEAT_STRINGS_SCALAR_TIMES_BENCHMARK_DEFINE(name)          \
   BENCHMARK_DEFINE_F(RepeatStrings, name)                           \
