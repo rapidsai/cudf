@@ -30,8 +30,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct ListColumnWrapperTest : public cudf::test::BaseFixture {
-};
+struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct ListColumnWrapperTestTyped : public cudf::test::BaseFixture {
   ListColumnWrapperTestTyped() {}

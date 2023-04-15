@@ -175,7 +175,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
     return degenerate_partitions(input, num_partitions, start_partition, stream, mr);
   }
 
-  auto np_max_size = nrows % num_partitions;  //# partitions of max size
+  auto np_max_size = nrows % num_partitions;  // # partitions of max size
 
   // handle case when nr `mod` np == 0;
   // fix for bug: https://github.com/rapidsai/cudf/issues/4043

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,12 +48,10 @@ using strings_col   = cudf::test::strings_column_wrapper;
 using structs_col   = cudf::test::structs_column_wrapper;
 using lists_cv      = cudf::lists_column_view;
 
-struct ListOverlapTest : public cudf::test::BaseFixture {
-};
+struct ListOverlapTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ListOverlapTypedTest : public cudf::test::BaseFixture {
-};
+struct ListOverlapTypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;

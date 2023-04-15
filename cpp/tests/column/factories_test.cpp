@@ -41,8 +41,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-class NumericFactoryTest : public ColumnFactoryTest {
-};
+class NumericFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
@@ -183,8 +182,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonNumericFactoryTest : public ColumnFactoryTest,
-                              public testing::WithParamInterface<cudf::type_id> {
-};
+                              public testing::WithParamInterface<cudf::type_id> {};
 
 // All non-numeric types should throw
 TEST_P(NonNumericFactoryTest, NonNumericThrow)
@@ -204,8 +202,7 @@ INSTANTIATE_TEST_CASE_P(NonNumeric,
                         testing::ValuesIn(cudf::test::non_numeric_type_ids));
 
 template <typename T>
-class FixedWidthFactoryTest : public ColumnFactoryTest {
-};
+class FixedWidthFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
@@ -220,8 +217,7 @@ TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 }
 
 template <typename T>
-class EmptyFactoryTest : public ColumnFactoryTest {
-};
+class EmptyFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(EmptyFactoryTest, cudf::test::AllTypes);
 
@@ -359,8 +355,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonFixedWidthFactoryTest : public ColumnFactoryTest,
-                                 public testing::WithParamInterface<cudf::type_id> {
-};
+                                 public testing::WithParamInterface<cudf::type_id> {};
 
 // All non-fixed types should throw
 TEST_P(NonFixedWidthFactoryTest, NonFixedWidthThrow)
@@ -469,8 +464,7 @@ TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
 }
 
 template <typename T>
-class ListsFixedWidthLeafTest : public ColumnFactoryTest {
-};
+class ListsFixedWidthLeafTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
@@ -507,8 +501,7 @@ TYPED_TEST(ListsFixedWidthLeafTest, FromNested)
 }
 
 template <typename T>
-class ListsDictionaryLeafTest : public ColumnFactoryTest {
-};
+class ListsDictionaryLeafTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 
@@ -562,8 +555,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
 }
 
-class ListsStringLeafTest : public ColumnFactoryTest {
-};
+class ListsStringLeafTest : public ColumnFactoryTest {};
 
 TEST_F(ListsStringLeafTest, FromNonNested)
 {

@@ -476,8 +476,7 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
 }
 
 template <typename T>
-struct ListsColumnTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;

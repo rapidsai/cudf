@@ -63,12 +63,10 @@ auto set_difference_sorted(cudf::column_view const& lhs,
 }
 }  // namespace
 
-struct SetDifferenceTest : public cudf::test::BaseFixture {
-};
+struct SetDifferenceTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct SetDifferenceTypedTest : public cudf::test::BaseFixture {
-};
+struct SetDifferenceTypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -573,7 +571,7 @@ TEST_F(SetDifferenceTest, InputListsOfNestedStructsHaveNull)
                                        "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "Apple", "Banana",
                                        "Cherry",    "Kiwi",  // end list1
                                        "" /*NULL*/, "Bear",      "Cat",       "Dog",   "Duck",
-                                       "Panda",  // end list2
+                                       "Panda",              // end list2
                                        "ÁÁÁ",       "ÉÉÉÉÉ",     "ÁBC",       "ÁÁÁ",   "ÍÍÍÍÍ",
                                        "" /*NULL*/, "XYZ",
                                        "ÁBC"  // end list3

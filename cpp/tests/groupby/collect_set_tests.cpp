@@ -87,8 +87,7 @@ struct CollectSetTest : public cudf::test::BaseFixture {
 };
 
 template <typename V>
-struct CollectSetTypedTest : public cudf::test::BaseFixture {
-};
+struct CollectSetTypedTest : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
@@ -244,7 +243,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   // null equal with nan unequal
   {
     vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
-                      validity_col{true, true, true, true, true, true, true, false}}};
+                                         validity_col{true, true, true, true, true, true, true, false}}};
     auto const [out_keys, out_lists] = groupby_collect_set(
       keys,
       vals,
@@ -257,7 +256,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   // null unequal with nan unequal
   {
     vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
-                      validity_col{true, true, true, true, true, true, true, false, false}}};
+                                         validity_col{true, true, true, true, true, true, true, false, false}}};
     auto const [out_keys, out_lists] = groupby_collect_set(
       keys,
       vals,
@@ -295,7 +294,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   // null unequal with nan equal
   {
     vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, 0.0f, 0.0f},
-                      validity_col{true, true, true, true, false, false}}};
+                                         validity_col{true, true, true, true, false, false}}};
     auto const [out_keys, out_lists] = groupby_collect_set(
       keys,
       vals,

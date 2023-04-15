@@ -556,8 +556,7 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
 }  // namespace
 
 // Base test fixture for tests
-struct JsonTest : public cudf::test::BaseFixture {
-};
+struct JsonTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonTest, TreeRepresentation)
 {
@@ -786,8 +785,7 @@ TEST_F(JsonTest, TreeRepresentationError)
  * @brief Test fixture for parametrized JSON tree traversal tests
  */
 struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
-                               public testing::WithParamInterface<std::tuple<bool, std::string>> {
-};
+                               public testing::WithParamInterface<std::tuple<bool, std::string>> {};
 
 //
 std::vector<std::string> json_list = {
