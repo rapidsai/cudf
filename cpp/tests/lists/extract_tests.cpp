@@ -32,15 +32,13 @@
 
 #include <vector>
 
-struct ListsExtractTest : public cudf::test::BaseFixture {
-};
+struct ListsExtractTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 template <typename T>
-class ListsExtractNumericsTest : public ListsExtractTest {
-};
+class ListsExtractNumericsTest : public ListsExtractTest {};
 
 TYPED_TEST_SUITE(ListsExtractNumericsTest, NumericTypesNotBool);
 
@@ -260,12 +258,10 @@ TEST_F(ListsExtractTest, ExtractElementWithNulls)
   }
 }
 
-struct ListsExtractColumnIndicesTest : ListsExtractTest {
-};
+struct ListsExtractColumnIndicesTest : ListsExtractTest {};
 
 template <typename T>
-struct ListsExtractColumnIndicesTypedTest : ListsExtractColumnIndicesTest {
-};
+struct ListsExtractColumnIndicesTypedTest : ListsExtractColumnIndicesTest {};
 
 TYPED_TEST_SUITE(ListsExtractColumnIndicesTypedTest, cudf::test::FixedWidthTypes);
 

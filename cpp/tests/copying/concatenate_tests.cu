@@ -121,8 +121,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, *concatenated_col);
 }
 
-struct StringColumnTest : public cudf::test::BaseFixture {
-};
+struct StringColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringColumnTest, ConcatenateColumnView)
 {
@@ -196,8 +195,7 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-struct TableTest : public cudf::test::BaseFixture {
-};
+struct TableTest : public cudf::test::BaseFixture {};
 
 TEST_F(TableTest, ConcatenateTables)
 {
@@ -338,8 +336,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
   }
 }
 
-struct OverflowTest : public cudf::test::BaseFixture {
-};
+struct OverflowTest : public cudf::test::BaseFixture {};
 
 TEST_F(OverflowTest, OverflowTest)
 {
@@ -800,8 +797,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
   }
 }
 
-struct StructsColumnTest : public cudf::test::BaseFixture {
-};
+struct StructsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructsColumnTest, ConcatenateStructs)
 {
@@ -847,11 +843,10 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
   expected_children.push_back(cudf::concatenate(age_col_vec));
   expected_children.push_back(cudf::concatenate(is_human_col_vec));
   std::vector<bool> struct_validity({1, 0, 1, 1, 1, 0});
-  auto expected = make_structs_column(
-    6,
-    std::move(expected_children),
-    2,
-    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+  auto expected =
+    make_structs_column(6, std::move(expected_children), null_count, std::move(null_mask));
 
   // concatenate as structs
   std::vector<cudf::test::structs_column_wrapper> src;
@@ -1027,8 +1022,7 @@ TEST_F(StructsColumnTest, ConcatenateStructsNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
-struct ListsColumnTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListsColumnTest, ConcatenateLists)
 {
@@ -1590,11 +1584,9 @@ TEST_F(ListsColumnTest, ListOfStructs)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
@@ -1651,8 +1643,7 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   EXPECT_THROW(cudf::concatenate(std::vector<cudf::column_view>{a, b, c}), cudf::logic_error);
 }
 
-struct DictionaryConcatTest : public cudf::test::BaseFixture {
-};
+struct DictionaryConcatTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryConcatTest, StringsKeys)
 {
@@ -1670,8 +1661,7 @@ TEST_F(DictionaryConcatTest, StringsKeys)
 }
 
 template <typename T>
-struct DictionaryConcatTestFW : public cudf::test::BaseFixture {
-};
+struct DictionaryConcatTestFW : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
 
