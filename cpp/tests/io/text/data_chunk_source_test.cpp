@@ -28,8 +28,7 @@
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-struct DataChunkSourceTest : public cudf::test::BaseFixture {
-};
+struct DataChunkSourceTest : public cudf::test::BaseFixture {};
 
 std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,16 +59,16 @@ struct backrefs_fn {
     auto const nchars = d_str.length();      // number of characters in input string
     auto nbytes       = d_str.size_bytes();  // number of bytes for the output string
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
-    size_type lpos    = 0;       // last byte position processed in d_str
-    size_type begin   = 0;       // first character position matching regex
-    size_type end     = nchars;  // last character position (exclusive)
+    size_type lpos    = 0;                   // last byte position processed in d_str
+    size_type begin   = 0;                   // first character position matching regex
+    size_type end     = nchars;              // last character position (exclusive)
 
     // copy input to output replacing strings as we go
     while (prog.find(prog_idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
-      auto spos = d_str.byte_offset(begin);           // get offset for the
-      auto epos = d_str.byte_offset(end);             // character position values;
-      nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
+      auto spos = d_str.byte_offset(begin);             // get offset for the
+      auto epos = d_str.byte_offset(end);               // character position values;
+      nbytes += d_repl.size_bytes() - (epos - spos);    // compute the output size
 
       // copy the string data before the matched section
       if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }

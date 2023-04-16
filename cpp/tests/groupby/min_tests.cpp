@@ -29,8 +29,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_min_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_test : public cudf::test::BaseFixture {};
 
 using K = int32_t;
 TYPED_TEST_SUITE(groupby_min_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
@@ -129,8 +128,7 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-struct groupby_min_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_min_string_test, basic)
 {
@@ -196,8 +194,7 @@ TEST_F(groupby_min_string_test, min_sorted_strings)
                   cudf::sorted::YES);
 }
 
-struct groupby_dictionary_min_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_min_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_min_test, basic)
 {
@@ -250,8 +247,7 @@ TEST_F(groupby_dictionary_min_test, fixed_width)
 }
 
 template <typename T>
-struct GroupByMinFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupByMinFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByMinFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -301,8 +297,7 @@ TYPED_TEST(GroupByMinFixedPointTest, GroupByHashMinDecimalAsValue)
   }
 }
 
-struct groupby_min_struct_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_struct_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_min_struct_test, basic)
 {
@@ -430,8 +425,7 @@ TEST_F(groupby_min_struct_test, values_with_null_child)
 }
 
 template <typename V>
-struct groupby_min_floating_point_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_floating_point_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_min_floating_point_test, cudf::test::FloatingPointTypes);
 

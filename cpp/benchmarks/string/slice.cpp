@@ -31,8 +31,7 @@
 
 #include <limits>
 
-class StringSlice : public cudf::benchmark {
-};
+class StringSlice : public cudf::benchmark {};
 
 enum slice_type { position, multi_position, delimiter, multi_delimiter };
 

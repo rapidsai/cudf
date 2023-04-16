@@ -22,8 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/reshape.hpp>
 
-class ByteCastTest : public cudf::test::BaseFixture {
-};
+class ByteCastTest : public cudf::test::BaseFixture {};
 
 TEST_F(ByteCastTest, int16ValuesWithSplit)
 {

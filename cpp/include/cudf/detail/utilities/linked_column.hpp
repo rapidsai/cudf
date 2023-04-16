@@ -33,7 +33,7 @@ using LinkedColVector = std::vector<LinkedColPtr>;
  * @brief A column_view class with pointer to parent's column_view
  */
 struct linked_column_view : public column_view_base {
-  linked_column_view(linked_column_view const&) = delete;
+  linked_column_view(linked_column_view const&)            = delete;
   linked_column_view& operator=(linked_column_view const&) = delete;
 
   /**

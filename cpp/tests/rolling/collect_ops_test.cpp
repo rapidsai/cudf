@@ -31,12 +31,10 @@
 
 #include <vector>
 
-struct CollectListTest : public cudf::test::BaseFixture {
-};
+struct CollectListTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedCollectListTest : public CollectListTest {
-};
+struct TypedCollectListTest : public CollectListTest {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::FloatingPointTypes,
@@ -1347,12 +1345,10 @@ auto grouped_time_range_rolling_collect_set(cudf::table_view const& group_keys,
 
 }  // namespace
 
-struct CollectSetTest : public cudf::test::BaseFixture {
-};
+struct CollectSetTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedCollectSetTest : public CollectSetTest {
-};
+struct TypedCollectSetTest : public CollectSetTest {};
 
 using TypesForSetTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                            cudf::test::FloatingPointTypes,
