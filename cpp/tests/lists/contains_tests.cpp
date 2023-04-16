@@ -107,12 +107,10 @@ using cudf::test::iterators::nulls_at;
 using ContainsTestTypes = cudf::test::
   Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
 
-struct ContainsTest : public cudf::test::BaseFixture {
-};
+struct ContainsTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedContainsTest : public ContainsTest {
-};
+struct TypedContainsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsTest, ContainsTestTypes);
 
@@ -530,8 +528,7 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
 }
 
 template <typename T>
-struct TypedVectorContainsTest : public ContainsTest {
-};
+struct TypedVectorContainsTest : public ContainsTest {};
 
 using VectorTestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -856,8 +853,7 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
 }
 
 template <typename T>
-struct TypedContainsNaNsTest : public ContainsTest {
-};
+struct TypedContainsNaNsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsNaNsTest, cudf::test::FloatingPointTypes);
 
@@ -1004,8 +1000,7 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
 }
 
 template <typename T>
-struct TypedContainsDecimalsTest : public ContainsTest {
-};
+struct TypedContainsDecimalsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsDecimalsTest, cudf::test::FixedPointTypes);
 
@@ -1086,8 +1081,7 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
 }
 
 template <typename T>
-struct TypedStructContainsTest : public ContainsTest {
-};
+struct TypedStructContainsTest : public ContainsTest {};
 TYPED_TEST_SUITE(TypedStructContainsTest, ContainsTestTypes);
 
 TYPED_TEST(TypedStructContainsTest, EmptyInputTest)
@@ -1557,8 +1551,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
 }
 
 template <typename T>
-struct TypedListContainsTest : public ContainsTest {
-};
+struct TypedListContainsTest : public ContainsTest {};
 TYPED_TEST_SUITE(TypedListContainsTest, ContainsTestTypes);
 
 TYPED_TEST(TypedListContainsTest, ScalarKeyLists)

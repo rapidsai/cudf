@@ -130,8 +130,7 @@ auto chunked_read(std::string const& filepath, std::size_t byte_limit)
 
 }  // namespace
 
-struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
-};
+struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {};
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
 {

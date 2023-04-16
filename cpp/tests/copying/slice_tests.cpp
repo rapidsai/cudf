@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,7 @@
 #include <vector>
 
 template <typename T>
-struct SliceTest : public cudf::test::BaseFixture {
-};
+struct SliceTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SliceTest, cudf::test::NumericTypes);
 
@@ -85,8 +84,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
   }
 }
 
-struct SliceStringTest : public SliceTest<std::string> {
-};
+struct SliceStringTest : public SliceTest<std::string> {};
 
 TEST_F(SliceStringTest, StringWithNulls)
 {
@@ -132,8 +130,7 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn)
   }
 }
 
-struct SliceListTest : public SliceTest<int> {
-};
+struct SliceListTest : public SliceTest<int> {};
 
 TEST_F(SliceListTest, Lists)
 {
@@ -258,8 +255,7 @@ TEST_F(SliceListTest, ListsWithNulls)
   }
 }
 
-struct SliceCornerCases : public SliceTest<int8_t> {
-};
+struct SliceCornerCases : public SliceTest<int8_t> {};
 
 TEST_F(SliceCornerCases, EmptyColumn)
 {
@@ -338,8 +334,7 @@ TEST_F(SliceCornerCases, NegativeOffset)
 }
 
 template <typename T>
-struct SliceTableTest : public cudf::test::BaseFixture {
-};
+struct SliceTableTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SliceTableTest, cudf::test::NumericTypes);
 
@@ -367,8 +362,7 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
   }
 }
 
-struct SliceStringTableTest : public SliceTableTest<std::string> {
-};
+struct SliceStringTableTest : public SliceTableTest<std::string> {};
 
 TEST_F(SliceStringTableTest, StringWithNulls)
 {
@@ -399,8 +393,7 @@ TEST_F(SliceStringTableTest, StringWithNulls)
   }
 }
 
-struct SliceTableCornerCases : public SliceTableTest<int8_t> {
-};
+struct SliceTableCornerCases : public SliceTableTest<int8_t> {};
 
 TEST_F(SliceTableCornerCases, EmptyTable)
 {

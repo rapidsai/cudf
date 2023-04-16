@@ -41,15 +41,12 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct ColumnUtilitiesTestIntegral : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestIntegral : public cudf::test::BaseFixture {};
 template <typename T>
-struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_SUITE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
@@ -137,8 +134,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
   EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, size));
 }
 
-struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 {
@@ -157,8 +153,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
-struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 {
@@ -324,8 +319,7 @@ TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHostWithOffset)
   EXPECT_TRUE(std::equal(expected.begin(), expected.end(), host_data.first.begin()));
 }
 
-struct ColumnUtilitiesListsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesListsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesListsTest, Equivalence)
 {
@@ -496,8 +490,7 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
   }
 }
 
-struct ColumnUtilitiesStructsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesStructsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStructsTest, Properties)
 {

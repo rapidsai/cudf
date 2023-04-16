@@ -137,8 +137,8 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);
       return sort_order(table_view({group_labels_view, get_grouped_values()}),
-                        {order::ASCENDING, rank_agg._column_order},
-                        {null_order::AFTER, rank_agg._null_precedence},
+                               {order::ASCENDING, rank_agg._column_order},
+                               {null_order::AFTER, rank_agg._null_precedence},
                         stream,
                         rmm::mr::get_current_device_resource());
     }

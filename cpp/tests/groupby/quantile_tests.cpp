@@ -26,8 +26,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_quantile_test : public cudf::test::BaseFixture {
-};
+struct groupby_quantile_test : public cudf::test::BaseFixture {};
 
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
