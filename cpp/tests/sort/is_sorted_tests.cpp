@@ -282,8 +282,7 @@ auto nulls_before<cudf::list_view>()
 // ---- tests ------------------------------------------------------------------
 
 template <typename T>
-struct IsSortedTest : public cudf::test::BaseFixture {
-};
+struct IsSortedTest : public cudf::test::BaseFixture {};
 
 using SupportedTypes = cudf::test::
   Concat<cudf::test::ComparableTypes, cudf::test::Types<cudf::struct_view>, cudf::test::ListTypes>;
@@ -494,8 +493,7 @@ TYPED_TEST(IsSortedTest, NullOrderArgsTooMany)
 }
 
 template <typename T>
-struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {
-};
+struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 

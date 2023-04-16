@@ -132,7 +132,7 @@ __launch_bounds__(block_size) __global__
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
       if (threadIdx.x < cudf::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;
-      __syncthreads();  // wait for init
+      __syncthreads();                   // wait for init
     }
 
     if (mask_true) {

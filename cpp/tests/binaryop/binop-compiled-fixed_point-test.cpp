@@ -29,8 +29,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
-struct FixedPointCompiledTest : public cudf::test::BaseFixture {
-};
+struct FixedPointCompiledTest : public cudf::test::BaseFixture {};
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -808,8 +807,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpPModAndPyMod)
 }
 
 template <typename T>
-struct FixedPointTest_64_128_Reps : public cudf::test::BaseFixture {
-};
+struct FixedPointTest_64_128_Reps : public cudf::test::BaseFixture {};
 
 using Decimal64And128Types = cudf::test::Types<numeric::decimal64, numeric::decimal128>;
 TYPED_TEST_SUITE(FixedPointTest_64_128_Reps, Decimal64And128Types);

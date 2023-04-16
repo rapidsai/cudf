@@ -34,8 +34,7 @@
 
 using namespace cudf::test::iterators;
 
-struct JSONTypeCastTest : public cudf::test::BaseFixture {
-};
+struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
 struct to_thrust_pair_fn {
@@ -78,7 +77,7 @@ TEST_F(JSONTypeCastTest, String)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto str_col = cudf::io::json::experimental::detail::parse_data(svs.data(),
                                                                   svs.size(),
@@ -114,7 +113,7 @@ TEST_F(JSONTypeCastTest, Int)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
                                                               svs.size(),
@@ -157,7 +156,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
   auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
                                                               svs.size(),

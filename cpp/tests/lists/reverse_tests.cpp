@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,10 @@ using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
 using strings_col = cudf::test::strings_column_wrapper;
 using structs_col = cudf::test::structs_column_wrapper;
 
-struct ListsReverseTest : public cudf::test::BaseFixture {
-};
+struct ListsReverseTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ListsReverseTypedTest : public cudf::test::BaseFixture {
-};
+struct ListsReverseTypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -372,8 +370,8 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
                                          "Kiwi",
                                          "Cherry",
                                          "Banana",
-                                         "", /*NULL*/
-                                         "", /*NULL*/
+                                         "",        /*NULL*/
+                                         "",        /*NULL*/
                                          "Apple",
                                          "",        /*NULL*/
                                          "Banana",  // end list1
@@ -438,8 +436,8 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
                                          "Kiwi",
                                          "Cherry",
                                          "Banana",
-                                         "", /*NULL*/
-                                         "", /*NULL*/
+                                         "",        /*NULL*/
+                                         "",        /*NULL*/
                                          "Apple",
                                          "",        /*NULL*/
                                          "Banana",  // end list1

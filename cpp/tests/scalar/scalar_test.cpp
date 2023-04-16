@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,10 @@
 #include <cudf/scalar/scalar.hpp>
 
 template <typename T>
-struct TypedScalarTest : public cudf::test::BaseFixture {
-};
+struct TypedScalarTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedScalarTestWithoutFixedPoint : public cudf::test::BaseFixture {
-};
+struct TypedScalarTestWithoutFixedPoint : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedScalarTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWithoutFixedPoint);
@@ -93,8 +91,7 @@ TYPED_TEST(TypedScalarTest, MoveConstructor)
   EXPECT_EQ(data_ptr, s2.data());
 }
 
-struct StringScalarTest : public cudf::test::BaseFixture {
-};
+struct StringScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringScalarTest, DefaultValidity)
 {
@@ -127,8 +124,7 @@ TEST_F(StringScalarTest, MoveConstructor)
   EXPECT_EQ(data_ptr, s2.data());
 }
 
-struct ListScalarTest : public cudf::test::BaseFixture {
-};
+struct ListScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListScalarTest, DefaultValidityNonNested)
 {
@@ -212,8 +208,7 @@ TEST_F(ListScalarTest, MoveConstructorNested)
   EXPECT_EQ(s.view().num_children(), 0);
 }
 
-struct StructScalarTest : public cudf::test::BaseFixture {
-};
+struct StructScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructScalarTest, Basic)
 {

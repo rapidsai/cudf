@@ -189,7 +189,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
                                  device_span<size_type const> d_delimiters,
                                  device_span<string_index_pair> d_tokens) const
   {
-    auto const base_ptr    = get_base_ptr();  // d_positions values based on this
+    auto const base_ptr    = get_base_ptr();                // d_positions values based on this
     auto str_ptr           = d_str.data();
     auto const str_end     = str_ptr + d_str.size_bytes();  // end of the string
     auto const token_count = static_cast<size_type>(d_tokens.size());

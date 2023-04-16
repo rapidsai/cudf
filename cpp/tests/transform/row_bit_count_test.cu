@@ -36,8 +36,7 @@
 #include <numeric>
 
 template <typename T>
-struct RowBitCountTyped : public cudf::test::BaseFixture {
-};
+struct RowBitCountTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RowBitCountTyped, cudf::test::FixedWidthTypes);
 
@@ -145,12 +144,10 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
                                                    {1, 1, 1, 0, 1, 1, 0, 1, 0}};
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> inner_offsets{0, 2, 5, 6, 9, 9};
   std::vector<bool> inner_list_validity{1, 1, 1, 1, 0};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end());
   auto inner_list = cudf::make_lists_column(
-    5,
-    inner_offsets.release(),
-    values.release(),
-    1,
-    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end()));
+    5, inner_offsets.release(), values.release(), null_count, std::move(null_mask));
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> outer_offsets{0, 2, 2, 3, 5};
   auto list = cudf::make_lists_column(4, outer_offsets.release(), std::move(inner_list), 0, {});
 
@@ -167,8 +164,7 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-struct RowBitCount : public cudf::test::BaseFixture {
-};
+struct RowBitCount : public cudf::test::BaseFixture {};
 
 TEST_F(RowBitCount, Strings)
 {
