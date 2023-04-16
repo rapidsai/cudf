@@ -46,10 +46,10 @@ namespace {
 template <typename IndexIterator>
 struct substring_from_fn {
   column_device_view const d_column;
-  IndexIterator starts;
-  IndexIterator stops;
+  IndexIterator const starts;
+  IndexIterator const stops;
 
-  __device__ string_view operator()(size_type idx)
+  __device__ string_view operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) { return string_view{nullptr, 0}; }
     auto const d_str  = d_column.template element<string_view>(idx);
