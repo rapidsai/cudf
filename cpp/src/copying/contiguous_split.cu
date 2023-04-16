@@ -108,8 +108,8 @@ struct dst_buf_info {
   int bit_shift;           // # of bits to shift right by (for validity buffers)
   size_type valid_count;   // validity count for this block of work
 
-  int src_buf_index;  // source buffer index
-  int dst_buf_index;  // destination buffer index
+  int src_buf_index;       // source buffer index
+  int dst_buf_index;       // destination buffer index
 };
 
 /**

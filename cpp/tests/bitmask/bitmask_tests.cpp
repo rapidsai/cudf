@@ -30,8 +30,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {
-};
+struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
 
 TEST_F(BitmaskUtilitiesTest, StateNullCount)
 {
@@ -63,8 +62,7 @@ TEST_F(BitmaskUtilitiesTest, NumBitmaskWords)
   EXPECT_EQ(3, cudf::num_bitmask_words(65));
 }
 
-struct CountBitmaskTest : public cudf::test::BaseFixture {
-};
+struct CountBitmaskTest : public cudf::test::BaseFixture {};
 
 TEST_F(CountBitmaskTest, NullMask)
 {
@@ -686,8 +684,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
     concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));
 }
 
-struct MergeBitmaskTest : public cudf::test::BaseFixture {
-};
+struct MergeBitmaskTest : public cudf::test::BaseFixture {};
 
 TEST_F(MergeBitmaskTest, TestBitmaskAnd)
 {

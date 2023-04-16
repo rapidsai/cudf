@@ -162,8 +162,7 @@ std::vector<cudf::table> create_expected_string_tables_for_splits(
 }
 
 template <typename T>
-struct SplitTest : public cudf::test::BaseFixture {
-};
+struct SplitTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SplitTest, cudf::test::NumericTypes);
 
@@ -304,8 +303,7 @@ TYPED_TEST(SplitTest, LongColumn)
     false);
 }
 
-struct SplitStringTest : public SplitTest<std::string> {
-};
+struct SplitStringTest : public SplitTest<std::string> {};
 
 TEST_F(SplitStringTest, StringWithInvalids)
 {
@@ -328,8 +326,7 @@ TEST_F(SplitStringTest, StringWithInvalids)
   }
 }
 
-struct SplitCornerCases : public SplitTest<int8_t> {
-};
+struct SplitCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(SplitCornerCases, EmptyColumn)
 {
@@ -552,8 +549,7 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
 
 // regular splits
 template <typename T>
-struct SplitTableTest : public cudf::test::BaseFixture {
-};
+struct SplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(SplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTableTest, SplitEndLessThanSize)
@@ -578,8 +574,7 @@ TYPED_TEST(SplitTableTest, SplitEndToSize)
     });
 }
 
-struct SplitTableCornerCases : public SplitTest<int8_t> {
-};
+struct SplitTableCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(SplitTableCornerCases, EmptyTable)
 {
@@ -726,8 +721,7 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 }
 
 // split with strings
-struct SplitStringTableTest : public SplitTest<std::string> {
-};
+struct SplitStringTableTest : public SplitTest<std::string> {};
 
 TEST_F(SplitStringTableTest, StringWithInvalids)
 {
@@ -760,8 +754,7 @@ TEST_F(SplitStringTableTest, NullStringColumn)
     });
 }
 
-struct SplitNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct SplitNestedTypesTest : public cudf::test::BaseFixture {};
 
 // common functions for testing split/contiguous_split
 template <typename T, typename SplitFunc, typename CompareFunc>
@@ -1169,8 +1162,7 @@ TEST_F(SplitNestedTypesTest, StructsOfList)
 }
 
 template <typename T>
-struct ContiguousSplitTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitTest : public cudf::test::BaseFixture {};
 
 // the various utility functions in slice_tests.cuh don't like the chrono types
 using FixedWidthTypesWithoutChrono =
@@ -1274,8 +1266,7 @@ thrust::make_counting_iterator(10000));
     );
 }
 */
-struct ContiguousSplitUntypedTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitUntypedTest : public cudf::test::BaseFixture {};
 
 TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
 {
@@ -1370,8 +1361,7 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTest)
 }
 
 // contiguous split with strings
-struct ContiguousSplitStringTableTest : public SplitTest<std::string> {
-};
+struct ContiguousSplitStringTableTest : public SplitTest<std::string> {};
 
 TEST_F(ContiguousSplitStringTableTest, StringWithInvalids)
 {
@@ -1439,8 +1429,7 @@ TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
 
 // contiguous splits
 template <typename T>
-struct ContiguousSplitTableTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
@@ -1465,8 +1454,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize)
     });
 }
 
-struct ContiguousSplitTableCornerCases : public SplitTest<int8_t> {
-};
+struct ContiguousSplitTableCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(ContiguousSplitTableCornerCases, EmptyTable)
 {
@@ -1889,8 +1877,7 @@ TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
   }
 }
 
-struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {};
 
 TEST_F(ContiguousSplitNestedTypesTest, Lists)
 {

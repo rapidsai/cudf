@@ -54,8 +54,7 @@ using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integ
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
-struct Sort : public cudf::test::BaseFixture {
-};
+struct Sort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(Sort, TestTypes);
 
@@ -989,8 +988,7 @@ TYPED_TEST(Sort, WithEmptyListColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
-struct SortByKey : public cudf::test::BaseFixture {
-};
+struct SortByKey : public cudf::test::BaseFixture {};
 
 TEST_F(SortByKey, ValueKeysSizeMismatch)
 {
@@ -1008,8 +1006,7 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
 }
 
 template <typename T>
-struct SortFixedPointTest : public cudf::test::BaseFixture {
-};
+struct SortFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SortFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -1045,8 +1042,7 @@ TYPED_TEST(SortFixedPointTest, SortedOrderGather)
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
-struct SortCornerTest : public cudf::test::BaseFixture {
-};
+struct SortCornerTest : public cudf::test::BaseFixture {};
 
 TEST_F(SortCornerTest, WithEmptyStructColumn)
 {

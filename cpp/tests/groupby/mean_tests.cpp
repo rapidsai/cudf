@@ -30,8 +30,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_mean_test : public cudf::test::BaseFixture {
-};
+struct groupby_mean_test : public cudf::test::BaseFixture {};
 
 template <typename Target, typename Source>
 std::vector<Target> convert(std::initializer_list<Source> in)
@@ -136,8 +135,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
 }
 // clang-format on
 
-struct groupby_dictionary_mean_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_mean_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_mean_test, basic)
 {
@@ -157,8 +155,7 @@ TEST_F(groupby_dictionary_mean_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 

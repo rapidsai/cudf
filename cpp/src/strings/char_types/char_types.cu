@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,9 +114,9 @@ struct filter_chars_fn {
   {
     auto const code_point = detail::utf8_to_codepoint(ch);
     auto const flag       = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
-    if (flag == 0)  // all types pass unless specifically identified
+    if (flag == 0)                       // all types pass unless specifically identified
       return (types_to_remove == ALL_TYPES);
-    if (types_to_keep == ALL_TYPES)  // filter case
+    if (types_to_keep == ALL_TYPES)      // filter case
       return (types_to_remove & flag) != 0;
     return (types_to_keep & flag) == 0;  // keep case
   }

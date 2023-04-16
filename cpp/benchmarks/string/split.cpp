@@ -27,8 +27,7 @@
 
 #include <limits>
 
-class StringSplit : public cudf::benchmark {
-};
+class StringSplit : public cudf::benchmark {};
 
 enum split_type { split, split_ws, record, record_ws };
 
