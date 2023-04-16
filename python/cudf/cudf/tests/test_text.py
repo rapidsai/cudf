@@ -806,6 +806,14 @@ def test_minhash():
     actual = strings.str.minhash(seeds=seeds, n=5)
     assert_eq(expected, actual)
 
+    with pytest.raises(ValueError):
+        strings.str.minhash(seeds=7)
+    with pytest.raises(ValueError):
+        strings.str.minhash(seeds=seeds, method="md5")
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.int32)
+        strings.str.minhash(seeds=seeds)
+
 
 def test_read_text(datadir):
     chess_file = str(datadir) + "/chess.pgn"
