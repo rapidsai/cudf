@@ -145,8 +145,7 @@ TYPED_TEST(groupby_sum_scan_test, null_keys_and_values)
 }
 
 template <typename T>
-struct GroupBySumScanFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupBySumScanFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupBySumScanFixedPointTest, cudf::test::FixedPointTypes);
 

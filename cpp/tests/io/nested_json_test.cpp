@@ -129,8 +129,7 @@ void print_column(std::string const& input, cuio_json::json_column const& column
 }  // namespace
 
 // Base test fixture for tests
-struct JsonTest : public cudf::test::BaseFixture {
-};
+struct JsonTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonTest, StackContext)
 {
@@ -450,8 +449,7 @@ TEST_F(JsonTest, TokenStream2)
   }
 }
 
-struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {
-};
+struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {};
 INSTANTIATE_TEST_SUITE_P(Experimental, JsonParserTest, testing::Bool());
 
 TEST_P(JsonParserTest, ExtractColumn)

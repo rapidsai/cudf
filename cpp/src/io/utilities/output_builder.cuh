@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,9 +214,9 @@ class output_builder {
     _chunks.back().reserve(max_write_size * 2, stream);
   }
 
-  output_builder(output_builder&&)      = delete;
-  output_builder(const output_builder&) = delete;
-  output_builder& operator=(output_builder&&) = delete;
+  output_builder(output_builder&&)                 = delete;
+  output_builder(const output_builder&)            = delete;
+  output_builder& operator=(output_builder&&)      = delete;
   output_builder& operator=(const output_builder&) = delete;
 
   /**

@@ -280,10 +280,10 @@ class hash_join {
 
   hash_join() = delete;
   ~hash_join();
-  hash_join(hash_join const&) = delete;
-  hash_join(hash_join&&)      = delete;
+  hash_join(hash_join const&)            = delete;
+  hash_join(hash_join&&)                 = delete;
   hash_join& operator=(hash_join const&) = delete;
-  hash_join& operator=(hash_join&&) = delete;
+  hash_join& operator=(hash_join&&)      = delete;
 
   /**
    * @brief Construct a hash join object for subsequent probe calls.

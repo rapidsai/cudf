@@ -81,10 +81,10 @@ class string_view {
     using pointer           = char_utf8*;
     using iterator_category = std::input_iterator_tag;
     __device__ inline const_iterator(const string_view& str, size_type pos);
-    const_iterator(const const_iterator& mit) = default;
-    const_iterator(const_iterator&& mit)      = default;
+    const_iterator(const const_iterator& mit)        = default;
+    const_iterator(const_iterator&& mit)             = default;
     const_iterator& operator=(const const_iterator&) = default;
-    const_iterator& operator=(const_iterator&&) = default;
+    const_iterator& operator=(const_iterator&&)      = default;
     __device__ inline const_iterator& operator++();
     __device__ inline const_iterator operator++(int);
     __device__ inline const_iterator& operator+=(difference_type);

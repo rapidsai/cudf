@@ -29,8 +29,7 @@
 
 #include <vector>
 
-struct StringsFindTest : public cudf::test::BaseFixture {
-};
+struct StringsFindTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindTest, Find)
 {
@@ -313,8 +312,8 @@ TEST_F(StringsFindTest, ErrorCheck)
                cudf::logic_error);
 }
 
-class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class FindParmsTest : public StringsFindTest,
+                      public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(FindParmsTest, Find)
 {
