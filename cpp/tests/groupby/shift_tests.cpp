@@ -25,8 +25,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 
 template <typename T>
-struct groupby_shift_fixed_width_test : public cudf::test::BaseFixture {
-};
+struct groupby_shift_fixed_width_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_shift_fixed_width_test, cudf::test::FixedWidthTypes);
 
@@ -228,8 +227,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, VeryLargeBackwardOffset)
   test_groupby_shift_fixed_width_single<K, V>(key, val, offset, *slr, expected);
 }
 
-struct groupby_shift_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_shift_string_test : public cudf::test::BaseFixture {};
 
 template <typename K>
 void test_groupby_shift_string_single(cudf::test::fixed_width_column_wrapper<K> const& key,
@@ -409,8 +407,7 @@ TEST_F(groupby_shift_string_test, VeryLargeBackwardOffset)
 }
 
 template <typename T>
-struct groupby_shift_mixed_test : public cudf::test::BaseFixture {
-};
+struct groupby_shift_mixed_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_shift_mixed_test, cudf::test::FixedWidthTypes);
 
@@ -469,8 +466,7 @@ TYPED_TEST(groupby_shift_mixed_test, Fill)
   test_groupby_shift_multi(key, value, offset, fill_values, expected);
 }
 
-struct groupby_shift_fixed_point_type_test : public cudf::test::BaseFixture {
-};
+struct groupby_shift_fixed_point_type_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_shift_fixed_point_type_test, Matching)
 {

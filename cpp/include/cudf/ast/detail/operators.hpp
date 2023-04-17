@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,8 +224,7 @@ CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, 
  * @tparam op AST operator.
  */
 template <ast_operator op, bool has_nulls>
-struct operator_functor {
-};
+struct operator_functor {};
 
 template <>
 struct operator_functor<ast_operator::ADD, false> {
@@ -402,8 +401,7 @@ struct operator_functor<ast_operator::EQUAL, false> {
 // Alias NULL_EQUAL = EQUAL in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_EQUAL, false>
-  : public operator_functor<ast_operator::EQUAL, false> {
-};
+  : public operator_functor<ast_operator::EQUAL, false> {};
 
 template <>
 struct operator_functor<ast_operator::NOT_EQUAL, false> {
@@ -507,8 +505,7 @@ struct operator_functor<ast_operator::LOGICAL_AND, false> {
 // Alias NULL_LOGICAL_AND = LOGICAL_AND in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_LOGICAL_AND, false>
-  : public operator_functor<ast_operator::LOGICAL_AND, false> {
-};
+  : public operator_functor<ast_operator::LOGICAL_AND, false> {};
 
 template <>
 struct operator_functor<ast_operator::LOGICAL_OR, false> {
@@ -524,8 +521,7 @@ struct operator_functor<ast_operator::LOGICAL_OR, false> {
 // Alias NULL_LOGICAL_OR = LOGICAL_OR in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_LOGICAL_OR, false>
-  : public operator_functor<ast_operator::LOGICAL_OR, false> {
-};
+  : public operator_functor<ast_operator::LOGICAL_OR, false> {};
 
 template <>
 struct operator_functor<ast_operator::IDENTITY, false> {
@@ -798,14 +794,11 @@ struct cast {
 };
 
 template <>
-struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {
-};
+struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {};
 template <>
-struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {
-};
+struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {};
 template <>
-struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {
-};
+struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {};
 
 /*
  * The default specialization of nullable operators is to fall back to the non-nullable

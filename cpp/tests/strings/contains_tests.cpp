@@ -31,8 +31,7 @@
 #include <algorithm>
 #include <vector>
 
-struct StringsContainsTests : public cudf::test::BaseFixture {
-};
+struct StringsContainsTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsContainsTests, ContainsTest)
 {
@@ -516,7 +515,7 @@ TEST_F(StringsContainsTests, OverlappedClasses)
 TEST_F(StringsContainsTests, NegatedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
-  auto sv    = cudf::strings_column_view(input);
+  auto sv = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[^a-f]");

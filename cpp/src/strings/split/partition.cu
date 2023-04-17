@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,7 @@ struct rpartition_fn : public partition_fn {
       --itr;
       pos = check_delimiter(idx, d_str, itr);
     }
-    if (pos < 0)  // delimiter not found
+    if (pos < 0)                                        // delimiter not found
     {
       d_indices_left[idx]  = string_index_pair{"", 0};  // two empty
       d_indices_delim[idx] = string_index_pair{"", 0};  // strings

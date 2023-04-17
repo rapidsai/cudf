@@ -29,8 +29,7 @@
 
 #include <vector>
 
-struct StringsDatetimeTest : public cudf::test::BaseFixture {
-};
+struct StringsDatetimeTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDatetimeTest, ToTimestamp)
 {

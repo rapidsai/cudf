@@ -157,8 +157,7 @@ void check_float_column(cudf::column_view const& col,
 /**
  * @brief Base test fixture for JSON reader tests
  */
-struct JsonReaderTest : public cudf::test::BaseFixture {
-};
+struct JsonReaderTest : public cudf::test::BaseFixture {};
 
 /**
  * @brief Enum class to be used to specify the test case of parametrized tests
@@ -190,16 +189,14 @@ constexpr bool is_row_orient_test(json_test_t test_opt)
  * @brief Test fixture for parametrized JSON reader tests
  */
 struct JsonReaderParamTest : public cudf::test::BaseFixture,
-                             public testing::WithParamInterface<json_test_t> {
-};
+                             public testing::WithParamInterface<json_test_t> {};
 
 /**
  * @brief Test fixture for parametrized JSON reader tests, testing record orient-only for legacy
  * JSON lines reader and the nested reader
  */
 struct JsonReaderDualTest : public cudf::test::BaseFixture,
-                            public testing::WithParamInterface<json_test_t> {
-};
+                            public testing::WithParamInterface<json_test_t> {};
 
 /**
  * @brief Generates a JSON lines string that uses the record orient
@@ -231,8 +228,7 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
 }
 
 template <typename DecimalType>
-struct JsonFixedPointReaderTest : public JsonReaderTest {
-};
+struct JsonFixedPointReaderTest : public JsonReaderTest {};
 
 template <typename DecimalType>
 struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalType> {
@@ -936,7 +932,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
       .dtypes({dtype<int8_t>()})
       .lines(true)
       .legacy(true);  // Support in new reader coming in https://github.com/rapidsai/cudf/pull/12498
-  ;
+
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
@@ -1006,21 +1002,21 @@ TEST_P(JsonReaderParamTest, ParseInRangeIntegers)
   constexpr auto num_rows                      = 4;
   std::vector<int64_t> small_int               = {0, -10, 20, -30};
   std::vector<int64_t> less_equal_int64_max    = {std::numeric_limits<int64_t>::max() - 3,
-                                               std::numeric_limits<int64_t>::max() - 2,
-                                               std::numeric_limits<int64_t>::max() - 1,
-                                               std::numeric_limits<int64_t>::max()};
+                                                  std::numeric_limits<int64_t>::max() - 2,
+                                                  std::numeric_limits<int64_t>::max() - 1,
+                                                  std::numeric_limits<int64_t>::max()};
   std::vector<int64_t> greater_equal_int64_min = {std::numeric_limits<int64_t>::min() + 3,
                                                   std::numeric_limits<int64_t>::min() + 2,
                                                   std::numeric_limits<int64_t>::min() + 1,
                                                   std::numeric_limits<int64_t>::min()};
   std::vector<uint64_t> greater_int64_max      = {uint64_t{std::numeric_limits<int64_t>::max()} - 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()},
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 2};
+                                                  uint64_t{std::numeric_limits<int64_t>::max()},
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 1,
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 2};
   std::vector<uint64_t> less_equal_uint64_max  = {std::numeric_limits<uint64_t>::max() - 3,
-                                                 std::numeric_limits<uint64_t>::max() - 2,
-                                                 std::numeric_limits<uint64_t>::max() - 1,
-                                                 std::numeric_limits<uint64_t>::max()};
+                                                  std::numeric_limits<uint64_t>::max() - 2,
+                                                  std::numeric_limits<uint64_t>::max() - 1,
+                                                  std::numeric_limits<uint64_t>::max()};
   auto input_small_int = column_wrapper<int64_t>(small_int.begin(), small_int.end());
   auto input_less_equal_int64_max =
     column_wrapper<int64_t>(less_equal_int64_max.begin(), less_equal_int64_max.end());
@@ -1530,12 +1526,14 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
   // List column expected
   auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
   auto const validity = {1, 0, 0};
-  auto expected       = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto expected = cudf::make_lists_column(
     3,
     int_wrapper{{0, 2, 2, 2}}.release(),
     cudf::test::structs_column_wrapper{{leaf_child}, {false, true}}.release(),
-    2,
-    cudf::test::detail::make_null_mask(validity.begin(), validity.end()));
+    null_count,
+    std::move(null_mask));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), *expected);
 }
 
@@ -1580,21 +1578,21 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
   std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
 
   auto int_col   = int_wrapper{{0,
-                              0,
-                              int_ignore,
-                              1,
-                              1,
-                              int_ignore,
-                              int_ignore,
-                              int_ignore,
-                              int_ignore,
-                              1,
-                              0,
-                              int_ignore,
-                              1,
-                              0,
-                              int_ignore,
-                              int_ignore},
+                                0,
+                                int_ignore,
+                                1,
+                                1,
+                                int_ignore,
+                                int_ignore,
+                                int_ignore,
+                                int_ignore,
+                                1,
+                                0,
+                                int_ignore,
+                                1,
+                                0,
+                                int_ignore,
+                                int_ignore},
                              make_validity(validity)};
   auto float_col = float_wrapper{{0.0,
                                   0.0,

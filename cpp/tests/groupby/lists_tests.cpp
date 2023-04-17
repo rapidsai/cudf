@@ -24,8 +24,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 
 template <typename V>
-struct groupby_lists_test : public cudf::test::BaseFixture {
-};
+struct groupby_lists_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_lists_test, cudf::test::FixedWidthTypes);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct StringsFindTest : public cudf::test::BaseFixture {
-};
+struct StringsFindTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindTest, Find)
 {
@@ -302,8 +301,8 @@ TEST_F(StringsFindTest, ErrorCheck)
                cudf::logic_error);
 }
 
-class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class FindParmsTest : public StringsFindTest,
+                      public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(FindParmsTest, Find)
 {
