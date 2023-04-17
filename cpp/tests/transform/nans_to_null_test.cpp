@@ -29,7 +29,7 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
   {
     auto [null_mask, null_count] = cudf::nans_to_nulls(input);
     cudf::column got(input);
-    got.set_null_mask(std::move(*(null_mask)), null_count);
+    got.set_null_mask(std::move(*null_mask), null_count);
 
     EXPECT_EQ(expected.null_count(), null_count);
 
