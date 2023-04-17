@@ -261,7 +261,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL),
+        col->child(0).size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_child_updated));
     }
@@ -427,7 +428,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL), col->size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_FALSE(is_shallow_equivalent(col_view, col_child_updated));
     }
