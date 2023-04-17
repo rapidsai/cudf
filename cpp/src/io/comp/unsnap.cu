@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ void __device__ busy_wait(size_t cycles)
 struct unsnap_batch_s {
   int32_t len;  // 1..64 = Number of bytes
   uint32_t
-    offset;  // copy distance if greater than zero or negative of literal offset in byte stream
+    offset;     // copy distance if greater than zero or negative of literal offset in byte stream
 };
 
 /**

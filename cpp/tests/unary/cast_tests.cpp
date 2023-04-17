@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,8 +193,7 @@ inline auto make_data_type()
   return cudf::data_type{cudf::type_to_id<T>()};
 }
 
-struct CastTimestampsSimple : public cudf::test::BaseFixture {
-};
+struct CastTimestampsSimple : public cudf::test::BaseFixture {};
 
 TEST_F(CastTimestampsSimple, IsIdempotent)
 {
@@ -235,8 +234,7 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
   validate_cast_result<cudf::timestamp_ns, cudf::timestamp_ns>(timestamps_ns, *timestamps_ns_got);
 }
 
-struct CastDurationsSimple : public cudf::test::BaseFixture {
-};
+struct CastDurationsSimple : public cudf::test::BaseFixture {};
 
 TEST_F(CastDurationsSimple, IsIdempotent)
 {
@@ -273,8 +271,7 @@ TEST_F(CastDurationsSimple, IsIdempotent)
 }
 
 template <typename T>
-struct CastChronosTyped : public cudf::test::BaseFixture {
-};
+struct CastChronosTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastChronosTyped, cudf::test::ChronoTypes);
 
@@ -351,8 +348,7 @@ TYPED_TEST(CastChronosTyped, DownCastingToDaysFloorsValues)
   validate_cast_result<cudf::duration_D, cudf::duration_D>(duration_exp, *duration_got);
 }
 
-struct CastToTimestamps : public cudf::test::BaseFixture {
-};
+struct CastToTimestamps : public cudf::test::BaseFixture {};
 
 // Cast duration types to timestamps (as integral types can't be converted)
 TEST_F(CastToTimestamps, AllValid)
@@ -382,8 +378,7 @@ TEST_F(CastToTimestamps, AllValid)
   validate_cast_result<cudf::duration_ns, cudf::timestamp_ns>(durations_ns, *timestamps_ns_got);
 }
 
-struct CastFromTimestamps : public cudf::test::BaseFixture {
-};
+struct CastFromTimestamps : public cudf::test::BaseFixture {};
 
 // Convert timestamps to duration types
 TEST_F(CastFromTimestamps, AllValid)
@@ -445,8 +440,7 @@ TEST_F(CastFromTimestamps, WithNulls)
 }
 
 template <typename T>
-struct CastToDurations : public cudf::test::BaseFixture {
-};
+struct CastToDurations : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastToDurations, cudf::test::IntegralTypes);
 
@@ -478,8 +472,7 @@ TYPED_TEST(CastToDurations, AllValid)
 }
 
 template <typename T>
-struct CastFromDurations : public cudf::test::BaseFixture {
-};
+struct CastFromDurations : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastFromDurations, cudf::test::NumericTypes);
 
@@ -549,12 +542,10 @@ inline auto make_fixed_point_data_type(int32_t scale)
   return cudf::data_type{cudf::type_to_id<T>(), scale};
 }
 
-struct FixedPointTestSingleType : public cudf::test::BaseFixture {
-};
+struct FixedPointTestSingleType : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FixedPointTests : public cudf::test::BaseFixture {
-};
+struct FixedPointTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 

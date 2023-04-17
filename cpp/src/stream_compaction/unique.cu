@@ -103,7 +103,7 @@ std::unique_ptr<table> unique(table_view const& input,
       return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
     }
   }();
-  auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size);
+  auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size, stream);
 
   // gather unique rows and return
   return detail::gather(input,

@@ -254,26 +254,26 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  auto const scv     = strings_column_view(c);
-  auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-    cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    cudf::get_default_stream());
-  auto const h_offsets = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::offset_type const>(
-      scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    cudf::get_default_stream());
+  thrust::host_vector<std::string> host_data(c.size());
+  if (c.size() > c.null_count()) {
+    auto const scv     = strings_column_view(c);
+    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
+      cudf::get_default_stream());
+    auto const h_offsets = cudf::detail::make_std_vector_sync(
+      cudf::device_span<cudf::offset_type const>(
+        scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+      cudf::get_default_stream());
 
-  // build std::string vector from chars and offsets
-  std::vector<std::string> host_data;
-  host_data.reserve(c.size());
-  std::transform(
-    std::begin(h_offsets),
-    std::end(h_offsets) - 1,
-    std::begin(h_offsets) + 1,
-    std::back_inserter(host_data),
-    [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
-
-  return {host_data, bitmask_to_host(c)};
+    // build std::string vector from chars and offsets
+    std::transform(
+      std::begin(h_offsets),
+      std::end(h_offsets) - 1,
+      std::begin(h_offsets) + 1,
+      host_data.begin(),
+      [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
+  }
+  return {std::move(host_data), bitmask_to_host(c)};
 }
 
 }  // namespace cudf::test

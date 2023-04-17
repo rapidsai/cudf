@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct StringsReplaceRegexTest : public cudf::test::BaseFixture {
-};
+struct StringsReplaceRegexTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
 {

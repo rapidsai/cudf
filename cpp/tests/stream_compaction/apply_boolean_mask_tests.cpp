@@ -32,8 +32,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 
-struct ApplyBooleanMask : public cudf::test::BaseFixture {
-};
+struct ApplyBooleanMask : public cudf::test::BaseFixture {};
 
 TEST_F(ApplyBooleanMask, NonNullBooleanMask)
 {

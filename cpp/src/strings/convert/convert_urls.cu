@@ -107,9 +107,9 @@ struct url_encoder_fn {
             out_ptr = copy_and_increment(out_ptr, hex, 2);  // add them to the output
           }
         }
-      } else  // these are to be utf-8 url-encoded
+      } else                       // these are to be utf-8 url-encoded
       {
-        uint8_t char_bytes[4];  // holds utf-8 bytes for one character
+        uint8_t char_bytes[4];     // holds utf-8 bytes for one character
         size_type char_width = from_char_utf8(ch, reinterpret_cast<char*>(char_bytes));
         nbytes += char_width * 3;  // '%' plus 2 hex chars per byte (example: é is %C3%A9)
         // process each byte in this current character

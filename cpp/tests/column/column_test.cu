@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,16 +196,12 @@ TYPED_TEST(TypedColumnTest, ResetNullCountAllNull)
     this->type(), this->num_elements(), std::move(this->data), std::move(this->all_null_mask)};
 
   EXPECT_EQ(this->num_elements(), col.null_count());
-  EXPECT_NO_THROW(col.set_null_count(cudf::UNKNOWN_NULL_COUNT));
-  EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
 TYPED_TEST(TypedColumnTest, ResetNullCountAllValid)
 {
   cudf::column col{
     this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
-  EXPECT_EQ(0, col.null_count());
-  EXPECT_NO_THROW(col.set_null_count(cudf::UNKNOWN_NULL_COUNT));
   EXPECT_EQ(0, col.null_count());
 }
 
@@ -388,7 +384,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
 TYPED_TEST(TypedColumnTest, ConstructWithChildren)
 {
   std::vector<std::unique_ptr<cudf::column>> children;
-  ;
+
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT8},
     42,
@@ -403,7 +399,7 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
                    this->num_elements(),
                    rmm::device_buffer{this->data, cudf::get_default_stream()},
                    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
-                   cudf::UNKNOWN_NULL_COUNT,
+                   0,
                    std::move(children)};
 
   verify_column_views(col);
@@ -448,7 +444,7 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
                    this->num_elements(),
                    rmm::device_buffer{this->data, cudf::get_default_stream()},
                    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
-                   cudf::UNKNOWN_NULL_COUNT,
+                   0,
                    std::move(children)};
 
   auto original_data = col.view().head();
@@ -480,8 +476,7 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
 }
 
 template <typename T>
-struct ListsColumnTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 // We disable warning 611 because the `arrow::TableBatchReader` only partially
 // override the `ReadNext` method of `arrow::RecordBatchReader::ReadNext`
 // triggering warning 611-D from nvcc.
+#ifdef __CUDACC__
 #pragma nv_diag_suppress 611
 #pragma nv_diag_suppress 2810
+#endif
 #include <arrow/api.h>
+#ifdef __CUDACC__
 #pragma nv_diag_default 611
 #pragma nv_diag_default 2810
+#endif
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>

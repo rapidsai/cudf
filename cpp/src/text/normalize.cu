@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ struct codepoint_to_utf8_fn {
     char* out_ptr = d_chars + d_offsets[idx];
     for (uint32_t jdx = 0; jdx < count; ++jdx) {
       uint32_t code_point = *str_cps++;
-      if (code_point < UTF8_1BYTE)  // ASCII range
+      if (code_point < UTF8_1BYTE)         // ASCII range
         *out_ptr++ = static_cast<char>(code_point);
       else if (code_point < UTF8_2BYTE) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy

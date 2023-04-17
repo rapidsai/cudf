@@ -40,10 +40,10 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-rmm::device_buffer mask_scan(column_view const& input_view,
-                             scan_type inclusive,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
+                                                   scan_type inclusive,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
@@ -62,7 +62,7 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   set_null_mask(static_cast<bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
   set_null_mask(
     static_cast<bitmask_type*>(mask.data()), first_null_position, input_view.size(), false, stream);
-  return mask;
+  return {std::move(mask), input_view.size() - first_null_position};
 }
 
 namespace {
@@ -189,12 +189,8 @@ struct scan_functor<Op, cudf::struct_view> {
                               ->release();
 
     // Don't need to set a null mask because that will be handled at the caller.
-    return make_structs_column(input.size(),
-                               std::move(scanned_children),
-                               UNKNOWN_NULL_COUNT,
-                               rmm::device_buffer{0, stream, mr},
-                               stream,
-                               mr);
+    return make_structs_column(
+      input.size(), std::move(scanned_children), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
   }
 };
 
@@ -257,7 +253,8 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
-    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
+    auto [mask, null_count] = mask_scan(input, scan_type::INCLUSIVE, stream, mr);
+    output->set_null_mask(mask, null_count);
   }
 
   // If the input is a structs column, we also need to push down nulls from the parent output column
