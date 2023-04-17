@@ -8,7 +8,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.api.types import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
     CopyOnWriteBuffer,
@@ -313,9 +313,13 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
+            data_dtype = col.dtype
+        elif is_datetime64tz_dtype(self.dtype):
+            col = self
+            data_dtype = col.dtype.base
         else:
             col = self
-        data_dtype = col.dtype
+            data_dtype = self.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
@@ -373,6 +377,9 @@ cdef class Column:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
+        elif is_datetime64tz_dtype(self.dtype):
+            col = self
+            data_dtype = self.dtype.base
         else:
             col = self
             data_dtype = self.dtype

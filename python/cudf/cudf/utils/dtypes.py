@@ -12,7 +12,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.api.types import is_bool, is_float, is_integer
-from cudf.core.dtypes import is_datetime64tz_dtype
 from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
