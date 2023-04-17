@@ -79,7 +79,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-from cudf.core.default import no_default
+from cudf.api.extensions import no_default
 
 
 def _format_percentile_names(percentiles):

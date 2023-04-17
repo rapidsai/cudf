@@ -53,7 +53,6 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.default import no_default
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import (
