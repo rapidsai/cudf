@@ -146,11 +146,11 @@ struct substring_fn {
  *
  * @tparam IndexIterator Iterator type for character position values
  *
- * @param d_column Input strings column to substring.
- * @param starts Start positions index iterator.
- * @param stops Stop positions index iterator.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param d_column Input strings column to substring
+ * @param starts Start positions index iterator
+ * @param stops Stop positions index iterator
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename IndexIterator>
 std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
