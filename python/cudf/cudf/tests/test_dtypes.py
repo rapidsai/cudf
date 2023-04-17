@@ -10,6 +10,7 @@ from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
+    DatetimeTZDtype,
     Decimal32Dtype,
     Decimal64Dtype,
     Decimal128Dtype,
@@ -368,3 +369,13 @@ def test_dtype_np_bool_to_pa_bool():
     """
 
     assert np_to_pa_dtype(np.dtype("bool")) == pa.bool_()
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+@pytest.mark.parametrize(
+    "tz", ["UTC", "America/New_York", "Asia/Tokya", "Etc/GMT+1"]
+)
+def test_datetimetz_dtype_pyarrow_roundtrip(unit, tz):
+    expect = pa.timestamp(unit, tz)
+    got = DatetimeTZDtype.from_arrow(expect).to_arrow()
+    assert expect == got
