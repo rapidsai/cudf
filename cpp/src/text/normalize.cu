@@ -28,9 +28,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

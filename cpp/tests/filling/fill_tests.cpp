@@ -46,7 +46,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
             bool value_is_valid                     = true,
             BitInitializerType destination_validity = all_valid)
   {
-    static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+    static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 

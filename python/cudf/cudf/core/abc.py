@@ -3,6 +3,8 @@
 
 import pickle
 
+import numpy
+
 import cudf
 
 
@@ -176,5 +178,9 @@ class Serializable:
 
     def __reduce_ex__(self, protocol):
         header, frames = self.host_serialize()
-        frames = [f.obj for f in frames]
+
+        # Since memoryviews are not pickable, we convert them to numpy
+        # arrays (zero-copy). This works seamlessly because host_deserialize
+        # converts the frames back into memoryviews.
+        frames = [numpy.asarray(f) for f in frames]
         return self.host_deserialize, (header, frames)

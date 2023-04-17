@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     count_iter,
     count_iter + offset_count,
     dst_offsets_v.begin<int32_t>(),
@@ -125,7 +125,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     gather_map,
     gather_map + output_count,
     base_offsets.data(),
@@ -285,11 +285,10 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  *
  * @returns column with elements gathered based on `gather_data`
  */
-std::unique_ptr<column> gather_list_nested(
-  lists_column_view const& list,
-  gather_data& gd,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
+                                           gather_data& gd,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Gather a leaf column from a hierarchy of list columns.
@@ -303,11 +302,10 @@ std::unique_ptr<column> gather_list_nested(
  *
  * @returns column with elements gathered based on `gather_data`
  */
-std::unique_ptr<column> gather_list_leaf(
-  column_view const& column,
-  gather_data const& gd,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> gather_list_leaf(column_view const& column,
+                                         gather_data const& gd,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::lists::segmented_gather(lists_column_view const& source_column,
@@ -317,13 +315,11 @@ std::unique_ptr<column> gather_list_leaf(
  *
  * @param stream CUDA stream on which to execute kernels
  */
-std::unique_ptr<column> segmented_gather(
-  lists_column_view const& source_column,
-  lists_column_view const& gather_map_list,
-  out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
-  // Move before bounds_policy?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         lists_column_view const& gather_map_list,
+                                         out_of_bounds_policy bounds_policy,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace lists

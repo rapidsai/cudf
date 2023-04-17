@@ -2,11 +2,13 @@
 
 from enum import Enum
 
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf.core.buffer import acquire_spill_lock, as_buffer
+
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -22,8 +24,6 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport mask_state, size_type
 from cudf._lib.utils cimport table_view_from_columns
 
-from cudf.core.buffer import as_buffer
-
 
 class MaskState(Enum):
     """
@@ -35,6 +35,7 @@ class MaskState(Enum):
     ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
 
 
+@acquire_spill_lock()
 def copy_bitmask(Column col):
     """
     Copies column's validity mask buffer into a new buffer, shifting by the
@@ -102,6 +103,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     return buf
 
 
+@acquire_spill_lock()
 def bitmask_and(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result
@@ -114,6 +116,7 @@ def bitmask_and(columns: list):
     return buf, c_result.second
 
 
+@acquire_spill_lock()
 def bitmask_or(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result

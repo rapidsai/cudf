@@ -1,6 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
+
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -26,6 +29,7 @@ cdef class Hashed_Vocabulary:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
 
 
+@acquire_spill_lock()
 def subword_tokenize_inmem_hash(
     Column strings,
     Hashed_Vocabulary hashed_vocabulary,

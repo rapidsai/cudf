@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -559,7 +559,7 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         string_view term{"]", 1};
-        bool const is_string = *pos == '\'' ? true : false;
+        bool const is_string = *pos == '\'';
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
@@ -570,9 +570,10 @@ class path_state : private parser {
               op.type          = path_operator_type::CHILD;
               op.expected_type = OBJECT;
             } else {
-              op.type  = path_operator_type::CHILD_INDEX;
-              op.index = cudf::io::parse_numeric<int>(
-                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts, -1);
+              op.type          = path_operator_type::CHILD_INDEX;
+              auto const value = cudf::io::parse_numeric<int>(
+                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts);
+              op.index = value.value_or(-1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
               op.expected_type = ARRAY;
             }
@@ -587,7 +588,7 @@ class path_state : private parser {
         return path_operator{path_operator_type::CHILD_WILDCARD};
       } break;
 
-      default: CUDF_FAIL("Unrecognized JSONPath operator"); break;
+      default: CUDF_FAIL("Unrecognized JSONPath operator", std::invalid_argument); break;
     }
     return {path_operator_type::ERROR};
   }
@@ -623,7 +624,8 @@ class path_state : private parser {
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONPath query string");
+    CUDF_EXPECTS(
+      name.size_bytes() > 0, "Invalid empty name in JSONPath query string", std::invalid_argument);
 
     return true;
   }
@@ -671,11 +673,10 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
   } while (op.type != path_operator_type::END);
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
-  return is_empty
-           ? std::pair(thrust::nullopt, 0)
-           : std::pair(
-               thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
-               max_stack_depth);
+  return is_empty ? std::pair(thrust::nullopt, 0)
+                  : std::pair(thrust::make_optional(cudf::detail::make_device_uvector_sync(
+                                h_operators, stream, rmm::mr::get_current_device_resource())),
+                              max_stack_depth);
 }
 
 #define PARSE_TRY(_x)                                                       \
@@ -968,6 +969,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
+
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
 
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(

@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -16,6 +18,7 @@ from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def _tokenize_scalar(Column strings, object py_delimiter):
 
     cdef DeviceScalar delimiter = py_delimiter.device_value
@@ -36,6 +39,7 @@ def _tokenize_scalar(Column strings, object py_delimiter):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def _tokenize_column(Column strings, Column delimiters):
     cdef column_view c_strings = strings.view()
     cdef column_view c_delimiters = delimiters.view()
@@ -52,6 +56,7 @@ def _tokenize_column(Column strings, Column delimiters):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def _count_tokens_scalar(Column strings, object py_delimiter):
 
     cdef DeviceScalar delimiter = py_delimiter.device_value
@@ -72,6 +77,7 @@ def _count_tokens_scalar(Column strings, object py_delimiter):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def _count_tokens_column(Column strings, Column delimiters):
     cdef column_view c_strings = strings.view()
     cdef column_view c_delimiters = delimiters.view()
@@ -88,6 +94,7 @@ def _count_tokens_column(Column strings, Column delimiters):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def character_tokenize(Column strings):
     cdef column_view c_strings = strings.view()
     cdef unique_ptr[column] c_result
@@ -99,6 +106,7 @@ def character_tokenize(Column strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def detokenize(Column strings, Column indices, object py_separator):
 
     cdef DeviceScalar separator = py_separator.device_value

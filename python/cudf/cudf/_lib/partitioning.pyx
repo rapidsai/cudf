@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -16,6 +18,7 @@ from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 cimport cudf._lib.cpp.types as libcudf_types
 
 
+@acquire_spill_lock()
 def partition(list source_columns, Column partition_map,
               object num_partitions):
 

@@ -40,7 +40,8 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
 {
   std::shared_ptr<arrow::Buffer> data_buffer;
   arrow::BufferBuilder buff_builder;
-  buff_builder.Append(data.data(), sizeof(T) * data.size());
+  CUDF_EXPECTS(buff_builder.Append(data.data(), sizeof(T) * data.size()).ok(),
+               "Failed to append values");
   CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
 
   std::shared_ptr<arrow::Buffer> mask_buffer =
@@ -190,9 +191,12 @@ template <typename T>
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
     if (validity.has_value() and not validity.value()[i]) {
-      decimal_builder.AppendNull();
+      CUDF_EXPECTS(decimal_builder.AppendNull().ok(), "Failed to append");
     } else {
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i));
+      CUDF_EXPECTS(
+        decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i))
+          .ok(),
+        "Failed to append");
     }
   }
 

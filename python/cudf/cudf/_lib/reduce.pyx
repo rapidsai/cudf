@@ -3,6 +3,7 @@
 from cython.operator import dereference
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
@@ -23,6 +24,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport dtype_to_data_type, is_decimal_type_id
 
 
+@acquire_spill_lock()
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
     Top level Cython reduce function wrapping libcudf reductions.
@@ -79,6 +81,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     return py_result.value
 
 
+@acquire_spill_lock()
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     Top level Cython scan function wrapping libcudf scans.
@@ -110,6 +113,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     return py_result
 
 
+@acquire_spill_lock()
 def minmax(Column incol):
     """
     Top level Cython minmax function wrapping libcudf minmax.

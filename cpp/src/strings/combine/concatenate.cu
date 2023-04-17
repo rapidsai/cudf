@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>

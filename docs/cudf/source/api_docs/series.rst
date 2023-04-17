@@ -31,6 +31,7 @@ Attributes
    Series.size
    Series.T
    Series.memory_usage
+   Series.hasnans
    Series.has_nulls
    Series.empty
    Series.name
@@ -101,7 +102,6 @@ Function application, GroupBy & window
    :toctree: api/
 
    Series.apply
-   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
@@ -165,6 +165,7 @@ Reindexing / selection / label manipulation
    Series.add_suffix
    Series.drop
    Series.drop_duplicates
+   Series.duplicated
    Series.equals
    Series.first
    Series.head
@@ -177,6 +178,7 @@ Reindexing / selection / label manipulation
    Series.take
    Series.tail
    Series.tile
+   Series.truncate
    Series.where
    Series.mask
 
@@ -367,6 +369,7 @@ Serialization / IO / conversion
 
    Series.to_arrow
    Series.to_cupy
+   Series.to_dict
    Series.to_dlpack
    Series.to_frame
    Series.to_hdf

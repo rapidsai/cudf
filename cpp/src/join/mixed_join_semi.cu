@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       // Anti and semi return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_ANTI_JOIN:
-        return get_trivial_left_join_indices(left_conditional, stream).first;
+        return get_trivial_left_join_indices(
+                 left_conditional, stream, rmm::mr::get_current_device_resource())
+          .first;
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
@@ -160,8 +162,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
@@ -193,7 +195,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(build, stream);
+    auto const [row_bitmask, _] =
+      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
@@ -398,8 +401,8 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
@@ -431,7 +434,8 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(build, stream);
+    auto const [row_bitmask, _] =
+      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,11 +49,8 @@ T get_value(column_view const& col_view, size_type element_index, rmm::cuda_stre
   CUDF_EXPECTS(element_index >= 0 && element_index < col_view.size(),
                "invalid element_index value");
   T result;
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&result,
-                                col_view.data<T>() + element_index,
-                                sizeof(T),
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    &result, col_view.data<T>() + element_index, sizeof(T), cudaMemcpyDefault, stream.value()));
   stream.synchronize();
   return result;
 }

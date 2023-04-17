@@ -18,6 +18,8 @@
 
 #include "gpuinflate.hpp"
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -30,14 +32,52 @@ namespace cudf::io::nvcomp {
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
 /**
- * @brief Whether the given compression type is enabled through nvCOMP.
+ * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
+ */
+struct feature_status_parameters {
+  int lib_major_version;
+  int lib_minor_version;
+  int lib_patch_version;
+  bool are_all_integrations_enabled;
+  bool are_stable_integrations_enabled;
+  int compute_capability_major;
+
+  feature_status_parameters();
+  feature_status_parameters(
+    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
+    : lib_major_version{major},
+      lib_minor_version{minor},
+      lib_patch_version{patch},
+      are_all_integrations_enabled{all_enabled},
+      are_stable_integrations_enabled{stable_enabled},
+      compute_capability_major{cc_major}
+  {
+  }
+};
+
+/**
+ * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
- * Result depends on nvCOMP version and environment variables.
+ * Result cab depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
- * @returns true if nvCOMP use is enabled; false otherwise
+ * @param params Optional parameters to query status with different configurations
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
-[[nodiscard]] bool is_compression_enabled(compression_type compression);
+[[nodiscard]] std::optional<std::string> is_compression_disabled(
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
+
+/**
+ * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
+ *
+ * Result can depend on nvCOMP version and environment variables.
+ *
+ * @param compression Compression type
+ * @param params Optional parameters to query status with different configurations
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
+ */
+[[nodiscard]] std::optional<std::string> is_decompression_disabled(
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
 
 /**
  * @brief Device batch decompression of given type.

@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from numba.np import numpy_support
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import as_buffer
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -34,6 +34,7 @@ from cudf._lib.utils cimport (
 )
 
 
+@acquire_spill_lock()
 def bools_to_mask(Column col):
     """
     Given an int8 (boolean) column, compress the data from booleans to bits and
@@ -52,6 +53,7 @@ def bools_to_mask(Column col):
     return buf
 
 
+@acquire_spill_lock()
 def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     """
     Given a mask buffer, returns a boolean column representng bit 0 -> False
@@ -60,7 +62,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
                         "cudf.core.buffer.Buffer")
-    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
+    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(
+        mask_buffer.get_ptr(mode="read")
+    )
 
     cdef unique_ptr[column] result
     with nogil:
@@ -71,6 +75,7 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     return Column.from_unique_ptr(move(result))
 
 
+@acquire_spill_lock()
 def nans_to_nulls(Column input):
     cdef column_view c_input = input.view()
     cdef pair[unique_ptr[device_buffer], size_type] c_output
@@ -83,11 +88,10 @@ def nans_to_nulls(Column input):
     if c_output.second == 0:
         return None
 
-    buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_buffer(buffer)
-    return buffer
+    return as_buffer(DeviceBuffer.c_from_unique_ptr(move(c_buffer)))
 
 
+@acquire_spill_lock()
 def transform(Column input, op):
     cdef column_view c_input = input.view()
     cdef string c_str
@@ -132,8 +136,10 @@ def table_encode(list source_columns):
     with nogil:
         c_result = move(libcudf_transform.encode(c_input))
 
-    return columns_from_unique_ptr(
-        move(c_result.first)), Column.from_unique_ptr(move(c_result.second))
+    return (
+        columns_from_unique_ptr(move(c_result.first)),
+        Column.from_unique_ptr(move(c_result.second))
+    )
 
 
 def one_hot_encode(Column input_column, Column categories):
@@ -146,7 +152,11 @@ def one_hot_encode(Column input_column, Column categories):
             libcudf_transform.one_hot_encode(c_view_input, c_view_categories)
         )
 
-    owner = Column.from_unique_ptr(move(c_result.first))
+    # Notice, the data pointer of `owner` has been exposed
+    # through `c_result.second` at this point.
+    owner = Column.from_unique_ptr(
+        move(c_result.first), data_ptr_exposed=True
+    )
 
     pylist_categories = categories.to_arrow().to_pylist()
     encodings, _ = data_from_table_view(
@@ -156,10 +166,10 @@ def one_hot_encode(Column input_column, Column categories):
             x if x is not None else 'null' for x in pylist_categories
         ]
     )
-
     return encodings
 
 
+@acquire_spill_lock()
 def compute_column(list columns, tuple column_names, expr: str):
     """Compute a new column by evaluating an expression on a set of columns.
 

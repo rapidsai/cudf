@@ -33,7 +33,7 @@ namespace cudf {
  * Stores output in a contiguous column, exposing the transposed table as
  * a `table_view`.
  *
- * @throw cudf::logic_error if column types are non-homogenous
+ * @throw cudf::logic_error if column types are non-homogeneous
  * @throw cudf::logic_error if column types are non-fixed-width
  *
  * @param[in] input A table (M cols x N rows) to be transposed

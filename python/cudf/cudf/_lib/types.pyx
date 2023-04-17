@@ -17,6 +17,8 @@ from cudf._lib.types cimport (
 
 import cudf
 
+size_type_dtype = np.dtype("int32")
+
 
 class TypeId(IntEnum):
     EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY

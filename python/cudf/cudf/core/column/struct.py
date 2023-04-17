@@ -1,5 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
+
+from functools import cached_property
 
 import pandas as pd
 import pyarrow as pa
@@ -65,6 +67,17 @@ class StructColumn(ColumnBase):
             pd_series.index = index
         return pd_series
 
+    @cached_property
+    def memory_usage(self):
+        n = 0
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
+
+        for child in self.children:
+            n += child.memory_usage
+
+        return n
+
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
         return {
@@ -82,7 +95,9 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result

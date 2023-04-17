@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -284,11 +284,12 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
   : _is_empty{build.num_rows() == 0},
-    _composite_bitmask{cudf::detail::bitmask_and(build, stream).first},
+    _composite_bitmask{
+      cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first},
     _nulls_equal{compare_nulls},
     _hash_table{compute_hash_table_size(build.num_rows()),
-                cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
+                cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
                 detail::hash_table_allocator_type{default_allocator<char>{}, stream}}
 {
@@ -298,9 +299,14 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                "Build column size is too big for hash join");
 
   // need to store off the owning structures for some of the views in _build
-  _flattened_build_table = structs::detail::flatten_nested_columns(
-    build, {}, {}, structs::detail::column_nullability::FORCE);
-  _build = _flattened_build_table;
+  _flattened_build_table =
+    structs::detail::flatten_nested_columns(build,
+                                            {},
+                                            {},
+                                            structs::detail::column_nullability::FORCE,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  _build = _flattened_build_table->flattened_columns();
 
   if (_is_empty) { return; }
 
@@ -356,9 +362,14 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   // Return directly if build table is empty
   if (_is_empty) { return 0; }
 
-  auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const flattened_probe_table = flattened_probe.flattened_columns();
+  auto flattened_probe =
+    structs::detail::flatten_nested_columns(probe,
+                                            {},
+                                            {},
+                                            structs::detail::column_nullability::FORCE,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  auto const flattened_probe_table = flattened_probe->flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
   auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
@@ -381,9 +392,14 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
-  auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const flattened_probe_table = flattened_probe.flattened_columns();
+  auto flattened_probe =
+    structs::detail::flatten_nested_columns(probe,
+                                            {},
+                                            {},
+                                            structs::detail::column_nullability::FORCE,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  auto const flattened_probe_table = flattened_probe->flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
   auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
@@ -407,9 +423,14 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   // Trivial left join case - exit early
   if (_is_empty) { return probe.num_rows(); }
 
-  auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const flattened_probe_table = flattened_probe.flattened_columns();
+  auto flattened_probe =
+    structs::detail::flatten_nested_columns(probe,
+                                            {},
+                                            {},
+                                            structs::detail::column_nullability::FORCE,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  auto const flattened_probe_table = flattened_probe->flattened_columns();
 
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
   auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
@@ -474,9 +495,14 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
 
-  auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const flattened_probe_table = flattened_probe.flattened_columns();
+  auto flattened_probe =
+    structs::detail::flatten_nested_columns(probe,
+                                            {},
+                                            {},
+                                            structs::detail::column_nullability::FORCE,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  auto const flattened_probe_table = flattened_probe->flattened_columns();
 
   CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),
                "Mismatch in number of columns to be joined on");

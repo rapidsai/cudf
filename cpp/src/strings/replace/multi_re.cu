@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <strings/regex/regex.cuh>
+#include <strings/regex/regex_program_impl.h>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -22,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -125,13 +127,12 @@ struct replace_multi_regex_fn {
 
 }  // namespace
 
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  std::vector<std::string> const& patterns,
-  strings_column_view const& replacements,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_re(strings_column_view const& input,
+                                   std::vector<std::string> const& patterns,
+                                   strings_column_view const& replacements,
+                                   regex_flags const flags,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
@@ -145,7 +146,8 @@ std::unique_ptr<column> replace_re(
     patterns.size());
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
-      return reprog_device::create(ptn, flags, capture_groups::NON_CAPTURE, stream);
+      auto h_prog = regex_program::create(ptn, flags, capture_groups::NON_CAPTURE);
+      return regex_device_builder::create_prog_device(*h_prog, stream);
     });
 
   // get the longest regex for the dispatcher
@@ -167,7 +169,8 @@ std::unique_ptr<column> replace_re(
                    prog->set_working_memory(d_buffer, size);
                    return *prog;
                  });
-  auto d_progs = cudf::detail::make_device_uvector_async(progs, stream);
+  auto d_progs =
+    cudf::detail::make_device_uvector_async(progs, stream, rmm::mr::get_current_device_resource());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);

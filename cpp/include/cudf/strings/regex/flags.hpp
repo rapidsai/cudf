@@ -21,7 +21,7 @@ namespace cudf {
 namespace strings {
 
 /**
- * @addtogroup strings_contains
+ * @addtogroup strings_regex
  * @{
  */
 

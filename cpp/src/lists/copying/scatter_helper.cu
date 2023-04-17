@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <thrust/binary_search.h>
@@ -185,7 +185,7 @@ struct list_child_constructor {
                                                       mr);
 
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(child_column->size()),
       child_column->mutable_view().begin<T>(),
@@ -237,7 +237,7 @@ struct list_child_constructor {
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(string_views.size()),
       string_views.begin(),
@@ -304,7 +304,7 @@ struct list_child_constructor {
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
     // child list_device_view instances.
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(child_list_views.size()),
       child_list_views.begin(),
@@ -338,8 +338,8 @@ struct list_child_constructor {
     auto begin = thrust::make_transform_iterator(
       child_list_views.begin(), [] __device__(auto const& row) { return row.size(); });
 
-    auto child_offsets = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + child_list_views.size(), stream, mr);
+    auto child_offsets = std::get<0>(
+      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr));
 
     auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
       source_lists_column_view.child().child(1).type(),

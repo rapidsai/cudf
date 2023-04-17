@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,16 +21,12 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
 
-if PANDAS_GE_120:
-    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
-else:
-    _guess_datetime_format = pd.core.tools.datetimes._guess_datetime_format
+_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -261,6 +257,11 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif isinstance(other, str):
+            try:
+                return cudf.Scalar(other, dtype=self.dtype)
+            except ValueError:
+                pass
 
         return NotImplemented
 

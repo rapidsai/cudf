@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -170,6 +170,10 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
+    if (options_.get_quoting() == cudf::io::quote_style::NONE) {
+      return std::make_unique<column>(column_v, stream_, mr_);
+    }
+
     // handle special characters: {delimiter, '\n', "} in row:
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
 
@@ -364,8 +368,11 @@ void write_chunked(data_sink* out_sink,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   cudf::string_scalar newline{options.get_line_terminator()};
-  auto p_str_col_w_nl =
-    cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
+  auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
+                                                            newline,
+                                                            string_scalar("", false),
+                                                            stream,
+                                                            rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
@@ -380,7 +387,7 @@ void write_chunked(data_sink* out_sink,
     CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
                                   ptr_all_bytes,
                                   total_num_bytes * sizeof(char),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -470,9 +477,11 @@ void write_csv(data_sink* out_sink,
                                                     delimiter_str,
                                                     options.get_na_rep(),
                                                     strings::separator_on_nulls::YES,
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
         cudf::string_scalar narep{options.get_na_rep()};
-        return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
+        return cudf::strings::detail::replace_nulls(
+          str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
       }();
 
       write_chunked(out_sink, str_concat_col->view(), options, stream, mr);

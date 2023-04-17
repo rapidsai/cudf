@@ -53,7 +53,7 @@ auto to_string(T value) -> std::string
   } else {
     return std::to_string(value);
   }
-  return std::string{};  // won't ever hit here, need to supress warning though
+  return std::string{};  // won't ever hit here, need to suppress warning though
 }
 
 template <typename T>

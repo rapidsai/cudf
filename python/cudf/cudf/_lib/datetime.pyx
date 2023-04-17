@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -12,6 +14,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def add_months(Column col, Column months):
     # months must be int16 dtype
     cdef unique_ptr[column] c_result
@@ -29,6 +32,7 @@ def add_months(Column col, Column months):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def extract_datetime_component(Column col, object field):
 
     cdef unique_ptr[column] c_result
@@ -99,6 +103,7 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     return freq_val
 
 
+@acquire_spill_lock()
 def ceil_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
@@ -112,6 +117,7 @@ def ceil_datetime(Column col, object freq):
     return result
 
 
+@acquire_spill_lock()
 def floor_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
@@ -125,6 +131,7 @@ def floor_datetime(Column col, object freq):
     return result
 
 
+@acquire_spill_lock()
 def round_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
@@ -138,6 +145,7 @@ def round_datetime(Column col, object freq):
     return result
 
 
+@acquire_spill_lock()
 def is_leap_year(Column col):
     """Returns a boolean indicator whether the year of the date is a leap year
     """
@@ -150,6 +158,7 @@ def is_leap_year(Column col):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def date_range(DeviceScalar start, size_type n, offset):
     cdef unique_ptr[column] c_result
     cdef size_type months = (
@@ -166,6 +175,7 @@ def date_range(DeviceScalar start, size_type n, offset):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def extract_quarter(Column col):
     """
     Returns a column which contains the corresponding quarter of the year
@@ -180,6 +190,7 @@ def extract_quarter(Column col):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def days_in_month(Column col):
     """Extracts the number of days in the month of the date
     """
@@ -192,6 +203,7 @@ def days_in_month(Column col):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def last_day_of_month(Column col):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()

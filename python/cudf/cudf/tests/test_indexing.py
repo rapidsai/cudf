@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from itertools import combinations
 
@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -451,10 +450,6 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -475,11 +470,11 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc["2001-01-02":"2001-01-05"],
         gs.loc["2001-01-02":"2001-01-05"],
-        **kwargs,
+        check_freq=False,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
-    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], check_freq=False)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], check_freq=False)
+    assert_eq(ps.loc[::2], gs.loc[::2], check_freq=False)
 
     assert_eq(
         ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
@@ -505,13 +500,15 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
-        **kwargs,
+        check_freq=False,
     )
 
     just_less_than_max = ps.index.max() - pd.Timedelta("5m")
 
     assert_eq(
-        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
+        ps.loc[:just_less_than_max],
+        gs.loc[:just_less_than_max],
+        check_freq=False,
     )
 
 
@@ -988,9 +985,6 @@ def test_series_setitem_iloc(key, value, nulls):
         pytest.param(
             0,
             0.5,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/9913"
-            ),
         ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
@@ -1015,10 +1009,6 @@ def test_series_setitem_datetime():
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="Pandas will coerce to object datatype here",
-)
 def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)
@@ -1217,32 +1207,26 @@ def test_out_of_bounds_indexing():
     assert_exceptions_equal(
         lambda: psr[[0, 1, 9]],
         lambda: gsr[[0, 1, 9]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[[0, 1, -4]],
         lambda: gsr[[0, 1, -4]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, 9], 2),
         lambda: gsr.__setitem__([0, 1, 9], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, -4], 2),
         lambda: gsr.__setitem__([0, 1, -4], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(-1, 2),
         lambda: gsr[4:6].iloc.__setitem__(-1, 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(1, 2),
         lambda: gsr[4:6].iloc.__setitem__(1, 2),
-        compare_error_message=False,
     )
 
 
@@ -1276,7 +1260,7 @@ def test_iloc_categorical_index(index):
         slice("2001", "2002"),
         slice("2002", "2001"),
         slice(None, "2020"),
-        slice("2020", None),
+        slice("2001", None),
     ],
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
@@ -1462,6 +1446,8 @@ def test_loc_zero_dim_array():
                 reason="https://github.com/pandas-dev/pandas/issues/46704"
             ),
         ),
+        1,
+        2,
     ],
 )
 def test_loc_series_multiindex(arg):
@@ -1682,10 +1668,6 @@ def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
                 [(slice(None, None, None), ["a", "b"]), array],
                 {},
             ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
         )
 
 

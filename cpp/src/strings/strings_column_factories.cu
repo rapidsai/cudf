@@ -56,13 +56,12 @@ std::unique_ptr<column> make_strings_column(
   return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
 }
 
-std::unique_ptr<column> make_strings_column(
-  device_span<char> chars,
-  device_span<size_type> offsets,
-  size_type null_count,
-  rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> make_strings_column(device_span<char> chars,
+                                            device_span<size_type> offsets,
+                                            size_type null_count,
+                                            rmm::device_buffer&& null_mask,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 

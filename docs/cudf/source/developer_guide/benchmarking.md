@@ -212,7 +212,7 @@ Since most cuDF benchmarks can be run with the same relatively small set of obje
 our benchmarks generate the Cartesian product of possible fixtures and then create all possible unions.
 
 This feature is critical to the design of our benchmarks.
-For each of the relevant parameter combinations (size, nullability, etc) we programatically generate a new fixture.
+For each of the relevant parameter combinations (size, nullability, etc) we programmatically generate a new fixture.
 The resulting fixtures are unambiguously named according to the following scheme:
 `{classname}_dtype_{dtype}[_nulls_{true|false}][[_cols_{num_cols}]_rows_{num_rows}]`.
 If a fixture name does not contain a particular component, it represents a union of all values of that component.

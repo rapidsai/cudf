@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,14 @@ enum class binary_operator : int32_t {
   MUL,          ///< operator *
   DIV,          ///< operator / using common type of lhs and rhs
   TRUE_DIV,     ///< operator / after promoting type to floating point
-  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
-                ///< flooring the result
+  FLOOR_DIV,    ///< operator //
+                ///< integer division rounding towards negative
+                ///< infinity if both arguments are integral;
+                ///< floor division for floating types (using C++ type
+                ///< promotion for mixed integral/floating arguments)
+                ///< If different promotion semantics are required, it
+                ///< is the responsibility of the caller to promote
+                ///< manually before calling in to this function.
   MOD,          ///< operator %
   PMOD,         ///< positive modulo operator
                 ///< If remainder is negative, this returns (remainder + divisor) % divisor
@@ -102,6 +108,7 @@ enum class binary_operator : int32_t {
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -130,6 +137,7 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -157,6 +165,7 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
