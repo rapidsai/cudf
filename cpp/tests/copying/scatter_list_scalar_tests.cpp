@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,7 @@
 using mask_vector = std::vector<cudf::valid_type>;
 using size_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
-class ScatterListScalarTests : public cudf::test::BaseFixture {
-};
+class ScatterListScalarTests : public cudf::test::BaseFixture {};
 
 std::unique_ptr<cudf::column> single_scalar_scatter(cudf::column_view const& target,
                                                     cudf::scalar const& slr,
@@ -40,8 +39,7 @@ std::unique_ptr<cudf::column> single_scalar_scatter(cudf::column_view const& tar
 }
 
 template <typename T>
-class ScatterListOfFixedWidthScalarTest : public ScatterListScalarTests {
-};
+class ScatterListOfFixedWidthScalarTest : public ScatterListScalarTests {};
 
 TYPED_TEST_SUITE(ScatterListOfFixedWidthScalarTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -117,8 +115,7 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullableTargetRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
-class ScatterListOfStringScalarTest : public ScatterListScalarTests {
-};
+class ScatterListOfStringScalarTest : public ScatterListScalarTests {};
 
 TEST_F(ScatterListOfStringScalarTest, Basic)
 {
@@ -205,8 +202,7 @@ TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
 }
 
 template <typename T>
-class ScatterListOfListScalarTest : public ScatterListScalarTests {
-};
+class ScatterListOfListScalarTest : public ScatterListScalarTests {};
 
 TYPED_TEST_SUITE(ScatterListOfListScalarTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 

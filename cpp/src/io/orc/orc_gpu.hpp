@@ -141,7 +141,7 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t* dict_index;              // dictionary index from row index
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };
@@ -180,9 +180,9 @@ struct DictionaryChunk {
   uint32_t num_rows;     // num rows in this chunk
   uint32_t num_strings;  // number of strings in this chunk
   uint32_t
-    string_char_count;  // total size of string data (NOTE: assumes less than 4G bytes per chunk)
-  uint32_t num_dict_strings;  // number of strings in dictionary
-  uint32_t dict_char_count;   // size of dictionary string data for this chunk
+    string_char_count;   // total size of string data (NOTE: assumes less than 4G bytes per chunk)
+  uint32_t num_dict_strings;                  // number of strings in dictionary
+  uint32_t dict_char_count;                   // size of dictionary string data for this chunk
 
   orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
