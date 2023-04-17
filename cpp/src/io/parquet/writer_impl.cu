@@ -1384,6 +1384,36 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
+void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
+                     table_view const& input)
+{
+  // Fill unnamed columns' names in table_meta
+  std::function<void(column_in_metadata&, std::string)> add_default_name =
+    [&](column_in_metadata& col_meta, std::string default_name) {
+      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
+      for (size_type i = 0; i < col_meta.num_children(); ++i) {
+        add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
+      }
+    };
+  for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
+    add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
+  }
+}
+
+/**
+ * @brief TODO
+ * @return
+ */
+std::tuple<int, int> convert_table_to_parquet_data(
+  table_view const& input,
+  table_input_metadata const& table_meta,
+  bool single_write_mode,
+  //                                                   data_sink const& out_sink,
+  rmm::cuda_stream_view stream)
+{
+  return {0, 0};
+}
+
 }  // namespace
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
@@ -1452,26 +1482,42 @@ void writer::impl::init_state()
   std::fill_n(_current_chunk_offset.begin(), _current_chunk_offset.size(), sizeof(file_header_s));
 }
 
-void writer::impl::write(table_view const& table, std::vector<partition_info> const& partitions)
+void writer::impl::write(table_view const& input, std::vector<partition_info> const& partitions)
 {
   _last_write_successful = false;
   CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
-  if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(table); }
+  if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
+  fill_table_meta(_table_meta, input);
 
-  // Fill unnamed columns' names in table_meta
-  std::function<void(column_in_metadata&, std::string)> add_default_name =
-    [&](column_in_metadata& col_meta, std::string default_name) {
-      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
-      for (size_type i = 0; i < col_meta.num_children(); ++i) {
-        add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
-      }
-    };
-  for (size_t i = 0; i < _table_meta->column_metadata.size(); ++i) {
-    add_default_name(_table_meta->column_metadata[i], "_col" + std::to_string(i));
-  }
+  // All kinds of memory allocation and data compressions/encoding are performed here.
+  // If any error occurs, such as out-of-memory exception, the internal state of the current writer
+  // is still intact.
+  // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
+  // writing anything to it.
+  [[maybe_unused]] auto [x, y] = [&] {
+    try {
+      return convert_table_to_parquet_data(input, *_table_meta, _single_write_mode, _stream);
+    } catch (...) {  // catch any exception type
+      CUDF_LOG_ERROR(
+        "Parquet writer encountered exception during processing. "
+        "No data has been written to the sink.");
+      throw;  // this throws the same exception
+    }
+  }();
 
-  auto vec = table_to_linked_columns(table);
+  // Compression/encoding were all successful. Now write the intermediate results.
+  write_parquet_data_to_sink();
+
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  auto vec = table_to_linked_columns(input);
   auto schema_tree =
     construct_schema_tree(vec, *_table_meta, _single_write_mode, _int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
@@ -1524,7 +1570,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
 
-  if (table.num_rows() > 0 && not _max_page_fragment_size.has_value()) {
+  if (input.num_rows() > 0 && not _max_page_fragment_size.has_value()) {
     std::vector<size_t> column_sizes;
     std::transform(single_streams_table.begin(),
                    single_streams_table.end(),
@@ -1533,7 +1579,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
     // adjust global fragment size if a single fragment will overrun a rowgroup
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
-    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, table.num_rows());
+    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, input.num_rows());
     if (avg_row_len > 0) {
       auto const rg_frag_size = util::div_rounding_up_safe(_max_row_group_size, avg_row_len);
       max_page_fragment_size  = std::min<size_type>(rg_frag_size, max_page_fragment_size);
@@ -1547,7 +1593,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     auto frag_size_fn = [&](auto const& col, size_type col_size) {
       const int target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
       auto const avg_len =
-        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
+        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
       if (avg_len > 0) {
         auto const frag_size = util::div_rounding_up_safe<size_type>(_max_page_size_bytes, avg_len);
         return std::min<size_type>(max_page_fragment_size, frag_size);
@@ -2061,6 +2107,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   _last_write_successful = true;
 }
+
+void writer::impl::write_parquet_data_to_sink() {}
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   std::vector<std::string> const& column_chunks_file_path)

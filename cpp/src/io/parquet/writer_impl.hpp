@@ -116,6 +116,22 @@ class writer::impl {
     std::vector<std::string> const& column_chunks_file_path = {});
 
  private:
+  /**
+   * @brief Write the intermediate Parquet data into the data sink.
+   *
+   */
+  void write_parquet_data_to_sink();
+  //  orc_streams& streams,
+  //                                  hostdevice_vector<compression_result> const& comp_results,
+  //                                  hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
+  //                                  encoded_data const& enc_data,
+  //                                  file_segmentation const& segmentation,
+  //                                  std::vector<StripeInformation>& stripes,
+  //                                  orc_table_view const& orc_table,
+  //                                  rmm::device_buffer const& compressed_data,
+  //                                  intermediate_statistics& intermediate_stats,
+  //                                  uint8_t* stream_output);
+
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;
 
