@@ -116,7 +116,7 @@ def _find_ambiguous_and_nonexistent(
 
     # At the start of the non-existent time period, Clock 2 reads less
     # than Clock 1 (which has been turned forward):
-    cond = clock_2 > clock_1
+    cond = clock_1 > clock_2
     nonexistent_begin = clock_2.apply_boolean_mask(cond)
 
     # The end of the non-existent time period is what Clock 1 reads
