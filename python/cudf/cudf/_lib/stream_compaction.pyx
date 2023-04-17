@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -149,7 +149,6 @@ def stable_distinct(list columns,
     )
 
     cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef table_view keys_view = source_table_view.select(cpp_keys)
 
     cdef unique_ptr[table] c_result
 
