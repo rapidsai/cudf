@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,16 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
+namespace cudf {
+// To print meanvar for debug.
+// Needs to be in the cudf namespace for ADL
+template <typename T>
+std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
+{
+  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
+};
+}  // namespace cudf
+
 template <typename T>
 struct NumericOptionalIteratorTest : public IteratorTest<T> {
 };
@@ -34,13 +44,6 @@ TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
   nonull_optional_iterator(*this);
 }
 TYPED_TEST(NumericOptionalIteratorTest, null_optional_iterator) { null_optional_iterator(*this); }
-
-// to print meanvar for debug.
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
 
 // Transformers and Operators for optional_iterator test
 template <typename ElementType>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,11 @@ namespace test {
 // Types -----------------------------------------
 using ::testing::Types;
 
+template <typename T>
+struct at_type {
+  using type = T;
+};
+
 // @cond
 template <class T, int D>
 struct GetTypeImpl {
@@ -90,14 +95,19 @@ template <class... T, int D>
 struct GetTypeImpl<Types<T...>, D> {
   static_assert(D < sizeof...(T), "Out of bounds");
 
-  using type = typename GetTypeImpl<typename Types<T...>::Tail, D - 1>::type;
+  using type = decltype(std::get<D>(std::declval<std::tuple<T...>>()));
 };
-
-template <class... ARGS>
-struct GetTypeImpl<Types<ARGS...>, 0> {
-  static_assert(sizeof...(ARGS) > 0, "Out of bounds");
-
-  using type = typename Types<ARGS...>::Head;
+template <class T, class U, class V, class... ARGS>
+struct GetTypeImpl<Types<T, U, V, ARGS...>, 2> {
+  using type = V;
+};
+template <class T, class U, class... ARGS>
+struct GetTypeImpl<Types<T, U, ARGS...>, 1> {
+  using type = U;
+};
+template <class T, class... ARGS>
+struct GetTypeImpl<Types<T, ARGS...>, 0> {
+  using type = T;
 };
 // @endcond
 
