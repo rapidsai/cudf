@@ -66,8 +66,9 @@ range_window_bounds::range_window_bounds(extent extent_, std::unique_ptr<scalar>
   : _extent{extent_}, _range_scalar{std::move(range_scalar_)}
 {
   CUDF_EXPECTS(_range_scalar.get(), "Range window scalar cannot be null.");
-  CUDF_EXPECTS(_extent == extent::UNBOUNDED || _extent == extent::CURRENT_ROW || _range_scalar->is_valid(),
-               "Bounded Range window scalar must be valid.");
+  CUDF_EXPECTS(
+    _extent == extent::UNBOUNDED || _extent == extent::CURRENT_ROW || _range_scalar->is_valid(),
+    "Bounded Range window scalar must be valid.");
 }
 
 range_window_bounds range_window_bounds::unbounded(data_type type)

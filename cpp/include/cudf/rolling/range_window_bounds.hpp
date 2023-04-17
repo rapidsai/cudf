@@ -37,15 +37,14 @@ namespace cudf {
  */
 struct range_window_bounds {
  public:
-
   /**
    * The type of range_window_bounds.
    */
   enum class extent : int32_t {
-    CURRENT_ROW = 0, /// Bounds defined as the first/last row that matches the current row.
-    BOUNDED,         /// Bounds defined as the first/last row that falls within
-                     /// a specified range from the current row
-    UNBOUNDED        /// Bounds stretching to the first/last row in the entire group.
+    CURRENT_ROW = 0,  /// Bounds defined as the first/last row that matches the current row.
+    BOUNDED,          /// Bounds defined as the first/last row that falls within
+                      /// a specified range from the current row
+    UNBOUNDED         /// Bounds stretching to the first/last row in the entire group.
   };
 
   /**
@@ -100,7 +99,7 @@ struct range_window_bounds {
   range_window_bounds() = default;  // Required for use as return types from dispatch functors.
 
  private:
-  const extent _extent {extent::UNBOUNDED};
+  const extent _extent{extent::UNBOUNDED};
   std::shared_ptr<scalar> _range_scalar{nullptr};  // To enable copy construction/assignment.
 
   range_window_bounds(extent extent_, std::unique_ptr<scalar> range_scalar_);

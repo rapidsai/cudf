@@ -281,8 +281,7 @@ __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
 {
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
-  }
-  else {
+  } else {
     return subtract_safe(orderby_iter[idx], delta);
   }
 }
@@ -298,8 +297,7 @@ __device__ ElementT compute_highest_in_window(ElementIter orderby_iter,
 {
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
-  }
-  else {
+  } else {
     return add_safe(orderby_iter[idx], delta);
   }
 }
@@ -889,12 +887,10 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   auto [preceding_value, following_value] = [&] {
     if constexpr (std::is_same_v<OrderByT, cudf::string_view>) {
       return std::pair{cudf::string_view{}, cudf::string_view{}};
-    }
-    else {
+    } else {
       return std::pair{
-          detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream),
-          detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream)
-      };
+        detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream),
+        detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream)};
     }
   }();
 
