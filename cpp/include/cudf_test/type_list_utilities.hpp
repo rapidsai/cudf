@@ -79,11 +79,6 @@ namespace test {
 // Types -----------------------------------------
 using ::testing::Types;
 
-template <typename T>
-struct at_type {
-  using type = T;
-};
-
 // @cond
 template <class T, int D>
 struct GetTypeImpl {
