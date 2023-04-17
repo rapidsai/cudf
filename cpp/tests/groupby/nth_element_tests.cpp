@@ -27,8 +27,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_nth_element_test : public cudf::test::BaseFixture {
-};
+struct groupby_nth_element_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_nth_element_test, cudf::test::AllTypes);
 
@@ -364,8 +363,7 @@ TEST_F(groupby_nth_element_string_test, dictionary)
 }
 
 template <typename T>
-struct groupby_nth_element_lists_test : cudf::test::BaseFixture {
-};
+struct groupby_nth_element_lists_test : cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_nth_element_lists_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -409,8 +407,7 @@ TYPED_TEST(groupby_nth_element_lists_test, EmptyInput)
                   cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(2));
 }
 
-struct groupby_nth_element_structs_test : cudf::test::BaseFixture {
-};
+struct groupby_nth_element_structs_test : cudf::test::BaseFixture {};
 
 TEST_F(groupby_nth_element_structs_test, Basics)
 {

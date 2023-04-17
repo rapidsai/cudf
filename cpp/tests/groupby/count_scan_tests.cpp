@@ -126,8 +126,7 @@ TYPED_TEST(groupby_count_scan_test, null_keys_and_values)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
-struct groupby_count_scan_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_count_scan_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_count_scan_string_test, basic)
 {
@@ -148,8 +147,7 @@ TEST_F(groupby_count_scan_string_test, basic)
 }
 
 template <typename T>
-struct GroupByCountScanFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupByCountScanFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByCountScanFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -183,8 +181,7 @@ TYPED_TEST(GroupByCountScanFixedPointTest, GroupByCountScan)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
-struct groupby_dictionary_count_scan_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_count_scan_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_count_scan_test, basic)
 {

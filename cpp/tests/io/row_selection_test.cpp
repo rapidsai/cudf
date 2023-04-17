@@ -24,8 +24,7 @@
 using cudf::io::detail::skip_rows_num_rows_from_options;
 
 // Base test fixture for tests
-struct FromOptsTest : public cudf::test::BaseFixture {
-};
+struct FromOptsTest : public cudf::test::BaseFixture {};
 
 TEST_F(FromOptsTest, PassThrough)
 {

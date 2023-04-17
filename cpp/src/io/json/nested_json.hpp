@@ -76,10 +76,10 @@ struct json_column {
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
 
-  json_column()                    = default;
-  json_column(json_column&& other) = default;
-  json_column& operator=(json_column&&) = default;
-  json_column(const json_column&)       = delete;
+  json_column()                              = default;
+  json_column(json_column&& other)           = default;
+  json_column& operator=(json_column&&)      = default;
+  json_column(const json_column&)            = delete;
   json_column& operator=(const json_column&) = delete;
 
   /**

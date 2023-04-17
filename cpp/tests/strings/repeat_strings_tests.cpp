@@ -33,12 +33,10 @@ constexpr int32_t null{0};  // mark for null elements in a column of int32_t val
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
 }  // namespace
 
-struct RepeatStringsTest : public cudf::test::BaseFixture {
-};
+struct RepeatStringsTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RepeatStringsTypedTest : public cudf::test::BaseFixture {
-};
+struct RepeatStringsTypedTest : public cudf::test::BaseFixture {};
 
 // Test for signed types only, as we will need to use non-positive values.
 using TypesForTest = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
@@ -369,15 +367,15 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 TYPED_TEST(RepeatStringsTypedTest, StringsColumnWithNullsWithScalarRepeatTimes)
 {
   auto const strs    = strs_col{{"0a0b0c",
-                              "" /*NULL*/,
-                              "abcxyz",
-                              "" /*NULL*/,
-                              "xyzééé",
-                              "" /*NULL*/,
-                              "ááá",
-                              "íí",
-                              "",
-                              "Hello World"},
+                                 "" /*NULL*/,
+                                 "abcxyz",
+                                 "" /*NULL*/,
+                                 "xyzééé",
+                                 "" /*NULL*/,
+                                 "ááá",
+                                 "íí",
+                                 "",
+                                 "Hello World"},
                              nulls_at({1, 3, 5})};
   auto const strs_cv = cudf::strings_column_view(strs);
 
@@ -421,15 +419,15 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnWithNullsWithColumnRepeatTimes)
   using ints_col = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const strs    = strs_col{{"0a0b0c",
-                              "" /*NULL*/,
-                              "abcxyz",
-                              "" /*NULL*/,
-                              "xyzééé",
-                              "" /*NULL*/,
-                              "ááá",
-                              "íí",
-                              "",
-                              "Hello World"},
+                                 "" /*NULL*/,
+                                 "abcxyz",
+                                 "" /*NULL*/,
+                                 "xyzééé",
+                                 "" /*NULL*/,
+                                 "ááá",
+                                 "íí",
+                                 "",
+                                 "Hello World"},
                              nulls_at({1, 3, 5})};
   auto const strs_cv = cudf::strings_column_view(strs);
 
@@ -558,7 +556,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
     auto const sliced_rtimes  = cudf::slice(repeat_times, {2, 7})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{
-      {"" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "áááááá"}, nulls_at({0, 1, 2, 3})};
+       {"" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "áááááá"}, nulls_at({0, 1, 2, 3})};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);

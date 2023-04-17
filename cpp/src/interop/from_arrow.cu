@@ -292,7 +292,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }
@@ -391,7 +392,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }

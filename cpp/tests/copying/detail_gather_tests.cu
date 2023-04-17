@@ -36,8 +36,7 @@
 #include <thrust/sequence.h>
 
 template <typename T>
-class GatherTest : public cudf::test::BaseFixture {
-};
+class GatherTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 

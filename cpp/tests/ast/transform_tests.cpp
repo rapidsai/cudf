@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,7 @@ using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct TransformTest : public cudf::test::BaseFixture {
-};
+struct TransformTest : public cudf::test::BaseFixture {};
 
 TEST_F(TransformTest, ColumnReference)
 {
@@ -603,9 +602,9 @@ TEST_F(TransformTest, BasicAdditionLargeNulls)
 TEST_F(TransformTest, NullLogicalAnd)
 {
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
-                                  {1, 1, 1, 1, 1, 0, 0, 0}};
+                                    {1, 1, 1, 1, 1, 0, 0, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
-                                  {1, 1, 1, 1, 0, 1, 1, 0}};
+                                    {1, 1, 1, 1, 0, 1, 1, 0}};
   auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);
@@ -623,9 +622,9 @@ TEST_F(TransformTest, NullLogicalAnd)
 TEST_F(TransformTest, NullLogicalOr)
 {
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
-                                  {1, 1, 1, 1, 1, 0, 1, 0}};
+                                    {1, 1, 1, 1, 1, 0, 1, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
-                                  {1, 1, 1, 1, 0, 1, 0, 0}};
+                                    {1, 1, 1, 1, 0, 1, 0, 0}};
   auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);
