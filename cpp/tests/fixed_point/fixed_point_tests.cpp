@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,10 @@
 
 using namespace numeric;
 
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
 

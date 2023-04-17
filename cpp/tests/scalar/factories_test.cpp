@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,8 +121,7 @@ TYPED_TEST(DefaultScalarFactory, TypeCast)
 }
 
 template <typename T>
-struct FixedWidthScalarFactory : public ScalarFactoryTest {
-};
+struct FixedWidthScalarFactory : public ScalarFactoryTest {};
 
 TYPED_TEST_SUITE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -142,8 +141,7 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 }
 
 template <typename T>
-struct FixedPointScalarFactory : public ScalarFactoryTest {
-};
+struct FixedPointScalarFactory : public ScalarFactoryTest {};
 
 TYPED_TEST_SUITE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
 
@@ -164,8 +162,7 @@ TYPED_TEST(FixedPointScalarFactory, ValueProvided)
   EXPECT_TRUE(s->is_valid());
 }
 
-struct StructScalarFactory : public ScalarFactoryTest {
-};
+struct StructScalarFactory : public ScalarFactoryTest {};
 
 TEST_F(StructScalarFactory, Basic)
 {

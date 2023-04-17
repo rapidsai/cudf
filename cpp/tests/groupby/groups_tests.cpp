@@ -52,12 +52,10 @@ void test_groups(cudf::column_view const& keys,
   }
 }
 
-struct groupby_group_keys_test : public cudf::test::BaseFixture {
-};
+struct groupby_group_keys_test : public cudf::test::BaseFixture {};
 
 template <typename V>
-struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {
-};
+struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_group_keys_and_values_test, cudf::test::NumericTypes);
 

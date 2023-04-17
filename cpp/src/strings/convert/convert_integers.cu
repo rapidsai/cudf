@@ -76,7 +76,7 @@ struct string_to_integer_check_fn {
       auto const digit       = static_cast<IntegerType>(chr - '0');
       auto const bound_check = (bound_val - sign * digit) / IntegerType{10} * sign;
       if (value > bound_check) return false;
-      value = value * IntegerType{10} + digit;
+      value = value* IntegerType{10} + digit;
     }
 
     return true;
