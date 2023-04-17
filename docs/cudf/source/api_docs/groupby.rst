@@ -42,7 +42,6 @@ Computations / descriptive stats
    :toctree: api/
 
    GroupBy.bfill
-   GroupBy.backfill
    GroupBy.count
    GroupBy.cumcount
    GroupBy.cummax
@@ -63,7 +62,6 @@ Computations / descriptive stats
    GroupBy.ngroup
    GroupBy.nth
    GroupBy.nunique
-   GroupBy.pad
    GroupBy.prod
    GroupBy.shift
    GroupBy.size

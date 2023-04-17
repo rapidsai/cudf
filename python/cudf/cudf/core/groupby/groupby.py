@@ -1945,28 +1945,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
-    def pad(self, limit=None):
-        """Forward fill NA values.
-
-        .. deprecated:: 23.06
-           `pad` is deprecated, use `ffill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        warnings.warn(
-            "pad is deprecated and will be removed in a future version. "
-            "Use ffill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("ffill", limit)
-
     def ffill(self, limit=None):
         """Forward fill NA values.
 
@@ -1980,27 +1958,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError("Does not support limit param yet.")
 
         return self._scan_fill("ffill", limit)
-
-    def backfill(self, limit=None):
-        """Backward fill NA values.
-
-        .. deprecated:: 23.06
-           `backfill` is deprecated, use `bfill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        warnings.warn(
-            "backfill is deprecated and will be removed in a future version. "
-            "Use bfill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("bfill", limit)
 
     def bfill(self, limit=None):
         """Backward fill NA values.
@@ -2030,11 +1987,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         value : scalar, dict
             Value to use to fill the holes. Cannot be specified with method.
-        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        method : { 'bfill', 'ffill', None}, default None
             Method to use for filling holes in reindexed Series
 
-            - pad/ffill: propagate last valid observation forward to next valid
-            - backfill/bfill: use next valid observation to fill gap
+            - ffill: propagate last valid observation forward to next valid
+            - bfill: use next valid observation to fill gap
         axis : {0 or 'index', 1 or 'columns'}
             Unsupported
         inplace : bool, default False
@@ -2064,11 +2021,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
         if method is not None:
-            if method not in {"pad", "ffill", "backfill", "bfill"}:
-                raise ValueError(
-                    "Method can only be of 'pad', 'ffill',"
-                    "'backfill', 'bfill'."
-                )
+            if method not in {"ffill", "bfill"}:
+                raise ValueError("Method can only be of 'ffill', 'bfill'.")
             return getattr(self, method, limit)()
 
         values = self.obj.__class__._from_data(
