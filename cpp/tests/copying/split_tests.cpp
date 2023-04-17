@@ -162,8 +162,7 @@ std::vector<cudf::table> create_expected_string_tables_for_splits(
 }
 
 template <typename T>
-struct SplitTest : public cudf::test::BaseFixture {
-};
+struct SplitTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SplitTest, cudf::test::NumericTypes);
 
@@ -304,8 +303,7 @@ TYPED_TEST(SplitTest, LongColumn)
     false);
 }
 
-struct SplitStringTest : public SplitTest<std::string> {
-};
+struct SplitStringTest : public SplitTest<std::string> {};
 
 TEST_F(SplitStringTest, StringWithInvalids)
 {
@@ -328,8 +326,7 @@ TEST_F(SplitStringTest, StringWithInvalids)
   }
 }
 
-struct SplitCornerCases : public SplitTest<int8_t> {
-};
+struct SplitCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(SplitCornerCases, EmptyColumn)
 {
@@ -552,8 +549,7 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
 
 // regular splits
 template <typename T>
-struct SplitTableTest : public cudf::test::BaseFixture {
-};
+struct SplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(SplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTableTest, SplitEndLessThanSize)
@@ -578,8 +574,7 @@ TYPED_TEST(SplitTableTest, SplitEndToSize)
     });
 }
 
-struct SplitTableCornerCases : public SplitTest<int8_t> {
-};
+struct SplitTableCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(SplitTableCornerCases, EmptyTable)
 {
@@ -726,8 +721,7 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 }
 
 // split with strings
-struct SplitStringTableTest : public SplitTest<std::string> {
-};
+struct SplitStringTableTest : public SplitTest<std::string> {};
 
 TEST_F(SplitStringTableTest, StringWithInvalids)
 {
@@ -760,8 +754,7 @@ TEST_F(SplitStringTableTest, NullStringColumn)
     });
 }
 
-struct SplitNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct SplitNestedTypesTest : public cudf::test::BaseFixture {};
 
 // common functions for testing split/contiguous_split
 template <typename T, typename SplitFunc, typename CompareFunc>
@@ -977,15 +970,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   // all nulls
   {
     std::vector<bool> struct_validity{false, false, false, false};
-    auto struct_column = cudf::make_structs_column(
-      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+    auto struct_column = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     std::vector<bool> expected_validity{false, false};
-    auto expected = cudf::make_structs_column(
-      2,
-      {},
-      2,
-      cudf::test::detail::make_null_mask(expected_validity.begin(), expected_validity.end()));
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(expected_validity.begin(), expected_validity.end());
+    auto expected = cudf::make_structs_column(2, {}, null_count, std::move(null_mask));
 
     // split
     std::vector<cudf::size_type> splits{2};
@@ -1014,15 +1006,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   // all nulls, empty output column
   {
     std::vector<bool> struct_validity{false, false, false, false};
-    auto struct_column = cudf::make_structs_column(
-      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+    auto struct_column = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     std::vector<bool> expected_validity0{false, false, false, false};
-    auto expected0 = cudf::make_structs_column(
-      4,
-      {},
-      4,
-      cudf::test::detail::make_null_mask(expected_validity0.begin(), expected_validity0.end()));
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(expected_validity0.begin(), expected_validity0.end());
+    auto expected0 = cudf::make_structs_column(4, {}, null_count, std::move(null_mask));
 
     auto expected1 = cudf::make_structs_column(0, {}, 0, rmm::device_buffer{});
 
@@ -1171,8 +1162,7 @@ TEST_F(SplitNestedTypesTest, StructsOfList)
 }
 
 template <typename T>
-struct ContiguousSplitTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitTest : public cudf::test::BaseFixture {};
 
 // the various utility functions in slice_tests.cuh don't like the chrono types
 using FixedWidthTypesWithoutChrono =
@@ -1276,8 +1266,7 @@ thrust::make_counting_iterator(10000));
     );
 }
 */
-struct ContiguousSplitUntypedTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitUntypedTest : public cudf::test::BaseFixture {};
 
 TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
 {
@@ -1332,7 +1321,8 @@ TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
   });
   cudf::size_type const num_rows = 2000000;
   auto col                       = cudf::sequence(num_rows, cudf::numeric_scalar<int8_t>{0});
-  col->set_null_mask(cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows));
+  auto [null_mask, null_count]   = cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows);
+  col->set_null_mask(std::move(null_mask), null_count);
 
   cudf::table_view t({*col});
   auto result   = cudf::contiguous_split(t, {num_rows / 2});
@@ -1371,8 +1361,7 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTest)
 }
 
 // contiguous split with strings
-struct ContiguousSplitStringTableTest : public SplitTest<std::string> {
-};
+struct ContiguousSplitStringTableTest : public SplitTest<std::string> {};
 
 TEST_F(ContiguousSplitStringTableTest, StringWithInvalids)
 {
@@ -1440,8 +1429,7 @@ TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
 
 // contiguous splits
 template <typename T>
-struct ContiguousSplitTableTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
@@ -1466,8 +1454,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize)
     });
 }
 
-struct ContiguousSplitTableCornerCases : public SplitTest<int8_t> {
-};
+struct ContiguousSplitTableCornerCases : public SplitTest<int8_t> {};
 
 TEST_F(ContiguousSplitTableCornerCases, EmptyTable)
 {
@@ -1890,8 +1877,7 @@ TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
   }
 }
 
-struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {};
 
 TEST_F(ContiguousSplitNestedTypesTest, Lists)
 {
@@ -2034,12 +2020,12 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
   cudf::test::fixed_width_column_wrapper<int> outer_offsets_col(outer_offsets.begin(),
                                                                 outer_offsets.end());
   std::vector<bool> outer_validity{1, 1, 1, 0, 1, 1, 0};
-  auto outer_null_mask =
+  auto [outer_null_mask, null_count] =
     cudf::test::detail::make_null_mask(outer_validity.begin(), outer_validity.end());
   auto outer_list = make_lists_column(static_cast<cudf::size_type>(outer_validity.size()),
                                       outer_offsets_col.release(),
                                       struct_column.release(),
-                                      cudf::UNKNOWN_NULL_COUNT,
+                                      null_count,
                                       std::move(outer_null_mask));
 
   // split

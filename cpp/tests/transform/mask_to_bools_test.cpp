@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-struct MaskToBools : public cudf::test::BaseFixture {
-};
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/types.hpp>
+
+struct MaskToBools : public cudf::test::BaseFixture {};
 
 TEST_F(MaskToBools, NullDataWithZeroLength)
 {
@@ -50,8 +50,7 @@ TEST_F(MaskToBools, ImproperBitRange)
 
 struct MaskToBoolsTest
   : public MaskToBools,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(MaskToBoolsTest, LargeDataSizeTest)
 {
@@ -61,7 +60,7 @@ TEST_P(MaskToBoolsTest, LargeDataSizeTest)
     data.cbegin(), data.cend(), data.begin(), [](auto val) { return rand() % 2 == 0; });
 
   auto col      = cudf::test::fixed_width_column_wrapper<bool>(data.begin(), data.end());
-  auto expected = cudf::detail::slice(static_cast<cudf::column_view>(col), begin_bit, end_bit);
+  auto expected = cudf::slice(static_cast<cudf::column_view>(col), {begin_bit, end_bit}).front();
 
   auto mask = cudf::bools_to_mask(col);
 

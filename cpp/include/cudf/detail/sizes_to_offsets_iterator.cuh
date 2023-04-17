@@ -169,11 +169,11 @@ struct sizes_to_offsets_iterator {
     return *this;
   }
 
-  sizes_to_offsets_iterator()                                 = default;
-  sizes_to_offsets_iterator(sizes_to_offsets_iterator const&) = default;
-  sizes_to_offsets_iterator(sizes_to_offsets_iterator&&)      = default;
+  sizes_to_offsets_iterator()                                            = default;
+  sizes_to_offsets_iterator(sizes_to_offsets_iterator const&)            = default;
+  sizes_to_offsets_iterator(sizes_to_offsets_iterator&&)                 = default;
   sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator const&) = default;
-  sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator&&) = default;
+  sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator&&)      = default;
 
  protected:
   template <typename S, typename R>

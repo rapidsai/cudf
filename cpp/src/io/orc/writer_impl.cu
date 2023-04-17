@@ -52,17 +52,17 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
-#include <algorithm>
-#include <cstring>
-#include <numeric>
-#include <tuple>
-#include <utility>
-
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
+
+#include <algorithm>
+#include <cstring>
+#include <numeric>
+#include <tuple>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -331,47 +331,6 @@ class orc_column_view {
 size_type orc_table_view::num_rows() const noexcept
 {
   return columns.empty() ? 0 : columns.front().size();
-}
-
-orc_streams::orc_stream_offsets orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const
-{
-  std::vector<size_t> strm_offsets(streams.size());
-  size_t non_rle_data_size = 0;
-  size_t rle_data_size     = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    const auto& stream = streams[i];
-
-    auto const is_rle_data = [&]() {
-      // First stream is an index stream, don't check types, etc.
-      if (!stream.column_index().has_value()) return true;
-
-      auto const& column = columns[stream.column_index().value()];
-      // Dictionary encoded string column - dictionary characters or
-      // directly encoded string - column characters
-      if (column.orc_kind() == TypeKind::STRING &&
-          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
-        return false;
-      // Decimal data
-      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
-
-      // Everything else uses RLE
-      return true;
-    }();
-    // non-RLE and RLE streams are separated in the buffer that stores encoded data
-    // The computed offsets do not take the streams of the other type into account
-    if (is_rle_data) {
-      strm_offsets[i] = rle_data_size;
-      rle_data_size += (stream.length + 7) & ~7;
-    } else {
-      strm_offsets[i] = non_rle_data_size;
-      non_rle_data_size += stream.length;
-    }
-  }
-  non_rle_data_size = (non_rle_data_size + 7) & ~7;
-
-  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
 namespace {
@@ -1026,9 +985,6 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
-  auto const stream_offsets =
-    streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
-  rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
@@ -1104,75 +1060,81 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
-  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    auto const& column = orc_table.column(col_idx);
-    auto col_streams   = chunk_streams[col_idx];
-    for (auto const& stripe : segmentation.stripes) {
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto const& ck    = chunks[col_idx][rg_idx];
-        auto& strm        = col_streams[rg_idx];
+  // per-stripe, per-stream owning buffers
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> encoded_data(segmentation.num_stripes());
+  for (auto const& stripe : segmentation.stripes) {
+    std::generate_n(std::back_inserter(encoded_data[stripe.id]), streams.size(), [stream]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
 
-        for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
-          auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
+        auto const& column = orc_table.column(col_idx);
+        auto col_streams   = chunk_streams[col_idx];
+        auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
-          strm.ids[strm_type] = strm_id;
-          if (strm_id >= 0) {
+        std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+          col_streams[rg_idx].ids[strm_type]     = strm_id;
+          col_streams[rg_idx].lengths[strm_type] = 0;
+        });
+
+        // Calculate rowgroup sizes and stripe size
+        if (strm_id >= 0) {
+          size_t stripe_size = 0;
+          std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+            auto const& ck = chunks[col_idx][rg_idx];
+            auto& strm     = col_streams[rg_idx];
+
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
-              if (rg_idx_it == stripe.cbegin()) {
-                const int32_t dict_stride = column.dict_stride();
-                const auto stripe_dict    = column.host_stripe_dict(stripe.id);
+              if (rg_idx == *stripe.cbegin()) {
+                const auto stripe_dict = column.host_stripe_dict(stripe.id);
                 strm.lengths[strm_type] =
                   (strm_type == gpu::CI_DICTIONARY)
                     ? stripe_dict->dict_char_count
                     : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
-                if (stripe.id == 0) {
-                  strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
-                  // Dictionary lengths are encoded as RLE, which are all stored after non-RLE data:
-                  // include non-RLE data size in the offset only in that case
-                  if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
-                    strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
-                } else {
-                  auto const& strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
-                  strm.data_ptrs[strm_type] =
-                    strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
-                }
               } else {
-                strm.lengths[strm_type]   = 0;
-                strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
+                strm.lengths[strm_type] = 0;
               }
             } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                        ck.encoding_kind == DIRECT_V2) {
-              strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                               col_streams[rg_idx - 1].lengths[strm_type]);
+              strm.lengths[strm_type] =
+                std::max(column.host_dict_chunk(rg_idx)->string_char_count, 1u);
             } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                        (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
               // Pass-through
-              strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
-              strm.data_ptrs[strm_type] = nullptr;
-
+              strm.lengths[strm_type] = ck.num_rows * ck.dtype_len;
             } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
-              strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                               col_streams[rg_idx - 1].lengths[strm_type]);
+              strm.lengths[strm_type] = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
             } else {
               strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
-              // RLE encoded streams are stored after all non-RLE streams
-              strm.data_ptrs[strm_type] =
-                (rg_idx == 0) ? (encoded_data.data() + stream_offsets.non_rle_data_size +
-                                 stream_offsets.offsets[strm_id])
-                              : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                 col_streams[rg_idx - 1].lengths[strm_type]);
             }
-          } else {
-            strm.lengths[strm_type]   = 0;
+            // Allow extra space for alignment
+            stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
+          });
+
+          encoded_data[stripe.id][strm_id] = rmm::device_uvector<uint8_t>(stripe_size, stream);
+        }
+
+        // Set offsets
+        for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+          auto const rg_idx = *rg_idx_it;
+          auto const& ck    = chunks[col_idx][rg_idx];
+          auto& strm        = col_streams[rg_idx];
+
+          if (strm_id < 0 or (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                              (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
             strm.data_ptrs[strm_type] = nullptr;
+          } else {
+            if ((strm_type == gpu::CI_DICTIONARY) ||
+                (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
+              strm.data_ptrs[strm_type] = encoded_data[stripe.id][strm_id].data();
+            } else {
+              strm.data_ptrs[strm_type] = (rg_idx_it == stripe.cbegin())
+                                            ? encoded_data[stripe.id][strm_id].data()
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
+            }
           }
           auto const misalignment =
             reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
@@ -1201,41 +1163,67 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   }
   dictionaries.data.clear();
   dictionaries.index.clear();
-  stream.synchronize();
+  chunk_streams.device_to_host(stream, true /* device sync */);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
+// TODO: remove StripeInformation from this function and return strm_desc instead
 /**
  * @brief Returns stripe information after compacting columns' individual data
  * chunks into contiguous data streams.
  *
  * @param[in] num_index_streams Total number of index streams
  * @param[in] segmentation stripe and rowgroup ranges
- * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
+ * @param[in,out] enc_data ORC per-chunk streams of encoded data
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The stripes' information
  */
-std::vector<StripeInformation> gather_stripes(
-  size_t num_index_streams,
-  file_segmentation const& segmentation,
-  hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
-  hostdevice_2dvector<gpu::StripeStream>* strm_desc,
-  rmm::cuda_stream_view stream)
+std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
+                                              file_segmentation const& segmentation,
+                                              encoded_data* enc_data,
+                                              hostdevice_2dvector<gpu::StripeStream>* strm_desc,
+                                              rmm::cuda_stream_view stream)
 {
   if (segmentation.num_stripes() == 0) { return {}; }
+
+  // gathered stripes - per-stripe, per-stream (same as encoded_data.data)
+  std::vector<std::vector<rmm::device_uvector<uint8_t>>> gathered_stripes(enc_data->data.size());
+  for (auto& stripe_data : gathered_stripes) {
+    std::generate_n(std::back_inserter(stripe_data), enc_data->data[0].size(), [&]() {
+      return rmm::device_uvector<uint8_t>(0, stream);
+    });
+  }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
-    for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
-      const auto& strm = (*enc_streams)[col_idx][stripe.first];
-
+    for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {
+      auto const& col_streams = (enc_data->streams)[col_idx];
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
-        const auto stream_id = strm.ids[k];
+        const auto stream_id = col_streams[0].ids[k];
         if (stream_id != -1) {
+          auto const actual_stripe_size = std::accumulate(
+            col_streams.begin() + stripe.first,
+            col_streams.begin() + stripe.first + stripe.size,
+            0ul,
+            [&](auto const& sum, auto const& strm) { return sum + strm.lengths[k]; });
+
+          auto const& allocated_stripe_size = enc_data->data[stripe.id][stream_id].size();
+          CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size,
+                       "Internal ORC writer error: insufficient allocation size for encoded data");
+          // Allocate buffers of the exact size as encoded data, smaller than the original buffers.
+          // Don't copying the data to exactly sized buffer when only one chunk is present to avoid
+          // performance overhead from the additional copy. When there are multiple chunks, they are
+          // copied anyway, to make them contiguous (i.e. gather them).
+          if (stripe.size > 1 and allocated_stripe_size > actual_stripe_size) {
+            gathered_stripes[stripe.id][stream_id] =
+              rmm::device_uvector<uint8_t>(actual_stripe_size, stream);
+          }
+
           auto* ss           = &(*strm_desc)[stripe.id][stream_id - num_index_streams];
-          ss->stream_size    = 0;
+          ss->data_ptr       = gathered_stripes[stripe.id][stream_id].data();
+          ss->stream_size    = actual_stripe_size;
           ss->first_chunk_id = stripe.first;
           ss->num_chunks     = stripe.size;
           ss->column_id      = col_idx;
@@ -1251,9 +1239,18 @@ std::vector<StripeInformation> gather_stripes(
   }
 
   strm_desc->host_to_device(stream);
-  gpu::CompactOrcDataStreams(*strm_desc, *enc_streams, stream);
+  // TODO: use cub::DeviceMemcpy::Batched
+  gpu::CompactOrcDataStreams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host(stream);
-  enc_streams->device_to_host(stream, true);
+  enc_data->streams.device_to_host(stream, true);
+
+  // move the gathered stripes to encoded_data.data for lifetime management
+  for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
+    for (auto stream_id = 0ul; stream_id < enc_data->data[0].size(); ++stream_id) {
+      if (not gathered_stripes[stripe_id][stream_id].is_empty())
+        enc_data->data[stripe_id][stream_id] = std::move(gathered_stripes[stripe_id][stream_id]);
+    }
+  }
 
   return stripes;
 }
@@ -2288,8 +2285,7 @@ convert_table_to_orc_data(table_view const& input,
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
-  auto stripes =
-    gather_stripes(num_index_streams, segmentation, &enc_data.streams, &strm_descs, stream);
+  auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
 
   if (num_rows == 0) {
     return {std::move(streams),
@@ -2370,7 +2366,7 @@ convert_table_to_orc_data(table_view const& input,
                                 stream);
 
     // deallocate encoded data as it is not needed anymore
-    enc_data.data = rmm::device_uvector<uint8_t>{0, stream};
+    enc_data.data.clear();
 
     strm_descs.device_to_host(stream);
     comp_results.device_to_host(stream, true);
@@ -2396,21 +2392,19 @@ convert_table_to_orc_data(table_view const& input,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const& options,
                    SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    stream(stream),
-    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
-    row_index_stride{options.get_row_index_stride()},
-    compression_kind_(to_orc_compression(options.get_compression())),
-    compression_blocksize_(compression_block_size(compression_kind_)),
-    stats_freq_(options.get_statistics_freq()),
-    single_write_mode(mode == SingleWriteMode::YES),
-    kv_meta(options.get_key_value_metadata()),
-    out_sink_(std::move(sink))
+                   rmm::cuda_stream_view stream)
+  : _stream(stream),
+    _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    _row_index_stride{options.get_row_index_stride()},
+    _compression_kind(to_orc_compression(options.get_compression())),
+    _compression_blocksize(compression_block_size(_compression_kind)),
+    _stats_freq(options.get_statistics_freq()),
+    _single_write_mode(mode == SingleWriteMode::YES),
+    _kv_meta(options.get_key_value_metadata()),
+    _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
-    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+    _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
   init_state();
 }
@@ -2418,21 +2412,19 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_orc_writer_options const& options,
                    SingleWriteMode mode,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
-    stream(stream),
-    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
-    row_index_stride{options.get_row_index_stride()},
-    compression_kind_(to_orc_compression(options.get_compression())),
-    compression_blocksize_(compression_block_size(compression_kind_)),
-    stats_freq_(options.get_statistics_freq()),
-    single_write_mode(mode == SingleWriteMode::YES),
-    kv_meta(options.get_key_value_metadata()),
-    out_sink_(std::move(sink))
+                   rmm::cuda_stream_view stream)
+  : _stream(stream),
+    _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    _row_index_stride{options.get_row_index_stride()},
+    _compression_kind(to_orc_compression(options.get_compression())),
+    _compression_blocksize(compression_block_size(_compression_kind)),
+    _stats_freq(options.get_statistics_freq()),
+    _single_write_mode(mode == SingleWriteMode::YES),
+    _kv_meta(options.get_key_value_metadata()),
+    _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
-    table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
+    _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
   init_state();
 }
@@ -2442,14 +2434,14 @@ writer::impl::~impl() { close(); }
 void writer::impl::init_state()
 {
   // Write file header
-  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
+  _out_sink->host_write(MAGIC, std::strlen(MAGIC));
 }
 
 void writer::impl::write(table_view const& input)
 {
-  CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
-  if (not table_meta) { table_meta = make_table_meta(input); }
+  if (not _table_meta) { _table_meta = make_table_meta(input); }
 
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current writer
@@ -2469,16 +2461,16 @@ void writer::impl::write(table_view const& input)
                          stream_output] = [&] {
     try {
       return convert_table_to_orc_data(input,
-                                       *table_meta,
-                                       max_stripe_size,
-                                       row_index_stride,
-                                       enable_dictionary_,
-                                       compression_kind_,
-                                       compression_blocksize_,
-                                       stats_freq_,
-                                       single_write_mode,
-                                       *out_sink_,
-                                       stream);
+                                       *_table_meta,
+                                       _max_stripe_size,
+                                       _row_index_stride,
+                                       _enable_dictionary,
+                                       _compression_kind,
+                                       _compression_blocksize,
+                                       _stats_freq,
+                                       _single_write_mode,
+                                       *_out_sink,
+                                       _stream);
     } catch (...) {  // catch any exception type
       CUDF_LOG_ERROR(
         "ORC writer encountered exception during processing. "
@@ -2517,8 +2509,8 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
   if (orc_table.num_rows() == 0) { return; }
 
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
-    persisted_stripe_statistics.persist(
-      orc_table.num_rows(), single_write_mode, intermediate_stats, stream);
+    _persisted_stripe_statistics.persist(
+      orc_table.num_rows(), _single_write_mode, intermediate_stats, _stream);
   }
 
   // Write stripes
@@ -2526,7 +2518,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
   for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
     auto& stripe = stripes[stripe_id];
 
-    stripe.offset = out_sink_->bytes_written();
+    stripe.offset = _out_sink->bytes_written();
 
     // Column (skippable) index streams appear at the start of the stripe
     size_type const num_index_streams = (orc_table.num_columns() + 1);
@@ -2541,9 +2533,9 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
                          intermediate_stats.rowgroup_blobs,
                          &stripe,
                          &streams,
-                         compression_kind_,
-                         compression_blocksize_,
-                         out_sink_);
+                         _compression_kind,
+                         _compression_blocksize,
+                         _out_sink);
     }
 
     // Column data consisting one or more separate streams
@@ -2555,9 +2547,9 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
         stream_output,
         &stripe,
         &streams,
-        compression_kind_,
-        out_sink_,
-        stream));
+        _compression_kind,
+        _out_sink,
+        _stream));
     }
 
     // Write stripefooter consisting of stream information
@@ -2573,16 +2565,16 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
           : 0;
       if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }
-    ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
+    ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
     pbw.write(sf);
     stripe.footerLength = pbw.size();
-    if (compression_kind_ != NONE) {
+    if (_compression_kind != NONE) {
       uint32_t uncomp_sf_len = (stripe.footerLength - 3) * 2 + 1;
       pbw.buffer()[0]        = static_cast<uint8_t>(uncomp_sf_len >> 0);
       pbw.buffer()[1]        = static_cast<uint8_t>(uncomp_sf_len >> 8);
       pbw.buffer()[2]        = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
-    out_sink_->host_write(pbw.data(), pbw.size());
+    _out_sink->host_write(pbw.data(), pbw.size());
   }
   for (auto const& task : write_tasks) {
     task.wait();
@@ -2592,20 +2584,20 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
 void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
                                             std::vector<StripeInformation>& stripes)
 {
-  if (ff.headerLength == 0) {
+  if (_ffooter.headerLength == 0) {
     // First call
-    ff.headerLength   = std::strlen(MAGIC);
-    ff.rowIndexStride = row_index_stride;
-    ff.types.resize(1 + orc_table.num_columns());
-    ff.types[0].kind = STRUCT;
+    _ffooter.headerLength   = std::strlen(MAGIC);
+    _ffooter.rowIndexStride = _row_index_stride;
+    _ffooter.types.resize(1 + orc_table.num_columns());
+    _ffooter.types[0].kind = STRUCT;
     for (auto const& column : orc_table.columns) {
       if (!column.is_child()) {
-        ff.types[0].subtypes.emplace_back(column.id());
-        ff.types[0].fieldNames.emplace_back(column.orc_name());
+        _ffooter.types[0].subtypes.emplace_back(column.id());
+        _ffooter.types[0].fieldNames.emplace_back(column.orc_name());
       }
     }
     for (auto const& column : orc_table.columns) {
-      auto& schema_type = ff.types[column.id()];
+      auto& schema_type = _ffooter.types[column.id()];
       schema_type.kind  = column.orc_kind();
       if (column.orc_kind() == DECIMAL) {
         schema_type.scale     = static_cast<uint32_t>(column.scale());
@@ -2626,101 +2618,103 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
     }
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(ff.types.size() == 1 + orc_table.num_columns(),
+    CUDF_EXPECTS(_ffooter.types.size() == 1 + orc_table.num_columns(),
                  "Mismatch in table structure between multiple calls to write");
     CUDF_EXPECTS(
       std::all_of(orc_table.columns.cbegin(),
                   orc_table.columns.cend(),
-                  [&](auto const& col) { return ff.types[col.id()].kind == col.orc_kind(); }),
+                  [&](auto const& col) { return _ffooter.types[col.id()].kind == col.orc_kind(); }),
       "Mismatch in column types between multiple calls to write");
   }
-  ff.stripes.insert(ff.stripes.end(),
-                    std::make_move_iterator(stripes.begin()),
-                    std::make_move_iterator(stripes.end()));
-  ff.numberOfRows += orc_table.num_rows();
+  _ffooter.stripes.insert(_ffooter.stripes.end(),
+                          std::make_move_iterator(stripes.begin()),
+                          std::make_move_iterator(stripes.end()));
+  _ffooter.numberOfRows += orc_table.num_rows();
 }
 
 void writer::impl::close()
 {
-  if (closed) { return; }
-  closed = true;
+  if (_closed) { return; }
+  _closed = true;
   PostScript ps;
 
   auto const statistics =
-    finish_statistic_blobs(ff.stripes.size(), persisted_stripe_statistics, stream);
+    finish_statistic_blobs(_ffooter.stripes.size(), _persisted_stripe_statistics, _stream);
 
   // File-level statistics
   if (not statistics.file_level.empty()) {
     ProtobufWriter pbw;
     pbw.put_uint(encode_field_number<size_type>(1));
-    pbw.put_uint(persisted_stripe_statistics.num_rows);
+    pbw.put_uint(_persisted_stripe_statistics.num_rows);
     // First entry contains total number of rows
-    ff.statistics.reserve(ff.types.size());
-    ff.statistics.emplace_back(pbw.release());
+    _ffooter.statistics.reserve(_ffooter.types.size());
+    _ffooter.statistics.emplace_back(pbw.release());
     // Add file stats, stored after stripe stats in `column_stats`
-    ff.statistics.insert(ff.statistics.end(),
-                         std::make_move_iterator(statistics.file_level.begin()),
-                         std::make_move_iterator(statistics.file_level.end()));
+    _ffooter.statistics.insert(_ffooter.statistics.end(),
+                               std::make_move_iterator(statistics.file_level.begin()),
+                               std::make_move_iterator(statistics.file_level.end()));
   }
 
   // Stripe-level statistics
   if (not statistics.stripe_level.empty()) {
-    md.stripeStats.resize(ff.stripes.size());
-    for (size_t stripe_id = 0; stripe_id < ff.stripes.size(); stripe_id++) {
-      md.stripeStats[stripe_id].colStats.resize(ff.types.size());
+    _orc_meta.stripeStats.resize(_ffooter.stripes.size());
+    for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
+      _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
       ProtobufWriter pbw;
       pbw.put_uint(encode_field_number<size_type>(1));
-      pbw.put_uint(ff.stripes[stripe_id].numberOfRows);
-      md.stripeStats[stripe_id].colStats[0] = pbw.release();
-      for (size_t col_idx = 0; col_idx < ff.types.size() - 1; col_idx++) {
-        size_t idx                                      = ff.stripes.size() * col_idx + stripe_id;
-        md.stripeStats[stripe_id].colStats[1 + col_idx] = std::move(statistics.stripe_level[idx]);
+      pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
+      _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
+      for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
+        size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
+        _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
+          std::move(statistics.stripe_level[idx]);
       }
     }
   }
 
-  persisted_stripe_statistics.clear();
+  _persisted_stripe_statistics.clear();
 
-  ff.contentLength = out_sink_->bytes_written();
-  std::transform(
-    kv_meta.begin(), kv_meta.end(), std::back_inserter(ff.metadata), [&](auto const& udata) {
-      return UserMetadataItem{udata.first, udata.second};
-    });
+  _ffooter.contentLength = _out_sink->bytes_written();
+  std::transform(_kv_meta.begin(),
+                 _kv_meta.end(),
+                 std::back_inserter(_ffooter.metadata),
+                 [&](auto const& udata) {
+                   return UserMetadataItem{udata.first, udata.second};
+                 });
 
   // Write statistics metadata
-  if (md.stripeStats.size() != 0) {
-    ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
-    pbw.write(md);
-    add_uncompressed_block_headers(compression_kind_, compression_blocksize_, pbw.buffer());
+  if (_orc_meta.stripeStats.size() != 0) {
+    ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
+    pbw.write(_orc_meta);
+    add_uncompressed_block_headers(_compression_kind, _compression_blocksize, pbw.buffer());
     ps.metadataLength = pbw.size();
-    out_sink_->host_write(pbw.data(), pbw.size());
+    _out_sink->host_write(pbw.data(), pbw.size());
   } else {
     ps.metadataLength = 0;
   }
-  ProtobufWriter pbw((compression_kind_ != NONE) ? 3 : 0);
-  pbw.write(ff);
-  add_uncompressed_block_headers(compression_kind_, compression_blocksize_, pbw.buffer());
+  ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
+  pbw.write(_ffooter);
+  add_uncompressed_block_headers(_compression_kind, _compression_blocksize, pbw.buffer());
 
   // Write postscript metadata
   ps.footerLength         = pbw.size();
-  ps.compression          = compression_kind_;
-  ps.compressionBlockSize = compression_blocksize_;
+  ps.compression          = _compression_kind;
+  ps.compressionBlockSize = _compression_blocksize;
   ps.version              = {0, 12};
   ps.magic                = MAGIC;
 
   const auto ps_length = static_cast<uint8_t>(pbw.write(ps));
   pbw.put_byte(ps_length);
-  out_sink_->host_write(pbw.data(), pbw.size());
-  out_sink_->flush();
+  _out_sink->host_write(pbw.data(), pbw.size());
+  _out_sink->flush();
 }
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const& options,
                SingleWriteMode mode,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream))
 {
 }
 
@@ -2728,9 +2722,8 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const& options,
                SingleWriteMode mode,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+               rmm::cuda_stream_view stream)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream))
 {
 }
 

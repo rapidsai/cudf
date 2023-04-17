@@ -36,8 +36,7 @@
 // This will make the code looks cleaner
 constexpr auto NULL_VAL = 0;
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IsIntegerBasicCheck)
 {
@@ -286,8 +285,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
 }
 
 template <typename T>
-class StringsIntegerConvertTest : public StringsConvertTest {
-};
+class StringsIntegerConvertTest : public StringsConvertTest {};
 
 TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
@@ -329,8 +327,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 
 //
 template <typename T>
-class StringsFloatConvertTest : public StringsConvertTest {
-};
+class StringsFloatConvertTest : public StringsConvertTest {};
 
 using FloatTypes = cudf::test::Types<float, double>;
 TYPED_TEST_SUITE(StringsFloatConvertTest, FloatTypes);
