@@ -71,10 +71,15 @@ def dtype(arbitrary):
             return np.dtype("object")
         elif isinstance(pd_dtype, pd.IntervalDtype):
             return cudf.IntervalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+            return pd_dtype
         else:
             raise TypeError(
                 f"Cannot interpret {arbitrary} as a valid cuDF dtype"
             )
+
+
+DatetimeTZDtype = pd.DatetimeTZDtype
 
 
 def _decode_type(
@@ -802,97 +807,6 @@ class DecimalDtype(_BaseDtype):
         return hash(self._typ)
 
 
-class DatetimeTZDtype(_BaseDtype):
-    _metadata = ("unit", "tz")
-
-    def __init__(self, unit, tz):
-        """
-        Type to represent timezone-aware datetime data.
-
-        unit: str
-        tz: str
-        """
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a string")
-        if not isinstance(tz, str):
-            raise TypeError("tz must be a string")
-        self._typ = pa.timestamp(unit, tz)
-
-    @property
-    def str(self):
-        return f"{str(self.name)}[{self.unit}, {self.tz}]"
-
-    @property
-    def unit(self):
-        """
-        The time unit.
-        """
-        return self._typ.unit
-
-    @property
-    def tz(self):
-        """
-        The time zone name.
-        """
-        return self._typ.tz
-
-    @property
-    def itemsize(self):
-        """
-        Length of one column element in bytes.
-        """
-        return 8
-
-    @property
-    def type(self):
-        return pa.timestamp
-
-    def to_arrow(self):
-        """
-        Return the equivalent ``pyarrow`` dtype.
-        """
-        return self._typ
-
-    @classmethod
-    def from_arrow(cls, typ):
-        """
-        Construct a Datetime64TZDtype from a pyarrow timestamp type.
-        """
-        return cls(typ.unit, typ.tz)
-
-    def __repr__(self):
-        return str(self)
-
-    def serialize(self) -> Tuple[dict, list]:
-        return (
-            {
-                "type-serialized": pickle.dumps(type(self)),
-                "unit": self.unit,
-                "tz": self.tz,
-                "frame_count": 0,
-            },
-            [],
-        )
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list):
-        header, frames, klass = _decode_type(
-            cls, header, frames, is_valid_class=issubclass
-        )
-        klass = pickle.loads(header["type-serialized"])
-        return klass(header["unit"], header["tz"])
-
-    def __eq__(self, other: Dtype) -> bool:
-        if other is self:
-            return True
-        elif not isinstance(other, self.__class__):
-            return False
-        return self.unit == other.unit and self.tz == other.tz
-
-    def __hash__(self):
-        return hash(self._typ)
-
-
 @doc_apply(
     decimal_dtype_template.format(
         size="32",
@@ -1199,4 +1113,13 @@ def is_decimal128_dtype(obj):
             and obj == cudf.core.dtypes.Decimal128Dtype.name
         )
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
+    )
+
+
+def is_datetime64tz_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Datetime64TZDtype
+        or obj is cudf.core.dtypes.Datetime64TZDtype
+        or (hasattr(obj, "dtype") and is_datetime64tz_dtype(obj.dtype))
+        or (isinstance(obj, str) and pd.api.types.is_datetime64tz_dtype(obj))
     )
