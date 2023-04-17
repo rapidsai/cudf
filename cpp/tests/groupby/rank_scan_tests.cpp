@@ -355,7 +355,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
   auto const definitely_null_structs = [&] {
     auto struct_column = get_struct_column();
     struct_column->set_null_mask(cudf::create_null_mask(num_rows, cudf::mask_state::ALL_NULL),
-                                 struct_column->size());
+                                 num_rows);
     return struct_column;
   }();
 

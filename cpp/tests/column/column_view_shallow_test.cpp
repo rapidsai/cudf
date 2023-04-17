@@ -159,7 +159,7 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
@@ -326,7 +326,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
