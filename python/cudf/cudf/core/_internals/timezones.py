@@ -3,8 +3,13 @@
 import os
 import zoneinfo
 from functools import lru_cache
+from typing import cast
 
-from cudf._lib.timezone import build_timezone_transition_table
+import cudf
+from cudf._lib.labeling import label_bins
+from cudf._lib.timezone import make_timezone_transition_table
+from cudf.core.column.column import build_column
+from cudf.core.column.datetime import DatetimeColumn, DatetimeTZColumn
 from cudf.core.dataframe import DataFrame
 
 
@@ -67,5 +72,75 @@ def _find_and_read_tzfile_tzdata(zone_name):
 
 
 def _read_tzfile_as_frame(tzdir, zone_name):
-    dt, offsets = build_timezone_transition_table(tzdir, zone_name)
+    dt, offsets = make_timezone_transition_table(tzdir, zone_name)
     return DataFrame._from_columns([dt, offsets], ["dt", "offsets"])
+
+
+def localize(data: DatetimeColumn, tz: str) -> DatetimeTZColumn:
+    """
+    Recognize ambiguous or nonexistent timestamps and set them to NaT
+    """
+    tz_zone = get_tz_data(tz)
+    dtype = cudf.DatetimeTZDtype(data._time_unit, tz)
+    time_start = tz_zone["dt"]
+    gmt_offset = (
+        tz_zone["offsets"]
+        .astype("timedelta64[s]")
+        .astype(f"timedelta64[{data._time_unit}]")
+    )
+
+    local_time_new_offsets = time_start[1:]._column + gmt_offset[1:]._column
+    local_time_old_offsets = time_start[1:]._column + gmt_offset[:-1]._column
+
+    if len(local_time_old_offsets) == 0:  # no transitions
+        return cast(
+            DatetimeTZColumn,
+            build_column(
+                data=data.base_data,
+                dtype=dtype,
+                size=data.size,
+                mask=data.mask,
+                offset=data.offset,
+            ),
+        )
+
+    # ambiguous time periods happen when the clock is
+    # moved backward after the transition
+    ambiguous_begin = local_time_new_offsets.apply_boolean_mask(
+        local_time_new_offsets < local_time_old_offsets
+    )
+    ambiguous_end = local_time_old_offsets.apply_boolean_mask(
+        local_time_new_offsets < local_time_old_offsets
+    )
+
+    # nonexistent time periods happen when the clock is
+    # moved forward after the transition
+    nonexistent_begin = local_time_old_offsets.apply_boolean_mask(
+        local_time_new_offsets > local_time_old_offsets
+    )
+    nonexistent_end = local_time_new_offsets.apply_boolean_mask(
+        local_time_new_offsets > local_time_old_offsets
+    )
+
+    ambiguous = label_bins(
+        data, ambiguous_begin, True, ambiguous_end, False
+    ).notnull()
+    nonexistent = label_bins(
+        data, nonexistent_begin, True, nonexistent_end, False
+    ).notnull()
+
+    set_to_nat = ambiguous._binaryop(nonexistent, "__or__")
+    localized_data = data._scatter_by_column(
+        set_to_nat, cudf.Scalar(None, dtype=data.dtype)
+    )
+
+    return cast(
+        DatetimeTZColumn,
+        build_column(
+            data=data.base_data,
+            dtype=dtype,
+            size=data.size,
+            mask=localized_data.mask,
+            offset=localized_data.offset,
+        ),
+    )

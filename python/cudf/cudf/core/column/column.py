@@ -1557,7 +1557,7 @@ def build_column(
     elif is_datetime64tz_dtype(dtype):
         if data is None:
             raise TypeError("Must specify data buffer")
-        return cudf.core.column.datetime.TZDatetimeColumn(
+        return cudf.core.column.datetime.DatetimeTZColumn(
             data=data,
             dtype=dtype,
             mask=mask,

@@ -4602,6 +4602,14 @@ class DatetimeProperties:
             data=str_col, index=self.series._index, name=self.series.name
         )
 
+    def tz_localize(self, tz):
+        from cudf.core._internals.timezones import localize
+
+        return Series._from_data(
+            data={self.series.name: localize(self.series._column, tz)},
+            index=self.series._index,
+        )
+
 
 class TimedeltaProperties:
     """

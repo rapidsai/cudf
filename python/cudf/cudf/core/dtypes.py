@@ -79,7 +79,10 @@ def dtype(arbitrary):
             )
 
 
-DatetimeTZDtype = pd.DatetimeTZDtype
+class DatetimeTZDtype(pd.DatetimeTZDtype):
+    @property
+    def base(self):
+        return np.dtype(f"datetime64[{self.unit}]")
 
 
 def _decode_type(
@@ -1113,13 +1116,4 @@ def is_decimal128_dtype(obj):
             and obj == cudf.core.dtypes.Decimal128Dtype.name
         )
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
-    )
-
-
-def is_datetime64tz_dtype(obj):
-    return (
-        type(obj) is cudf.core.dtypes.Datetime64TZDtype
-        or obj is cudf.core.dtypes.Datetime64TZDtype
-        or (hasattr(obj, "dtype") and is_datetime64tz_dtype(obj.dtype))
-        or (isinstance(obj, str) and pd.api.types.is_datetime64tz_dtype(obj))
     )
