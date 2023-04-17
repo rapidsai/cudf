@@ -30,8 +30,7 @@
 
 #include <vector>
 
-struct MinHashTest : public cudf::test::BaseFixture {
-};
+struct MinHashTest : public cudf::test::BaseFixture {};
 
 TEST_F(MinHashTest, Basic)
 {
