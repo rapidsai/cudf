@@ -40,5 +40,20 @@ def test_localize_ambiguous(unit, tz):
     )
     expect = s.to_pandas().dt.tz_localize(tz, ambiguous="NaT")
     got = s.dt.tz_localize(tz)
-    print(got)
+    assert_eq(expect, got)
+
+
+def test_localize_nonexistent(unit, tz):
+    s = cudf.Series(
+        [
+            "2018-03-11 01:30:00",
+            "2018-03-11 02:00:00",
+            "2018-03-11 02:30:00",
+            "2018-03-11 03:00:00",
+            "2018-03-11 03:30:00",
+        ],
+        dtype=f"datetime64[{unit}]",
+    )
+    expect = s.to_pandas().dt.tz_localize(tz, nonexistent="NaT")
+    got = s.dt.tz_localize(tz)
     assert_eq(expect, got)

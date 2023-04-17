@@ -560,7 +560,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
-        return self._local_time.to_pandas().dt.tz_localize(self.dtype.tz)
+        return self._local_time.to_pandas().dt.tz_localize(
+            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+        )
 
     def to_arrow(self):
         return self._local_time.to_arrow().cast(
