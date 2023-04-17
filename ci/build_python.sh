@@ -15,7 +15,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PY_VER=${RAPIDS_PY_VERSION//./}
 
 LIBRAFT_CHANNEL=$(rapids-get-artifact ci/raft/pull-request/1415/7203c76/raft_conda_cpp_cuda11_$(arch).tar.gz)
-RAFT_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1415/7203c76/raft_conda_python_cuda11_${PY_VER}_$(arch).tar.gz)
+RAFT_CHANNEL=$(rapids-get-artifact ci/raft/pull-request/1415/7203c76/raft_conda_python_cuda11_${PY_VER}_$(arch).tar.gz)
 
 # TODO: Remove `--no-test` flag once importing on a CPU
 # node works correctly
