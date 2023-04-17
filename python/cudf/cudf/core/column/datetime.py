@@ -560,13 +560,11 @@ class DatetimeTZColumn(DatetimeColumn):
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
-        return super().to_pandas().dt.tz_localize(self.dtype.tz)
+        return self._local_time.to_pandas().dt.tz_localize(self.dtype.tz)
 
     def to_arrow(self):
-        return (
-            super()
-            .to_arrow()
-            .cast(pa.timestamp(self.dtype.unit, str(self.dtype.tz)))
+        return self._local_time.to_arrow().cast(
+            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
         )
 
     @property
@@ -577,6 +575,18 @@ class DatetimeTZColumn(DatetimeColumn):
         raise NotImplementedError(
             "DateTime Arrays is not yet implemented in cudf"
         )
+
+    @property
+    def _local_time(self):
+        """Return the local time as naive timestamps."""
+        from cudf.core._internals.timezones import utc_to_local
+
+        return utc_to_local(self, str(self.dtype.tz))
+
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        return self._local_time.as_string_column(dtype, format, **kwargs)
 
 
 def infer_format(element: str, **kwargs) -> str:
