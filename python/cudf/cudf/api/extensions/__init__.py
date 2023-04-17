@@ -8,8 +8,8 @@ from cudf.api.extensions.accessor import (
 from pandas.api.extensions import no_default
 
 __all__ = [
+    "no_default",
     "register_dataframe_accessor",
     "register_index_accessor",
     "register_series_accessor",
-    "no_default",
 ]
