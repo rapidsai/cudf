@@ -33,8 +33,7 @@ std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
 }  // namespace cudf
 
 template <typename T>
-struct NumericPairIteratorTest : public IteratorTest<T> {
-};
+struct NumericPairIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }

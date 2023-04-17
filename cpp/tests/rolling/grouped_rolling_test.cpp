@@ -453,8 +453,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
 // // ------------- expected failures --------------------
 
-class GroupedRollingErrorTest : public cudf::test::BaseFixture {
-};
+class GroupedRollingErrorTest : public cudf::test::BaseFixture {};
 
 // negative sizes
 TEST_F(GroupedRollingErrorTest, NegativeMinPeriods)
@@ -1260,11 +1259,9 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithNoGrou
 }
 
 template <typename T>
-struct TypedNullTimestampTestForRangeQueries : public cudf::test::BaseFixture {
-};
+struct TypedNullTimestampTestForRangeQueries : public cudf::test::BaseFixture {};
 
-struct NullTimestampTestForRangeQueries : public cudf::test::BaseFixture {
-};
+struct NullTimestampTestForRangeQueries : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedNullTimestampTestForRangeQueries, cudf::test::IntegralTypes);
 
@@ -1569,11 +1566,9 @@ TYPED_TEST(TypedNullTimestampTestForRangeQueries, CountMultiGroupAllNullTimestam
 }
 
 template <typename T>
-struct TypedUnboundedWindowTest : public cudf::test::BaseFixture {
-};
+struct TypedUnboundedWindowTest : public cudf::test::BaseFixture {};
 
-struct UnboundedWindowTest : public cudf::test::BaseFixture {
-};
+struct UnboundedWindowTest : public cudf::test::BaseFixture {};
 
 using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
                                            cudf::test::FloatingPointTypes,

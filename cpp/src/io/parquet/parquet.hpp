@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,27 +44,19 @@ struct file_ender_s {
 };
 
 // thrift generated code simplified.
-struct StringType {
-};
-struct MapType {
-};
-struct ListType {
-};
-struct EnumType {
-};
+struct StringType {};
+struct MapType {};
+struct ListType {};
+struct EnumType {};
 struct DecimalType {
   int32_t scale     = 0;
   int32_t precision = 0;
 };
-struct DateType {
-};
+struct DateType {};
 
-struct MilliSeconds {
-};
-struct MicroSeconds {
-};
-struct NanoSeconds {
-};
+struct MilliSeconds {};
+struct MicroSeconds {};
+struct NanoSeconds {};
 using TimeUnit_isset = struct TimeUnit_isset {
   bool MILLIS{false};
   bool MICROS{false};
@@ -90,12 +82,9 @@ struct IntType {
   int8_t bitWidth = 0;
   bool isSigned   = false;
 };
-struct NullType {
-};
-struct JsonType {
-};
-struct BsonType {
-};
+struct NullType {};
+struct JsonType {};
+struct BsonType {};
 
 // thrift generated code simplified.
 using LogicalType_isset = struct LogicalType_isset {
@@ -358,8 +347,8 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;  // Optional count of null values per page
+    BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;              // Optional count of null values per page
 };
 
 // bit space we are reserving in column_buffer::user_data

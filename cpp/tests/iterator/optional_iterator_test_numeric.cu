@@ -35,8 +35,7 @@ std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
 }  // namespace cudf
 
 template <typename T>
-struct NumericOptionalIteratorTest : public IteratorTest<T> {
-};
+struct NumericOptionalIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericOptionalIteratorTest, TestingTypes);
 TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)

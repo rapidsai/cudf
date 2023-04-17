@@ -27,11 +27,9 @@ namespace cudf {
 namespace test {
 
 template <typename T>
-struct ColumnTypeCheckTestTyped : public cudf::test::BaseFixture {
-};
+struct ColumnTypeCheckTestTyped : public cudf::test::BaseFixture {};
 
-struct ColumnTypeCheckTest : public cudf::test::BaseFixture {
-};
+struct ColumnTypeCheckTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnTypeCheckTestTyped, cudf::test::FixedWidthTypes);
 
