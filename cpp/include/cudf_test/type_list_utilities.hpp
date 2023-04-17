@@ -90,15 +90,8 @@ template <class... T, int D>
 struct GetTypeImpl<Types<T...>, D> {
   static_assert(D < sizeof...(T), "Out of bounds");
 
-  using type = decltype(std::get<D>(std::declval<std::tuple<T...>>()));
-};
-template <class T, class U, class V, class... ARGS>
-struct GetTypeImpl<Types<T, U, V, ARGS...>, 2> {
-  using type = V;
-};
-template <class T, class U, class... ARGS>
-struct GetTypeImpl<Types<T, U, ARGS...>, 1> {
-  using type = U;
+  using raw_type = decltype(std::get<D>(std::declval<std::tuple<T...>>()));
+  using type     = std::decay_t<raw_type>;
 };
 template <class T, class... ARGS>
 struct GetTypeImpl<Types<T, ARGS...>, 0> {
