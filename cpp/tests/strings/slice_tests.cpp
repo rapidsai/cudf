@@ -30,8 +30,7 @@
 #include <string>
 #include <vector>
 
-struct StringsSliceTest : public cudf::test::BaseFixture {
-};
+struct StringsSliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsSliceTest, Substring)
 {
@@ -51,8 +50,7 @@ TEST_F(StringsSliceTest, Substring)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-class Parameters : public StringsSliceTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class Parameters : public StringsSliceTest, public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(Parameters, Substring)
 {
@@ -485,7 +483,7 @@ TEST_F(StringsSliceTest, SearchColumnDelimiter)
   }
 
   {
-    auto col0      = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi ™◎ooﬀ™ff™",
+    auto col0 = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi ™◎ooﬀ™ff™",
                                                     "tﬀﬀhﬀesé",
                                                     "",
                                                     "lﬀ fooﬀ ffﬀ eaﬀse™",

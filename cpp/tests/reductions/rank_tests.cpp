@@ -257,8 +257,7 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
   }
 }
 
-struct RankScanTest : public cudf::test::BaseFixture {
-};
+struct RankScanTest : public cudf::test::BaseFixture {};
 
 TEST(RankScanTest, BoolRank)
 {

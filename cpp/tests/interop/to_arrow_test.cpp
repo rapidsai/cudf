@@ -154,12 +154,10 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
       schema, {int64array, string_array, dict_array, boolarray, list_array, struct_array}));
 }
 
-struct ToArrowTest : public cudf::test::BaseFixture {
-};
+struct ToArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -556,8 +554,7 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
 
 struct ToArrowTestSlice
   : public ToArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(ToArrowTestSlice, SliceTest)
 {

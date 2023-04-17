@@ -131,7 +131,7 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
     auto const expected           = LCW<T>{{
                                    LCW<T>{}  // NULL.
                                  },
-                                 null_at(0)};
+                                           null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.child(), values_col_t{});
@@ -306,7 +306,7 @@ TEST_F(PurgeNonEmptyNullsTest, ListOfStrings)
                                    {"55555"},
                                    {"11", "22", "33", "44"},
                                  },
-                                 null_at(0)};
+                                          null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_list_view.offsets(), offsets_col_t{0, 0, 3, 4, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(

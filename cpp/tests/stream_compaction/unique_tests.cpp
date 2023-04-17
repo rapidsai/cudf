@@ -52,8 +52,7 @@ using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
 using strings_col = cudf::test::strings_column_wrapper;
 using structs_col = cudf::test::structs_column_wrapper;
 
-struct Unique : public cudf::test::BaseFixture {
-};
+struct Unique : public cudf::test::BaseFixture {};
 
 TEST_F(Unique, StringKeyColumn)
 {

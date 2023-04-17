@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,7 +223,7 @@ struct multi_delimiter_strings_tokenizer {
         });
       if (itr_find != delimiters_end) {  // found delimiter
         auto token_size = static_cast<cudf::size_type>((curr_ptr - data_ptr) - last_pos);
-        if (token_size > 0)  // we only care about non-zero sized tokens
+        if (token_size > 0)              // we only care about non-zero sized tokens
         {
           if (d_str_tokens)
             d_str_tokens[token_idx] = string_index_pair{data_ptr + last_pos, token_size};
