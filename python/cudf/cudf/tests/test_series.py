@@ -1474,8 +1474,7 @@ def test_reset_index_named(drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    with expect_warning_if(name is None and not drop):
-        expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
     got = gs.reset_index(drop=drop, inplace=inplace, name=name)
 
     if inplace:
