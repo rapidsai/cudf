@@ -74,15 +74,15 @@ struct replace_regex_fn {
       auto const end_pos   = d_str.byte_offset(end);          // character position values
       nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // and compute new size
 
-      if (out_ptr) {                                         // replace:
-                                                             // i:bbbbsssseeee
-        out_ptr = copy_and_increment(out_ptr,                //   ^
-                                     in_ptr + last_pos,      // o:bbbb
-                                     start_pos - last_pos);  //       ^
-        out_ptr = copy_string(out_ptr, d_repl);              // o:bbbbrrrrrr
-                                                             //  out_ptr ---^
-        last_pos = end_pos;                                  // i:bbbbsssseeee
-      }                                                      //  in_ptr --^
+      if (out_ptr) {                                          // replace:
+                                                              // i:bbbbsssseeee
+        out_ptr = copy_and_increment(out_ptr,                 //   ^
+                                     in_ptr + last_pos,       // o:bbbb
+                                     start_pos - last_pos);   //       ^
+        out_ptr = copy_string(out_ptr, d_repl);               // o:bbbbrrrrrr
+                                                              //  out_ptr ---^
+        last_pos = end_pos;                                   // i:bbbbsssseeee
+      }                                                       //  in_ptr --^
 
       begin = end + (begin == end);
       end   = -1;

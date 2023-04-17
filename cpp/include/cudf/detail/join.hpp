@@ -65,12 +65,12 @@ struct hash_join {
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
-  hash_join()                 = delete;
-  ~hash_join()                = default;
-  hash_join(hash_join const&) = delete;
-  hash_join(hash_join&&)      = delete;
+  hash_join()                            = delete;
+  ~hash_join()                           = default;
+  hash_join(hash_join const&)            = delete;
+  hash_join(hash_join&&)                 = delete;
   hash_join& operator=(hash_join const&) = delete;
-  hash_join& operator=(hash_join&&) = delete;
+  hash_join& operator=(hash_join&&)      = delete;
 
  private:
   bool const _is_empty;   ///< true if `_hash_table` is empty
@@ -78,8 +78,8 @@ struct hash_join {
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
+    _preprocessed_build;                   ///< input table preprocssed for row operators
+  map_type _hash_table;                    ///< hash table built on `_build`
 
  public:
   /**

@@ -31,8 +31,7 @@ using namespace cudf::test::iterators;
 
 constexpr auto null{0};
 
-struct NestedStructTest : public cudf::test::BaseFixture {
-};
+struct NestedStructTest : public cudf::test::BaseFixture {};
 
 TEST_F(NestedStructTest, SimpleStructsOfListsNoNulls)
 {

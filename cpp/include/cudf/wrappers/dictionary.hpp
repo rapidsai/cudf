@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,5 +215,5 @@ CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
 
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
-/** @} */  // end of group
+/** @} */                                          // end of group
 }  // namespace cudf

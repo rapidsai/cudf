@@ -44,8 +44,7 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::TimestampTypes>;
 
 template <typename T>
-struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {
-};
+struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TypedListsContainsTestScalarNeedle, TestTypes);
 
 TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInput)
@@ -220,8 +219,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
 }
 
 template <typename T>
-struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {
-};
+struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedListContainsTestColumnNeedles, TestTypes);
 
@@ -360,8 +358,7 @@ auto search_bounds(cudf::table_view const& t,
   return std::pair(std::move(result_lower_bound), std::move(result_upper_bound));
 }
 
-struct ListBinarySearch : public cudf::test::BaseFixture {
-};
+struct ListBinarySearch : public cudf::test::BaseFixture {};
 
 TEST_F(ListBinarySearch, ListWithNulls)
 {

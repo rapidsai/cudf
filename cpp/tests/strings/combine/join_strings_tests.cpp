@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-struct JoinStringsTest : public cudf::test::BaseFixture {
-};
+struct JoinStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(JoinStringsTest, Join)
 {
