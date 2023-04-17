@@ -877,15 +877,14 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  /*
-  auto preceding_value =
-    detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream);
-  auto following_value =
-    detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream);
-    */
-
   auto [preceding_value, following_value] = [&] {
     if constexpr (std::is_same_v<OrderByT, cudf::string_view>) {
+      CUDF_EXPECTS(
+        preceding_window.is_unbounded() || preceding_window.is_current_row(),
+        "For STRING order-by column, preceding range has to be either UNBOUNDED or CURRENT ROW.");
+      CUDF_EXPECTS(
+        following_window.is_unbounded() || following_window.is_current_row(),
+        "For STRING order-by column, following range has to be either UNBOUNDED or CURRENT ROW.");
       return std::pair{cudf::string_view{}, cudf::string_view{}};
     } else {
       return std::pair{
