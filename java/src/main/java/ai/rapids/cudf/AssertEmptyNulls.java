@@ -18,6 +18,15 @@
 
 package ai.rapids.cudf;
 
+/**
+ *  This class is a Helper class to assert there are no non-empty nulls in a ColumnView
+ *
+ *  The reason for the existence of this class is so that we can turn the asserts on/off when needed
+ *  by passing "-da:ai.rapids.cudf.AssertEmptyNulls". We need that behavior because we have tests
+ *  that explicitly test with ColumnViews that contain non-empty nulls but more importantly, there
+ *  could be cases where an external system may not have a requirement of nulls being empty, so for
+ *  us to work with those systems, we can turn off this assert in the field.
+ */
 public class AssertEmptyNulls {
   // This is the recommended way to check at runtime that assertions are enabled.
   // https://docs.oracle.com/javase/8/docs/technotes/guides/language/assert.html
