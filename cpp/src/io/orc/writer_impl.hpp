@@ -118,7 +118,7 @@ class orc_streams {
   auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
-  operator std::vector<Stream> const &() const { return streams; }
+  operator std::vector<Stream> const&() const { return streams; }
 
  private:
   std::vector<Stream> streams;

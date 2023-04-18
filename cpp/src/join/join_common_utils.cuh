@@ -158,6 +158,7 @@ get_trivial_left_join_indices(table_view const& left,
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
  *                           build
  * @param hash_table Build hash table.
+ * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -168,6 +169,7 @@ void build_join_hash_table(
   cudf::table_view const& build,
   std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
   MultimapType& hash_table,
+  bool has_nulls,
   null_equality nulls_equal,
   [[maybe_unused]] bitmask_type const* bitmask,
   rmm::cuda_stream_view stream)
@@ -176,7 +178,7 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
   auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
+  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};

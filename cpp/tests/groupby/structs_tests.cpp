@@ -26,8 +26,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_structs_test : public cudf::test::BaseFixture {
-};
+struct groupby_structs_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_structs_test, cudf::test::FixedWidthTypes);
 

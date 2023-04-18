@@ -44,8 +44,7 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
   return std::make_tuple(std::move(dev_chars), replaced_array);
 }
 
-struct StringIteratorTest : public IteratorTest<cudf::string_view> {
-};
+struct StringIteratorTest : public IteratorTest<cudf::string_view> {};
 
 TEST_F(StringIteratorTest, string_view_null_iterator)
 {

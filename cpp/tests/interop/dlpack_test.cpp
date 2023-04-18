@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +59,7 @@ void validate_dtype(DLDataType const& dtype)
   EXPECT_EQ(sizeof(T) * 8, dtype.bits);
 }
 
-class DLPackUntypedTests : public cudf::test::BaseFixture {
-};
+class DLPackUntypedTests : public cudf::test::BaseFixture {};
 
 TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
 {
@@ -333,8 +332,7 @@ TEST_F(DLPackUntypedTests, UnsupportedStridedColMajor2DTensorFromDlpack)
 }
 
 template <typename T>
-class DLPackTimestampTests : public cudf::test::BaseFixture {
-};
+class DLPackTimestampTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(DLPackTimestampTests, cudf::test::ChronoTypes);
 
@@ -346,8 +344,7 @@ TYPED_TEST(DLPackTimestampTests, ChronoTypesToDlpack)
 }
 
 template <typename T>
-class DLPackNumericTests : public cudf::test::BaseFixture {
-};
+class DLPackNumericTests : public cudf::test::BaseFixture {};
 
 // The list of supported types comes from DLDataType_to_data_type() in cpp/src/dlpack/dlpack.cpp
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353

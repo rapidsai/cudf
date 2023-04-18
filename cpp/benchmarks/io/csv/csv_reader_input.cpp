@@ -78,11 +78,11 @@ template <cudf::io::io_type IOType>
 void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IOType>>)
 {
   auto const d_type      = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
-                                         static_cast<int32_t>(data_type::FLOAT),
-                                         static_cast<int32_t>(data_type::DECIMAL),
-                                         static_cast<int32_t>(data_type::TIMESTAMP),
-                                         static_cast<int32_t>(data_type::DURATION),
-                                         static_cast<int32_t>(data_type::STRING)});
+                                              static_cast<int32_t>(data_type::FLOAT),
+                                              static_cast<int32_t>(data_type::DECIMAL),
+                                              static_cast<int32_t>(data_type::TIMESTAMP),
+                                              static_cast<int32_t>(data_type::DURATION),
+                                              static_cast<int32_t>(data_type::STRING)});
   auto const source_type = IOType;
 
   csv_read_common(d_type, source_type, state);
