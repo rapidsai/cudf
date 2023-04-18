@@ -26,17 +26,52 @@ namespace io {
 namespace avro {
 struct block_desc_s {
   block_desc_s() {}
-  explicit constexpr block_desc_s(size_t offset_,
-                                  uint32_t size_,
-                                  uint32_t first_row_,
-                                  uint32_t num_rows_)
-    : offset(offset_), size(size_), first_row(first_row_), num_rows(num_rows_)
+  explicit constexpr block_desc_s(
+    size_t offset_, uint32_t size_, uint32_t row_offset_, uint32_t first_row_, uint32_t num_rows_)
+    : offset(offset_),
+      size(size_),
+      row_offset(row_offset_),
+      first_row(first_row_),
+      num_rows(num_rows_)
   {
   }
 
+  // Offset of this block, in bytes, from the start of the file.
   size_t offset;
+
+  // Size of this block, in bytes.
   uint32_t size;
+
+  // The absolute row offset that needs to be added to each row index in order
+  // to derive the offset of the decoded data in the destination array.  E.g.
+  // `const ptrdiff_t dst_row = ((row - first_row) + row_offset)`.  See
+  // `avro_decode_row()` for details.
+  uint32_t row_offset;
+
+  // The index of the first row to be *saved* from this block.  That is, the
+  // number of rows to skip in this block before starting to save values.  If
+  // this is 0, then no rows will be skipped (all rows will be saved).  If a
+  // user has requested `read_avro()` to skip rows, that will materialize as a
+  // non-zero `first_row` value in the appropriate block containing the first
+  // row to be saved.
+  //
+  // N.B. We explicitly use the word "saved" here, not "decoded".  Technically,
+  //      all rows are decoded, one column at a time, as the process of decoding
+  //      a column value is what informs us of the value's size in bytes (in its
+  //      encoded form), and thus, where the next column starts.  However, we
+  //      only *save* these decoded values based on the `first_row`.
   uint32_t first_row;
+
+  // The number of rows to save from this block.  If a user has requested
+  // `read_avro()` to limit the number of rows to return, this will materialize
+  // as a `num_rows` value less than the total number of rows in the appropriate
+  // block.  Otherwise, `num_rows` will be equal to the total number of rows in
+  // the block, after skipping `first_row` rows (if applicable).
+  //
+  // N.B. Unlike `first_rows`, where all rows and columns are decoded prior to
+  //      reaching the point we've been requested to start *saving* values --
+  //      once the `num_rows` limit has been reached, no further decoding takes
+  //      place.
   uint32_t num_rows;
 };
 
