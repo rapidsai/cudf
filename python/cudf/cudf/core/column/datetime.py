@@ -586,9 +586,9 @@ def infer_format(element: str, **kwargs) -> str:
             # unsupported timezone will let the code fail below
             # with a ValueError.
             raise NotImplementedError(
-                "cuDF does not yet support " "timezone-aware datetimes"
+                "cuDF does not yet support timezone-aware datetimes"
             )
-        # second_parts.remove("Z")
+
         second_part = "".join(second_parts[1:])
 
         if len(second_part) > 1:

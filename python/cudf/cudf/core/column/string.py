@@ -5525,10 +5525,10 @@ class StringColumn(column.ColumnBase):
                 format = datetime.infer_format(
                     self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
-        print(format)
+
         if format.endswith("%z"):
             raise NotImplementedError(
-                "cuDF does not yet support " "timezone-aware datetimes"
+                "cuDF does not yet support timezone-aware datetimes"
             )
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
