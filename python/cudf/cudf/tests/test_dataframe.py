@@ -5376,11 +5376,11 @@ def test_df_sr_binop(gsr, colnames, op):
         expect = op(pdf, psr)
     except ValueError:
         with pytest.raises(ValueError):
-            got = op(gdf, gsr).to_pandas(nullable=True)
+            op(gdf, gsr)
         with pytest.raises(ValueError):
-            expect = op(psr, pdf)
+            op(psr, pdf)
         with pytest.raises(ValueError):
-            got = op(gsr, gdf).to_pandas(nullable=True)
+            op(gsr, gdf)
     else:
         got = op(gdf, gsr).to_pandas(nullable=True)
         assert_eq(expect, got, check_dtype=False, check_like=True)
