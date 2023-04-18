@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,6 +202,9 @@ public final class Literal extends AstExpression {
 
   /** Construct a string literal with the specified value or null. */
   public static Literal ofString(String value) {
+    if (value == null) {
+      return ofNull(DType.STRING);
+    }
     byte[] stringBytes = value.getBytes();
     byte[] serializedValue = new byte[stringBytes.length + Integer.BYTES];
     ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putInt(stringBytes.length);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -486,7 +486,11 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(BinaryOperator.LESS, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) < 0)),
         Arguments.of(BinaryOperator.GREATER, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) > 0)),
         Arguments.of(BinaryOperator.LESS_EQUAL, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) <= 0)),
-        Arguments.of(BinaryOperator.GREATER_EQUAL, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) >= 0)));
+        Arguments.of(BinaryOperator.GREATER_EQUAL, in1, in2, mapArray(in1, (a) -> a.compareTo(in2) >= 0)),
+        // null literal
+        Arguments.of(BinaryOperator.NULL_EQUAL, in1, null, Arrays.asList(false, false, true, false, false)),
+        Arguments.of(BinaryOperator.NOT_EQUAL, in1, null, Arrays.asList(null, null, null, null, null)),
+        Arguments.of(BinaryOperator.LESS, in1, null, Arrays.asList(null, null, null, null, null)));
   }
 
   @ParameterizedTest
