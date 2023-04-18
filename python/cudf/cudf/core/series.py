@@ -79,6 +79,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.api.extensions import no_default
 
 
 def _format_percentile_names(percentiles):
@@ -996,7 +997,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 """,
         )
     )
-    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, name=no_default, inplace=False
+    ):
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
@@ -1004,7 +1007,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
-            if name is None:
+            if name is no_default:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
             return cudf.core.dataframe.DataFrame._from_data(data, index)
