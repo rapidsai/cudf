@@ -68,7 +68,7 @@ class cufile_shim {
   auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
-  cufile_shim(cufile_shim const&) = delete;
+  cufile_shim(cufile_shim const&)            = delete;
   cufile_shim& operator=(cufile_shim const&) = delete;
 
   static cufile_shim const* instance();
