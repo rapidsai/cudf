@@ -30,7 +30,7 @@ from cudf.api.types import (
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.core.dtypes import DatetimeTZDtype
+from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _fillna_natwise
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
@@ -541,7 +541,7 @@ class DatetimeTZColumn(DatetimeColumn):
     def __init__(
         self,
         data: Buffer,
-        dtype: DatetimeTZDtype,
+        dtype: pd.DatetimeTZDtype,
         mask: Buffer = None,
         size: int = None,
         offset: int = 0,
@@ -549,7 +549,7 @@ class DatetimeTZColumn(DatetimeColumn):
     ):
         super().__init__(
             data=data,
-            dtype=dtype.base,
+            dtype=_get_base_dtype(dtype),
             mask=mask,
             size=size,
             offset=offset,

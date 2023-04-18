@@ -3,15 +3,19 @@
 import os
 import zoneinfo
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import Tuple, cast
+
+import numpy as np
+import pandas as pd
 
 import cudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
 from cudf._lib.timezone import make_timezone_transition_table
-from cudf.core.column.column import build_column
+from cudf.core.column.column import as_column, build_column
 from cudf.core.column.datetime import DatetimeColumn, DatetimeTZColumn
 from cudf.core.dataframe import DataFrame
+from cudf.utils.dtypes import _get_base_dtype
 
 
 @lru_cache(maxsize=20)
@@ -27,15 +31,16 @@ def get_tz_data(zone_name):
 
     Returns
     -------
-    DataFrame with two columns containing the transition times ("dt")
-    and corresponding UTC offsets ("offset").
+    DataFrame with two columns containing the transition times
+    ("transition_times") and corresponding UTC offsets ("offsets").
     """
     try:
         # like zoneinfo, we first look in TZPATH
-        return _find_and_read_tzfile_tzpath(zone_name)
+        tz_table = _find_and_read_tzfile_tzpath(zone_name)
     except zoneinfo.ZoneInfoNotFoundError:
         # if that fails, we fall back to using `tzdata`
-        return _find_and_read_tzfile_tzdata(zone_name)
+        tz_table = _find_and_read_tzfile_tzdata(zone_name)
+    return tz_table
 
 
 def _find_and_read_tzfile_tzpath(zone_name):
@@ -73,54 +78,68 @@ def _find_and_read_tzfile_tzdata(zone_name):
 
 
 def _read_tzfile_as_frame(tzdir, zone_name):
-    dt, offsets = make_timezone_transition_table(tzdir, zone_name)
-    return DataFrame._from_columns([dt, offsets], ["dt", "offsets"])
+    transition_times_and_offsets = make_timezone_transition_table(
+        tzdir, zone_name
+    )
+
+    if not transition_times_and_offsets:
+        # this happens for UTC-like zones
+        min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
+        transition_times_and_offsets = as_column([min_date]), as_column(
+            [np.timedelta64(0, "s")]
+        )
+
+    return DataFrame._from_columns(
+        transition_times_and_offsets, ["transition_times", "offsets"]
+    )
 
 
 def _find_ambiguous_and_nonexistent(
     data: DatetimeColumn, zone_name: str
-) -> Optional[Tuple]:
+) -> Tuple:
     """
     Recognize ambiguous and nonexistent timestamps for the given timezone.
     """
-    tz_zone = get_tz_data(zone_name)
-    dt = tz_zone["dt"]
-    offsets = tz_zone["offsets"].astype(f"timedelta64[{data._time_unit}]")
+    tz_data_for_zone = get_tz_data(zone_name)
+    transition_times = tz_data_for_zone["transition_times"]
+    offsets = tz_data_for_zone["offsets"].astype(
+        f"timedelta64[{data._time_unit}]"
+    )
 
     if len(offsets) == 1:  # no transitions
         return False, False
 
-    dt, offsets, old_offsets = (
-        dt[1:]._column,
+    transition_times, offsets, old_offsets = (
+        transition_times[1:]._column,
         offsets[1:]._column,
         offsets[:-1]._column,
     )
 
-    # Assume we have two clocks:
-    # - Clock 1 is turned forward or backwards correctly at transition times
-    # - Clock 2 makes no changes at transition times
-    clock_1 = dt + offsets
-    clock_2 = dt + old_offsets
+    # Assume we have two clocks at the moment of transition:
+    # - Clock 1 is turned forward or backwards correctly
+    # - Clock 2 makes no changes
+    clock_1 = transition_times + offsets
+    clock_2 = transition_times + old_offsets
 
-    # At the start of the ambiguous time period, Clock 1 (which has
+    # At the start of an ambiguous time period, Clock 1 (which has
     # been turned back) reads less than Clock 2:
     cond = clock_1 < clock_2
     ambiguous_begin = clock_1.apply_boolean_mask(cond)
 
-    # The end of the ambiguous time period is what Clock 2 reads at
-    # transition time:
+    # The end of an ambiguous time period is what Clock 2 reads at
+    # the moment of transition:
     ambiguous_end = clock_2.apply_boolean_mask(cond)
     ambiguous = label_bins(
         data, ambiguous_begin, True, ambiguous_end, False
     ).notnull()
 
-    # At the start of the non-existent time period, Clock 2 reads less
+    # At the start of a non-existent time period, Clock 2 reads less
     # than Clock 1 (which has been turned forward):
     cond = clock_1 > clock_2
     nonexistent_begin = clock_2.apply_boolean_mask(cond)
 
     # The end of the non-existent time period is what Clock 1 reads
-    # at transition time:
+    # at the moment of transition:
     nonexistent_end = clock_1.apply_boolean_mask(cond)
     nonexistent = label_bins(
         data, nonexistent_begin, True, nonexistent_end, False
@@ -129,46 +148,48 @@ def _find_ambiguous_and_nonexistent(
     return ambiguous, nonexistent
 
 
-def localize(data, zone_name):
-    dtype = cudf.DatetimeTZDtype(data._time_unit, zone_name)
+def localize(data: DatetimeColumn, zone_name: str) -> DatetimeTZColumn:
+
+    if isinstance(data, DatetimeTZColumn):
+        raise ValueError(
+            "Already localized. "
+            "Use `tz_convert` to convert between time zones."
+        )
+    dtype = pd.DatetimeTZDtype(data._time_unit, zone_name)
     ambiguous, nonexistent = _find_ambiguous_and_nonexistent(data, zone_name)
-    localized = data._scatter_by_column(
-        data.isnull() and (ambiguous or nonexistent),
-        cudf.Scalar(cudf.NA, dtype=data.dtype),
+    localized = cast(
+        DatetimeColumn,
+        data._scatter_by_column(
+            data.isnull() | (ambiguous | nonexistent),
+            cudf.Scalar(cudf.NA, dtype=data.dtype),
+        ),
     )
     gmt_data = local_to_utc(localized, zone_name)
-    return build_column(
-        data=gmt_data.data,
-        dtype=dtype,
-        mask=localized.mask,
-        size=gmt_data.size,
-        offset=gmt_data.offset,
+    return cast(
+        DatetimeTZColumn,
+        build_column(
+            data=gmt_data.data,
+            dtype=dtype,
+            mask=localized.mask,
+            size=gmt_data.size,
+            offset=gmt_data.offset,
+        ),
     )
 
 
-def utc_to_local(data: DatetimeTZColumn, zone: str) -> DatetimeColumn:
-    tz_zone = get_tz_data(zone)
-    time_starts = tz_zone._data["dt"].astype(data.dtype.base)
-    indices = search_sorted([time_starts], [data], "right")
-    gmt_offsets = (
-        tz_zone["offsets"]
-        ._column.astype(f"timedelta64[{data._time_unit}]")
-        .take(indices, nullify=True)
-    )
-    # apply each offset to get the time in `zone`:
-    return data + gmt_offsets
+def utc_to_local(data: DatetimeColumn, zone_name: str) -> DatetimeColumn:
+    tz_data_for_zone = get_tz_data(zone_name)
+    transition_times, offsets = tz_data_for_zone._columns
+    transition_times = transition_times.astype(_get_base_dtype(data.dtype))
+    indices = search_sorted([transition_times], [data], "right") - 1
+    offsets_from_utc = offsets.take(indices, nullify=True)
+    return data + offsets_from_utc
 
 
-def local_to_utc(data, zone):
-    tz_zone = get_tz_data(zone)
-    time_starts = (
-        tz_zone._data["dt"] + tz_zone._data["offsets"].astype("timedelta64[s]")
-    ).astype(data.dtype.base)
-    indices = search_sorted([time_starts], [data], "right")
-    gmt_offsets = (
-        tz_zone["offsets"]
-        ._column.astype(f"timedelta64[{data._time_unit}]")
-        .take(indices, nullify=True)
-    )
-    # apply each offset to get the time in `zone`:
-    return data - gmt_offsets
+def local_to_utc(data: DatetimeColumn, zone_name: str) -> DatetimeColumn:
+    tz_data_for_zone = get_tz_data(zone_name)
+    transition_times, offsets = tz_data_for_zone._columns
+    transition_times_local = (transition_times + offsets).astype(data.dtype)
+    indices = search_sorted([transition_times_local], [data], "right") - 1
+    offsets_to_utc = offsets.take(indices, nullify=True)
+    return data - offsets_to_utc

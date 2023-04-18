@@ -16,7 +16,7 @@ from cudf.core.buffer import (
     acquire_spill_lock,
     as_buffer,
 )
-
+from cudf.utils.dtypes import _get_base_dtype
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
@@ -316,7 +316,7 @@ cdef class Column:
             data_dtype = col.dtype
         elif is_datetime64tz_dtype(self.dtype):
             col = self
-            data_dtype = col.dtype.base
+            data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
             data_dtype = self.dtype
@@ -379,7 +379,7 @@ cdef class Column:
             data_dtype = col.dtype
         elif is_datetime64tz_dtype(self.dtype):
             col = self
-            data_dtype = self.dtype.base
+            data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
             data_dtype = self.dtype
