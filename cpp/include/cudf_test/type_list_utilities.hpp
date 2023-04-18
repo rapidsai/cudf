@@ -90,14 +90,12 @@ template <class... T, int D>
 struct GetTypeImpl<Types<T...>, D> {
   static_assert(D < sizeof...(T), "Out of bounds");
 
-  using type = typename GetTypeImpl<typename Types<T...>::Tail, D - 1>::type;
+  using raw_type = decltype(std::get<D>(std::declval<std::tuple<T...>>()));
+  using type     = std::decay_t<raw_type>;
 };
-
-template <class... ARGS>
-struct GetTypeImpl<Types<ARGS...>, 0> {
-  static_assert(sizeof...(ARGS) > 0, "Out of bounds");
-
-  using type = typename Types<ARGS...>::Head;
+template <class T, class... ARGS>
+struct GetTypeImpl<Types<T, ARGS...>, 0> {
+  using type = T;
 };
 // @endcond
 
