@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 }
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator+(
-  string_view::const_iterator::difference_type offset)
+  string_view::const_iterator::difference_type offset) const
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
@@ -181,7 +181,7 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 }
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator-(
-  string_view::const_iterator::difference_type offset)
+  string_view::const_iterator::difference_type offset) const
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
@@ -396,12 +396,12 @@ __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, siz
 }
 
 // parameters are character position values
-__device__ inline string_view string_view::substr(size_type pos, size_type length) const
+__device__ inline string_view string_view::substr(size_type pos, size_type count) const
 {
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(pos + length);
-  if (epos > size_bytes()) epos = size_bytes();
-  if (spos >= epos) return string_view("", 0);
+  if (pos < 0 || pos >= length()) { return string_view{}; }
+  auto const itr  = begin() + pos;
+  auto const spos = itr.byte_offset();
+  auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
   return string_view(data() + spos, epos - spos);
 }
 

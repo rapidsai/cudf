@@ -88,11 +88,11 @@ class string_view {
     __device__ inline const_iterator& operator++();
     __device__ inline const_iterator operator++(int);
     __device__ inline const_iterator& operator+=(difference_type);
-    __device__ inline const_iterator operator+(difference_type);
+    __device__ inline const_iterator operator+(difference_type) const;
     __device__ inline const_iterator& operator--();
     __device__ inline const_iterator operator--(int);
     __device__ inline const_iterator& operator-=(difference_type);
-    __device__ inline const_iterator operator-(difference_type);
+    __device__ inline const_iterator operator-(difference_type) const;
     __device__ inline bool operator==(const const_iterator&) const;
     __device__ inline bool operator!=(const const_iterator&) const;
     __device__ inline bool operator<(const const_iterator&) const;
