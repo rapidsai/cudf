@@ -25,8 +25,7 @@
 /**
  * @brief Base test fixture for JSON reader tests
  */
-struct JsonReaderTest : public cudf::test::BaseFixture {
-};
+struct JsonReaderTest : public cudf::test::BaseFixture {};
 
 // function to extract first delimiter in the string in each chunk,
 // collate together and form byte_range for each chunk,

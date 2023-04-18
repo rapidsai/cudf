@@ -35,8 +35,7 @@
 #include <vector>
 
 template <typename T>
-struct TypedTableViewTest : public cudf::test::BaseFixture {
-};
+struct TypedTableViewTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -231,8 +230,7 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorSameTable)
 }
 
 template <typename T>
-struct NaNTableViewTest : public cudf::test::BaseFixture {
-};
+struct NaNTableViewTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(NaNTableViewTest, cudf::test::FloatingPointTypes);
 

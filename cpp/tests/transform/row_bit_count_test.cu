@@ -36,8 +36,7 @@
 #include <numeric>
 
 template <typename T>
-struct RowBitCountTyped : public cudf::test::BaseFixture {
-};
+struct RowBitCountTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RowBitCountTyped, cudf::test::FixedWidthTypes);
 
@@ -145,12 +144,10 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
                                                    {1, 1, 1, 0, 1, 1, 0, 1, 0}};
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> inner_offsets{0, 2, 5, 6, 9, 9};
   std::vector<bool> inner_list_validity{1, 1, 1, 1, 0};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end());
   auto inner_list = cudf::make_lists_column(
-    5,
-    inner_offsets.release(),
-    values.release(),
-    1,
-    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end()));
+    5, inner_offsets.release(), values.release(), null_count, std::move(null_mask));
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> outer_offsets{0, 2, 2, 3, 5};
   auto list = cudf::make_lists_column(4, outer_offsets.release(), std::move(inner_list), 0, {});
 
@@ -167,8 +164,7 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-struct RowBitCount : public cudf::test::BaseFixture {
-};
+struct RowBitCount : public cudf::test::BaseFixture {};
 
 TEST_F(RowBitCount, Strings)
 {
@@ -236,11 +232,10 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // column size. For what it's worth, it looks as follows:
   //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
 
-  using namespace cudf;
   auto constexpr num_rows = 1024 * 2;  // Exceeding a block size.
 
   // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
-  auto ints      = make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows * 2);
+  auto ints      = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows * 2);
   auto ints_view = ints->mutable_view();
   thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
                    ints_view.begin<int32_t>(),
@@ -248,7 +243,8 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
                    thrust::identity{});
 
   // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
-  auto list_offsets      = make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
+  auto list_offsets =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
   auto list_offsets_view = list_offsets->mutable_view();
   thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
                    list_offsets_view.begin<cudf::offset_type>(),
@@ -256,17 +252,18 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
                    times_2{});
 
   // List<int32_t> = {{0,1}, {2,3}, {4,5}, ..., {2*(num_rows-1), 2*num_rows-1}};
-  auto lists_column = make_lists_column(num_rows, std::move(list_offsets), std::move(ints), 0, {});
+  auto lists_column =
+    cudf::make_lists_column(num_rows, std::move(list_offsets), std::move(ints), 0, {});
 
   // Struct<List<int32_t>.
   auto struct_members = std::vector<std::unique_ptr<cudf::column>>{};
   struct_members.emplace_back(std::move(lists_column));
-  auto structs_column = make_structs_column(num_rows, std::move(struct_members), 0, {});
+  auto structs_column = cudf::make_structs_column(num_rows, std::move(struct_members), 0, {});
 
   // Compute row_bit_count, and compare.
-  auto row_bit_counts = row_bit_count(cudf::table_view{{structs_column->view()}});
+  auto row_bit_counts = cudf::row_bit_count(cudf::table_view{{structs_column->view()}});
   auto expected_row_bit_counts =
-    make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
+    cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
   thrust::fill_n(rmm::exec_policy(cudf::get_default_stream()),
                  expected_row_bit_counts->mutable_view().begin<int32_t>(),
                  num_rows,

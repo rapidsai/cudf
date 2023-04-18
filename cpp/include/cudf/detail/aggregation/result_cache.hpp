@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,9 @@ struct pair_column_aggregation_hash {
 
 class result_cache {
  public:
-  result_cache()                    = delete;
-  ~result_cache()                   = default;
-  result_cache(result_cache const&) = delete;
+  result_cache()                                     = delete;
+  ~result_cache()                                    = default;
+  result_cache(result_cache const&)                  = delete;
   result_cache& operator=(const result_cache& other) = delete;
 
   result_cache(size_t num_columns) : _cache(num_columns) {}
