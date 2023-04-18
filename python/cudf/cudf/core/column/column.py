@@ -2252,7 +2252,7 @@ def as_column(
                         raise TypeError
                     if is_datetime64tz_dtype(dtype):
                         raise NotImplementedError(
-                            "Use `.dt.tz_localize()` to construct a Series of "
+                            "Use `tz_localize()` to construct "
                             "timezone aware data."
                         )
                     if is_list_dtype(dtype):
