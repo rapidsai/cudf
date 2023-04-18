@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,7 @@ static void BM_transpose(benchmark::State& state)
   }
 }
 
-class Transpose : public cudf::benchmark {
-};
+class Transpose : public cudf::benchmark {};
 
 #define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                                \
   BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { BM_transpose(state); } \

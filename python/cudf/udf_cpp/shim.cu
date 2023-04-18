@@ -671,8 +671,34 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
   ptr->~udf_string();
 }
 
+// Only used to allocate the right amount of space, see below
+struct meminfo_and_str {
+  NRT_MemInfo mi;
+  udf_string st;
+};
+
+/*
+Create a new MemInfo object holding the reference count of a udf_string. When returning
+new strings, shim functions expect a pointer to a stack allocated buffer into which it
+will construct the udf_string it returns. Since one can not safely build a MemInfo object
+around this stack memory, we store a copy of the udf_string itself next to the MemInfo
+where it can be later used to destroy the underlying data.
+*/
 extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
 {
-  *nb_retval = NRT_MemInfo_new(udf_str, sizeof(udf_string), (NRT_dtor_function)udf_str_dtor, NULL);
+  // allocate enough room for both the meminfo and udf_string
+  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str));
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
+
+    // copy the udf_string to the extra heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+  }
+
+  *nb_retval = &(mi_and_str->mi);
   return 0;
 }

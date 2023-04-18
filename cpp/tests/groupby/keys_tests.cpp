@@ -27,8 +27,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_keys_test : public cudf::test::BaseFixture {
-};
+struct groupby_keys_test : public cudf::test::BaseFixture {};
 
 using supported_types = cudf::test::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, numeric::decimal32, numeric::decimal64>;
@@ -314,8 +313,7 @@ TYPED_TEST(groupby_keys_test, lists)
   test_single_agg(keys, values, expected_keys, expected_values, std::move(agg));
 }
 
-struct groupby_string_keys_test : public cudf::test::BaseFixture {
-};
+struct groupby_string_keys_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_string_keys_test, basic)
 {
@@ -335,8 +333,7 @@ TEST_F(groupby_string_keys_test, basic)
 }
 // clang-format on
 
-struct groupby_dictionary_keys_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_keys_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_keys_test, basic)
 {
@@ -361,8 +358,7 @@ TEST_F(groupby_dictionary_keys_test, basic)
                   force_use_sort_impl::YES);
 }
 
-struct groupby_cache_test : public cudf::test::BaseFixture {
-};
+struct groupby_cache_test : public cudf::test::BaseFixture {};
 
 // To check if the cache doesn't insert multiple times to cache for the same aggregation on a
 // column in the same request. If this test fails, then insert happened and the key stored in the

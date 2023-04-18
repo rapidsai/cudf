@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct ClampErrorTest : public cudf::test::BaseFixture {
-};
+struct ClampErrorTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 {
@@ -104,8 +103,7 @@ TEST_F(ClampErrorTest, InValidCase2)
   EXPECT_THROW(cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace), cudf::logic_error);
 }
 
-struct ClampEmptyCaseTest : public cudf::test::BaseFixture {
-};
+struct ClampEmptyCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 {
@@ -291,8 +289,7 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
 }
 
 template <typename T>
-struct ClampFloatTest : public cudf::test::BaseFixture {
-};
+struct ClampFloatTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ClampFloatTest, cudf::test::FloatingPointTypes);
 
@@ -380,8 +377,7 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
-struct ClampStringTest : public cudf::test::BaseFixture {
-};
+struct ClampStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampStringTest, WithNullableColumn)
 {
@@ -512,8 +508,7 @@ TEST_F(ClampStringTest, WithReplaceString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
-struct ClampDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ClampDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampDictionaryTest, WithNullableColumn)
 {
@@ -590,8 +585,7 @@ TEST_F(ClampDictionaryTest, WithReplace)
 }
 
 template <typename T>
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTest, cudf::test::FixedPointTypes);
 

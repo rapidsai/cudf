@@ -28,8 +28,7 @@
 
 #include <random>
 
-class StringExtract : public cudf::benchmark {
-};
+class StringExtract : public cudf::benchmark {};
 
 static void BM_extract(benchmark::State& state, int groups)
 {
@@ -41,7 +40,7 @@ static void BM_extract(benchmark::State& state, int groups)
 
   std::vector<std::string> samples(100);  // 100 unique rows of data to reuse
   std::generate(samples.begin(), samples.end(), [&]() {
-    std::string row;  // build a row of random tokens
+    std::string row;                      // build a row of random tokens
     while (static_cast<int>(row.size()) < n_length) {
       row += std::to_string(words_dist(generator)) + " ";
     }

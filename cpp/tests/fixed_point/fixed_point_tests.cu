@@ -36,12 +36,10 @@
 
 using namespace numeric;
 
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t, __int128_t>;
 

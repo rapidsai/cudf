@@ -36,12 +36,10 @@
 #include <memory>
 #include <string>
 
-struct LeadLagWindowTest : public cudf::test::BaseFixture {
-};
+struct LeadLagWindowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedLeadLagWindowTest : public cudf::test::BaseFixture {
-};
+struct TypedLeadLagWindowTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::FloatingPointTypes,
@@ -540,8 +538,7 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
 }
 
 template <typename T>
-struct TypedNestedLeadLagWindowTest : public cudf::test::BaseFixture {
-};
+struct TypedNestedLeadLagWindowTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedNestedLeadLagWindowTest, TypesForTest);
 
@@ -778,17 +775,17 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                    min_periods,
                                    *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
     auto expected_lists_col   = lcw{{{3, 3, 3},
-                                   {{4, 4, 4, 4}, null_at_2},
-                                   {5, 5, 5, 5, 5},
-                                   {},
-                                   {},
-                                   {},
-                                   {30, 30, 30},
-                                   {40, 40, 40, 40},
-                                   {{50, 50, 50, 50, 50}, null_at_2},
-                                   {},
-                                   {},
-                                   {}},
+                                     {{4, 4, 4, 4}, null_at_2},
+                                     {5, 5, 5, 5, 5},
+                                     {},
+                                     {},
+                                     {},
+                                     {30, 30, 30},
+                                     {40, 40, 40, 40},
+                                     {{50, 50, 50, 50, 50}, null_at_2},
+                                     {},
+                                     {},
+                                     {}},
                                   cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})};
     auto expected_strings_col = cudf::test::strings_column_wrapper{
       {"333", "4444", "55555", "", "", "", "", "40404040", "5050505050", "", "", ""},
@@ -848,8 +845,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
   }
 }
 
-struct LeadLagNonFixedWidthTest : cudf::test::BaseFixture {
-};
+struct LeadLagNonFixedWidthTest : cudf::test::BaseFixture {};
 
 TEST_F(LeadLagNonFixedWidthTest, StringsNoDefaults)
 {

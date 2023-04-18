@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,14 +92,12 @@ struct sum_statistics {
 /**
  * @brief Statistics for integral columns.
  */
-struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
-};
+struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {};
 
 /**
  * @brief Statistics for floating point columns.
  */
-struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
-};
+struct double_statistics : minmax_statistics<double>, sum_statistics<double> {};
 
 /**
  * @brief Statistics for string columns.
@@ -108,8 +106,7 @@ struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
  * order. The `sum` is the total length of elements in the column.
  * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
  */
-struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {
-};
+struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {};
 
 /**
  * @brief Statistics for boolean columns.
@@ -123,8 +120,7 @@ struct bucket_statistics {
 /**
  * @brief Statistics for decimal columns.
  */
-struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
-};
+struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {};
 
 /**
  * @brief Statistics for date(time) columns.
