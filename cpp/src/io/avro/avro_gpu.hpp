@@ -45,8 +45,6 @@ struct schemadesc_s {
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
- * @param[in] max_rows Maximum number of rows to load
- * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use
  */
@@ -55,8 +53,6 @@ void DecodeAvroColumnData(cudf::device_span<block_desc_s const> blocks,
                           cudf::device_span<string_index_pair const> global_dictionary,
                           uint8_t const* avro_data,
                           uint32_t schema_len,
-                          size_t max_rows,
-                          size_t first_row,
                           uint32_t min_row_size,
                           rmm::cuda_stream_view stream);
 
