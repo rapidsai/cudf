@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <cstring>
 #include <numeric>
+#include <type_traits>
 #include <utility>
 
 namespace cudf {
@@ -1400,18 +1401,171 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
   }
 }
 
+using table_device_view_owner =
+  std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+struct return_type {
+  std::vector<parquet_column_view> parquet_columns;
+  table_view single_streams_table;
+  hostdevice_vector<gpu::parquet_column_device_view> col_desc;
+  std::vector<size_type> column_frag_size;
+  std::vector<SchemaElement> this_table_schema;
+  std::vector<int> part_frag_offset;
+  cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments;
+  table_device_view_owner parent_column_table_device_view;
+  rmm::device_uvector<column_device_view> leaf_column_views;
+  size_type max_page_fragment_size;
+  size_type num_fragments;
+};
+
 /**
  * @brief TODO
  * @return
  */
-std::tuple<int, int> convert_table_to_parquet_data(
+return_type convert_table_to_parquet_data(
   table_view const& input,
-  table_input_metadata const& table_meta,
+  table_input_metadata& table_meta,
   bool single_write_mode,
+  bool int96_timestamps,
+  std::optional<size_type> const max_page_fragment_size_opt,
+  size_t max_row_group_size,
+  size_t max_page_size_bytes,
+  std::vector<partition_info> const& partitions,
   //                                                   data_sink const& out_sink,
   rmm::cuda_stream_view stream)
 {
-  return {0, 0};
+  auto vec         = table_to_linked_columns(input);
+  auto schema_tree = construct_schema_tree(vec, table_meta, single_write_mode, int96_timestamps);
+  // Construct parquet_column_views from the schema tree leaf nodes.
+  std::vector<parquet_column_view> parquet_columns;
+
+  for (schema_tree_node const& schema_node : schema_tree) {
+    if (schema_node.leaf_column) { parquet_columns.emplace_back(schema_node, schema_tree, stream); }
+  }
+
+  // Mass allocation of column_device_views for each parquet_column_view
+  std::vector<column_view> cudf_cols;
+  cudf_cols.reserve(parquet_columns.size());
+  for (auto const& parq_col : parquet_columns) {
+    cudf_cols.push_back(parq_col.cudf_column_view());
+  }
+  table_view single_streams_table(cudf_cols);
+  size_type num_columns = single_streams_table.num_columns();
+
+  std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
+
+  // Initialize column description
+  hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
+  std::transform(
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const& pcol) {
+      return pcol.get_device_view(stream);
+    });
+
+  // Init page fragments
+  // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
+  // will start producing fragments larger than the desired page size, so calculate fragment sizes
+  // for each leaf column.  Skip if the fragment size is not the default.
+  size_type max_page_fragment_size =
+    max_page_fragment_size_opt.value_or(default_max_page_fragment_size);
+
+  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
+
+  if (input.num_rows() > 0 && not max_page_fragment_size_opt.has_value()) {
+    std::vector<size_t> column_sizes;
+    std::transform(single_streams_table.begin(),
+                   single_streams_table.end(),
+                   std::back_inserter(column_sizes),
+                   [&](auto const& column) { return column_size(column, stream); });
+
+    // adjust global fragment size if a single fragment will overrun a rowgroup
+    auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
+    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, input.num_rows());
+    if (avg_row_len > 0) {
+      auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
+      max_page_fragment_size  = std::min<size_type>(rg_frag_size, max_page_fragment_size);
+    }
+
+    // dividing page size by average row length will tend to overshoot the desired
+    // page size when there's high variability in the row lengths. instead, shoot
+    // for multiple fragments per page to smooth things out. using 2 was too
+    // unbalanced in final page sizes, so using 4 which seems to be a good
+    // compromise at smoothing things out without getting fragment sizes too small.
+    auto frag_size_fn = [&](auto const& col, size_type col_size) {
+      const int target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
+      auto const avg_len =
+        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
+      if (avg_len > 0) {
+        auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
+        return std::min<size_type>(max_page_fragment_size, frag_size);
+      } else {
+        return max_page_fragment_size;
+      }
+    };
+
+    std::transform(single_streams_table.begin(),
+                   single_streams_table.end(),
+                   column_sizes.begin(),
+                   column_frag_size.begin(),
+                   frag_size_fn);
+  }
+
+  // Fragments are calculated in two passes. In the first pass, a uniform number of fragments
+  // per column is used. This is done to satisfy the requirement that each column chunk within
+  // a row group has the same number of rows. After the row group (and thus column chunk)
+  // boundaries are known, a second pass is done to calculate fragments to be used in determining
+  // page boundaries within each column chunk.
+  std::vector<int> num_frag_in_part;
+  std::transform(partitions.begin(),
+                 partitions.end(),
+                 std::back_inserter(num_frag_in_part),
+                 [&, max_page_fragment_size](auto const& part) {
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                 });
+
+  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
+
+  std::vector<int> part_frag_offset;  // Store the idx of the first fragment in each partition
+  std::exclusive_scan(
+    num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
+  part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
+
+  auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
+    part_frag_offset, stream, rmm::mr::get_current_device_resource());
+  cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments(
+    num_columns, num_fragments, stream);
+
+  // Create table_device_view so that corresponding column_device_view data
+  // can be written into col_desc members
+  // These are unused but needs to be kept alive.
+  table_device_view_owner parent_column_table_device_view =
+    table_device_view::create(single_streams_table, stream);
+  rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
+
+  if (num_fragments != 0) {
+    // Move column info to device
+    col_desc.host_to_device(stream);
+    leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
+      col_desc, *parent_column_table_device_view, stream);
+
+    init_row_group_fragments(row_group_fragments,
+                             col_desc,
+                             partitions,
+                             d_part_frag_offset,
+                             max_page_fragment_size,
+                             stream);
+  }
+
+  return return_type{std::move(parquet_columns),
+                     std::move(single_streams_table),
+                     std::move(col_desc),
+                     std::move(column_frag_size),
+                     std::move(this_table_schema),
+                     std::move(part_frag_offset),
+                     std::move(row_group_fragments),
+                     std::move(parent_column_table_device_view),
+                     std::move(leaf_column_views),
+                     max_page_fragment_size,
+                     num_fragments};
 }
 
 }  // namespace
@@ -1490,14 +1644,35 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
   fill_table_meta(_table_meta, input);
 
+  // int const num_fragments{0};
+  // int const max_page_fragment_size{0};
+
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current writer
   // is still intact.
   // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
   // writing anything to it.
-  [[maybe_unused]] auto [x, y] = [&] {
+  [[maybe_unused]] auto [parquet_columns,
+                         single_streams_table,
+                         col_desc,
+                         column_frag_size,
+                         this_table_schema,
+                         part_frag_offset,
+                         row_group_fragments,
+                         parent_column_table_device_view,  // unused, but needs to be kept alive
+                         leaf_column_views,                // unused, but needs to be kept alive
+                         max_page_fragment_size,
+                         num_fragments] = [&] {
     try {
-      return convert_table_to_parquet_data(input, *_table_meta, _single_write_mode, _stream);
+      return convert_table_to_parquet_data(input,
+                                           *_table_meta,
+                                           _single_write_mode,
+                                           _int96_timestamps,
+                                           _max_page_fragment_size,
+                                           _max_row_group_size,
+                                           _max_page_size_bytes,
+                                           partitions,
+                                           _stream);
     } catch (...) {  // catch any exception type
       CUDF_LOG_ERROR(
         "Parquet writer encountered exception during processing. "
@@ -1517,28 +1692,8 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   //
   //
   //
-  auto vec = table_to_linked_columns(input);
-  auto schema_tree =
-    construct_schema_tree(vec, *_table_meta, _single_write_mode, _int96_timestamps);
-  // Construct parquet_column_views from the schema tree leaf nodes.
-  std::vector<parquet_column_view> parquet_columns;
 
-  for (schema_tree_node const& schema_node : schema_tree) {
-    if (schema_node.leaf_column) {
-      parquet_columns.emplace_back(schema_node, schema_tree, _stream);
-    }
-  }
-
-  // Mass allocation of column_device_views for each parquet_column_view
-  std::vector<column_view> cudf_cols;
-  cudf_cols.reserve(parquet_columns.size());
-  for (auto const& parq_col : parquet_columns) {
-    cudf_cols.push_back(parq_col.cudf_column_view());
-  }
-  table_view single_streams_table(cudf_cols);
-  size_type num_columns = single_streams_table.num_columns();
-
-  std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
+  auto const num_columns = single_streams_table.num_columns();
 
   if (!_agg_meta) {
     _agg_meta = std::make_unique<aggregate_writer_metadata>(
@@ -1551,107 +1706,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
     _agg_meta->update_files(partitions);
   }
 
-  // Initialize column description
-  hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), _stream);
-  std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const& pcol) {
-      return pcol.get_device_view(_stream);
-    });
-
-  // Init page fragments
-  // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
-  // will start producing fragments larger than the desired page size, so calculate fragment sizes
-  // for each leaf column.  Skip if the fragment size is not the default.
-  auto max_page_fragment_size = _max_page_fragment_size.value_or(default_max_page_fragment_size);
-
-  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
-
-  if (input.num_rows() > 0 && not _max_page_fragment_size.has_value()) {
-    std::vector<size_t> column_sizes;
-    std::transform(single_streams_table.begin(),
-                   single_streams_table.end(),
-                   std::back_inserter(column_sizes),
-                   [this](auto const& column) { return column_size(column, _stream); });
-
-    // adjust global fragment size if a single fragment will overrun a rowgroup
-    auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
-    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, input.num_rows());
-    if (avg_row_len > 0) {
-      auto const rg_frag_size = util::div_rounding_up_safe(_max_row_group_size, avg_row_len);
-      max_page_fragment_size  = std::min<size_type>(rg_frag_size, max_page_fragment_size);
-    }
-
-    // dividing page size by average row length will tend to overshoot the desired
-    // page size when there's high variability in the row lengths. instead, shoot
-    // for multiple fragments per page to smooth things out. using 2 was too
-    // unbalanced in final page sizes, so using 4 which seems to be a good
-    // compromise at smoothing things out without getting fragment sizes too small.
-    auto frag_size_fn = [&](auto const& col, size_type col_size) {
-      const int target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
-      auto const avg_len =
-        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
-      if (avg_len > 0) {
-        auto const frag_size = util::div_rounding_up_safe<size_type>(_max_page_size_bytes, avg_len);
-        return std::min<size_type>(max_page_fragment_size, frag_size);
-      } else {
-        return max_page_fragment_size;
-      }
-    };
-
-    std::transform(single_streams_table.begin(),
-                   single_streams_table.end(),
-                   column_sizes.begin(),
-                   column_frag_size.begin(),
-                   frag_size_fn);
-  }
-
-  // Fragments are calculated in two passes. In the first pass, a uniform number of fragments
-  // per column is used. This is done to satisfy the requirement that each column chunk within
-  // a row group has the same number of rows. After the row group (and thus column chunk)
-  // boundaries are known, a second pass is done to calculate fragments to be used in determining
-  // page boundaries within each column chunk.
-  std::vector<int> num_frag_in_part;
-  std::transform(partitions.begin(),
-                 partitions.end(),
-                 std::back_inserter(num_frag_in_part),
-                 [this, max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
-                 });
-
-  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
-
-  std::vector<int> part_frag_offset;  // Store the idx of the first fragment in each partition
-  std::exclusive_scan(
-    num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
-  part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
-
-  auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
-    part_frag_offset, _stream, rmm::mr::get_current_device_resource());
-  cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments(
-    num_columns, num_fragments, _stream);
-
-  // Create table_device_view so that corresponding column_device_view data
-  // can be written into col_desc members
-  // These are unused but needs to be kept alive.
-  auto const parent_column_table_device_view =
-    table_device_view::create(single_streams_table, _stream);
-  auto leaf_column_views = rmm::device_uvector<column_device_view>(0, _stream);
-
-  if (num_fragments != 0) {
-    // Move column info to device
-    col_desc.host_to_device(_stream);
-    leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
-      col_desc, *parent_column_table_device_view, _stream);
-
-    init_row_group_fragments(row_group_fragments,
-                             col_desc,
-                             partitions,
-                             d_part_frag_offset,
-                             max_page_fragment_size,
-                             _stream);
-  }
-
-  std::vector<size_t> const global_rowgroup_base = _agg_meta->num_row_groups_per_file();
+  auto const global_rowgroup_base = _agg_meta->num_row_groups_per_file();
 
   // Decide row group boundaries based on uncompressed data size
   int num_rowgroups = 0;
