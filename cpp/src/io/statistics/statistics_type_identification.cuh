@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,8 +108,7 @@ class type_conversion {
 };
 
 template <class T>
-struct dependent_false : std::false_type {
-};
+struct dependent_false : std::false_type {};
 
 /**
  * @brief Utility class to convert a leaf column element into its extrema type

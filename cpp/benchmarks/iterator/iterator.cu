@@ -126,8 +126,7 @@ void iterator_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& resul
 }
 
 // -----------------------------------------------------------------------------
-class Iterator : public cudf::benchmark {
-};
+class Iterator : public cudf::benchmark {};
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
 void BM_iterator(benchmark::State& state)
@@ -146,7 +145,7 @@ void BM_iterator(benchmark::State& state)
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
       if (raw_or_iterator) {
-        raw_stream_bench_cub<T>(hasnull_F, dev_result);  // driven by raw pointer
+        raw_stream_bench_cub<T>(hasnull_F, dev_result);       // driven by raw pointer
       } else {
         iterator_bench_cub<T, false>(hasnull_F, dev_result);  // driven by riterator without nulls
       }

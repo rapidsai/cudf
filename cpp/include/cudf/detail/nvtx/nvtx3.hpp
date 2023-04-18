@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -585,10 +585,10 @@ constexpr auto has_name_member() noexcept -> decltype(T::name, bool())
  */
 class domain {
  public:
-  domain(domain const&) = delete;
+  domain(domain const&)            = delete;
   domain& operator=(domain const&) = delete;
   domain(domain&&)                 = delete;
-  domain& operator=(domain&&) = delete;
+  domain& operator=(domain&&)      = delete;
 
   /**
    * @brief Returns reference to an instance of a function local static
@@ -663,8 +663,7 @@ class domain {
    * applications will be grouped together.
    *
    */
-  struct global {
-  };
+  struct global {};
 
  private:
   /**
@@ -870,12 +869,12 @@ class color {
    */
   constexpr nvtxColorType_t get_type() const noexcept { return _type; }
 
-  color()             = delete;
-  ~color()            = default;
-  color(color const&) = default;
+  color()                        = delete;
+  ~color()                       = default;
+  color(color const&)            = default;
   color& operator=(color const&) = default;
   color(color&&)                 = default;
-  color& operator=(color&&) = default;
+  color& operator=(color&&)      = default;
 
  private:
   /**
@@ -937,12 +936,12 @@ class category {
    */
   constexpr id_type get_id() const noexcept { return id_; }
 
-  category()                = delete;
-  ~category()               = default;
-  category(category const&) = default;
+  category()                           = delete;
+  ~category()                          = default;
+  category(category const&)            = default;
   category& operator=(category const&) = default;
   category(category&&)                 = default;
-  category& operator=(category&&) = default;
+  category& operator=(category&&)      = default;
 
  private:
   id_type const id_{};  ///< category's unique identifier
@@ -1226,12 +1225,12 @@ class registered_message {
    */
   nvtxStringHandle_t get_handle() const noexcept { return handle_; }
 
-  registered_message()                          = delete;
-  ~registered_message()                         = default;
-  registered_message(registered_message const&) = default;
+  registered_message()                                     = delete;
+  ~registered_message()                                    = default;
+  registered_message(registered_message const&)            = default;
   registered_message& operator=(registered_message const&) = default;
   registered_message(registered_message&&)                 = default;
-  registered_message& operator=(registered_message&&) = default;
+  registered_message& operator=(registered_message&&)      = default;
 
  private:
   nvtxStringHandle_t const handle_{};  ///< The handle returned from
@@ -1612,11 +1611,11 @@ class event_attributes {
     attributes_.messageType = m.get_type();
   }
 
-  ~event_attributes()                       = default;
-  event_attributes(event_attributes const&) = default;
+  ~event_attributes()                                  = default;
+  event_attributes(event_attributes const&)            = default;
   event_attributes& operator=(event_attributes const&) = default;
   event_attributes(event_attributes&&)                 = default;
-  event_attributes& operator=(event_attributes&&) = default;
+  event_attributes& operator=(event_attributes&&)      = default;
 
   /**
    * @brief Get raw pointer to underlying NVTX attributes object.
@@ -1741,10 +1740,10 @@ class domain_thread_range {
    */
   domain_thread_range() : domain_thread_range{event_attributes{}} {}
 
-  domain_thread_range(domain_thread_range const&) = delete;
+  domain_thread_range(domain_thread_range const&)            = delete;
   domain_thread_range& operator=(domain_thread_range const&) = delete;
   domain_thread_range(domain_thread_range&&)                 = delete;
-  domain_thread_range& operator=(domain_thread_range&&) = delete;
+  domain_thread_range& operator=(domain_thread_range&&)      = delete;
 
   /**
    * @brief Destroy the domain_thread_range, ending the NVTX range event.
@@ -1819,7 +1818,7 @@ class domain_process_range {
     if (not moved_from_) { nvtxRangeEnd(range_id_); }
   }
 
-  domain_process_range(domain_process_range const&) = delete;
+  domain_process_range(domain_process_range const&)            = delete;
   domain_process_range& operator=(domain_process_range const&) = delete;
 
   domain_process_range(domain_process_range&& other) noexcept : range_id_{other.range_id_}

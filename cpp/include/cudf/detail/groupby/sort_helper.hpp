@@ -66,11 +66,11 @@ struct sort_groupby_helper {
                       sorted keys_pre_sorted,
                       std::vector<null_order> const& null_precedence);
 
-  ~sort_groupby_helper()                          = default;
-  sort_groupby_helper(sort_groupby_helper const&) = delete;
+  ~sort_groupby_helper()                                     = default;
+  sort_groupby_helper(sort_groupby_helper const&)            = delete;
   sort_groupby_helper& operator=(sort_groupby_helper const&) = delete;
   sort_groupby_helper(sort_groupby_helper&&)                 = default;
-  sort_groupby_helper& operator=(sort_groupby_helper&&) = default;
+  sort_groupby_helper& operator=(sort_groupby_helper&&)      = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each

@@ -50,6 +50,7 @@ from cudf.api.types import (
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
+    is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
@@ -334,6 +335,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         data = pa.table([array], [None])
 
+        if (
+            isinstance(array.type, pa.TimestampType)
+            and array.type.tz is not None
+        ):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
                 {
@@ -2072,7 +2080,6 @@ def as_column(
                 arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
-
             time_unit = get_time_unit(arbitrary)
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
@@ -2234,6 +2241,11 @@ def as_column(
                 if dtype is not None:
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
+                    if is_datetime64tz_dtype(dtype):
+                        raise NotImplementedError(
+                            "cuDF does not yet support "
+                            "timezone-aware datetimes"
+                        )
                     if is_list_dtype(dtype):
                         data = pa.array(arbitrary)
                         if type(data) not in (pa.ListArray, pa.NullArray):
@@ -2276,7 +2288,6 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
-
                     if is_bool_dtype(dtype):
                         # Need this special case handling for bool dtypes,
                         # since 'boolean' & 'pd.BooleanDtype' are not

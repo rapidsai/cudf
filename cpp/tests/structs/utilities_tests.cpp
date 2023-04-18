@@ -35,12 +35,10 @@ using nums = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 template <typename T>
 using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
-struct StructUtilitiesTest : cudf::test::BaseFixture {
-};
+struct StructUtilitiesTest : cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedStructUtilitiesTest : StructUtilitiesTest {
-};
+struct TypedStructUtilitiesTest : StructUtilitiesTest {};
 
 TYPED_TEST_SUITE(TypedStructUtilitiesTest, cudf::test::FixedWidthTypes);
 
@@ -376,12 +374,10 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
                cudf::logic_error);
 }
 
-struct SuperimposeTest : StructUtilitiesTest {
-};
+struct SuperimposeTest : StructUtilitiesTest {};
 
 template <typename T>
-struct TypedSuperimposeTest : StructUtilitiesTest {
-};
+struct TypedSuperimposeTest : StructUtilitiesTest {};
 
 TYPED_TEST_SUITE(TypedSuperimposeTest, cudf::test::FixedWidthTypes);
 
@@ -521,7 +517,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 4, 5}));
   auto expected_structs      = cudf::test::structs_column_wrapper{
-    {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
+         {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
   auto expected_structs_of_structs = cudf::test::structs_column_wrapper{{expected_structs}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_of_structs);
@@ -564,7 +560,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 1, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 1, 4, 5}));
   auto expected_structs      = cudf::test::structs_column_wrapper{
-    {expected_nums_member, expected_lists_member}, cudf::test::iterators::nulls_at({0, 1})};
+         {expected_nums_member, expected_lists_member}, cudf::test::iterators::nulls_at({0, 1})};
   auto expected_structs_of_structs =
     cudf::test::structs_column_wrapper{{expected_structs}, cudf::test::iterators::null_at(1)};
 

@@ -144,6 +144,7 @@ mixed_join(
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
+                        has_nulls,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
@@ -409,6 +410,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
+                        has_nulls,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);

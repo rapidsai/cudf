@@ -119,8 +119,7 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   }
 };
 
-struct NvcompConfigTest : public cudf::test::BaseFixture {
-};
+struct NvcompConfigTest : public cudf::test::BaseFixture {};
 
 TEST_F(GzipDecompressTest, HelloWorld)
 {

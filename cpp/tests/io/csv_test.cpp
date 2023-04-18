@@ -73,23 +73,19 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct CsvWriterTest : public cudf::test::BaseFixture {
-};
+struct CsvWriterTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct CsvFixedPointWriterTest : public CsvWriterTest {
-};
+struct CsvFixedPointWriterTest : public CsvWriterTest {};
 
 TYPED_TEST_SUITE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
-struct CsvReaderTest : public cudf::test::BaseFixture {
-};
+struct CsvReaderTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for timestamp type tests
 template <typename T>
-struct CsvReaderNumericTypeTest : public CsvReaderTest {
-};
+struct CsvReaderNumericTypeTest : public CsvReaderTest {};
 
 // Declare typed test cases
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
@@ -2027,21 +2023,21 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
 {
   std::vector<int64_t> small_int               = {0, -10, 20, -30};
   std::vector<int64_t> less_equal_int64_max    = {std::numeric_limits<int64_t>::max() - 3,
-                                               std::numeric_limits<int64_t>::max() - 2,
-                                               std::numeric_limits<int64_t>::max() - 1,
-                                               std::numeric_limits<int64_t>::max()};
+                                                  std::numeric_limits<int64_t>::max() - 2,
+                                                  std::numeric_limits<int64_t>::max() - 1,
+                                                  std::numeric_limits<int64_t>::max()};
   std::vector<int64_t> greater_equal_int64_min = {std::numeric_limits<int64_t>::min() + 3,
                                                   std::numeric_limits<int64_t>::min() + 2,
                                                   std::numeric_limits<int64_t>::min() + 1,
                                                   std::numeric_limits<int64_t>::min()};
   std::vector<uint64_t> greater_int64_max      = {uint64_t{std::numeric_limits<int64_t>::max()} - 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()},
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 2};
+                                                  uint64_t{std::numeric_limits<int64_t>::max()},
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 1,
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 2};
   std::vector<uint64_t> less_equal_uint64_max  = {std::numeric_limits<uint64_t>::max() - 3,
-                                                 std::numeric_limits<uint64_t>::max() - 2,
-                                                 std::numeric_limits<uint64_t>::max() - 1,
-                                                 std::numeric_limits<uint64_t>::max()};
+                                                  std::numeric_limits<uint64_t>::max() - 2,
+                                                  std::numeric_limits<uint64_t>::max() - 1,
+                                                  std::numeric_limits<uint64_t>::max()};
   auto input_small_int = column_wrapper<int64_t>(small_int.begin(), small_int.end());
   auto input_less_equal_int64_max =
     column_wrapper<int64_t>(less_equal_int64_max.begin(), less_equal_int64_max.end());
