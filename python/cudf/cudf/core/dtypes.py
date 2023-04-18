@@ -79,12 +79,6 @@ def dtype(arbitrary):
             )
 
 
-class DatetimeTZDtype(pd.DatetimeTZDtype):
-    @property
-    def base(self):
-        return np.dtype(f"datetime64[{self.unit}]")
-
-
 def _decode_type(
     cls: Type,
     header: dict,
