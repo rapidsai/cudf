@@ -26,6 +26,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -286,56 +287,29 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // children index:             0    1 2    3       4     5       6     7    8  9
-  // list:            null, [], [1], [1,2], [null], [null, null], [null, 2], [1, null]
-  // index:           0     1   2    3      4       5             6          7
-  // offsets:         0     0   0    1      3       4             6          8        10
-  // length:          0     0   1    2      1       2             2          2 = (offset[i+1] -
-  // offset[i]) #strviews:       2     2   3    5      3       5             5          5 formula?
-  // null ? 1/2 : (empty ? 2 : 2 + length + length - 1) 0-0, 1-1, 2-3, 3-5, 4-7, 5-9, 6-11, 7-13,
-  // 8-15, 9-17 = 2n-1 except for 0 #strviews(scan): 0     2   4    7      12      15            20
-  // 25         30 label segments, use this label from children to index the offsets, and subtract
-  // from index to get sublist index. use this sublist index and #strviews(scanned)[label] and put
-  // the string view in the right place. scatter list_pre, post or nullstr using #strviews(scanned)
-  // segmented reduce & scan? or scan + gather? so that direct string column offsets are available.
-  // copy bitmask from list column
-  // The above algorithm is either children parallel or list parallel. no serialization within a
-  // list.
-
+  // create string_views of the list elements, and the list separators and list prefix/suffix.
+  // then concatenates them all together.
+  // gather offset of first string_view of each row as offsets for output string column.
   auto const offsets          = lists_strings.offsets();
   auto const strings_children = lists_strings.get_sliced_child(stream);
   auto const null_count       = lists_strings.null_count();
   auto const num_lists        = lists_strings.size();
   auto const num_strings      = strings_children.size();
   auto const num_offsets      = offsets.size();
-  // auto const num_segments = num_offsets - 1;
-  // Algorithm:
-  // construct #strviews using null mask, and list_offsets.
-  // scan #strviews to get #strviews(scanned)
-  // create label segments.
-  // sublist_index= index - offsets[label]
-  // #strviews(scanned)[label] + sublist_index = string_view index +1, +2
-  // use above 2 to scatter element, element_seperator
-  // scatter list_prefix, list_suffix to the right place using list_offsets
 
-  // segmented reduce of sizes, then scan. to get string offsets.
-  //  then gather chars. (optimizer further to ignore the offsets)
-  // or make_strings_column() and gather offsets, based on #strviews(scanned).
-
-  rmm::device_uvector<size_type> d_strview_counts(num_offsets, stream);
-  thrust::tabulate(rmm::exec_policy(stream),
-                   d_strview_counts.begin(),
-                   d_strview_counts.end() - 1,
-                   [offsets = offsets.begin<size_type>()] __device__(size_type idx) {
-                     auto const length = offsets[idx + 1] - offsets[idx];
-                     return length == 0 ? 2 : (2 + length + length - 1);
-                     // TODO nullmask unused for now.
-                   });
+  rmm::device_uvector<size_type> d_strview_offsets(num_offsets, stream);
+  auto num_str_views_per_list = cudf::detail::make_counting_transform_iterator(
+    0, [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
+      if (idx + 1 >= num_offsets) return 0;
+      auto const length = offsets[idx + 1] - offsets[idx];
+      return length == 0 ? 2 : (2 + length + length - 1);
+      // TODO nullmask unused for now.
+    });
   thrust::exclusive_scan(rmm::exec_policy(stream),
-                         d_strview_counts.begin(),
-                         d_strview_counts.end(),
-                         d_strview_counts.begin());
-  auto const string_views_total = d_strview_counts.back_element(stream);
+                         num_str_views_per_list,
+                         num_str_views_per_list + num_offsets,
+                         d_strview_offsets.begin());
+  auto const string_views_total = d_strview_offsets.back_element(stream);
 
   using str_pair = thrust::pair<const char*, size_type>;
   rmm::device_uvector<str_pair> d_strviews(string_views_total, stream);
@@ -348,7 +322,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
     [col = *col_device_view,
      list_prefix,
      list_suffix,
-     d_strview_counts = d_strview_counts.begin(),
+     d_strview_counts = d_strview_offsets.begin(),
      d_strviews       = d_strviews.begin()] __device__(auto idx) {
       if (col.is_null(idx)) {
         d_strviews[d_strview_counts[idx]] = str_pair{nullptr, 0};
@@ -369,7 +343,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_strings),
                    [col                = *col_device_view,
-                    d_strview_counts   = d_strview_counts.begin(),
+                    d_strview_counts   = d_strview_offsets.begin(),
                     d_strviews         = d_strviews.begin(),
                     labels             = labels->view().begin<size_type>(),
                     list_offsets       = offsets.begin<size_type>(),
@@ -398,7 +372,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   auto old_offsets = strings_column_view(joined_col->view()).offsets();
   auto row_string_offsets =
     std::move(cudf::detail::gather(cudf::table_view{{old_offsets}},
-                                   d_strview_counts,
+                                   d_strview_offsets,
                                    cudf::out_of_bounds_policy::DONT_CHECK,
                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
                                    stream,
