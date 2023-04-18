@@ -60,7 +60,7 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
     with:
       build_type: branch
-      node_type: "gpu-latest-1"
+      node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
       run_script: "ci/build_docs.sh"
