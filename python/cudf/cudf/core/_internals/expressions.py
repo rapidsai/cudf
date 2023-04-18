@@ -115,7 +115,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
         self.stack.append(ColumnReference(col_id))
 
     def visit_Constant(self, node):
-        if not isinstance(node, ast.Num) and not isinstance(node, ast.Str):
+        if not isinstance(node, (ast.Num, ast.Str)):
             raise ValueError(
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
