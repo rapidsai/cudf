@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,8 +70,7 @@ static void BM_shift(benchmark::State& state)
   }
 }
 
-class Shift : public cudf::benchmark {
-};
+class Shift : public cudf::benchmark {};
 
 #define SHIFT_BM_BENCHMARK_DEFINE(name, use_validity, shift_factor) \
   BENCHMARK_DEFINE_F(Shift, name)(::benchmark::State & state)       \

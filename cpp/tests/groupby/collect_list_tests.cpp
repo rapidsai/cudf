@@ -23,8 +23,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 
 template <typename V>
-struct groupby_collect_list_test : public cudf::test::BaseFixture {
-};
+struct groupby_collect_list_test : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,

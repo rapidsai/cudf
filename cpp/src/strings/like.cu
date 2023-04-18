@@ -93,7 +93,7 @@ struct like_fn {
           last_pattern_itr = pattern_itr;
           last_target_itr  = target_itr;
         }
-      }  // next pattern character
+      }                                                     // next pattern character
 
       if (result && (target_itr == target_end)) { break; }  // success
 

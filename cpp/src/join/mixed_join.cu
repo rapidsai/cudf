@@ -110,7 +110,7 @@ mixed_join(
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    cudf::has_nested_nulls(left_equality) || cudf::has_nested_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
@@ -146,6 +146,7 @@ mixed_join(
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
+                        has_nulls,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
@@ -365,7 +366,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    cudf::has_nested_nulls(left_equality) || cudf::has_nested_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
@@ -401,6 +402,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
+                        has_nulls,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);

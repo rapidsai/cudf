@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,9 +105,9 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
 {
   if (lhs_is_null and rhs_is_null) {  // null <? null
     return weak_ordering::EQUIVALENT;
-  } else if (lhs_is_null) {  // null <? x
+  } else if (lhs_is_null) {           // null <? x
     return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS : weak_ordering::GREATER;
-  } else if (rhs_is_null) {  // x <? null
+  } else if (rhs_is_null) {           // x <? null
     return (null_precedence == null_order::AFTER) ? weak_ordering::LESS : weak_ordering::GREATER;
   }
   return weak_ordering::EQUIVALENT;

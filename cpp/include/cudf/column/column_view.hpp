@@ -329,9 +329,13 @@ class column_view : public detail::column_view_base {
   // they then end up being called by a simple __host__ function
   // (eg std::vector destructor) you get a compile error because you're trying to
   // call a __host__ __device__ function from a __host__ function.
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   ~column_view() = default;
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   column_view(column_view const&) = default;  ///< Copy constructor
   column_view(column_view&&)      = default;  ///< Move constructor
   /**

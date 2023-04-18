@@ -39,36 +39,19 @@ namespace detail {
  * @throws cudf::logic_error if `begin < 0`, `end < begin` or
  * `end > input.size()`.
  *
- * @param[in] input View of input column to slice
- * @param[in] begin Index of the first desired element in the slice (inclusive).
- * @param[in] end Index of the last desired element in the slice (exclusive).
+ * @tparam ColumnView Must be either cudf::column_view or cudf::mutable_column_view
+ * @param input View of input column to slice
+ * @param begin Index of the first desired element in the slice (inclusive).
+ * @param end Index of the last desired element in the slice (exclusive).
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
  */
 template <typename ColumnView>
-ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
-{
-  static_assert(std::is_same_v<ColumnView, cudf::column_view> or
-                  std::is_same_v<ColumnView, cudf::mutable_column_view>,
-                "slice can be performed only on column_view and mutable_column_view");
-  CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
-  CUDF_EXPECTS(end >= begin, "Invalid end of range.");
-  CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
-
-  std::vector<ColumnView> children{};
-  children.reserve(input.num_children());
-  for (size_type index = 0; index < input.num_children(); index++) {
-    children.emplace_back(input.child(index));
-  }
-
-  return ColumnView(input.type(),
-                    end - begin,
-                    input.head(),
-                    input.null_mask(),
-                    cudf::UNKNOWN_NULL_COUNT,
-                    input.offset() + begin,
-                    children);
-}
+ColumnView slice(ColumnView const& input,
+                 size_type begin,
+                 size_type end,
+                 rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::slice(column_view const&, host_span<size_type const>)

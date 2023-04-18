@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_v
  * time to fill in the allocated output buffer for each string.
  */
 struct replace_tokens_fn : base_token_replacer_fn {
-  strings_iterator d_targets_begin;  ///< strings to search for
+  strings_iterator d_targets_begin;               ///< strings to search for
   strings_iterator d_targets_end;
   cudf::column_device_view const d_replacements;  ///< replacement strings
 

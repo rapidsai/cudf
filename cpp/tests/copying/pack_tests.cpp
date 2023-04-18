@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,12 +269,10 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
   std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
 
   cudf::test::fixed_width_column_wrapper<int> offsets{0, 1, 4, 5, 7, 7, 10, 13, 14, 16};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.begin() + 9);
   auto list = cudf::make_lists_column(
-    9,
-    offsets.release(),
-    struct_column.release(),
-    2,
-    cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.begin() + 9));
+    9, offsets.release(), struct_column.release(), null_count, std::move(null_mask));
 
   std::vector<std::unique_ptr<cudf::column>> out;
   out.push_back(std::move(list));
