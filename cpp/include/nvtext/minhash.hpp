@@ -37,12 +37,11 @@ namespace nvtext {
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if h_id is not HASH_MURMUR3
+ * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  *
  * @param input Strings column to compute minhash
  * @param seed  Seed value used for the MurmurHash3_32 algorithm
  * @param width The character width used for apply substrings;
- *              Any string smaller than this width will not be hashed.
  *              Default is 4 characters.
  * @param hash_function Hash algorithm to use;
  *                      Only HASH_MURMUR3 is currently supported.
@@ -68,18 +67,18 @@ std::unique_ptr<cudf::column> minhash(
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if h_id is not HASH_MURMUR3
+ * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  * @throw std::invalid_argument if seeds is empty
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the MurmurHash3_32 algorithm
  * @param width The character width used for apply substrings;
- *              Any string smaller than this width will not be hashed.
  *              Default is 4 characters.
  * @param hash_function Hash algorithm to use;
  *                      Only HASH_MURMUR3 is currently supported.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
+ *         or a hash_value_type column if only a single seed is specified
  */
 std::unique_ptr<cudf::column> minhash(
   cudf::strings_column_view const& input,
