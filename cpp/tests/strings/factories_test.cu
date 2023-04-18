@@ -40,8 +40,7 @@
 #include <cstring>
 #include <vector>
 
-struct StringsFactoriesTest : public cudf::test::BaseFixture {
-};
+struct StringsFactoriesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 {

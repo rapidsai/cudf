@@ -32,8 +32,7 @@
 
 #include <cmath>
 
-class ScatterLists : public cudf::benchmark {
-};
+class ScatterLists : public cudf::benchmark {};
 
 template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)

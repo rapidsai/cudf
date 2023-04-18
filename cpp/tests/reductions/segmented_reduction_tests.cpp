@@ -31,11 +31,9 @@
 #define XXX 0  // null placeholder
 
 template <typename T>
-struct SegmentedReductionTest : public cudf::test::BaseFixture {
-};
+struct SegmentedReductionTest : public cudf::test::BaseFixture {};
 
-struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {
-};
+struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(SegmentedReductionTest, cudf::test::NumericTypes);
 
@@ -1120,8 +1118,7 @@ TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
 }
 
 template <typename T>
-struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
-};
+struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
 

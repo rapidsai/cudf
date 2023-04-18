@@ -42,11 +42,12 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <limits>
 #include <stack>
 
 // Debug print flag
 #ifndef NJP_DEBUG_PRINT
-//#define NJP_DEBUG_PRINT
+// #define NJP_DEBUG_PRINT
 #endif
 
 namespace {
@@ -69,6 +70,20 @@ struct tree_node {
 
   std::size_t num_children = 0;
 };
+
+/**
+ * @brief Verifies that the JSON input can be handled without corrupted data due to offset
+ * overflows.
+ *
+ * @param input_size The JSON inputs size in bytes
+ */
+void check_input_size(std::size_t input_size)
+{
+  // Transduce() writes symbol offsets that may be as large input_size-1
+  CUDF_EXPECTS(input_size == 0 ||
+                 (input_size - 1) <= std::numeric_limits<cudf::io::json::SymbolOffsetT>::max(),
+               "Given JSON input is too large");
+}
 }  // namespace
 
 namespace cudf::io::json {
@@ -530,18 +545,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {ValueBegin}}};  // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
-    {               /*ROOT*/
-     {ErrorBegin},  // OPENING_BRACE
-     {ErrorBegin},  // OPENING_BRACKET
-     {ErrorBegin},  // CLOSING_BRACE
-     {ErrorBegin},  // CLOSING_BRACKET
-     {ErrorBegin},  // QUOTE
-     {ErrorBegin},  // ESCAPE
-     {ErrorBegin},  // COMMA
-     {ErrorBegin},  // COLON
-     {ErrorBegin},  // WHITE_SPACE
-     {ErrorBegin},  // LINE_BREAK
-     {ErrorBegin},  // OTHER
+    {                                                                    /*ROOT*/
+     {ErrorBegin},                                                       // OPENING_BRACE
+     {ErrorBegin},                                                       // OPENING_BRACKET
+     {ErrorBegin},                                                       // CLOSING_BRACE
+     {ErrorBegin},                                                       // CLOSING_BRACKET
+     {ErrorBegin},                                                       // QUOTE
+     {ErrorBegin},                                                       // ESCAPE
+     {ErrorBegin},                                                       // COMMA
+     {ErrorBegin},                                                       // COLON
+     {ErrorBegin},                                                       // WHITE_SPACE
+     {ErrorBegin},                                                       // LINE_BREAK
+     {ErrorBegin},                                                       // OTHER
      /*LIST*/
      {StructBegin},  // OPENING_BRACE
      {ListBegin},    // OPENING_BRACKET
@@ -567,18 +582,18 @@ auto get_translation_table()
      {},                                   // LINE_BREAK
      {ErrorBegin}}};                       // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    {               /*ROOT*/
-     {ErrorBegin},  // OPENING_BRACE
-     {ErrorBegin},  // OPENING_BRACKET
-     {ErrorBegin},  // CLOSING_BRACE
-     {ErrorBegin},  // CLOSING_BRACKET
-     {ErrorBegin},  // QUOTE
-     {ErrorBegin},  // ESCAPE
-     {ErrorBegin},  // COMMA
-     {ErrorBegin},  // COLON
-     {ValueEnd},    // WHITE_SPACE
-     {ValueEnd},    // LINE_BREAK
-     {},            // OTHER
+    {                                      /*ROOT*/
+     {ErrorBegin},                         // OPENING_BRACE
+     {ErrorBegin},                         // OPENING_BRACKET
+     {ErrorBegin},                         // CLOSING_BRACE
+     {ErrorBegin},                         // CLOSING_BRACKET
+     {ErrorBegin},                         // QUOTE
+     {ErrorBegin},                         // ESCAPE
+     {ErrorBegin},                         // COMMA
+     {ErrorBegin},                         // COLON
+     {ValueEnd},                           // WHITE_SPACE
+     {ValueEnd},                           // LINE_BREAK
+     {},                                   // OTHER
      /*LIST*/
      {ErrorBegin},         // OPENING_BRACE
      {ErrorBegin},         // OPENING_BRACKET
@@ -592,17 +607,17 @@ auto get_translation_table()
      {ValueEnd},           // LINE_BREAK
      {},                   // OTHER
      /*STRUCT*/
-     {ErrorBegin},                            // OPENING_BRACE
-     {ErrorBegin},                            // OPENING_BRACKET
-     {ValueEnd, StructMemberEnd, StructEnd},  // CLOSING_BRACE
-     {ErrorBegin},                            // CLOSING_BRACKET
-     {ErrorBegin},                            // QUOTE
-     {ErrorBegin},                            // ESCAPE
-     {ValueEnd, StructMemberEnd},             // COMMA
-     {ErrorBegin},                            // COLON
-     {ValueEnd},                              // WHITE_SPACE
-     {ValueEnd},                              // LINE_BREAK
-     {}}};                                    // OTHER
+     {ErrorBegin},                                                    // OPENING_BRACE
+     {ErrorBegin},                                                    // OPENING_BRACKET
+     {ValueEnd, StructMemberEnd, StructEnd},                          // CLOSING_BRACE
+     {ErrorBegin},                                                    // CLOSING_BRACKET
+     {ErrorBegin},                                                    // QUOTE
+     {ErrorBegin},                                                    // ESCAPE
+     {ValueEnd, StructMemberEnd},                                     // COMMA
+     {ErrorBegin},                                                    // COLON
+     {ValueEnd},                                                      // WHITE_SPACE
+     {ValueEnd},                                                      // LINE_BREAK
+     {}}};                                                            // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{              /*ROOT*/
                                                         {},           // OPENING_BRACE
@@ -641,18 +656,18 @@ auto get_translation_table()
                                                         {},           // LINE_BREAK
                                                         {}}};         // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{     /*ROOT*/
-                                                        {},  // OPENING_BRACE
-                                                        {},  // OPENING_BRACKET
-                                                        {},  // CLOSING_BRACE
-                                                        {},  // CLOSING_BRACKET
-                                                        {},  // QUOTE
-                                                        {},  // ESCAPE
-                                                        {},  // COMMA
-                                                        {},  // COLON
-                                                        {},  // WHITE_SPACE
-                                                        {},  // LINE_BREAK
-                                                        {},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{              /*ROOT*/
+                                                        {},           // OPENING_BRACE
+                                                        {},           // OPENING_BRACKET
+                                                        {},           // CLOSING_BRACE
+                                                        {},           // CLOSING_BRACKET
+                                                        {},           // QUOTE
+                                                        {},           // ESCAPE
+                                                        {},           // COMMA
+                                                        {},           // COLON
+                                                        {},           // WHITE_SPACE
+                                                        {},           // LINE_BREAK
+                                                        {},           // OTHER
                                                         /*LIST*/
                                                         {},  // OPENING_BRACE
                                                         {},  // OPENING_BRACKET
@@ -742,17 +757,17 @@ auto get_translation_table()
      {ErrorBegin},  // LINE_BREAK
      {ErrorBegin},  // OTHER
      /*STRUCT*/
-     {ErrorBegin},                         // OPENING_BRACE
-     {ErrorBegin},                         // OPENING_BRACKET
-     {StructEnd},                          // CLOSING_BRACE
-     {ErrorBegin},                         // CLOSING_BRACKET
-     {StructMemberBegin, FieldNameBegin},  // QUOTE
-     {ErrorBegin},                         // ESCAPE
-     {ErrorBegin},                         // COMMA
-     {ErrorBegin},                         // COLON
-     {},                                   // WHITE_SPACE
-     {},                                   // LINE_BREAK
-     {ErrorBegin}}};                       // OTHER
+     {ErrorBegin},                                                     // OPENING_BRACE
+     {ErrorBegin},                                                     // OPENING_BRACKET
+     {StructEnd},                                                      // CLOSING_BRACE
+     {ErrorBegin},                                                     // CLOSING_BRACKET
+     {StructMemberBegin, FieldNameBegin},                              // QUOTE
+     {ErrorBegin},                                                     // ESCAPE
+     {ErrorBegin},                                                     // COMMA
+     {ErrorBegin},                                                     // COLON
+     {},                                                               // WHITE_SPACE
+     {},                                                               // LINE_BREAK
+     {ErrorBegin}}};                                                   // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{               /*ROOT*/
                                                         {ErrorBegin},  // OPENING_BRACE
@@ -791,18 +806,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {}}};            // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{               /*ROOT*/
-                                                        {ErrorBegin},  // OPENING_BRACE
-                                                        {ErrorBegin},  // OPENING_BRACKET
-                                                        {ErrorBegin},  // CLOSING_BRACE
-                                                        {ErrorBegin},  // CLOSING_BRACKET
-                                                        {ErrorBegin},  // QUOTE
-                                                        {ErrorBegin},  // ESCAPE
-                                                        {ErrorBegin},  // COMMA
-                                                        {ErrorBegin},  // COLON
-                                                        {ErrorBegin},  // WHITE_SPACE
-                                                        {ErrorBegin},  // LINE_BREAK
-                                                        {ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{                 /*ROOT*/
+                                                        {ErrorBegin},    // OPENING_BRACE
+                                                        {ErrorBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},    // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {ErrorBegin},    // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {ErrorBegin},    // COMMA
+                                                        {ErrorBegin},    // COLON
+                                                        {ErrorBegin},    // WHITE_SPACE
+                                                        {ErrorBegin},    // LINE_BREAK
+                                                        {ErrorBegin},    // OTHER
                                                         /*LIST*/
                                                         {ErrorBegin},  // OPENING_BRACE
                                                         {ErrorBegin},  // OPENING_BRACKET
@@ -816,17 +831,17 @@ auto get_translation_table()
                                                         {ErrorBegin},  // LINE_BREAK
                                                         {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {},    // OPENING_BRACE
-                                                        {},    // OPENING_BRACKET
-                                                        {},    // CLOSING_BRACE
-                                                        {},    // CLOSING_BRACKET
-                                                        {},    // QUOTE
-                                                        {},    // ESCAPE
-                                                        {},    // COMMA
-                                                        {},    // COLON
-                                                        {},    // WHITE_SPACE
-                                                        {},    // LINE_BREAK
-                                                        {}}};  // OTHER
+                                                        {},            // OPENING_BRACE
+                                                        {},            // OPENING_BRACKET
+                                                        {},            // CLOSING_BRACE
+                                                        {},            // CLOSING_BRACKET
+                                                        {},            // QUOTE
+                                                        {},            // ESCAPE
+                                                        {},            // COMMA
+                                                        {},            // COLON
+                                                        {},            // WHITE_SPACE
+                                                        {},            // LINE_BREAK
+                                                        {}}};          // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{               /*ROOT*/
                                                         {ErrorBegin},  // OPENING_BRACE
@@ -865,18 +880,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {ErrorBegin}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{     /*ROOT*/
-                                                        {},  // OPENING_BRACE
-                                                        {},  // OPENING_BRACKET
-                                                        {},  // CLOSING_BRACE
-                                                        {},  // CLOSING_BRACKET
-                                                        {},  // QUOTE
-                                                        {},  // ESCAPE
-                                                        {},  // COMMA
-                                                        {},  // COLON
-                                                        {},  // WHITE_SPACE
-                                                        {},  // LINE_BREAK
-                                                        {},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                 /*ROOT*/
+                                                        {},              // OPENING_BRACE
+                                                        {},              // OPENING_BRACKET
+                                                        {},              // CLOSING_BRACE
+                                                        {},              // CLOSING_BRACKET
+                                                        {},              // QUOTE
+                                                        {},              // ESCAPE
+                                                        {},              // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {},              // OTHER
                                                         /*LIST*/
                                                         {},  // OPENING_BRACE
                                                         {},  // OPENING_BRACKET
@@ -1017,6 +1032,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
+  check_input_size(json_in.size());
+
   // Range of encapsulating function that comprises:
   // -> DFA simulation for filtering out brackets and braces inside of quotes
   // -> Logical stack to infer the stack context
@@ -1076,6 +1093,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  check_input_size(json_in.size());
+
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
@@ -1083,13 +1102,13 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream]() {
-    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     // Memory holding the top-of-stack stack context for the input
     rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
     // Identify what is the stack context for each input character (JSON-root, struct, or list)
     get_stack_context(json_in, stack_op_indices.data(), stream);
 
+    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
     thrust::transform(rmm::exec_policy(stream),
                       zip_in,
@@ -1125,7 +1144,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
+  rmm::device_scalar<std::size_t> num_written_tokens{stream};
   rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
 
@@ -1637,11 +1656,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
           parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
       }
 
+      auto [result_bitmask, null_count] = make_validity(json_col);
+
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  make_validity(json_col).first,
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   parsing_options(options).view(),
                                                   stream,
                                                   mr);
