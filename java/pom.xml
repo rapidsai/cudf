@@ -159,7 +159,6 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <junit.version>5.4.2</junit.version>
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
-        <ai.rapids.allow.nonempty.nulls>true</ai.rapids.allow.nonempty.nulls>
         <ai.rapids.cudf.nvtx.enabled>false</ai.rapids.cudf.nvtx.enabled>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
@@ -552,7 +551,6 @@
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
                     <systemPropertyVariables>
                         <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
-                        <ai.rapids.allow.nonempty.nulls>${ai.rapids.allow.nonempty.nulls}</ai.rapids.allow.nonempty.nulls>
                         <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
                     </systemPropertyVariables>
                 </configuration>
