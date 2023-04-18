@@ -23,6 +23,7 @@ from cudf.testing._utils import (
     expect_warning_if,
     gen_rand,
 )
+from cudf.api.extensions import no_default
 
 
 def _series_na_data():
@@ -1407,7 +1408,7 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
 @pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("original_name", [None, "original_ser"])
-@pytest.mark.parametrize("name", [None, "ser"])
+@pytest.mark.parametrize("name", [None, "ser", no_default])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_reset_index(level, drop, inplace, original_name, name):
     midx = pd.MultiIndex.from_tuples(
@@ -1422,10 +1423,8 @@ def test_reset_index(level, drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    with expect_warning_if(name is None and not drop):
-        expect = ps.reset_index(
-            level=level, drop=drop, name=name, inplace=inplace
-        )
+    expect = ps.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+
     got = gs.reset_index(level=level, drop=drop, name=name, inplace=inplace)
     if inplace:
         expect = ps
@@ -1450,10 +1449,7 @@ def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    with expect_warning_if(name is None and not drop):
-        expect = ps.reset_index(
-            level=level, drop=drop, inplace=inplace, name=name
-        )
+    expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
     got = gs.reset_index(level=level, drop=drop, inplace=inplace, name=name)
     if inplace:
         expect = ps
@@ -1479,8 +1475,7 @@ def test_reset_index_named(drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    with expect_warning_if(name is None and not drop):
-        expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
     got = gs.reset_index(drop=drop, inplace=inplace, name=name)
 
     if inplace:

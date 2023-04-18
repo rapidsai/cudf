@@ -117,8 +117,7 @@ struct tdigest_groupby_simple_merge_op {
 };
 
 template <typename T>
-struct TDigestAllTypes : public cudf::test::BaseFixture {
-};
+struct TDigestAllTypes : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TDigestAllTypes, cudf::test::NumericTypes);
 
 TYPED_TEST(TDigestAllTypes, Simple)
@@ -206,8 +205,7 @@ TYPED_TEST(TDigestAllTypes, LargeGroups)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result.second[0].results[0], *merged_parts);
 }
 
-struct TDigestTest : public cudf::test::BaseFixture {
-};
+struct TDigestTest : public cudf::test::BaseFixture {};
 
 TEST_F(TDigestTest, EmptyMixed)
 {
@@ -251,8 +249,7 @@ TEST_F(TDigestTest, LargeInputDecimal)
   cudf::test::tdigest_simple_large_input_decimal_aggregation(tdigest_groupby_simple_op{});
 }
 
-struct TDigestMergeTest : public cudf::test::BaseFixture {
-};
+struct TDigestMergeTest : public cudf::test::BaseFixture {};
 
 // Note: there is no need to test different types here as the internals of a tdigest are always
 // the same regardless of input.

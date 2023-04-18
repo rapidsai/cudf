@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@
 #include <vector>
 
 template <typename T>
-struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {
-};
+struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(UnaryLogicalOpsTest, cudf::test::NumericTypes);
 
@@ -86,8 +85,7 @@ TYPED_TEST(UnaryLogicalOpsTest, EmptyLogicalNot)
 }
 
 template <typename T>
-struct UnaryMathOpsTest : public cudf::test::BaseFixture {
-};
+struct UnaryMathOpsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(UnaryMathOpsTest, cudf::test::NumericTypes);
 
@@ -232,8 +230,7 @@ TYPED_TEST(UnaryMathOpsTest, DictionaryCBRT)
 }
 
 template <typename T>
-struct UnaryMathFloatOpsTest : public cudf::test::BaseFixture {
-};
+struct UnaryMathFloatOpsTest : public cudf::test::BaseFixture {};
 
 using floating_point_type_list = ::testing::Types<float, double>;
 
@@ -422,8 +419,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleCBRT)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
-struct UnaryMathOpsErrorTest : public cudf::test::BaseFixture {
-};
+struct UnaryMathOpsErrorTest : public cudf::test::BaseFixture {};
 
 TEST_F(UnaryMathOpsErrorTest, ArithmeticTypeFail)
 {

@@ -1994,7 +1994,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    backfill = bfill
+    @_cudf_nvtx_annotate
+    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.bfill/Series.bfill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.backfill/Series.backfill is deprecated. Use "
+            "DataFrame.bfill/Series.bfill instead",
+            FutureWarning,
+        )
+        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_cudf_nvtx_annotate
     def ffill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2013,7 +2030,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    pad = ffill
+    @_cudf_nvtx_annotate
+    def pad(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.ffill/Series.ffill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.pad/Series.pad is deprecated. Use "
+            "DataFrame.ffill/Series.ffill instead",
+            FutureWarning,
+        )
+        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix):
         """
