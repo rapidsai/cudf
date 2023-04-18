@@ -130,7 +130,11 @@ def _find_ambiguous_and_nonexistent(
     # the moment of transition:
     ambiguous_end = clock_2.apply_boolean_mask(cond)
     ambiguous = label_bins(
-        data, ambiguous_begin, True, ambiguous_end, False
+        data,
+        left_edges=ambiguous_begin,
+        left_inclusive=True,
+        right_edges=ambiguous_end,
+        right_inclusive=False,
     ).notnull()
 
     # At the start of a non-existent time period, Clock 2 reads less
@@ -142,7 +146,11 @@ def _find_ambiguous_and_nonexistent(
     # at the moment of transition:
     nonexistent_end = clock_1.apply_boolean_mask(cond)
     nonexistent = label_bins(
-        data, nonexistent_begin, True, nonexistent_end, False
+        data,
+        left_edges=nonexistent_begin,
+        left_inclusive=True,
+        right_edges=nonexistent_end,
+        right_inclusive=False,
     ).notnull()
 
     return ambiguous, nonexistent
