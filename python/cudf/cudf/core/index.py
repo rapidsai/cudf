@@ -2510,20 +2510,22 @@ class DatetimeIndex(GenericIndex):
 
         Examples
         --------
-        >>> tz_naive = pd.date_range('2018-03-01 09:00', periods=3)
+        >>> import cudf
+        >>> import pandas as pd
+        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
         >>> tz_aware = tz_naive.tz_localize("America/New_York")
         >>> tz_aware
         DatetimeIndex(['2018-03-01 09:00:00-05:00',
                        '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-              dtype='datetime64[ns, America/New_York]')
+                      dtype='datetime64[ns, America/New_York]')
 
         Ambiguous or nonexistent datetimes are converted to NaT.
 
         >>> s = cudf.to_datetime(cudf.Series(['2018-10-28 01:20:00',
-                                            '2018-10-28 02:36:00',
-                                            '2018-10-28 03:46:00']))
-        >>>  s.dt.tz_localize("CET")
+        ...                                   '2018-10-28 02:36:00',
+        ...                                   '2018-10-28 03:46:00']))
+        >>> s.dt.tz_localize("CET")
         0    2018-10-28 01:20:00.000000000
         1                             <NA>
         2    2018-10-28 03:46:00.000000000
