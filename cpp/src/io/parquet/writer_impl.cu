@@ -1419,10 +1419,11 @@ struct return_type {
   table_device_view_owner parent_column_table_device_view;    // unused
   rmm::device_uvector<column_device_view> leaf_column_views;  // unused
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
+  std::vector<size_t> global_rowgroup_base;
   std::vector<int> num_rg_in_part;
   size_type max_page_fragment_size;
   size_type num_fragments;
-  int num_rowgroups;
+  size_type num_rowgroups;
 };
 
 /**
@@ -1569,19 +1570,25 @@ return_type convert_table_to_parquet_data(
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   if (!curr_agg_meta) {
     agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions, num_columns, std::move(this_table_schema), stats_granularity, kv_meta);
+      partitions,
+      num_columns,
+      std::vector<SchemaElement>(this_table_schema.begin(), this_table_schema.end()),
+      stats_granularity,
+      kv_meta);
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
-    // verify the user isn't passing mismatched tables
+    //    verify the user isn't passing mismatched tables
     CUDF_EXPECTS(agg_meta->schema_matches(this_table_schema),
                  "Mismatch in schema between multiple calls to write_chunk");
 
     agg_meta->update_files(partitions);
   }
 
+  auto global_rowgroup_base = agg_meta->num_row_groups_per_file();
+
   // Decide row group boundaries based on uncompressed data size
-  int num_rowgroups = 0;
+  size_type num_rowgroups = 0;
 
   std::vector<int> num_rg_in_part(partitions.size());
   for (size_t p = 0; p < partitions.size(); ++p) {
@@ -1631,6 +1638,7 @@ return_type convert_table_to_parquet_data(
                      std::move(parent_column_table_device_view),
                      std::move(leaf_column_views),
                      std::move(agg_meta),
+                     std::move(global_rowgroup_base),
                      std::move(num_rg_in_part),
                      max_page_fragment_size,
                      num_fragments,
@@ -1731,6 +1739,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          parent_column_table_device_view,  // unused, but needs to be kept alive
                          leaf_column_views,                // unused, but needs to be kept alive
                          updated_agg_meta,
+                         global_rowgroup_base,
                          num_rg_in_part,
                          max_page_fragment_size,
                          num_fragments,
@@ -1783,8 +1792,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   //  }
 
   _agg_meta = std::move(updated_agg_meta);
-
-  auto const global_rowgroup_base = _agg_meta->num_row_groups_per_file();
 
   std::vector<int> first_rg_in_part;
   std::exclusive_scan(
