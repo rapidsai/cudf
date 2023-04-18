@@ -132,7 +132,7 @@ std::string compression_type_name(compression_type compression)
     case compression_type::ZSTD: return "Zstandard";
     case compression_type::DEFLATE: return "Deflate";
   }
-  return "compression_type(" + std::to_string(int(compression)) + ")";
+  return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
 
 size_t batched_decompress_temp_size(compression_type compression,
