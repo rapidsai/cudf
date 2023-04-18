@@ -87,7 +87,7 @@ jobs:
       sha: ${{ inputs.sha }}
       package-name: cudf
       test-before-arm64: "python -m pip install 'cupy-cuda11x<12.0.0' -f https://pip.cupy.dev/aarch64"
-      test-unittest: "python -m pytest -v -n 8 ./python/cudf/cudf/tests"
+      test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.06
@@ -99,4 +99,4 @@ jobs:
       package-name: dask_cudf
       # Test against latest dask/distributed/dask-cuda.
       test-before: "pip install git+https://github.com/dask/dask.git@2023.3.2 git+https://github.com/dask/distributed.git@2023.3.2.1 git+https://github.com/rapidsai/dask-cuda.git@branch-23.06"
-      test-unittest: "python -m pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
+      test-unittest: "python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests"
