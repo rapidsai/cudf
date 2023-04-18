@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,13 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct ListsElementsTest : public cudf::test::BaseFixture {
-};
+struct ListsElementsTest : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 template <typename T>
-class ListsElementsNumericsTest : public ListsElementsTest {
-};
+class ListsElementsNumericsTest : public ListsElementsTest {};
 
 TYPED_TEST_SUITE(ListsElementsNumericsTest, NumericTypesNotBool);
 

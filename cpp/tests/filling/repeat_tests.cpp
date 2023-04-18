@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,8 +240,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
-class RepeatErrorTestFixture : public cudf::test::BaseFixture {
-};
+class RepeatErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(RepeatErrorTestFixture, LengthMismatch)
 {

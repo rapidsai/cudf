@@ -7574,11 +7574,13 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
         pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan]),
     ],
 )
-def test_dataframe_bfill(df):
+@pytest.mark.parametrize("alias", ["bfill", "backfill"])
+def test_dataframe_bfill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = df.bfill()
-    expected = gdf.bfill()
+    actual = getattr(df, alias)()
+    with expect_warning_if(alias == "backfill"):
+        expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
 
 
@@ -7589,11 +7591,13 @@ def test_dataframe_bfill(df):
         pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan]),
     ],
 )
-def test_dataframe_ffill(df):
+@pytest.mark.parametrize("alias", ["ffill", "pad"])
+def test_dataframe_ffill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = df.ffill()
-    expected = gdf.ffill()
+    actual = getattr(df, alias)()
+    with expect_warning_if(alias == "pad"):
+        expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
 
 
@@ -10077,16 +10081,37 @@ def test_dataframe_init_from_scalar_and_lists(data):
     assert_eq(expected, actual)
 
 
-def test_dataframe_init_length_error():
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ({"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}, None),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        ([[10, 11], [12, 13]], ["a", "b", "c"]),
+    ],
+)
+def test_dataframe_init_length_error(data, index):
     assert_exceptions_equal(
         lfunc=pd.DataFrame,
         rfunc=cudf.DataFrame,
         lfunc_args_and_kwargs=(
             [],
-            {"data": {"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}},
+            {"data": data, "index": index},
         ),
         rfunc_args_and_kwargs=(
             [],
-            {"data": {"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}},
+            {"data": data, "index": index},
         ),
     )

@@ -48,6 +48,7 @@ set(cython_sources
     string_casting.pyx
     strings_udf.pyx
     text.pyx
+    timezone.pyx
     transform.pyx
     transpose.pyx
     types.pyx
