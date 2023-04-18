@@ -449,7 +449,7 @@ feature_status_parameters::feature_status_parameters()
     cudaDeviceGetAttribute(&compute_capability_major, cudaDevAttrComputeCapabilityMajor, device));
 }
 
-// Represents all parameters reqired to determine status of a compression/decompression feature
+// Represents all parameters required to determine status of a compression/decompression feature
 using feature_status_inputs = std::pair<compression_type, feature_status_parameters>;
 struct hash_feature_status_inputs {
   size_t operator()(feature_status_inputs const& fsi) const
