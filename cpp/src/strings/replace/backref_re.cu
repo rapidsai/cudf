@@ -146,18 +146,6 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
-                                              std::string_view pattern,
-                                              std::string_view replacement,
-                                              regex_flags const flags,
-                                              rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
-  return detail::replace_with_backrefs(
-    strings, *h_prog, replacement, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
                                               regex_program const& prog,
                                               std::string_view replacement,
                                               rmm::mr::device_memory_resource* mr)

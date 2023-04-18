@@ -36,6 +36,8 @@ namespace detail {
 rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
                                                              rmm::cuda_stream_view stream)
 {
+  if (keys.empty()) { return rmm::device_uvector<serial_trie_node>{0, stream}; }
+
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
     using TrieNodePtr                 = std::unique_ptr<TreeTrieNode>;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-struct TextSubwordTest : public cudf::test::BaseFixture {
-};
+struct TextSubwordTest : public cudf::test::BaseFixture {};
 
 // Create a fake hashed vocab text file for the tests in this source file.
 // The vocab only includes the following words:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
-struct CopyTest : public cudf::test::BaseFixture {
-};
+struct CopyTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -230,8 +229,7 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
   }
 }
 
-struct CopyEmptyNested : public cudf::test::BaseFixture {
-};
+struct CopyEmptyNested : public cudf::test::BaseFixture {};
 
 TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedColumns)
 {
@@ -310,8 +308,7 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
 }
 
 template <typename T>
-struct CopyTestNumeric : public cudf::test::BaseFixture {
-};
+struct CopyTestNumeric : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(CopyTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
@@ -398,8 +395,7 @@ struct create_chrono_scalar {
 };
 
 template <typename T>
-struct CopyTestChrono : public cudf::test::BaseFixture {
-};
+struct CopyTestChrono : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(CopyTestChrono, cudf::test::ChronoTypes);
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
@@ -460,8 +456,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
-struct CopyTestUntyped : public cudf::test::BaseFixture {
-};
+struct CopyTestUntyped : public cudf::test::BaseFixture {};
 
 TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
 {
@@ -473,8 +468,7 @@ TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
   EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
 }
 
-struct StringsCopyIfElseTest : public cudf::test::BaseFixture {
-};
+struct StringsCopyIfElseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCopyIfElseTest, CopyIfElse)
 {
@@ -587,8 +581,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 }
 
 template <typename T>
-struct FixedPointTypes : public cudf::test::BaseFixture {
-};
+struct FixedPointTypes : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTypes, cudf::test::FixedPointTypes);
 
@@ -644,8 +637,7 @@ TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
   EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
 }
 
-struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {
-};
+struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryCopyIfElseTest, ColumnColumn)
 {

@@ -22,8 +22,7 @@
 #include <cudf/reduction.hpp>
 
 template <typename T>
-struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {
-};
+struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ReductionTDigestAllTypes, cudf::test::NumericTypes);
 
 struct reduce_op {
@@ -80,8 +79,7 @@ TYPED_TEST(ReductionTDigestAllTypes, AllNull)
   cudf::test::tdigest_simple_all_nulls_aggregation<T>(reduce_op{});
 }
 
-struct ReductionTDigestMerge : public cudf::test::BaseFixture {
-};
+struct ReductionTDigestMerge : public cudf::test::BaseFixture {};
 
 TEST_F(ReductionTDigestMerge, Simple)
 {
