@@ -349,7 +349,8 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   auto d_column_names     = experimental::detail::parse_data(string_views.begin(),
                                                          num_strings,
                                                          data_type{type_id::STRING},
-                                                         rmm::device_buffer{0, stream},
+                                                         rmm::device_buffer{},
+                                                         0,
                                                          options_view,
                                                          stream,
                                                          rmm::mr::get_current_device_resource());
@@ -790,12 +791,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         target_type = cudf::io::detail::infer_data_type(
           options.json_view(), d_input, string_ranges_it, col_size, stream);
       }
-      validity_size_check(json_col);
+
+      auto [result_bitmask, null_count] = make_validity(json_col);
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  json_col.validity.release(),
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   options.view(),
                                                   stream,
                                                   mr);
