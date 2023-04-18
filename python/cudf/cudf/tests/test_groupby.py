@@ -2499,7 +2499,7 @@ def test_groupby_various_by_fillna(by, data, args):
 
 
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
-@pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_groupby_fillna_method(nelem, method):
     t = rand_dataframe(
         dtypes_meta=[
@@ -2538,8 +2538,7 @@ def test_groupby_fillna_method(nelem, method):
     gdf = cudf.from_pandas(pdf)
 
     expect = pdf.groupby(key_col).fillna(method=method)
-    with expect_warning_if(method in {"pad", "backfill"}):
-        got = gdf.groupby(key_col).fillna(method=method)
+    got = gdf.groupby(key_col).fillna(method=method)
 
     assert_groupby_results_equal(
         expect[value_cols], got[value_cols], sort=False
@@ -2879,19 +2878,17 @@ def test_groupby_transform_maintain_index(by):
     ],
 )
 @pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill"])
 def test_groupby_pct_change(data, gkey, periods, fill_method):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    with expect_warning_if(fill_method in ("pad", "backfill")):
-        actual = gdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
-    with expect_warning_if(fill_method in ("pad", "backfill")):
-        expected = pdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
+    actual = gdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
+    expected = pdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
 
     assert_eq(expected, actual)
 
