@@ -1550,10 +1550,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
     _agg_meta->update_files(partitions);
   }
-  // Create table_device_view so that corresponding column_device_view data
-  // can be written into col_desc members
-  auto parent_column_table_device_view = table_device_view::create(single_streams_table, _stream);
-  rmm::device_uvector<column_device_view> leaf_column_views(0, _stream);
 
   // Initialize column description
   hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), _stream);
@@ -1633,6 +1629,13 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
     part_frag_offset, _stream, rmm::mr::get_current_device_resource());
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments(
     num_columns, num_fragments, _stream);
+
+  // Create table_device_view so that corresponding column_device_view data
+  // can be written into col_desc members
+  // These are unused but needs to be kept alive.
+  auto const parent_column_table_device_view =
+    table_device_view::create(single_streams_table, _stream);
+  auto leaf_column_views = rmm::device_uvector<column_device_view>(0, _stream);
 
   if (num_fragments != 0) {
     // Move column info to device
