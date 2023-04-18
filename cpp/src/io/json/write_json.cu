@@ -82,7 +82,7 @@ namespace {
  */
 struct escape_strings_fn {
   column_device_view const d_column;
-  bool const append_colon;
+  bool const append_colon{false};
   offset_type* d_offsets{};
   char* d_chars{};
 
