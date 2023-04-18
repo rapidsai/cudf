@@ -5642,6 +5642,58 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingWithStringOrderByColumn() {
+    final String X = null;
+    final int orderIndex = 3; // Index of order-by column.
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(7, 5, 1, 9, 7, 9,  8, 2, 8, 0, 6, 6, 8) // Agg Column
+            .column("0", "1", "2", "3", "4", "5", X, X, "1", "2", "4", "5", "7") // String orderBy Key
+            .build()) {
+      try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(3, true));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(2);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        try (WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
+                     .minPeriods(1)
+                     .unboundedPreceding()
+                     .unboundedFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build();
+             WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
+                     .minPeriods(1)
+                     .unboundedPreceding()
+                     .currentRowFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build();
+             WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
+                     .minPeriods(1)
+                     .currentRowPreceding()
+                     .unboundedFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build()) {
+
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverRanges(
+                          RollingAggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),
+                          RollingAggregation.count().onColumn(2).overWindow(unboundedPrecedingAndCurrentRow),
+                          RollingAggregation.count().onColumn(2).overWindow(currentRowAndUnboundedFollowing));
+               ColumnVector expect_0 = ColumnVector.fromBoxedInts(6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7);
+               ColumnVector expect_1 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 2, 2, 3, 4, 5, 6, 7);
+               ColumnVector expect_2 = ColumnVector.fromBoxedInts(6, 5, 4, 3, 2, 1, 7, 7, 5, 4, 3, 2, 1)) {
+
+            assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expect_1, windowAggResults.getColumn(1));
+            assertColumnsAreEqual(expect_2, windowAggResults.getColumn(2));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testRangeWindowingCountUnboundedASCWithNullsFirst() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
