@@ -29,11 +29,11 @@
 namespace cudf {
 namespace detail {
 
-using row_hash_experimental =
+using row_hash =
   cudf::experimental::row::hash::device_row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
-using row_equality_experimental =
+using row_equality =
   cudf::experimental::row::equality::strong_index_comparator_adapter<
     cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
@@ -50,7 +50,7 @@ struct expression_equality {
     cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
     cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
     bool const swap_tables,
-    row_equality_experimental const& equality_probe)
+    row_equality const& equality_probe)
     : evaluator{evaluator},
       thread_intermediate_storage{thread_intermediate_storage},
       swap_tables{swap_tables},
@@ -61,7 +61,7 @@ struct expression_equality {
   cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
   cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
   bool const swap_tables;
-  row_equality_experimental const& equality_probe;
+  row_equality const& equality_probe;
 };
 
 /**

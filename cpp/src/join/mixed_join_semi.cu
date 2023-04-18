@@ -62,8 +62,8 @@ struct make_pair_function_semi {
  */
 class double_row_equality {
  public:
-  double_row_equality(row_equality_experimental equality_comparator,
-                      row_equality_experimental conditional_comparator)
+  double_row_equality(row_equality equality_comparator,
+                      row_equality conditional_comparator)
     : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
   {
   }
@@ -78,8 +78,8 @@ class double_row_equality {
   }
 
  private:
-  row_equality_experimental _equality_comparator;
-  row_equality_experimental _conditional_comparator;
+  row_equality _equality_comparator;
+  row_equality _conditional_comparator;
 };
 
 }  // namespace
