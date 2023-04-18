@@ -7572,7 +7572,8 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
 def test_dataframe_bfill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = getattr(df, alias)()
+    with expect_warning_if(PANDAS_GE_200 and alias == "backfill"):
+        actual = getattr(df, alias)()
     with expect_warning_if(alias == "backfill"):
         expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
@@ -7589,7 +7590,8 @@ def test_dataframe_bfill(df, alias):
 def test_dataframe_ffill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = getattr(df, alias)()
+    with expect_warning_if(PANDAS_GE_200 and alias == "pad"):
+        actual = getattr(df, alias)()
     with expect_warning_if(alias == "pad"):
         expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
