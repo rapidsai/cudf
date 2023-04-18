@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 /**
  * @file orc_field_reader.hpp
  * @brief Functors to encapsulate common functionality required to implement
- * ProtobufWriter::read(...) functions
+ * ProtobufReader::read(...) functions
  */
 
 namespace cudf {

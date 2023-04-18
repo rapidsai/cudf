@@ -17,8 +17,7 @@
 #include <benchmarks/join/join_common.hpp>
 
 template <typename key_type, typename payload_type>
-class ConditionalJoin : public cudf::benchmark {
-};
+class ConditionalJoin : public cudf::benchmark {};
 
 // For compatibility with the shared logic for equality (hash) joins, all of
 // the join lambdas defined by these macros accept a null_equality parameter

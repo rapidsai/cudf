@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 using TestingTypes = cudf::test::NumericTypes;
 
 template <typename T>
-struct NumericPairIteratorTest : public IteratorTest<T> {
-};
+struct NumericPairIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }

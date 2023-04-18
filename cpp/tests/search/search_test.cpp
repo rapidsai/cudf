@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-struct SearchTest : public cudf::test::BaseFixture {
-};
+struct SearchTest : public cudf::test::BaseFixture {};
 
 using cudf::numeric_scalar;
 using cudf::size_type;
@@ -1819,8 +1818,7 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 

@@ -91,14 +91,12 @@ struct window_exec {
   ScalarT preceding;             // Preceding window scalar.
   ScalarT following;             // Following window scalar.
   cudf::size_type min_periods = 1;
-};  // struct window_exec;
+};                               // struct window_exec;
 
-struct RangeRollingTest : public cudf::test::BaseFixture {
-};
+struct RangeRollingTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedTimeRangeRollingTest : RangeRollingTest {
-};
+struct TypedTimeRangeRollingTest : RangeRollingTest {};
 
 TYPED_TEST_SUITE(TypedTimeRangeRollingTest, cudf::test::TimestampTypes);
 
@@ -269,8 +267,7 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimestampDESC)
 }
 
 template <typename T>
-struct TypedIntegralRangeRollingTest : RangeRollingTest {
-};
+struct TypedIntegralRangeRollingTest : RangeRollingTest {};
 
 TYPED_TEST_SUITE(TypedIntegralRangeRollingTest, cudf::test::IntegralTypesNotBool);
 
@@ -321,8 +318,7 @@ TYPED_TEST(TypedIntegralRangeRollingTest, OrderByDesc)
 }
 
 template <typename T>
-struct TypedRangeRollingNullsTest : public RangeRollingTest {
-};
+struct TypedRangeRollingNullsTest : public RangeRollingTest {};
 
 using TypesUnderTest = cudf::test::IntegralTypesNotBool;
 
