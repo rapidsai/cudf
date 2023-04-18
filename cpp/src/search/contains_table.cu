@@ -345,11 +345,11 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
 
     auto const d_hasher = strong_index_hasher_adapter{
       row_hash_legacy{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
-    auto const d_eqcomp =
-      strong_index_comparator_adapter{row_equality_legacy{cudf::nullate::DYNAMIC{haystack_has_nulls},
-                                                   *haystack_tdv_ptr,
-                                                   *haystack_tdv_ptr,
-                                                   compare_nulls}};
+    auto const d_eqcomp = strong_index_comparator_adapter{
+      row_equality_legacy{cudf::nullate::DYNAMIC{haystack_has_nulls},
+                          *haystack_tdv_ptr,
+                          *haystack_tdv_ptr,
+                          compare_nulls}};
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:

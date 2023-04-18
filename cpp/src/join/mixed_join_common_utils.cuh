@@ -33,9 +33,8 @@ using row_hash =
   cudf::experimental::row::hash::device_row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
-using row_equality =
-  cudf::experimental::row::equality::strong_index_comparator_adapter<
-    cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
+using row_equality = cudf::experimental::row::equality::strong_index_comparator_adapter<
+  cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
 /**
  * @brief Equality comparator for use with cuco map methods that require expression evaluation.
