@@ -305,16 +305,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if use_pandas_metadata:
                 df.index.names = index_col
 
-    if meta is not None:
-        columns_meta = meta['column_indexes']
-        if len(columns_meta) == 1:
-            if columns_meta[0]['numpy_type'] is not None \
-                    and cudf.dtype(
-                    columns_meta[0]['numpy_type']) != cudf.dtype("O"):
-                # Parquet metadata store integer column names as strings.
-                # This special handling is to restore the types of column
-                # names.
-                df.columns = df.columns.astype(columns_meta[0]['numpy_type'])
     return df
 
 
