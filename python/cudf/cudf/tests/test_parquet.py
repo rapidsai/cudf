@@ -311,7 +311,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_column_type=not PANDAS_GE_200)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -2210,7 +2210,12 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual, check_index_type=True)
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=True,
+        check_column_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2807,3 +2812,11 @@ def test_parquet_writer_schema_nullability(data, force_nullable_schema):
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
         force_nullable_schema or df.isnull().any().any()
     )
+
+
+def test_parquet_roundtrip_int_columns():
+    file_obj = BytesIO()
+    expected = pd.DataFrame({0: [1, 2, 3], 10: [10, 11, 12]})
+    expected.to_parquet(file_obj)
+    actual = cudf.read_parquet(file_obj)
+    assert_eq(expected, actual, check_column_type=True)

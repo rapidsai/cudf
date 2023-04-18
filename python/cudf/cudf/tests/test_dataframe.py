@@ -6325,12 +6325,22 @@ def test_dataframe_init_1d_list(data, columns):
     expect = pd.DataFrame(data, columns=columns)
     actual = cudf.DataFrame(data, columns=columns)
 
-    assert_eq(expect, actual, check_index_type=len(data) != 0)
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+        check_column_type=not PANDAS_GE_200 and len(data) == 0,
+    )
 
     expect = pd.DataFrame(data, columns=None)
     actual = cudf.DataFrame(data, columns=None)
 
-    assert_eq(expect, actual, check_index_type=len(data) != 0)
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+        check_column_type=not PANDAS_GE_200 and len(data) == 0,
+    )
 
 
 @pytest.mark.parametrize(
@@ -7660,7 +7670,12 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
             check_column_type=not gdf.empty,
         )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=PANDAS_GE_200 and len(gdf.columns) != 0,
+        )
 
 
 def test_dataframe_concat_series_without_name():
