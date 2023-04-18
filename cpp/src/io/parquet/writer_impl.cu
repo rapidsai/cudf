@@ -91,6 +91,8 @@ struct aggregate_writer_metadata {
     }
   }
 
+  aggregate_writer_metadata(aggregate_writer_metadata const&) = default;
+
   void update_files(std::vector<partition_info> const& partitions)
   {
     CUDF_EXPECTS(partitions.size() == this->files.size(),
@@ -1401,9 +1403,11 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
   }
 }
 
+// TODO
 using table_device_view_owner =
   std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
+// TODO
 struct return_type {
   std::vector<parquet_column_view> parquet_columns;
   table_view single_streams_table;
@@ -1412,10 +1416,13 @@ struct return_type {
   std::vector<SchemaElement> this_table_schema;
   std::vector<int> part_frag_offset;
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments;
-  table_device_view_owner parent_column_table_device_view;
-  rmm::device_uvector<column_device_view> leaf_column_views;
+  table_device_view_owner parent_column_table_device_view;    // unused
+  rmm::device_uvector<column_device_view> leaf_column_views;  // unused
+  std::unique_ptr<aggregate_writer_metadata> agg_meta;
+  std::vector<int> num_rg_in_part;
   size_type max_page_fragment_size;
   size_type num_fragments;
+  int num_rowgroups;
 };
 
 /**
@@ -1429,8 +1436,12 @@ return_type convert_table_to_parquet_data(
   bool int96_timestamps,
   std::optional<size_type> const max_page_fragment_size_opt,
   size_t max_row_group_size,
+  size_type max_row_group_rows,
   size_t max_page_size_bytes,
   std::vector<partition_info> const& partitions,
+  std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
+  statistics_freq stats_granularity,
+  std::vector<std::map<std::string, std::string>> const& kv_meta,
   //                                                   data_sink const& out_sink,
   rmm::cuda_stream_view stream)
 {
@@ -1555,6 +1566,61 @@ return_type convert_table_to_parquet_data(
                              stream);
   }
 
+  std::unique_ptr<aggregate_writer_metadata> agg_meta;
+  if (!curr_agg_meta) {
+    agg_meta = std::make_unique<aggregate_writer_metadata>(
+      partitions, num_columns, std::move(this_table_schema), stats_granularity, kv_meta);
+  } else {
+    agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
+
+    // verify the user isn't passing mismatched tables
+    CUDF_EXPECTS(agg_meta->schema_matches(this_table_schema),
+                 "Mismatch in schema between multiple calls to write_chunk");
+
+    agg_meta->update_files(partitions);
+  }
+
+  // Decide row group boundaries based on uncompressed data size
+  int num_rowgroups = 0;
+
+  std::vector<int> num_rg_in_part(partitions.size());
+  for (size_t p = 0; p < partitions.size(); ++p) {
+    size_type curr_rg_num_rows = 0;
+    size_t curr_rg_data_size   = 0;
+    int first_frag_in_rg       = part_frag_offset[p];
+    int last_frag_in_part      = part_frag_offset[p + 1] - 1;
+    for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
+      size_t fragment_data_size = 0;
+      for (auto c = 0; c < num_columns; c++) {
+        fragment_data_size += row_group_fragments[c][f].fragment_data_size;
+      }
+      size_type fragment_num_rows = row_group_fragments[0][f].num_rows;
+
+      // If the fragment size gets larger than rg limit then break off a rg
+      if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
+          (curr_rg_data_size + fragment_data_size > max_row_group_size ||
+           curr_rg_num_rows + fragment_num_rows > max_row_group_rows)) {
+        auto& rg    = agg_meta->file(p).row_groups.emplace_back();
+        rg.num_rows = curr_rg_num_rows;
+        num_rowgroups++;
+        num_rg_in_part[p]++;
+        curr_rg_num_rows  = 0;
+        curr_rg_data_size = 0;
+        first_frag_in_rg  = f;
+      }
+      curr_rg_num_rows += fragment_num_rows;
+      curr_rg_data_size += fragment_data_size;
+
+      // TODO: (wishful) refactor to consolidate with above if block
+      if (f == last_frag_in_part) {
+        auto& rg    = agg_meta->file(p).row_groups.emplace_back();
+        rg.num_rows = curr_rg_num_rows;
+        num_rowgroups++;
+        num_rg_in_part[p]++;
+      }
+    }
+  }
+
   return return_type{std::move(parquet_columns),
                      std::move(single_streams_table),
                      std::move(col_desc),
@@ -1564,8 +1630,11 @@ return_type convert_table_to_parquet_data(
                      std::move(row_group_fragments),
                      std::move(parent_column_table_device_view),
                      std::move(leaf_column_views),
+                     std::move(agg_meta),
+                     std::move(num_rg_in_part),
                      max_page_fragment_size,
-                     num_fragments};
+                     num_fragments,
+                     num_rowgroups};
 }
 
 }  // namespace
@@ -1661,8 +1730,11 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          row_group_fragments,
                          parent_column_table_device_view,  // unused, but needs to be kept alive
                          leaf_column_views,                // unused, but needs to be kept alive
+                         updated_agg_meta,
+                         num_rg_in_part,
                          max_page_fragment_size,
-                         num_fragments] = [&] {
+                         num_fragments,
+                         num_rowgroups] = [&] {
     try {
       return convert_table_to_parquet_data(input,
                                            *_table_meta,
@@ -1670,8 +1742,12 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _max_page_fragment_size,
                                            _max_row_group_size,
+                                           _max_row_group_rows,
                                            _max_page_size_bytes,
                                            partitions,
+                                           _agg_meta,
+                                           _stats_granularity,
+                                           _kv_meta,
                                            _stream);
     } catch (...) {  // catch any exception type
       CUDF_LOG_ERROR(
@@ -1695,59 +1771,20 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
   auto const num_columns = single_streams_table.num_columns();
 
-  if (!_agg_meta) {
-    _agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions, num_columns, std::move(this_table_schema), _stats_granularity, _kv_meta);
-  } else {
-    // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(_agg_meta->schema_matches(this_table_schema),
-                 "Mismatch in schema between multiple calls to write_chunk");
+  //  if (!_agg_meta) {
+  //    _agg_meta = std::make_unique<aggregate_writer_metadata>(
+  //      partitions, num_columns, std::move(this_table_schema), _stats_granularity, _kv_meta);
+  //  } else {
+  //    // verify the user isn't passing mismatched tables
+  //    CUDF_EXPECTS(_agg_meta->schema_matches(this_table_schema),
+  //                 "Mismatch in schema between multiple calls to write_chunk");
 
-    _agg_meta->update_files(partitions);
-  }
+  //    _agg_meta->update_files(partitions);
+  //  }
+
+  _agg_meta = std::move(updated_agg_meta);
 
   auto const global_rowgroup_base = _agg_meta->num_row_groups_per_file();
-
-  // Decide row group boundaries based on uncompressed data size
-  int num_rowgroups = 0;
-
-  std::vector<int> num_rg_in_part(partitions.size());
-  for (size_t p = 0; p < partitions.size(); ++p) {
-    size_type curr_rg_num_rows = 0;
-    size_t curr_rg_data_size   = 0;
-    int first_frag_in_rg       = part_frag_offset[p];
-    int last_frag_in_part      = part_frag_offset[p + 1] - 1;
-    for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
-      size_t fragment_data_size = 0;
-      for (auto c = 0; c < num_columns; c++) {
-        fragment_data_size += row_group_fragments[c][f].fragment_data_size;
-      }
-      size_type fragment_num_rows = row_group_fragments[0][f].num_rows;
-
-      // If the fragment size gets larger than rg limit then break off a rg
-      if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
-          (curr_rg_data_size + fragment_data_size > _max_row_group_size ||
-           curr_rg_num_rows + fragment_num_rows > _max_row_group_rows)) {
-        auto& rg    = _agg_meta->file(p).row_groups.emplace_back();
-        rg.num_rows = curr_rg_num_rows;
-        num_rowgroups++;
-        num_rg_in_part[p]++;
-        curr_rg_num_rows  = 0;
-        curr_rg_data_size = 0;
-        first_frag_in_rg  = f;
-      }
-      curr_rg_num_rows += fragment_num_rows;
-      curr_rg_data_size += fragment_data_size;
-
-      // TODO: (wishful) refactor to consolidate with above if block
-      if (f == last_frag_in_part) {
-        auto& rg    = _agg_meta->file(p).row_groups.emplace_back();
-        rg.num_rows = curr_rg_num_rows;
-        num_rowgroups++;
-        num_rg_in_part[p]++;
-      }
-    }
-  }
 
   std::vector<int> first_rg_in_part;
   std::exclusive_scan(
