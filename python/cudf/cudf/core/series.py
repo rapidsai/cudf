@@ -60,7 +60,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -4602,11 +4602,16 @@ class DatetimeProperties:
             data=str_col, index=self.series._index, name=self.series.name
         )
 
-    def tz_localize(self, tz):
+    @copy_docstring(DatetimeIndex.tz_localize)
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
         from cudf.core._internals.timezones import localize
 
         return Series._from_data(
-            data={self.series.name: localize(self.series._column, tz)},
+            data={
+                self.series.name: localize(
+                    self.series._column, tz, ambiguous, nonexistent
+                )
+            },
             index=self.series._index,
         )
 

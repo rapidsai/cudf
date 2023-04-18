@@ -148,8 +148,17 @@ def _find_ambiguous_and_nonexistent(
     return ambiguous, nonexistent
 
 
-def localize(data: DatetimeColumn, zone_name: str) -> DatetimeTZColumn:
-
+def localize(
+    data: DatetimeColumn, zone_name: str, ambiguous, nonexistent
+) -> DatetimeTZColumn:
+    if ambiguous != "NaT":
+        raise NotImplementedError(
+            "Only ambiguous='NaT' is currently supported"
+        )
+    if nonexistent != "NaT":
+        raise NotImplementedError(
+            "Only nonexistent='NaT' is currently supported"
+        )
     if isinstance(data, DatetimeTZColumn):
         raise ValueError(
             "Already localized. "
