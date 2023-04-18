@@ -58,7 +58,7 @@ struct feature_status_parameters {
 /**
  * @brief Equality operator overload. Required to use `feature_status_parameters` as a map key.
  */
-inline bool operator==(const feature_status_parameters& lhs, const feature_status_parameters& rhs)
+inline bool operator==(feature_status_parameters const& lhs, feature_status_parameters const& rhs)
 {
   return lhs.lib_major_version == rhs.lib_major_version and
          lhs.lib_minor_version == rhs.lib_minor_version and
