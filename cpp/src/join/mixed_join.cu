@@ -110,7 +110,7 @@ mixed_join(
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    cudf::has_nested_nulls(left_equality) || cudf::has_nested_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
@@ -141,8 +141,15 @@ mixed_join(
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -359,7 +366,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
-    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
+    cudf::has_nested_nulls(left_equality) || cudf::has_nested_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
@@ -390,8 +397,15 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);

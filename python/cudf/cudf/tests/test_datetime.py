@@ -2078,3 +2078,18 @@ def test_datetime_constructor(data, dtype):
     actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [pd.Timestamp("2001-01-01", tz="America/New_York")],
+        pd.Series(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
+        pd.Index(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
+    ],
+)
+def test_construction_from_tz_timestamps(data):
+    with pytest.raises(NotImplementedError):
+        _ = cudf.Series(data)
+    with pytest.raises(NotImplementedError):
+        _ = cudf.Index(data)

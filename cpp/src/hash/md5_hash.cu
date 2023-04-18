@@ -85,10 +85,10 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&) = delete;
+  MD5Hasher(const MD5Hasher&)            = delete;
   MD5Hasher& operator=(const MD5Hasher&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
-  MD5Hasher& operator=(MD5Hasher&&) = delete;
+  MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)

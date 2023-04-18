@@ -19,6 +19,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -126,16 +127,6 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     return result;
   }
 };
-
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
-{
-  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
-  auto child   = make_empty_column(child_type);
-  return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr), stream, mr);
-}
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,

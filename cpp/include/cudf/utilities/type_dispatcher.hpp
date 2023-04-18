@@ -433,7 +433,9 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  */
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
@@ -540,7 +542,9 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
 namespace detail {
 template <typename T1>
 struct double_type_dispatcher_second_type {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <typename T2, typename F, typename... Ts>
   CUDF_HOST_DEVICE __forceinline__ decltype(auto) operator()(F&& f, Ts&&... args) const
   {
@@ -550,7 +554,9 @@ struct double_type_dispatcher_second_type {
 
 template <template <cudf::type_id> typename IdTypeMap>
 struct double_type_dispatcher_first_type {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <typename T1, typename F, typename... Ts>
   CUDF_HOST_DEVICE __forceinline__ decltype(auto) operator()(cudf::data_type type2,
                                                              F&& f,
@@ -580,7 +586,9 @@ struct double_type_dispatcher_first_type {
  *
  * @return The result of invoking `f.template operator<T1, T2>(args)`
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
 CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) double_type_dispatcher(
   cudf::data_type type1, cudf::data_type type2, F&& f, Ts&&... args)

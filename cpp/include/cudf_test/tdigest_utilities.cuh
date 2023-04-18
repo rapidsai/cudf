@@ -224,9 +224,9 @@ void tdigest_simple_aggregation(Func op)
   double const min = 1;
   double const max = 126;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -249,9 +249,9 @@ void tdigest_simple_with_nulls_aggregation(Func op)
   double const min = 1;
   double const max = 122;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

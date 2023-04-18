@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,7 +303,7 @@ inline void CompactProtocolFieldWriter::field_struct(int field, const T& val)
   if constexpr (not std::is_empty_v<T>) {
     writer.write(val);  // write the struct if it's not empty
   } else {
-    put_byte(0);  // otherwise, add a stop field
+    put_byte(0);        // otherwise, add a stop field
   }
   current_field_value = field;
 }
