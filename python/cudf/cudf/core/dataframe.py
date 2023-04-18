@@ -1955,7 +1955,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Can only compare DataFrame & Series objects "
                     "whose columns & index are same respectively, "
-                    "please re-index."
+                    "please reindex."
                 )
             rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
