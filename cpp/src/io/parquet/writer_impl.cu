@@ -1439,6 +1439,8 @@ struct return_type {
   rmm::device_uvector<gpu::EncPage> pages;
   rmm::device_uvector<statistics_chunk> page_stats;
 
+  pinned_buffer<uint8_t> host_bfr;
+
   size_type max_page_fragment_size;
   size_type num_fragments;
   size_type num_rowgroups;
@@ -1915,6 +1917,107 @@ return_type convert_table_to_parquet_data(
                        stream);
   }
 
+  pinned_buffer<uint8_t> host_bfr =
+    pinned_buffer<uint8_t>{[](size_t size) {
+                             uint8_t* ptr = nullptr;
+                             CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+                             return ptr;
+                           }(max_chunk_bfr_size),
+                           cudaFreeHost};
+
+#if 0
+  // Encode row groups in batches
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+    // Count pages in this batch
+    auto const rnext               = r + batch_list[b];
+    auto const first_page_in_batch = chunks[r][0].first_page;
+    auto const first_page_in_next_batch =
+      (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
+    auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+
+    encode_pages(
+      chunks,
+      {pages.data(), pages.size()},
+      max_page_uncomp_data_size,
+      pages_in_batch,
+      first_page_in_batch,
+      batch_list[b],
+      r,
+      (stats_granularity == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
+      (stats_granularity != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
+                                                              : nullptr,
+      (stats_granularity == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr,
+      compression,
+      column_index_truncate_length,
+      stream);
+
+#if 0
+    for (; r < rnext; r++) {
+      int p           = rg_to_part[r];
+      int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
+      auto& row_group = _agg_meta->file(p).row_groups[global_r];
+      for (auto i = 0; i < num_columns; i++) {
+        gpu::EncColumnChunk& ck = chunks[r][i];
+        auto& column_chunk_meta = row_group.columns[i].meta_data;
+        uint8_t* dev_bfr;
+        if (ck.is_compressed) {
+          column_chunk_meta.codec = _compression;
+          dev_bfr                 = ck.compressed_bfr;
+        } else {
+          dev_bfr = ck.uncompressed_bfr;
+        }
+
+        if (_out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
+          // let the writer do what it wants to retrieve the data from the gpu.
+          write_tasks.push_back(_out_sink[p]->device_write_async(
+            dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
+          // we still need to do a (much smaller) memcpy for the statistics.
+          if (ck.ck_stat_size != 0) {
+            column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
+            CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
+                                          dev_bfr,
+                                          ck.ck_stat_size,
+                                          cudaMemcpyDefault,
+                                          _stream.value()));
+            _stream.synchronize();
+          }
+        } else {
+          if (!host_bfr) {
+            host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
+                                                uint8_t* ptr = nullptr;
+                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+                                                return ptr;
+                                              }(max_chunk_bfr_size),
+                                              cudaFreeHost};
+          }
+          // copy the full data
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+                                        dev_bfr,
+                                        ck.ck_stat_size + ck.compressed_size,
+                                        cudaMemcpyDefault,
+                                        _stream.value()));
+          _stream.synchronize();
+          _out_sink[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
+          if (ck.ck_stat_size != 0) {
+            column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
+            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.get(), ck.ck_stat_size);
+          }
+        }
+        row_group.total_byte_size += ck.compressed_size;
+        column_chunk_meta.data_page_offset =
+          _current_chunk_offset[p] + ((ck.use_dictionary) ? ck.dictionary_size : 0);
+        column_chunk_meta.dictionary_page_offset =
+          (ck.use_dictionary) ? _current_chunk_offset[p] : 0;
+        column_chunk_meta.total_uncompressed_size = ck.bfr_size;
+        column_chunk_meta.total_compressed_size   = ck.compressed_size;
+        _current_chunk_offset[p] += ck.compressed_size;
+      }
+    }
+#endif
+  }
+
+#endif
+
   return return_type{std::move(parquet_columns),
                      std::move(single_streams_table),
                      std::move(col_desc),
@@ -1942,6 +2045,9 @@ return_type convert_table_to_parquet_data(
 
                      std::move(pages),
                      std::move(page_stats),
+
+                     std::move(host_bfr),
+
                      max_page_fragment_size,
                      num_fragments,
                      num_rowgroups,
@@ -2032,10 +2138,9 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   // int const max_page_fragment_size{0};
 
   // All kinds of memory allocation and data compressions/encoding are performed here.
-  // If any error occurs, such as out-of-memory exception, the internal state of the current writer
-  // is still intact.
-  // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
-  // writing anything to it.
+  // If any error occurs, such as out-of-memory exception, the internal state of the current
+  // writer is still intact. Note that `out_sink_` is intentionally passed by const reference to
+  // prevent accidentally writing anything to it.
   [[maybe_unused]] auto [parquet_columns,
                          single_streams_table,
                          col_desc,
@@ -2063,6 +2168,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
                          pages,
                          page_stats,
+                         host_bfr,
                          //
                          //
                          max_page_fragment_size,
@@ -2127,16 +2233,16 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   //
   //
 
-  pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
-
   // Encode row groups in batches
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
-    auto const rnext               = r + batch_list[b];
+    auto const rnext = r + batch_list[b];
+#if 1
     auto const first_page_in_batch = chunks[r][0].first_page;
     auto const first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
     auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+
     encode_pages(
       chunks,
       {pages.data(), pages.size()},
@@ -2152,6 +2258,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
       _compression,
       _column_index_truncate_length,
       _stream);
+#endif
 
     std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++) {
@@ -2159,8 +2266,8 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
       int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
       auto& row_group = _agg_meta->file(p).row_groups[global_r];
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk& ck = chunks[r][i];
-        auto& column_chunk_meta = row_group.columns[i].meta_data;
+        gpu::EncColumnChunk const& ck = chunks[r][i];
+        auto& column_chunk_meta       = row_group.columns[i].meta_data;
         uint8_t* dev_bfr;
         if (ck.is_compressed) {
           column_chunk_meta.codec = _compression;
@@ -2184,14 +2291,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
             _stream.synchronize();
           }
         } else {
-          if (!host_bfr) {
-            host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t* ptr = nullptr;
-                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                                return ptr;
-                                              }(max_chunk_bfr_size),
-                                              cudaFreeHost};
-          }
           // copy the full data
           CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
                                         dev_bfr,
