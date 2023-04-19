@@ -166,7 +166,8 @@ table_view remove_struct_child_offsets(table_view table)
  * same row.
  *
  * @param table The table whose struct columns to decompose.
- * @param decompose_lists Whether to decompose lists columns or output them unchanged
+ * @param decompose_lists Whether to decompose lists columns (preprocessing for equality comparator)
+ *        or output them unchanged (preprocessing for lexicographic comparator)
  * @param column_order The per-column order if using output with lexicographic comparison
  * @param null_precedence The per-column null precedence
  * @return A tuple containing a table with all struct columns decomposed, new corresponding column
@@ -325,12 +326,12 @@ void check_lex_compatibility(table_view const& input)
     if (c.type().id() == type_id::LIST) {
       auto const& list_col = lists_column_view(c);
       CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
-                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
+                   "Cannot lexicographically compare a table with a LIST of STRUCT column");
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
         CUDF_EXPECTS(child->type().id() != type_id::LIST,
-                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
+                     "Cannot lexicographically compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }

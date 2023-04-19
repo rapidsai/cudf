@@ -1104,12 +1104,12 @@ class two_table_comparator {
     // comparator, they must have been generated together using the factory function
     // `preprocessed_table::create(table_view const&, table_view const&)`.
     // We can check for that using their _preprocessed_id numbers.
-    CUDF_EXPECTS(
-      (d_left_table->_structs_transformed_columns.size() == 0 &&
-       d_right_table->_structs_transformed_columns.size() == 0) ||
-        (d_left_table->_preprocessed_id == d_right_table->_preprocessed_id),
-      "The pre-generated preprocessed_table(s) are not be able to use for two_table_comparator.\n"
-      "Please create a two_table_comparator using the original tables instead.");
+    CUDF_EXPECTS((d_left_table->_structs_transformed_columns.size() == 0 &&
+                  d_right_table->_structs_transformed_columns.size() == 0) ||
+                   (d_left_table->_preprocessed_id == d_right_table->_preprocessed_id),
+                 "The independently generated preprocessed_table(s) are unable to be used with "
+                 "two_table_comparator.\n"
+                 "Please create a two_table_comparator using the original tables instead.");
   }
 
   /**
