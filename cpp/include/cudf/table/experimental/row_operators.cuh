@@ -747,7 +747,9 @@ struct preprocessed_table {
    * @param null_precedence Optional, an array having the same length as the number of columns in
    *        the input tables that indicates how null values compare to all other. If it is empty,
    *        the order `null_order::BEFORE` will be used for all columns.
-   * @param preprocessed_id A randomly generated ID number
+   * @param preprocessed_id A randomly generated ID number by the factory functions
+   *        `preprocess::create()`, used to check whether this preprocessed table was created
+   *        independently or together with other table.
    * @param ranked_floating_point Flag indicating if the input table was preprocessed to transform
    *        any lists-of-structs column having floating-point children using `cudf::rank`
    * @param stream The stream to launch kernels and h->d copies on while preprocessing
