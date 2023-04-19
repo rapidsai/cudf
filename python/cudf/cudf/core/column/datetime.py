@@ -580,11 +580,15 @@ def infer_format(element: str, **kwargs) -> str:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_parts) > 1:
-        # "Z" indicates Zulu time(widely used in aviation) - Which is
-        # UTC timezone that currently cudf only supports. Having any other
-        # unsupported timezone will let the code fail below
-        # with a ValueError.
-        second_parts.remove("Z")
+        if "Z" in second_parts:
+            # "Z" indicates Zulu time(widely used in aviation) - Which is
+            # UTC timezone that currently cudf only supports. Having any other
+            # unsupported timezone will let the code fail below
+            # with a ValueError.
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+
         second_part = "".join(second_parts[1:])
 
         if len(second_part) > 1:

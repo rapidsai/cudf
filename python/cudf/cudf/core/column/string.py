@@ -5526,6 +5526,10 @@ class StringColumn(column.ColumnBase):
                     self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
+        if format.endswith("%z"):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(

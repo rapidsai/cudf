@@ -10,6 +10,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+import warnings
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
@@ -680,12 +681,14 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    assert_exceptions_equal(
-        pd.to_datetime,
-        cudf.to_datetime,
-        ([pd_data],),
-        ([gd_data],),
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert_exceptions_equal(
+            pd.to_datetime,
+            cudf.to_datetime,
+            ([pd_data],),
+            ([gd_data],),
+        )
 
 
 def test_to_datetime_not_implemented():
@@ -785,14 +788,19 @@ def test_to_datetime_format(data, format, infer_datetime_format):
     else:
         gd_data = pd_data
 
-    expected = pd.to_datetime(
-        pd_data, format=format, infer_datetime_format=infer_datetime_format
-    )
-    actual = cudf.to_datetime(
-        gd_data, format=format, infer_datetime_format=infer_datetime_format
-    )
+    with expect_warning_if(True, UserWarning):
+        expected = pd.to_datetime(
+            pd_data, format=format, infer_datetime_format=infer_datetime_format
+        )
+    with expect_warning_if(not infer_datetime_format):
+        actual = cudf.to_datetime(
+            gd_data, format=format, infer_datetime_format=infer_datetime_format
+        )
+    # TODO: Remove typecast to `ns` after following
+    # issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
 
-    assert_eq(actual, expected)
+    assert_eq(actual.astype("datetime64[ns]"), expected)
 
 
 def test_datetime_can_cast_safely():
@@ -847,7 +855,11 @@ def test_datetime_scalar_timeunit_cast(timeunit):
 
     gs = Series(testscalar)
     ps = pd.Series(testscalar)
-    assert_eq(ps, gs)
+    # TODO: Remove typecast to `ns` after following
+    # issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
+
+    assert_eq(ps, gs.astype("datetime64[ns]"))
 
     gdf = DataFrame()
     gdf["a"] = np.arange(5)
@@ -857,6 +869,11 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     pdf["a"] = np.arange(5)
     pdf["b"] = testscalar
 
+    assert gdf["b"].dtype == cudf.dtype("datetime64[s]")
+    # TODO: Remove typecast to `ns` after following
+    # issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
+    gdf["b"] = gdf["b"].astype("datetime64[ns]")
     assert_eq(pdf, gdf)
 
 
@@ -1268,10 +1285,6 @@ def test_datetime_reductions(data, op, dtype):
     "data",
     [
         np.datetime_as_string(
-            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
-            timezone="UTC",
-        ),
-        np.datetime_as_string(
             np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
             timezone="UTC",
         ),
@@ -1294,10 +1307,13 @@ def test_datetime_infer_format(data, dtype):
     sr = cudf.Series(data)
     psr = pd.Series(data)
 
-    expected = psr.astype(dtype)
-    actual = sr.astype(dtype)
-
-    assert_eq(expected, actual)
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=sr.astype,
+        lfunc_args_and_kwargs=([], {"dtype": dtype}),
+        rfunc_args_and_kwargs=([], {"dtype": dtype}),
+        check_exception_type=False,
+    )
 
 
 def test_dateoffset_instance_subclass_check():
