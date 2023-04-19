@@ -319,7 +319,7 @@ cdef class Column:
             data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
-            data_dtype = self.dtype
+            data_dtype = col.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
@@ -382,7 +382,7 @@ cdef class Column:
             data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
-            data_dtype = self.dtype
+            data_dtype = col.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
