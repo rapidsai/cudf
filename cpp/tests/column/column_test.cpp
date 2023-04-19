@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/null_mask.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -31,27 +21,35 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/exec_policy.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 
-#include <thrust/execution_policy.h>
-#include <thrust/sequence.h>
-
+#include <numeric>
 #include <random>
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
-  TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type()), cudf::get_default_stream()},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements), cudf::get_default_stream()}
+  TypedColumnTest(rmm::cuda_stream_view stream = cudf::get_default_stream())
+    : data{_num_elements * cudf::size_of(type()), stream},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
-    auto typed_data = static_cast<char*>(data.data());
-    auto typed_mask = static_cast<char*>(mask.data());
-    thrust::sequence(
-      rmm::exec_policy(cudf::get_default_stream()), typed_data, typed_data + data.size());
-    thrust::sequence(
-      rmm::exec_policy(cudf::get_default_stream()), typed_mask, typed_mask + mask.size());
+    std::vector<char> h_data(std::max(data.size(), mask.size()));
+    std::iota(h_data.begin(), h_data.end(), 0);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(data.data(), h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(mask.data(), h_data.data(), mask.size(), cudaMemcpyDefault, stream.value()));
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -347,12 +345,11 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
 
 TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 {
-  rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
-                                          cudf::get_default_stream()};
-  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
-               static_cast<TypeParam*>(this->data.data()),
-               static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
-               original.begin());
+  auto data = cudf::device_span<TypeParam const>(static_cast<TypeParam*>(this->data.data()),
+                                                 this->num_elements());
+
+  auto original = cudf::detail::make_device_uvector_async(
+    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto original_data = original.data();
   cudf::column moved_to{std::move(original)};
   verify_column_views(moved_to);
@@ -364,12 +361,11 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 
 TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
 {
-  rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
-                                          cudf::get_default_stream()};
-  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
-               static_cast<TypeParam*>(this->data.data()),
-               static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
-               original.begin());
+  auto data = cudf::device_span<TypeParam const>(static_cast<TypeParam*>(this->data.data()),
+                                                 this->num_elements());
+
+  auto original = cudf::detail::make_device_uvector_async(
+    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto original_data = original.data();
   auto original_mask = this->all_valid_mask.data();
   cudf::column moved_to{std::move(original), std::move(this->all_valid_mask)};
@@ -564,8 +560,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
 {
-  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
-  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 
   // Column of List<List<int>>, with incomplete hierarchy
   LCW list{{LCW{1}, LCW{2}}, {}, {LCW{3}, LCW{4, 5}}};
@@ -580,8 +575,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
 {
-  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
-  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 
   LCW list{{1, 2}, {}, {3, 4}, {8, 9}};
 
