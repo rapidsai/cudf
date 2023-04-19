@@ -1943,6 +1943,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
         elif isinstance(other, Series):
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and (
+                    not self._data.to_pandas_index().equals(
+                        other.index.to_pandas()
+                    )
+                )
+            ):
+                raise ValueError(
+                    "Can only compare DataFrame & Series objects "
+                    "whose columns & index are same respectively, "
+                    "please reindex."
+                )
             rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
