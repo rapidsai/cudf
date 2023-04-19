@@ -1429,11 +1429,24 @@ struct return_type {
   std::pair<std::vector<rmm::device_uvector<size_type>>,
             std::vector<rmm::device_uvector<size_type>>>
     dict_info_owner;  // unused
+  std::vector<size_type> batch_list;
+  std::vector<int> rg_to_part;
+
+  rmm::device_buffer uncomp_bfr;   // unused
+  rmm::device_buffer comp_bfr;     // unused
+  rmm::device_buffer col_idx_bfr;  // unused
+
+  rmm::device_uvector<gpu::EncPage> pages;
+  rmm::device_uvector<statistics_chunk> page_stats;
+
   size_type max_page_fragment_size;
   size_type num_fragments;
   size_type num_rowgroups;
   size_type num_chunks;
   size_type total_frags;  // delete
+  size_type num_pages;
+  size_type max_page_uncomp_data_size;
+  size_t max_chunk_bfr_size;
 };
 
 /**
@@ -1447,8 +1460,10 @@ return_type convert_table_to_parquet_data(
   bool int96_timestamps,
   std::optional<size_type> const max_page_fragment_size_opt,
   size_t max_row_group_size,
-  size_type max_row_group_rows,
   size_t max_page_size_bytes,
+  size_type max_row_group_rows,
+  size_type max_page_size_rows,
+  int32_t column_index_truncate_length,
   std::vector<partition_info> const& partitions,
   std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
   statistics_freq stats_granularity,
@@ -1784,6 +1799,122 @@ return_type convert_table_to_parquet_data(
     }
   }
 
+  // Build chunk dictionaries and count pages. Sends chunks to device.
+  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
+    chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression, stream);
+
+  // Get the maximum page size across all chunks
+  size_type max_page_uncomp_data_size =
+    std::accumulate(chunks.host_view().flat_view().begin(),
+                    chunks.host_view().flat_view().end(),
+                    0,
+                    [](uint32_t max_page_size, gpu::EncColumnChunk const& chunk) {
+                      return std::max(max_page_size, chunk.max_page_data_size);
+                    });
+
+  // Find which partition a rg belongs to
+  std::vector<int> rg_to_part;
+  for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
+    std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
+  }
+
+  // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
+  std::vector<size_type> batch_list;
+  size_type num_pages          = 0;
+  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
+  size_t max_uncomp_bfr_size   = 0;
+  size_t max_comp_bfr_size     = 0;
+  size_t max_chunk_bfr_size    = 0;
+  size_type max_pages_in_batch = 0;
+  size_t bytes_in_batch        = 0;
+  size_t comp_bytes_in_batch   = 0;
+  size_t column_index_bfr_size = 0;
+  for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
+    size_t rowgroup_size      = 0;
+    size_t comp_rowgroup_size = 0;
+    if (r < num_rowgroups) {
+      for (int i = 0; i < num_columns; i++) {
+        gpu::EncColumnChunk* ck = &chunks[r][i];
+        ck->first_page          = num_pages;
+        num_pages += ck->num_pages;
+        pages_in_batch += ck->num_pages;
+        rowgroup_size += ck->bfr_size;
+        comp_rowgroup_size += ck->compressed_size;
+        max_chunk_bfr_size =
+          std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
+        if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
+          column_index_bfr_size += column_index_buffer_size(ck, column_index_truncate_length);
+        }
+      }
+    }
+    // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
+    if ((r == num_rowgroups) ||
+        (groups_in_batch != 0 && bytes_in_batch + rowgroup_size > max_bytes_in_batch)) {
+      max_uncomp_bfr_size = std::max(max_uncomp_bfr_size, bytes_in_batch);
+      max_comp_bfr_size   = std::max(max_comp_bfr_size, comp_bytes_in_batch);
+      max_pages_in_batch  = std::max(max_pages_in_batch, pages_in_batch);
+      if (groups_in_batch != 0) {
+        batch_list.push_back(groups_in_batch);
+        groups_in_batch = 0;
+      }
+      bytes_in_batch      = 0;
+      comp_bytes_in_batch = 0;
+      pages_in_batch      = 0;
+    }
+    bytes_in_batch += rowgroup_size;
+    comp_bytes_in_batch += comp_rowgroup_size;
+    groups_in_batch++;
+  }
+
+  // Clear compressed buffer size if compression has been turned off
+  if (compression == parquet::Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
+
+  // Initialize data pointers in batch
+  uint32_t num_stats_bfr =
+    (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
+  rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
+
+  // This contains stats for both the pages and the rowgroups. TODO: make them separate.
+  rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
+  auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    for (auto j = 0; j < batch_list[b]; j++, r++) {
+      for (auto i = 0; i < num_columns; i++) {
+        gpu::EncColumnChunk& ck = chunks[r][i];
+        ck.uncompressed_bfr     = bfr;
+        ck.compressed_bfr       = bfr_c;
+        ck.column_index_blob    = bfr_i;
+        bfr += ck.bfr_size;
+        bfr_c += ck.compressed_size;
+        if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
+          ck.column_index_size = column_index_buffer_size(&ck, column_index_truncate_length);
+          bfr_i += ck.column_index_size;
+        }
+      }
+    }
+  }
+
+  if (num_pages != 0) {
+    init_encoder_pages(chunks,
+                       col_desc,
+                       {pages.data(), pages.size()},
+                       comp_page_sizes,
+                       (num_stats_bfr) ? page_stats.data() : nullptr,
+                       (num_stats_bfr) ? frag_stats.data() : nullptr,
+                       num_columns,
+                       num_pages,
+                       num_stats_bfr,
+                       compression,
+                       max_page_size_bytes,
+                       max_page_size_rows,
+                       stream);
+  }
+
   return return_type{std::move(parquet_columns),
                      std::move(single_streams_table),
                      std::move(col_desc),
@@ -1802,11 +1933,23 @@ return_type convert_table_to_parquet_data(
                      std::move(page_fragments),
                      std::move(frag_offsets),
                      std::move(dict_info_owner),
+                     std::move(batch_list),
+                     std::move(rg_to_part),
+
+                     std::move(uncomp_bfr),
+                     std::move(comp_bfr),
+                     std::move(col_idx_bfr),
+
+                     std::move(pages),
+                     std::move(page_stats),
                      max_page_fragment_size,
                      num_fragments,
                      num_rowgroups,
                      num_chunks,
-                     total_frags};
+                     total_frags,
+                     num_pages,
+                     max_page_uncomp_data_size,
+                     max_chunk_bfr_size};
 }
 
 }  // namespace
@@ -1911,11 +2054,25 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          page_fragments,
                          frag_offsets,
                          dict_info_owner,
+                         batch_list,
+                         rg_to_part,
+
+                         uncomp_bfr,   // unused
+                         comp_bfr,     // unused
+                         col_idx_bfr,  // unused
+
+                         pages,
+                         page_stats,
+                         //
+                         //
                          max_page_fragment_size,
                          num_fragments,
                          num_rowgroups,
                          num_chunks,
-                         total_frags] = [&] {
+                         total_frags,
+                         num_pages,
+                         max_page_uncomp_data_size,
+                         max_chunk_bfr_size] = [&] {
     try {
       return convert_table_to_parquet_data(input,
                                            *_table_meta,
@@ -1923,8 +2080,10 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _max_page_fragment_size,
                                            _max_row_group_size,
-                                           _max_row_group_rows,
                                            _max_page_size_bytes,
+                                           _max_row_group_rows,
+                                           _max_page_size_rows,
+                                           _column_index_truncate_length,
                                            partitions,
                                            _agg_meta,
                                            _stats_granularity,
@@ -1967,127 +2126,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   //
   //
   //
-
-  // Build chunk dictionaries and count pages. Sends chunks to device.
-  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(chunks,
-                                                                 col_desc,
-                                                                 num_columns,
-                                                                 _max_page_size_bytes,
-                                                                 _max_page_size_rows,
-                                                                 _compression,
-                                                                 _stream);
-
-  // Get the maximum page size across all chunks
-  size_type max_page_uncomp_data_size =
-    std::accumulate(chunks.host_view().flat_view().begin(),
-                    chunks.host_view().flat_view().end(),
-                    0,
-                    [](uint32_t max_page_size, gpu::EncColumnChunk const& chunk) {
-                      return std::max(max_page_size, chunk.max_page_data_size);
-                    });
-
-  // Find which partition a rg belongs to
-  std::vector<int> rg_to_part;
-  for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
-    std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
-  }
-
-  // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
-  std::vector<size_type> batch_list;
-  size_type num_pages          = 0;
-  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
-  size_t max_uncomp_bfr_size   = 0;
-  size_t max_comp_bfr_size     = 0;
-  size_t max_chunk_bfr_size    = 0;
-  size_type max_pages_in_batch = 0;
-  size_t bytes_in_batch        = 0;
-  size_t comp_bytes_in_batch   = 0;
-  size_t column_index_bfr_size = 0;
-  for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
-    size_t rowgroup_size      = 0;
-    size_t comp_rowgroup_size = 0;
-    if (r < num_rowgroups) {
-      for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk* ck = &chunks[r][i];
-        ck->first_page          = num_pages;
-        num_pages += ck->num_pages;
-        pages_in_batch += ck->num_pages;
-        rowgroup_size += ck->bfr_size;
-        comp_rowgroup_size += ck->compressed_size;
-        max_chunk_bfr_size =
-          std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
-        if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          column_index_bfr_size += column_index_buffer_size(ck, _column_index_truncate_length);
-        }
-      }
-    }
-    // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
-    if ((r == num_rowgroups) ||
-        (groups_in_batch != 0 && bytes_in_batch + rowgroup_size > max_bytes_in_batch)) {
-      max_uncomp_bfr_size = std::max(max_uncomp_bfr_size, bytes_in_batch);
-      max_comp_bfr_size   = std::max(max_comp_bfr_size, comp_bytes_in_batch);
-      max_pages_in_batch  = std::max(max_pages_in_batch, pages_in_batch);
-      if (groups_in_batch != 0) {
-        batch_list.push_back(groups_in_batch);
-        groups_in_batch = 0;
-      }
-      bytes_in_batch      = 0;
-      comp_bytes_in_batch = 0;
-      pages_in_batch      = 0;
-    }
-    bytes_in_batch += rowgroup_size;
-    comp_bytes_in_batch += comp_rowgroup_size;
-    groups_in_batch++;
-  }
-
-  // Clear compressed buffer size if compression has been turned off
-  if (_compression == parquet::Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
-
-  // Initialize data pointers in batch
-  uint32_t num_stats_bfr =
-    (_stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, _stream);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, _stream);
-  rmm::device_buffer col_idx_bfr(column_index_bfr_size, _stream);
-  rmm::device_uvector<gpu::EncPage> pages(num_pages, _stream);
-
-  // This contains stats for both the pages and the rowgroups. TODO: make them separate.
-  rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, _stream);
-  auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
-  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
-    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
-    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    for (auto j = 0; j < batch_list[b]; j++, r++) {
-      for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk& ck = chunks[r][i];
-        ck.uncompressed_bfr     = bfr;
-        ck.compressed_bfr       = bfr_c;
-        ck.column_index_blob    = bfr_i;
-        bfr += ck.bfr_size;
-        bfr_c += ck.compressed_size;
-        if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          ck.column_index_size = column_index_buffer_size(&ck, _column_index_truncate_length);
-          bfr_i += ck.column_index_size;
-        }
-      }
-    }
-  }
-
-  if (num_pages != 0) {
-    init_encoder_pages(chunks,
-                       col_desc,
-                       {pages.data(), pages.size()},
-                       comp_page_sizes,
-                       (num_stats_bfr) ? page_stats.data() : nullptr,
-                       (num_stats_bfr) ? frag_stats.data() : nullptr,
-                       num_columns,
-                       num_pages,
-                       num_stats_bfr,
-                       _compression,
-                       _max_page_size_bytes,
-                       _max_page_size_rows,
-                       _stream);
-  }
 
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
