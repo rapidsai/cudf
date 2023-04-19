@@ -1,11 +1,33 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+import os
+import zoneinfo
+
 import pandas as pd
 import pytest
 
 import cudf
 from cudf import date_range
 from cudf.testing._utils import assert_eq
+
+
+def _get_all_zones():
+    zones = []
+    for root, dirs, files in os.walk("/usr/share/zoneinfo"):
+        for f in files:
+            zone_name = ("/".join([root, f])).lstrip("/usr/share/zoneinfo")
+            try:
+                _ = zoneinfo.ZoneInfo(zone_name)
+            except Exception:
+                continue
+            zones.append(zone_name)
+    return zones
+
+
+# NOTE: ALL_TIME_ZONES is a very large list; we likely do NOT want to
+# use it for more than a handful of tests
+ALL_TIME_ZONES = _get_all_zones()
+ALL_TIME_ZONES.remove("Factory")  # Pandas/pytz seems not to recognize this one
 
 
 @pytest.fixture(params=["ns", "us", "ms", "s"])
@@ -20,16 +42,24 @@ def tz(request):
     return request.param
 
 
-def test_tz_localize(unit, tz):
+@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
+def test_tz_localize(unit, zone_name):
     s = cudf.Series(date_range("2001-01-01", "2001-01-02", freq="1s"))
     s = s.astype(f"<M8[{unit}]")
-    s = s.dt.tz_localize(tz)
+    s = s.dt.tz_localize(zone_name)
     assert isinstance(s.dtype, pd.DatetimeTZDtype)
     assert s.dtype.unit == unit
-    assert str(s.dtype.tz) == tz
+    assert str(s.dtype.tz) == zone_name
 
 
-def test_localize_ambiguous(unit, tz):
+@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
+def test_localize_ambiguous(request, unit, zone_name):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(zone_name == "America/Metlakatla"),
+            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",  # noqa: E501
+        )
+    )
     s = cudf.Series(
         [
             "2018-11-04 00:30:00",
@@ -41,12 +71,21 @@ def test_localize_ambiguous(unit, tz):
         ],
         dtype=f"datetime64[{unit}]",
     )
-    expect = s.to_pandas().dt.tz_localize(tz, ambiguous="NaT")
-    got = s.dt.tz_localize(tz)
+    expect = s.to_pandas().dt.tz_localize(
+        zone_name, ambiguous="NaT", nonexistent="NaT"
+    )
+    got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
 
 
-def test_localize_nonexistent(unit, tz):
+@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
+def test_localize_nonexistent(request, unit, zone_name):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(zone_name == "America/Grand_Turk"),
+            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",  # noqa: E501
+        )
+    )
     s = cudf.Series(
         [
             "2018-03-11 01:30:00",
@@ -58,6 +97,8 @@ def test_localize_nonexistent(unit, tz):
         ],
         dtype=f"datetime64[{unit}]",
     )
-    expect = s.to_pandas().dt.tz_localize(tz, nonexistent="NaT")
-    got = s.dt.tz_localize(tz)
+    expect = s.to_pandas().dt.tz_localize(
+        zone_name, ambiguous="NaT", nonexistent="NaT"
+    )
+    got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)

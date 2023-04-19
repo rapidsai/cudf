@@ -2540,9 +2540,11 @@ class DatetimeIndex(GenericIndex):
         """
         from cudf.core._internals.timezones import localize
 
-        return DatetimeIndex._from_data(
-            {self.name: localize(self._column, tz, ambiguous, nonexistent)}
-        )
+        if tz is None:
+            result_col = self._column._local_time
+        else:
+            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        return DatetimeIndex._from_data({self.name: result_col})
 
 
 class TimedeltaIndex(GenericIndex):

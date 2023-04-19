@@ -4606,12 +4606,14 @@ class DatetimeProperties:
     def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
         from cudf.core._internals.timezones import localize
 
+        if tz is None:
+            result_col = self.series._column._local_time
+        else:
+            result_col = localize(
+                self.series._column, tz, ambiguous, nonexistent
+            )
         return Series._from_data(
-            data={
-                self.series.name: localize(
-                    self.series._column, tz, ambiguous, nonexistent
-                )
-            },
+            data={self.series.name: result_col},
             index=self.series._index,
         )
 
