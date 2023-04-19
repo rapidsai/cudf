@@ -21,8 +21,8 @@
 #include <nvbench/nvbench.cuh>
 
 namespace {
-auto constexpr min_val = 0;
-auto constexpr max_val = 100;
+cudf::size_type constexpr min_val = 0;
+cudf::size_type constexpr max_val = 100;
 
 void sort_multiple_lists(nvbench::state& state)
 {
