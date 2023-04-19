@@ -28,15 +28,8 @@ package ai.rapids.cudf;
  *  us to work with those systems, we can turn off this assert in the field.
  */
 public class AssertEmptyNulls {
-  // This is the recommended way to check at runtime that assertions are enabled.
-  // https://docs.oracle.com/javase/8/docs/technotes/guides/language/assert.html
-  private static boolean assertNullsAreEmpty = false;
-  static {
-      assert assertNullsAreEmpty = true ; // Intentional side effect
-  }
-
   public static void assertNullsAreEmpty(ColumnView cv) {
-    if (cv.type.isNestedType() || cv.type.hasOffsets() && assertNullsAreEmpty) {
+    if (cv.type.isNestedType() || cv.type.hasOffsets()) {
       assert !cv.hasNonEmptyNulls() : "Column has non-empty nulls";
     }
   }
