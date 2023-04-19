@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -23,6 +23,7 @@ from cudf.testing._utils import (
     gen_rand_series,
     supported_numpy_dtypes,
 )
+from cudf.core._compat import PANDAS_GE_200
 
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we
@@ -158,6 +159,12 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, use_index=use_index)
+
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        gdf = gdf.astype("datetime64[ns]")
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -1847,12 +1854,24 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     with expect_warning_if(engine == "pyarrow", UserWarning):
         got = cudf.read_orc(buffer, engine=engine)
 
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        negative_timestamp_df = negative_timestamp_df.astype("datetime64[ns]")
+
     assert_eq(negative_timestamp_df, got)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
+
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        negative_timestamp_df = negative_timestamp_df.astype("datetime64[ns]")
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer))
     assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
