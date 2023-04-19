@@ -311,7 +311,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_column_type=not PANDAS_GE_200)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -2210,7 +2210,12 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual, check_index_type=True)
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=True,
+        check_column_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(

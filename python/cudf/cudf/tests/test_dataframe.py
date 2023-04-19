@@ -6325,12 +6325,22 @@ def test_dataframe_init_1d_list(data, columns):
     expect = pd.DataFrame(data, columns=columns)
     actual = cudf.DataFrame(data, columns=columns)
 
-    assert_eq(expect, actual, check_index_type=len(data) != 0)
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+        check_column_type=not PANDAS_GE_200 and len(data) == 0,
+    )
 
     expect = pd.DataFrame(data, columns=None)
     actual = cudf.DataFrame(data, columns=None)
 
-    assert_eq(expect, actual, check_index_type=len(data) != 0)
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+        check_column_type=not PANDAS_GE_200 and len(data) == 0,
+    )
 
 
 @pytest.mark.parametrize(
@@ -7190,7 +7200,11 @@ def test_dataframe_from_dict_cp_np_arrays(
 def test_dataframe_keys(df):
     gdf = cudf.from_pandas(df)
 
-    assert_eq(df.keys(), gdf.keys())
+    assert_eq(
+        df.keys(),
+        gdf.keys(),
+        exact=not (PANDAS_GE_200 and len(gdf.columns) == 0),
+    )
 
 
 @pytest.mark.parametrize(
@@ -7662,7 +7676,12 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
             check_column_type=not gdf.empty,
         )
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=PANDAS_GE_200 and len(gdf.columns) != 0,
+        )
 
 
 def test_dataframe_concat_series_without_name():
@@ -7943,6 +7962,7 @@ def test_dataframe_init_with_columns(data, columns):
         gdf,
         check_index_type=len(pdf.index) != 0,
         check_dtype=not (pdf.empty and len(pdf.columns)),
+        check_column_type=not PANDAS_GE_200,
     )
 
 
@@ -8023,7 +8043,12 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
             check_index_type=True,
         )
     else:
-        assert_eq(expected, actual, check_index_type=True)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=True,
+            check_column_type=not PANDAS_GE_200,
+        )
 
 
 @pytest_unmark_spilling
@@ -8114,7 +8139,7 @@ def test_dataframe_init_from_series_list_with_index(
             actual = actual.sort_index(axis=1)
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(expected, actual)
+        assert_eq(expected, actual, check_column_type=not PANDAS_GE_200)
 
 
 @pytest.mark.parametrize(
@@ -8715,7 +8740,12 @@ def test_dataframe_constructor_columns(df, columns, index):
                 check_index_type=check_index_type,
             )
         else:
-            assert_eq(expected, actual, check_index_type=check_index_type)
+            assert_eq(
+                expected,
+                actual,
+                check_index_type=check_index_type,
+                check_column_type=not PANDAS_GE_200,
+            )
 
     gdf = cudf.from_pandas(df)
     host_columns = (

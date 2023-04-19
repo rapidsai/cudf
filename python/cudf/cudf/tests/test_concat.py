@@ -8,9 +8,13 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    assert_eq,
+    assert_exceptions_equal,
+    expect_warning_if,
+)
 
 
 def make_frames(index=None, nulls="none"):
@@ -365,7 +369,7 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(not PANDAS_GE_200):
         assert_exceptions_equal(
             lfunc=pd.concat,
             rfunc=gd.concat,
@@ -596,7 +600,12 @@ def test_concat_empty_dataframes(df, other, ignore_index):
                 actual[key] = col.fillna(-1)
         assert_eq(expected, actual, check_dtype=False, check_index_type=True)
     else:
-        assert_eq(expected, actual, check_index_type=not gdf.empty)
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=not PANDAS_GE_200,
+        )
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -1084,10 +1093,12 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
         ignore_index=ignore_index,
         axis=axis,
     )
-    # TODO: change `check_index_type` to `True`
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/46675
-    assert_eq(expected, actual, check_index_type=False)
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=PANDAS_GE_150,
+        check_column_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])

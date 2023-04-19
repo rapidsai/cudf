@@ -18,7 +18,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
@@ -1971,11 +1971,16 @@ def test_groupby_apply_return_series_dataframe(func, args):
 )
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
+    if isinstance(pdf, pd.DataFrame):
+        kwargs = {"check_column_type": not PANDAS_GE_200}
+    else:
+        kwargs = {}
     assert_groupby_results_equal(
         pdf.groupby([]).max(),
         gdf.groupby([]).max(),
         check_dtype=False,
         check_index_type=False,  # Int64Index v/s Float64Index
+        **kwargs,
     )
 
 
@@ -1985,10 +1990,15 @@ def test_groupby_no_keys(pdf):
 )
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
+    if isinstance(pdf, pd.DataFrame):
+        kwargs = {"check_column_type": not PANDAS_GE_200}
+    else:
+        kwargs = {}
     assert_groupby_results_equal(
         pdf.groupby([], group_keys=False).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
         check_index_type=False,  # Int64Index v/s Float64Index
+        **kwargs,
     )
 
 
