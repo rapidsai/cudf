@@ -102,3 +102,14 @@ def test_localize_nonexistent(request, unit, zone_name):
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
+
+
+def test_delocalize(unit, tz):
+    psr = pd.Series(
+        pd.date_range("2001-01-01", "2001-01-02", freq="1s")
+    ).astype(f"datetime64[{unit}]")
+    sr = cudf.from_pandas(psr)
+
+    expect = psr.dt.tz_localize(tz).dt.tz_localize(None)
+    got = sr.dt.tz_localize(tz).dt.tz_localize(None)
+    assert_eq(expect, got)
