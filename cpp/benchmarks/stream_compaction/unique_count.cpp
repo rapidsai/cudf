@@ -40,7 +40,7 @@ void nvbench_unique_count(nvbench::state& state, nvbench::type_list<Type>)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::unique_count(input.column(0), cudf::null_policy::INCLUDE, cudf::nan_policy::NAN_IS_NULL);
+    cudf::unique_count(input, cudf::null_equality::EQUAL);
   });
 }
 
