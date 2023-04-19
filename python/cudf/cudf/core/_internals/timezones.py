@@ -99,6 +99,14 @@ def _find_ambiguous_and_nonexistent(
 ) -> Tuple:
     """
     Recognize ambiguous and nonexistent timestamps for the given timezone.
+
+    Returns a tuple of columns, both of "bool" dtype and of the same
+    size as `data`, that respectivelt indicate ambiguous and
+    nonexistent timestamps in `data` with the value `True`.
+
+    Ambiguous and/or nonexistent timestamps are only possible if any
+    transitions occur in the time zone database for the given timezone.
+    If no transitions occur, the tuple `(None, None)` is returned.
     """
     tz_data_for_zone = get_tz_data(zone_name)
     transition_times = tz_data_for_zone["transition_times"]
