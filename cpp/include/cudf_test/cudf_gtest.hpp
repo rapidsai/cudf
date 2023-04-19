@@ -22,7 +22,7 @@
 
 /**
  * @file cudf_gtest.hpp
- * @brief Work around for GTests emulation of variadic templates in
+ * @brief Work around for GTests( <=v1.10 ) emulation of variadic templates in
  * @verbatim ::Testing::Types @endverbatim
  *
  * @note Instead of including `gtest/gtest.h`, all libcudf test files should
@@ -35,6 +35,10 @@
  */
 
 // @cond
+#if __has_include(<gtest/internal/gtest-type-util.h.pump>)
+// gtest doesn't provide a version header so we need to
+// use a file existence trick.
+// gtest-type-util.h.pump only exists in versions < 1.11
 #define Types      Types_NOT_USED
 #define Types0     Types0_NOT_USED
 #define TypeList   TypeList_NOT_USED
@@ -89,6 +93,7 @@ struct TypeList<Types<TYPES...>> {
 
 }  // namespace internal
 }  // namespace testing
+#endif  // gtest < 1.11
 // @endcond
 
 #include <gmock/gmock.h>
