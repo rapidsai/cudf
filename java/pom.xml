@@ -270,7 +270,6 @@
                                 </goals>
                                 <configuration>
                                     <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
-                                    <reuseForks>false</reuseForks>
                                     <test>*/ColumnViewNonEmptyNullsTest.java</test>
                                 </configuration>
                             </execution>
