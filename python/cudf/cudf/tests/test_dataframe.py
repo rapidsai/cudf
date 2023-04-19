@@ -9,7 +9,6 @@ import random
 import re
 import string
 import textwrap
-import warnings
 from collections import OrderedDict, defaultdict
 from copy import copy
 
@@ -5338,7 +5337,9 @@ def test_cov_nans():
         cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
         pytest.param(
             cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
-            marks=pytest_xfail,
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_200, reason="works only with pandas 2.0+"
+            ),
         ),
     ],
 )
@@ -5361,39 +5362,32 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    # Anywhere that the column names of the DataFrame don't match the index
-    # names of the Series will trigger a deprecated reindexing. Since this
-    # behavior is deprecated in pandas, this test is temporarily silencing
-    # those warnings until cudf updates to pandas 2.0 as its compatibility
-    # target, at which point a large number of the parametrizations can be
-    # removed altogether (along with this warnings filter).
-    with warnings.catch_warnings():
-        assert version.parse(pd.__version__) < version.parse("2.0.0")
-        warnings.filterwarnings(
-            action="ignore",
-            category=FutureWarning,
-            message=(
-                "Automatic reindexing on DataFrame vs Series comparisons is "
-                "deprecated"
-            ),
-        )
-        data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
-        data = dict(zip(colnames, data))
+    data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
+    data = dict(zip(colnames, data))
 
-        gsr = gsr.astype("float64")
+    gsr = gsr.astype("float64")
 
-        gdf = cudf.DataFrame(data)
-        pdf = gdf.to_pandas(nullable=True)
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas(nullable=True)
 
-        psr = gsr.to_pandas(nullable=True)
+    psr = gsr.to_pandas(nullable=True)
 
+    try:
         expect = op(pdf, psr)
+    except ValueError:
+        with pytest.raises(ValueError):
+            op(gdf, gsr)
+        with pytest.raises(ValueError):
+            op(psr, pdf)
+        with pytest.raises(ValueError):
+            op(gsr, gdf)
+    else:
         got = op(gdf, gsr).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False, check_like=True)
 
         expect = op(psr, pdf)
         got = op(gsr, gdf).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False, check_like=True)
 
 
 @pytest_unmark_spilling
