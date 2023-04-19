@@ -14,52 +14,80 @@
  * limitations under the License.
  */
 
-#include "string_bench_args.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringCase : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-static void BM_case(benchmark::State& state)
+enum class encoding_type { UTF8 = 0, ASCII = 1 };
+
+template <encoding_type encoding>
+void bench_case(nvbench::state& state, nvbench::type_list<nvbench::enum_type<encoding>>)
 {
-  auto const n_rows          = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length  = static_cast<cudf::size_type>(state.range(1));
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
-  auto const input  = cudf::strings_column_view(column->view());
+  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const max_width = static_cast<int32_t>(state.get_int64("width"));
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::strings::to_lower(input);
+  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  data_profile const profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+
+  auto col_view = column->view();
+
+  cudf::column::contents ascii_contents;
+  if constexpr (encoding == encoding_type::ASCII) {
+    data_profile ascii_profile = data_profile_builder().no_validity().distribution(
+      cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
+    auto input = cudf::strings_column_view(col_view);
+    auto ascii_column =
+      create_random_column(cudf::type_id::INT8, row_count{input.chars_size()}, ascii_profile);
+    auto ascii_data = ascii_column->view();
+
+    col_view = cudf::column_view(col_view.type(),
+                                 col_view.size(),
+                                 nullptr,
+                                 col_view.null_mask(),
+                                 col_view.null_count(),
+                                 0,
+                                 {input.offsets(), ascii_data});
+
+    ascii_contents = ascii_column->release();
+  }
+  auto input = cudf::strings_column_view(col_view);
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+
+  state.add_element_count(input.chars_size(), "chars_size");
+  state.add_global_memory_reads<nvbench::int8_t>(input.chars_size());
+  state.add_global_memory_writes<nvbench::int8_t>(input.chars_size());
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto result = cudf::strings::to_lower(input); });
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 2;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
-}
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  encoding_type,
+  [](auto value) {
+    switch (value) {
+      case encoding_type::ASCII: return "ASCII";
+      case encoding_type::UTF8: return "UTF8";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
 
-#define SORT_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(StringCase, name)       \
-  (::benchmark::State & st) { BM_case(st); } \
-  BENCHMARK_REGISTER_F(StringCase, name)     \
-    ->Apply(generate_bench_args)             \
-    ->UseManualTime()                        \
-    ->Unit(benchmark::kMillisecond);
+using type_list = nvbench::enum_type_list<encoding_type::UTF8, encoding_type::ASCII>;
 
-SORT_BENCHMARK_DEFINE(to_lower)
+NVBENCH_BENCH_TYPES(bench_case, NVBENCH_TYPE_AXES(type_list))
+  .set_name("strings_case")
+  .set_type_axes_names({"encoding"})
+  .add_int64_axis("width", {32, 64, 128, 256, 512, 1024, 2048})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});

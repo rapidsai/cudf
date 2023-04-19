@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -34,8 +33,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/warp/warp_reduce.cuh>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -45,12 +42,12 @@ namespace {
  * @brief Threshold to decide on using string or warp parallel functions.
  *
  * If the average byte length of a string in a column exceeds this value then
- * the warp-parallel function is used.
+ * the warp-parallel function is used to compute the output sizes.
  * Otherwise, a regular string-parallel function is used.
  *
  * This value was found using the strings_lengths benchmark results.
  */
-constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 128;
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 
 /**
  * @brief Utility functions for converting characters to upper or lower case
@@ -61,7 +58,7 @@ struct convert_char_fn {
   character_cases_table_type const* d_case_table;
   special_case_mapping const* d_special_case_mapping;
 
-  // compute-size / copy the bytes representing the special case mapping for this codepoint
+  // compute size or copy the bytes representing the special case mapping for this codepoint
   __device__ size_type handle_special_case_bytes(uint32_t code_point,
                                                  detail::character_flags_table_type flag,
                                                  char* d_buffer = nullptr) const
@@ -87,9 +84,8 @@ struct convert_char_fn {
     detail::character_flags_table_type flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
 
     // we apply special mapping in two cases:
-    // - uncased characters with the special mapping flag, always
-    // - cased characters with the special mapping flag, when matching the input case_flag
-    //
+    // - uncased characters with the special mapping flag: always
+    // - cased characters with the special mapping flag: when matching the input case_flag
     if (IS_SPECIAL(flag) && ((flag & case_flag) || !IS_UPPER_OR_LOWER(flag))) {
       return handle_special_case_bytes(code_point, case_flag, d_buffer);
     }
@@ -221,15 +217,18 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                                cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
-  // Check if any multi-byte characters
+  // Check if the input contains any multi-byte characters.
+  // This check incurs ~20% performance hit for smaller strings and so we only use it
+  // after the threshold check above. The check makes very little impact for larger strings
+  // but results in a large performance gain when the input contains only single-byte characters.
   // Using count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
-  bool const multi_byte_data =
+  bool const multi_byte_chars =
     thrust::count_if(
       rmm::exec_policy(stream), input.chars_begin(), input.chars_end(), [] __device__(auto chr) {
         return is_utf8_continuation_char(chr);
       }) > 0;
-  if (!multi_byte_data) {
-    // optimize for ascii case: copy input string column and inplace replace characters
+  if (!multi_byte_chars) {
+    // optimization for ASCII-only case: copy the input column and inplace replace each character
     auto result = std::make_unique<column>(input.parent(), stream, mr);
     auto d_chars =
       result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
@@ -241,7 +240,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   }
 
   // This will use a warp-parallel algorithm to compute the output sizes for each string
-  // and then the normal string parallel function to build the output.
+  // and then uses the normal string parallel functor to build the output.
   auto offsets = make_numeric_column(
     data_type{type_to_id<size_type>()}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<size_type>();
