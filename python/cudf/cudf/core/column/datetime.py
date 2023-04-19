@@ -565,8 +565,8 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def to_arrow(self):
-        return self._local_time.to_arrow().cast(
-            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+        return pa.compute.assume_timezone(
+            self._local_time.to_arrow(), str(self.dtype.tz)
         )
 
     @property
