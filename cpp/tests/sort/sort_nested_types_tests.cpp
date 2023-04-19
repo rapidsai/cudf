@@ -277,8 +277,7 @@ TEST_F(NestedStructTest, SimpleStructsOfListsOfStructsNoNulls)
   }
 }
 
-struct NestedListTest : public cudf::test::BaseFixture {
-};
+struct NestedListTest : public cudf::test::BaseFixture {};
 
 TEST_F(NestedListTest, SimpleListsOfStructsNoNulls)
 {
