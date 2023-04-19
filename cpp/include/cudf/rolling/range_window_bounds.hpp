@@ -38,12 +38,12 @@ namespace cudf {
 struct range_window_bounds {
  public:
   /**
-   * The type of range_window_bounds.
+   * @brief The type of range_window_bounds.
    */
-  enum class extent : int32_t {
+  enum class extent_type : int32_t {
     CURRENT_ROW = 0,  /// Bounds defined as the first/last row that matches the current row.
     BOUNDED,          /// Bounds defined as the first/last row that falls within
-                      /// a specified range from the current row
+                      /// a specified range from the current row.
     UNBOUNDED         /// Bounds stretching to the first/last row in the entire group.
   };
 
@@ -70,7 +70,7 @@ struct range_window_bounds {
    * @return true If window is bounded to the current row
    * @return false If window is not bounded to the current row
    */
-  [[nodiscard]] bool is_current_row() const { return _extent == extent::CURRENT_ROW; }
+  [[nodiscard]] bool is_current_row() const { return _extent == extent_type::CURRENT_ROW; }
 
   /**
    * @brief Factory method to construct an unbounded window boundary.
@@ -86,7 +86,7 @@ struct range_window_bounds {
    * @return true If window is unbounded
    * @return false If window is of finite bounds
    */
-  [[nodiscard]] bool is_unbounded() const { return _extent == extent::UNBOUNDED; }
+  [[nodiscard]] bool is_unbounded() const { return _extent == extent_type::UNBOUNDED; }
 
   /**
    * @brief Returns the underlying scalar value for the bounds
@@ -99,10 +99,10 @@ struct range_window_bounds {
   range_window_bounds() = default;  // Required for use as return types from dispatch functors.
 
  private:
-  const extent _extent{extent::UNBOUNDED};
+  const extent_type _extent{extent_type::UNBOUNDED};
   std::shared_ptr<scalar> _range_scalar{nullptr};  // To enable copy construction/assignment.
 
-  range_window_bounds(extent extent_, std::unique_ptr<scalar> range_scalar_);
+  range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_);
 };
 
 }  // namespace cudf
