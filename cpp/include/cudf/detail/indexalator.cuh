@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,11 +52,11 @@ struct base_indexalator {
   using pointer           = size_type*;
   using iterator_category = std::random_access_iterator_tag;
 
-  base_indexalator()                        = default;
-  base_indexalator(base_indexalator const&) = default;
-  base_indexalator(base_indexalator&&)      = default;
+  base_indexalator()                                   = default;
+  base_indexalator(base_indexalator const&)            = default;
+  base_indexalator(base_indexalator&&)                 = default;
   base_indexalator& operator=(base_indexalator const&) = default;
-  base_indexalator& operator=(base_indexalator&&) = default;
+  base_indexalator& operator=(base_indexalator&&)      = default;
 
   /**
    * @brief Prefix increment operator.
@@ -248,13 +248,13 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   friend struct indexalator_factory;
   friend struct base_indexalator<input_indexalator>;  // for CRTP
 
-  using reference = size_type const;  // this keeps STL and thrust happy
+  using reference = size_type const;                  // this keeps STL and thrust happy
 
-  input_indexalator()                         = default;
-  input_indexalator(input_indexalator const&) = default;
-  input_indexalator(input_indexalator&&)      = default;
+  input_indexalator()                                    = default;
+  input_indexalator(input_indexalator const&)            = default;
+  input_indexalator(input_indexalator&&)                 = default;
   input_indexalator& operator=(input_indexalator const&) = default;
-  input_indexalator& operator=(input_indexalator&&) = default;
+  input_indexalator& operator=(input_indexalator&&)      = default;
 
   /**
    * @brief Indirection operator returns the value at the current iterator position.
@@ -332,13 +332,13 @@ struct output_indexalator : base_indexalator<output_indexalator> {
   friend struct indexalator_factory;
   friend struct base_indexalator<output_indexalator>;  // for CRTP
 
-  using reference = output_indexalator const&;  // required for output iterators
+  using reference = output_indexalator const&;         // required for output iterators
 
-  output_indexalator()                          = default;
-  output_indexalator(output_indexalator const&) = default;
-  output_indexalator(output_indexalator&&)      = default;
+  output_indexalator()                                     = default;
+  output_indexalator(output_indexalator const&)            = default;
+  output_indexalator(output_indexalator&&)                 = default;
   output_indexalator& operator=(output_indexalator const&) = default;
-  output_indexalator& operator=(output_indexalator&&) = default;
+  output_indexalator& operator=(output_indexalator&&)      = default;
 
   /**
    * @brief Indirection operator returns this iterator instance in order

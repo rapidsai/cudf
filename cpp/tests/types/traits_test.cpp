@@ -36,12 +36,10 @@ void tuple_for_each(const std::tuple<Args...>& tuple, F&& f)
   tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
 }
 
-class TraitsTest : public ::testing::Test {
-};
+class TraitsTest : public ::testing::Test {};
 
 template <typename T>
-class TypedTraitsTest : public TraitsTest {
-};
+class TypedTraitsTest : public TraitsTest {};
 
 TYPED_TEST_SUITE(TypedTraitsTest, cudf::test::AllTypes);
 
@@ -87,8 +85,7 @@ TYPED_TEST(TypedTraitsTest, RelationallyComparable)
 TYPED_TEST(TypedTraitsTest, NotRelationallyComparable)
 {
   // No type should be comparable with an empty dummy type
-  struct foo {
-  };
+  struct foo {};
   bool comparable = cudf::is_relationally_comparable<foo, TypeParam>();
   EXPECT_FALSE(comparable);
 
@@ -115,8 +112,7 @@ TYPED_TEST(TypedTraitsTest, EqualityComparable)
 TYPED_TEST(TypedTraitsTest, NotEqualityComparable)
 {
   // No type should be comparable with an empty dummy type
-  struct foo {
-  };
+  struct foo {};
   bool comparable = cudf::is_equality_comparable<foo, TypeParam>();
   EXPECT_FALSE(comparable);
 

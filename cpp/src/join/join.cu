@@ -73,7 +73,7 @@ left_join(table_view const& left_input,
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input, right_input},  // these should match
+    {left_input, right_input},                // these should match
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones
@@ -98,7 +98,7 @@ full_join(table_view const& left_input,
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input, right_input},  // these should match
+    {left_input, right_input},                // these should match
     stream,
     rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones

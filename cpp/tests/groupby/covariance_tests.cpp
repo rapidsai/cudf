@@ -31,8 +31,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_covariance_test : public cudf::test::BaseFixture {
-};
+struct groupby_covariance_test : public cudf::test::BaseFixture {};
 
 using supported_types =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
@@ -236,8 +235,7 @@ TYPED_TEST(groupby_covariance_test, ddof)
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2), force_use_sort_impl::YES);
 }
 
-struct groupby_dictionary_covariance_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_covariance_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_covariance_test, basic)
 {

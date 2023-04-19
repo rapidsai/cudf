@@ -55,12 +55,10 @@ std::unique_ptr<cudf::table> get_cudf_table()
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-struct FromArrowTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -186,10 +184,10 @@ TEST_F(FromArrowTest, StructColumn)
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
-  auto mask =
+  auto [null_mask, null_count] =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), null_count, std::move(*null_mask));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
@@ -329,8 +327,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
 struct FromArrowTestSlice
   : public FromArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {
