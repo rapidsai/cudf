@@ -575,7 +575,7 @@ class DatetimeTZColumn(DatetimeColumn):
         Return a CuPy representation of the DateTimeColumn.
         """
         raise NotImplementedError(
-            "DateTime Arrays is not yet implemented in cudf"
+            "DateTime Arrays are not yet implemented in cudf"
         )
 
     @property
