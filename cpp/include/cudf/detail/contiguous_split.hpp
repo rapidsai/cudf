@@ -44,6 +44,5 @@ packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr);
 
-
-} // namespace detail
-} // namespace cudf
+}  // namespace detail
+}  // namespace cudf

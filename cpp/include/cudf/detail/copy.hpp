@@ -173,7 +173,6 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 
-
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
  * rmm::mr::device_memory_resource*)
