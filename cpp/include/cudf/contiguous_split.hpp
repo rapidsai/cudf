@@ -25,6 +25,13 @@
 namespace cudf {
 
 /**
+ * @addtogroup column_copy
+ * @{
+ * @file
+ * @brief Table APIs for contiguous_split, pack, unpack, and metadadata
+ */
+
+/**
  * @brief Column data in a serialized format
  *
  * @ingroup copy_split
@@ -218,4 +225,5 @@ table_view unpack(packed_columns const& input);
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
 
+/** @} */
 }  // namespace cudf
