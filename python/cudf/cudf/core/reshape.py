@@ -906,7 +906,7 @@ def _pivot(df, index, columns):
     )
 
 
-def pivot(data, index=no_default, columns=None, values=no_default):
+def pivot(data, columns=None, index=no_default, values=no_default):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
