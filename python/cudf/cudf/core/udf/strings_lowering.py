@@ -143,10 +143,19 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     return sv._getvalue()
 
 
-@cuda_lowering_registry.lower_cast(string_view, udf_string)
-def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
+@cuda_lowering_registry.lower_cast(string_view, managed_udf_string)
+def cast_string_view_to_managed_udf_string(
+    context, builder, fromty, toty, val
+):
     sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
-    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
+
+    managed_ptr = builder.alloca(
+        default_manager[managed_udf_string].get_value_type()
+    )
+    udf_str_ptr = builder.gep(
+        managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
+    )
+
     builder.store(val, sv_ptr)
     _ = context.compile_internal(
         builder,
@@ -154,18 +163,21 @@ def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
         nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
         (sv_ptr, udf_str_ptr),
     )
-    result = cgutils.create_struct_proxy(udf_string)(
-        context, builder, value=builder.load(udf_str_ptr)
-    )
-
-    return result._getvalue()
+    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
 
 
-@cuda_lowering_registry.lower_cast(udf_string, string_view)
-def cast_udf_string_to_string_view(context, builder, fromty, toty, val):
-    udf_str_ptr = builder.alloca(default_manager[fromty].get_value_type())
+@cuda_lowering_registry.lower_cast(managed_udf_string, string_view)
+def cast_managed_udf_string_to_string_view(
+    context, builder, fromty, toty, val
+):
     sv_ptr = builder.alloca(default_manager[toty].get_value_type())
-    builder.store(val, udf_str_ptr)
+
+    managed_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    builder.store(val, managed_ptr)
+
+    udf_str_ptr = builder.gep(
+        managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
+    )
 
     context.compile_internal(
         builder,
@@ -173,11 +185,9 @@ def cast_udf_string_to_string_view(context, builder, fromty, toty, val):
         nb_signature(types.void, _UDF_STRING_PTR, _STR_VIEW_PTR),
         (udf_str_ptr, sv_ptr),
     )
-
     result = cgutils.create_struct_proxy(string_view)(
         context, builder, value=builder.load(sv_ptr)
     )
-
     return result._getvalue()
 
 
@@ -245,6 +255,20 @@ def call_create_string_view_from_udf_string(udf_str, sv):
     _create_string_view_from_udf_string(udf_str, sv)
 
 
+# Return string setitem impl with an extra incref
+@cuda_lower(
+    operator.setitem,
+    types.CPointer(managed_udf_string),
+    types.Integer,
+    types.Any,
+)
+def setitem_cpointer_managed_udf_string(context, builder, sig, args):
+    base_ptr, idx, val = args
+    elem_ptr = builder.gep(base_ptr, [idx])
+    builder.store(val, elem_ptr)
+    context.nrt.incref(builder, managed_udf_string, val)
+
+
 # String function implementations
 def call_len_string_view(st):
     return _string_view_len(st)
@@ -275,18 +299,20 @@ def concat_impl(context, builder, sig, args):
     builder.store(args[0], lhs_ptr)
     builder.store(args[1], rhs_ptr)
 
-    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+    managed_ptr = builder.alloca(
+        default_manager[managed_udf_string].get_value_type()
+    )
+    udf_str_ptr = builder.gep(
+        managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
+    )
+
     _ = context.compile_internal(
         builder,
         call_concat_string_view,
         types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
         (udf_str_ptr, lhs_ptr, rhs_ptr),
     )
-
-    result = cgutils.create_struct_proxy(udf_string)(
-        context, builder, value=builder.load(udf_str_ptr)
-    )
-    return result._getvalue()
+    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
 
 
 def call_string_view_replace(result, src, to_replace, replacement):
@@ -294,7 +320,6 @@ def call_string_view_replace(result, src, to_replace, replacement):
 
 
 @cuda_lower("StringView.replace", string_view, string_view, string_view)
-@cuda_lower("UDFString.replace", string_view, string_view, string_view)
 def replace_impl(context, builder, sig, args):
     src_ptr = builder.alloca(args[0].type)
     to_replace_ptr = builder.alloca(args[1].type)
@@ -304,7 +329,12 @@ def replace_impl(context, builder, sig, args):
     builder.store(args[1], to_replace_ptr),
     builder.store(args[2], replacement_ptr)
 
-    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+    managed_ptr = builder.alloca(
+        default_manager[managed_udf_string].get_value_type()
+    )
+    udf_str_ptr = builder.gep(
+        managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
+    )
 
     _ = context.compile_internal(
         builder,
@@ -315,10 +345,7 @@ def replace_impl(context, builder, sig, args):
         (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
     )
 
-    result = cgutils.create_struct_proxy(udf_string)(
-        context, builder, value=builder.load(udf_str_ptr)
-    )
-    return result._getvalue()
+    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
 
 
 def create_binary_string_func(binary_func, retty):
@@ -357,19 +384,23 @@ def create_binary_string_func(binary_func, retty):
                 # value of compile_internal is therefore discarded (although
                 # this may change in the future if we need to return error
                 # codes, for instance).
-                udf_str_ptr = builder.alloca(
-                    default_manager[udf_string].get_value_type()
+
+                managed_ptr = builder.alloca(
+                    default_manager[managed_udf_string].get_value_type()
                 )
+                udf_str_ptr = builder.gep(
+                    managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
+                )
+
                 _ = context.compile_internal(
                     builder,
                     cuda_func,
                     size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
                     (udf_str_ptr, lhs_ptr, rhs_ptr),
                 )
-                result = cgutils.create_struct_proxy(udf_string)(
-                    context, builder, value=builder.load(udf_str_ptr)
+                return _finalize_new_managed_udf_string(
+                    context, builder, managed_ptr
                 )
-                return result._getvalue()
 
         # binary_func can be attribute-like: str.binary_func
         # or operator-like: binary_func(str, other)
@@ -378,7 +409,7 @@ def create_binary_string_func(binary_func, retty):
                 f"StringView.{binary_func}", string_view, string_view
             )(binary_func_impl)
             binary_func_impl = cuda_lower(
-                f"UDFString.{binary_func}", string_view, string_view
+                f"ManagedUDFString.{binary_func}", string_view, string_view
             )(binary_func_impl)
         else:
             binary_func_impl = cuda_lower(
@@ -525,8 +556,12 @@ def create_upper_or_lower(id_func):
             special_tbl_ptr = context.get_constant(
                 types.uintp, get_special_case_mapping_table_ptr()
             )
-            udf_str_ptr = builder.alloca(
-                default_manager[udf_string].get_value_type()
+
+            managed_ptr = builder.alloca(
+                default_manager[managed_udf_string].get_value_type()
+            )
+            udf_str_ptr = builder.gep(
+                managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
             )
 
             _ = context.compile_internal(
@@ -547,11 +582,9 @@ def create_upper_or_lower(id_func):
                     special_tbl_ptr,
                 ),
             )
-
-            result = cgutils.create_struct_proxy(udf_string)(
-                context, builder, value=builder.load(udf_str_ptr)
+            return _finalize_new_managed_udf_string(
+                context, builder, managed_ptr
             )
-            return result._getvalue()
 
         return id_func_impl
 

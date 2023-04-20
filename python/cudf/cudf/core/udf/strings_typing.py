@@ -221,7 +221,7 @@ class StringViewReplace(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            udf_string, string_view, string_view, recvr=self.this
+            managed_udf_string, string_view, string_view, recvr=self.this
         )
 
 
@@ -262,7 +262,7 @@ for func in string_return_attrs:
     setattr(
         StringViewAttrs,
         f"resolve_{func}",
-        create_binary_attr(func, udf_string),
+        create_binary_attr(func, managed_udf_string),
     )
 
 
@@ -282,17 +282,17 @@ for func in string_unary_funcs:
     setattr(
         StringViewAttrs,
         f"resolve_{func}",
-        create_identifier_attr(func, udf_string),
+        create_identifier_attr(func, managed_udf_string),
     )
 
 
 @cuda_decl_registry.register_attr
-class UDFStringAttrs(StringViewAttrs):
-    key = udf_string
+class ManagedUDFStringAttrs(StringViewAttrs):
+    key = managed_udf_string
 
 
 cuda_decl_registry.register_attr(StringViewAttrs)
-cuda_decl_registry.register_attr(UDFStringAttrs)
+cuda_decl_registry.register_attr(ManagedUDFStringAttrs)
 
 register_stringview_binaryop(operator.eq, types.boolean)
 register_stringview_binaryop(operator.ne, types.boolean)
@@ -305,4 +305,4 @@ register_stringview_binaryop(operator.ge, types.boolean)
 register_stringview_binaryop(operator.contains, types.boolean)
 
 # st + other
-register_stringview_binaryop(operator.add, udf_string)
+register_stringview_binaryop(operator.add, managed_udf_string)
