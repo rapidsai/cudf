@@ -25,8 +25,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -34,13 +32,14 @@
 #include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/list_view.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table.hpp>
@@ -48,19 +47,16 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
-#include <thrust/sequence.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
@@ -82,7 +78,6 @@ namespace {
  */
 struct escape_strings_fn {
   column_device_view const d_column;
-  bool const append_colon{false};
   offset_type* d_offsets{};
   char* d_chars{};
 
@@ -121,8 +116,6 @@ struct escape_strings_fn {
       }
     }
     if (quote_row) write_char(quote, d_buffer, bytes);
-    constexpr char_utf8 const colon = ':';  // append colon
-    if (append_colon) write_char(colon, d_buffer, bytes);
 
     if (!d_chars) d_offsets[idx] = bytes;
   }
@@ -139,6 +132,84 @@ struct escape_strings_fn {
                                std::move(children.second),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
+  }
+};
+
+// Struct concatenation.
+struct concat_structs_base {
+  table_device_view const d_table;
+  column_device_view const d_column_names;
+  string_view const row_prefix;             //{
+  string_view const row_suffix;             //} or }\n for json-lines
+  string_view const d_col_separator;        //:
+  string_view const d_val_separator;        //,
+  string_scalar_device_view const d_narep;  // null
+  bool include_nulls = false;
+  offset_type* d_offsets{};
+  char* d_chars{};
+
+  /**
+   * @brief Concatenate each table row to a single output string.
+   *
+   * This will concatenate the strings from each row of the given table
+   * and apply the separator. The null-replacement string `d_narep` is
+   * used in place of any string in a row that contains a null entry.
+   *
+   * @param idx The current row to process
+   * @param d_separator String to place in between each column's row
+   */
+  __device__ void operator()(size_type idx)
+  {
+    if (!d_narep.is_valid() &&
+        thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
+          return col.is_null(idx);
+        })) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+
+    char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    offset_type bytes    = 0;
+    bool write_separator = false;
+
+    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, row_prefix);
+    bytes += row_prefix.size_bytes();
+
+    for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
+      auto const col_idx         = thrust::distance(d_table.begin(), itr);
+      auto const d_column        = *itr;
+      bool const is_null_element = d_column.is_null(idx);
+      bool const include_element = (include_nulls == true || !is_null_element);
+
+      if (write_separator && include_element) {
+        if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_val_separator);
+        bytes += d_val_separator.size_bytes();
+        write_separator = false;
+      }
+
+      // column_name:
+      if (include_element && !d_column_names.is_null(col_idx)) {
+        auto const d_name = d_column_names.element<string_view>(col_idx);
+        if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_name);
+        bytes += d_name.size_bytes();
+        if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_col_separator);
+        bytes += d_col_separator.size_bytes();
+      }
+
+      // write out column's row data (or narep if the row is null)
+      if (include_element) {
+        auto const d_str = is_null_element ? d_narep.value() : d_column.element<string_view>(idx);
+        if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_str);
+        bytes += d_str.size_bytes();
+      }
+
+      write_separator = write_separator || include_element;
+    }
+    if (d_buffer) {
+      d_buffer = strings::detail::copy_string(d_buffer, row_suffix);
+    } else {
+      d_offsets[idx] = bytes + row_suffix.size_bytes();
+    }
   }
 };
 
@@ -183,208 +254,38 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                            strings_columns.end(),
                            [](auto const& c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
-  auto const num_str_views_per_row = strings_columns.num_columns() * 3 + 1;
 
-  auto tbl_device_view = cudf::table_device_view::create(strings_columns, stream);
-  auto d_column_names  = column_device_view::create(column_names, stream);
+  // Create device views from the strings columns.
+  auto d_table        = table_device_view::create(strings_columns, stream);
+  auto d_column_names = column_device_view::create(column_names, stream);
+  auto d_narep        = get_scalar_device_view(const_cast<string_scalar&>(narep));
+  concat_structs_base fn{*d_table,
+                         *d_column_names,
+                         row_prefix,
+                         row_suffix,
+                         column_name_separator,
+                         value_separator,
+                         d_narep,
+                         include_nulls};
+  auto children = strings::detail::make_strings_children(fn, strings_count, stream, mr);
 
-  // (num_columns*3+1)*num_rows size (very high!) IDEA: chunk it here? but maximize parallelism?
-  auto const string_views_total = num_str_views_per_row * strings_columns.num_rows();
-  auto const total_rows         = strings_columns.num_rows() * strings_columns.num_columns();
-  using str_pair                = thrust::pair<const char*, size_type>;
-  rmm::device_uvector<str_pair> d_strviews(string_views_total, stream);
-
-  // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
-  thrust::for_each(
-    rmm::exec_policy(stream),
+  // create resulting null mask
+  auto [null_mask, null_count] = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(total_rows),
-    [tbl       = *tbl_device_view,
-     col_names = *d_column_names,
-     row_prefix,
-     row_suffix,
-     value_separator,
-     narep = narep.value(stream),
-     include_nulls,
-     d_strviews = d_strviews.begin()] __device__(auto idx) {
-      auto const row        = idx / tbl.num_columns();
-      auto const col        = idx % tbl.num_columns();
-      auto const d_str_null = tbl.column(col).is_null(row);
-      auto const this_index = row * 3 * tbl.num_columns() + 1 * row + col * 3 + 1;
-      // prefix
-      if (col == 0) {
-        d_strviews[this_index - 1] = str_pair(row_prefix.data(), row_prefix.size_bytes());
-      }
-      if (!include_nulls && d_str_null) {
-        if (col != 0) d_strviews[this_index - 1] = str_pair(nullptr, 0);
-        d_strviews[this_index]     = str_pair(nullptr, 0);
-        d_strviews[this_index + 1] = str_pair(nullptr, 0);
-      } else {
-        // if previous column was null, then we skip the value separator
-        if (col != 0)
-          if (tbl.column(col - 1).is_null(row) && !include_nulls)
-            d_strviews[this_index - 1] = str_pair(nullptr, 0);
-          else
-            d_strviews[this_index - 1] =
-              str_pair(value_separator.data(), value_separator.size_bytes());
-        auto const d_col_name = col_names.element<string_view>(col);
-        auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
-        // column_name: value
-        d_strviews[this_index]     = str_pair(d_col_name.data(), d_col_name.size_bytes());
-        d_strviews[this_index + 1] = str_pair(d_str.data(), d_str.size_bytes());
-      }
-      // suffix
-      if (col == tbl.num_columns() - 1) {
-        d_strviews[this_index + 2] = str_pair(row_suffix.data(), row_suffix.size_bytes());
-      }
-    });
-  auto joined_col = make_strings_column(d_strviews, stream, mr);
+    thrust::make_counting_iterator<size_type>(strings_count),
+    [d_table = *d_table, d_narep] __device__(size_type idx) {
+      if (d_narep.is_valid()) return true;
+      return !thrust::any_of(
+        thrust::seq, d_table.begin(), d_table.end(), [idx](auto col) { return col.is_null(idx); });
+    },
+    stream,
+    mr);
 
-  // gather from offset and create a new string column
-  rmm::device_uvector<size_type> d_strview_offsets(strings_columns.num_rows() + 1, stream);
-  thrust::sequence(rmm::exec_policy(stream),
-                   d_strview_offsets.begin(),
-                   d_strview_offsets.end(),
-                   0,
-                   num_str_views_per_row);
-  auto old_offsets = strings_column_view(joined_col->view()).offsets();
-  auto row_string_offsets =
-    std::move(cudf::detail::gather(cudf::table_view{{old_offsets}},
-                                   d_strview_offsets,
-                                   cudf::out_of_bounds_policy::DONT_CHECK,
-                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                   stream,
-                                   mr)
-                ->release()
-                .front());
-  return make_strings_column(
-    strings_columns.num_rows(),
-    std::move(row_string_offsets),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
-    0,
-    {});
-}
-
-/**
- * @brief Concatenates a list of strings columns into a single strings column.
- *
- * @param lists_strings Column containing lists of strings to concatenate.
- * @param list_prefix String to place before each list. (typically [)
- * @param list_suffix String to place after each list. (typically ])
- * @param element_separator String that should inserted between strings of each list row.
- * @param element_narep String that should be used in place of any null strings.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with concatenated results.
- */
-std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_strings,
-                                             string_view const list_prefix,
-                                             string_view const list_suffix,
-                                             string_view const element_separator,
-                                             string_view const element_narep,
-                                             //  string_view const list_narep,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  // create string_views of the list elements, and the list separators and list prefix/suffix.
-  // then concatenates them all together.
-  // gather offset of first string_view of each row as offsets for output string column.
-  auto const offsets          = lists_strings.offsets();
-  auto const strings_children = lists_strings.get_sliced_child(stream);
-  auto const null_count       = lists_strings.null_count();
-  auto const num_lists        = lists_strings.size();
-  auto const num_strings      = strings_children.size();
-  auto const num_offsets      = offsets.size();
-
-  rmm::device_uvector<size_type> d_strview_offsets(num_offsets, stream);
-  auto num_str_views_per_list = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
-      if (idx + 1 >= num_offsets) return 0;
-      auto const length = offsets[idx + 1] - offsets[idx];
-      return length == 0 ? 2 : (2 + length + length - 1);
-      // TODO nullmask unused for now.
-    });
-  thrust::exclusive_scan(rmm::exec_policy(stream),
-                         num_str_views_per_list,
-                         num_str_views_per_list + num_offsets,
-                         d_strview_offsets.begin());
-  auto const string_views_total = d_strview_offsets.back_element(stream);
-
-  using str_pair = thrust::pair<const char*, size_type>;
-  rmm::device_uvector<str_pair> d_strviews(string_views_total, stream);
-  // scatter null_list and list_prefix, list_suffix
-  auto col_device_view = cudf::column_device_view::create(lists_strings.parent(), stream);
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_lists),
-    [col = *col_device_view,
-     list_prefix,
-     list_suffix,
-     d_strview_counts = d_strview_offsets.begin(),
-     d_strviews       = d_strviews.begin()] __device__(auto idx) {
-      if (col.is_null(idx)) {
-        d_strviews[d_strview_counts[idx]] = str_pair{nullptr, 0};
-        d_strviews[d_strview_counts[idx] + 1] =
-          str_pair{nullptr, 0};  // TODO could skip this to reduce memory usage.
-      } else {
-        // [ ]
-        d_strviews[d_strview_counts[idx]] = str_pair{list_prefix.data(), list_prefix.size_bytes()};
-        d_strviews[d_strview_counts[idx + 1] - 1] =
-          str_pair{list_suffix.data(), list_suffix.size_bytes()};
-      }
-    });
-
-  // scatter string and separator
-  auto labels = cudf::lists::detail::generate_labels(lists_strings, num_strings, stream, mr);
-  auto d_strings_children = cudf::column_device_view::create(strings_children, stream);
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator<size_type>(0),
-                   thrust::make_counting_iterator<size_type>(num_strings),
-                   [col                = *col_device_view,
-                    d_strview_counts   = d_strview_offsets.begin(),
-                    d_strviews         = d_strviews.begin(),
-                    labels             = labels->view().begin<size_type>(),
-                    list_offsets       = offsets.begin<size_type>(),
-                    d_strings_children = *d_strings_children,
-                    element_separator,
-                    element_narep] __device__(auto idx) {
-                     auto const label         = labels[idx];
-                     auto const sublist_index = idx - list_offsets[label];
-                     auto const strview_index = d_strview_counts[label] + sublist_index * 2 + 1;
-                     // value or na_rep
-                     auto const strview = d_strings_children.element<cudf::string_view>(idx);
-                     d_strviews[strview_index] =
-                       d_strings_children.is_null(idx)
-                         ? str_pair{element_narep.data(), element_narep.size_bytes()}
-                         : str_pair{strview.data(), strview.size_bytes()};
-                     // separator
-                     if (sublist_index != 0) {
-                       d_strviews[strview_index - 1] =
-                         str_pair{element_separator.data(), element_separator.size_bytes()};
-                     }
-                   });
-
-  auto joined_col = make_strings_column(d_strviews, stream, mr);
-
-  // gather from offset and create a new string column
-  auto old_offsets = strings_column_view(joined_col->view()).offsets();
-  auto row_string_offsets =
-    std::move(cudf::detail::gather(cudf::table_view{{old_offsets}},
-                                   d_strview_offsets,
-                                   cudf::out_of_bounds_policy::DONT_CHECK,
-                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                   stream,
-                                   mr)
-                ->release()
-                .front());
-  return make_strings_column(
-    num_lists,
-    std::move(row_string_offsets),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
-    lists_strings.null_count(),
-    cudf::detail::copy_bitmask(lists_strings.parent(), stream, mr));
+  return make_strings_column(strings_count,
+                             std::move(children.first),
+                             std::move(children.second),
+                             null_count,
+                             std::move(null_mask));
 }
 
 /**
@@ -517,40 +418,53 @@ struct column_to_strings_fn {
   {
     auto child_view            = lists_column_view(column).get_sliced_child(stream_);
     auto constexpr child_index = lists_column_view::child_column_index;
-
-    auto child_string_with_null = [&]() {
-      if (child_view.type().id() == type_id::STRUCT) {
-        return (*this).template operator()<cudf::struct_view>(
-          child_view,
-          children_names.size() > child_index ? children_names[child_index].children
-                                              : std::vector<column_name_info>{});
-      } else if (child_view.type().id() == type_id::LIST) {
-        return (*this).template operator()<cudf::list_view>(child_view,
-                                                            children_names.size() > child_index
-                                                              ? children_names[child_index].children
-                                                              : std::vector<column_name_info>{});
-      } else {
-        return cudf::type_dispatcher(child_view.type(), *this, child_view);
-      }
-    };
-    auto new_offsets = cudf::lists::detail::get_normalized_offsets(
-      lists_column_view(column), stream_, rmm::mr::get_current_device_resource());
-    auto const list_child_string = make_lists_column(
-      column.size(),
-      std::move(new_offsets),
-      std::move(child_string_with_null()),
-      column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, rmm::mr::get_current_device_resource()),
-      stream_);
-    auto l_pre = string_scalar{"["}, l_post = string_scalar{"]"}, sep = string_scalar{","},
-         elem_narep = string_scalar{"null"};
-    return join_list_of_strings(lists_column_view(*list_child_string),
-                                l_pre.value(stream_),
-                                l_post.value(stream_),
-                                sep.value(stream_),
-                                elem_narep.value(stream_),
-                                stream_,
-                                mr_);
+    auto list_string           = [&]() {
+      // nulls are replaced due to special handling of all-null lists as empty lists
+      // by join_list_elements
+      auto child_string_with_null = [&]() {
+        if (child_view.type().id() == type_id::STRUCT) {
+          return (*this).template operator()<cudf::struct_view>(
+            child_view,
+            children_names.size() > child_index ? children_names[child_index].children
+                                                          : std::vector<column_name_info>{});
+        } else if (child_view.type().id() == type_id::LIST) {
+          return (*this).template operator()<cudf::list_view>(
+            child_view,
+            children_names.size() > child_index ? children_names[child_index].children
+                                                          : std::vector<column_name_info>{});
+        } else {
+          return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        }
+      };
+      auto child_string = cudf::strings::detail::replace_nulls(
+        child_string_with_null()->view(), narep, stream_, rmm::mr::get_current_device_resource());
+      auto new_offsets = cudf::lists::detail::get_normalized_offsets(
+        lists_column_view(column), stream_, rmm::mr::get_current_device_resource());
+      auto const list_child_string = make_lists_column(
+        column.size(),
+        std::move(new_offsets),
+        std::move(child_string),
+        column.null_count(),
+        cudf::detail::copy_bitmask(column, stream_, rmm::mr::get_current_device_resource()),
+        stream_);
+      return strings::detail::join_list_elements(lists_column_view(*list_child_string),
+                                                 string_scalar{","},
+                                                 narep,
+                                                 strings::separator_on_nulls::YES,
+                                                 strings::output_if_empty_list::EMPTY_STRING,
+                                                 stream_,
+                                                 mr_);
+    }();
+    // create column with "[", "]" to wrap around list string
+    auto prepend = make_column_from_scalar(string_scalar{"["}, column.size(), stream_, mr_);
+    auto append  = make_column_from_scalar(string_scalar{"]"}, column.size(), stream_, mr_);
+    return cudf::strings::detail::concatenate(
+      table_view{{prepend->view(), list_string->view(), append->view()}},
+      string_scalar(""),
+      string_scalar("", false),
+      strings::separator_on_nulls::YES,
+      stream_,
+      mr_);
   }
 
   // structs:
@@ -562,8 +476,7 @@ struct column_to_strings_fn {
       0, [structs_view = structs_column_view{column}](auto const child_idx) {
         return structs_view.get_sliced_child(child_idx);
       });
-    auto col_string = operator()(
-      child_it, child_it + column.num_children(), children_names, row_end_wrap.value(stream_));
+    auto col_string = operator()(child_it, child_it + column.num_children(), children_names);
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
                               column.null_count());
     return col_string;
@@ -573,9 +486,9 @@ struct column_to_strings_fn {
   template <typename column_iterator>
   std::unique_ptr<column> operator()(column_iterator column_begin,
                                      column_iterator column_end,
-                                     host_span<column_name_info const> children_names,
-                                     cudf::string_view const row_end_wrap_value) const
+                                     host_span<column_name_info const> children_names) const
   {
+    CUDF_FUNC_RANGE();
     auto const num_columns = std::distance(column_begin, column_end);
     auto column_names      = make_column_names_column(children_names, num_columns, stream_);
     auto column_names_view = column_names->view();
@@ -618,7 +531,7 @@ struct column_to_strings_fn {
     return struct_to_strings(str_table_view,
                              column_names_view,
                              row_begin_wrap.value(stream_),
-                             row_end_wrap_value,
+                             row_end_wrap.value(stream_),
                              column_seperator.value(stream_),
                              value_seperator.value(stream_),
                              narep,
@@ -676,13 +589,13 @@ std::unique_ptr<column> make_column_names_column(host_span<column_name_info cons
   }
   auto unescaped_string_col = make_strings_column_from_host(unescaped_column_names, stream);
   auto d_column             = column_device_view::create(*unescaped_string_col, stream);
-  return escape_strings_fn{*d_column, true}.get_escaped_strings(
+  return escape_strings_fn{*d_column}.get_escaped_strings(
     *unescaped_string_col, stream, rmm::mr::get_current_device_resource());
 }
 
 void write_chunked(data_sink* out_sink,
                    strings_column_view const& str_column_view,
-                   int const skip_last_chars,
+                   string_scalar const& d_line_terminator,
                    json_writer_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
@@ -690,8 +603,15 @@ void write_chunked(data_sink* out_sink,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  auto total_num_bytes      = str_column_view.chars_size() - skip_last_chars;
-  char const* ptr_all_bytes = str_column_view.chars_begin();
+  auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
+                                                            d_line_terminator,
+                                                            string_scalar("", false),
+                                                            stream,
+                                                            rmm::mr::get_current_device_resource());
+  strings_column_view strings_column{p_str_col_w_nl->view()};
+
+  auto total_num_bytes      = strings_column.chars_size();
+  char const* ptr_all_bytes = strings_column.chars_begin();
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory
@@ -727,7 +647,6 @@ void write_json(data_sink* out_sink,
     }
   }();
   auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
-  string_scalar d_line_terminator_with_row_end{"}" + line_terminator};
   string_scalar d_line_terminator{line_terminator};
 
   // write header: required for non-record oriented output
@@ -782,16 +701,18 @@ void write_json(data_sink* out_sink,
       std::vector<std::unique_ptr<column>> str_column_vec;
 
       // struct converter for the table
-      auto str_concat_col = converter(sub_view.begin(),
-                                      sub_view.end(),
-                                      user_column_names,
-                                      d_line_terminator_with_row_end.value(stream));
+      auto str_concat_col = converter(sub_view.begin(), sub_view.end(), user_column_names);
+
+      write_chunked(out_sink, str_concat_col->view(), d_line_terminator, options, stream, mr);
 
       // Needs line_terminator at the end, to separate from next chunk
-      bool const include_line_terminator =
-        (&sub_view != &vector_views.back()) or options.is_enabled_lines();
-      auto const skip_last_chars = (include_line_terminator ? 0 : line_terminator.size());
-      write_chunked(out_sink, str_concat_col->view(), skip_last_chars, options, stream, mr);
+      if (&sub_view != &vector_views.back() or options.is_enabled_lines()) {
+        if (out_sink->is_device_write_preferred(d_line_terminator.size())) {
+          out_sink->device_write(d_line_terminator.data(), d_line_terminator.size(), stream);
+        } else {
+          out_sink->host_write(line_terminator.data(), line_terminator.size());
+        }
+      }
     }
   } else {
     if (options.is_enabled_lines()) {
