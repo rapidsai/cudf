@@ -65,7 +65,16 @@ struct NRT_MemSys {
 /* The Memory System object */
 __device__ NRT_MemSys TheMSys;
 
-extern "C" __device__ void* NRT_Allocate(size_t size) { return malloc(size); }
+extern "C" void* NRT_Allocate(size_t size) {
+  void *ptr = NULL;
+  ptr = TheMSys.allocator.malloc(size);
+  if (TheMSys.stats.enabled)
+  {
+      TheMSys.stats.alloc++;
+  }
+  return ptr;
+}
+
 
 extern "C" __device__ void NRT_MemInfo_init(
   NRT_MemInfo* mi, void* data, size_t size, NRT_dtor_function dtor, void* dtor_info)
