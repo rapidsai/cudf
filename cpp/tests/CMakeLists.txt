@@ -74,7 +74,7 @@ ConfigureTest(
   COLUMN_TEST
   column/bit_cast_test.cpp
   column/column_device_view_test.cu
-  column/column_test.cu
+  column/column_test.cpp
   column/column_view_device_span_test.cpp
   column/column_view_shallow_test.cpp
   column/compound_test.cu
@@ -306,7 +306,7 @@ ConfigureTest(
 # * copying tests ---------------------------------------------------------------------------------
 ConfigureTest(
   COPYING_TEST
-  copying/concatenate_tests.cu
+  copying/concatenate_tests.cpp
   copying/copy_if_else_nested_tests.cpp
   copying/copy_range_tests.cpp
   copying/copy_tests.cpp
