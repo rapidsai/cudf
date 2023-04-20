@@ -123,13 +123,13 @@ class writer::impl {
    * by `convert_table_to_parquet_data` called in the `write()` function.
    *
    * @param updated_agg_meta The updated aggregate data after processing the input
-   * @param batch_list
-   * @param rg_to_part
-   * @param global_rowgroup_base
-   * @param first_rg_in_part
-   * @param chunks
-   * @param pages
-   * @param num_columns
+   * @param batch_list The batches of rowgroups to encode
+   * @param rg_to_part A map from rowgroup to partition
+   * @param global_rowgroup_base Numbers of rowgroups in each file/partition
+   * @param first_rg_in_part The first rowgroup in each partition
+   * @param chunks Column chunks
+   * @param pages Encoded pages
+   * @param num_columns Number of encoded columns
    * @param out_buff Temporary host output buffer
    *
    */

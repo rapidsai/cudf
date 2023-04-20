@@ -1405,8 +1405,29 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
 }
 
 /**
- * @brief TODO
- * @return
+ * @brief Perform the processing steps needed to convert the input table into the output Parquet
+ * data for writing, such as compression and encoding.
+ *
+ * @param input The input table
+ * @param partitions Optional partitions to divide the table into, if specified then must be same
+ *        size as number of sinks
+ * @param table_meta The table metadata
+ * @param curr_agg_meta The current aggregate writer metadata
+ * @param kv_meta Optional user metadata
+ * @param max_page_fragment_size_opt Optional maximum number of rows in a page fragment
+ * @param max_row_group_size Maximum row group size, in bytes
+ * @param max_page_size_bytes Maximum uncompressed page size, in bytes
+ * @param max_row_group_rows Maximum row group size, in rows
+ * @param max_page_size_rows Maximum page size, in rows
+ * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
+ * @param stats_granularity Level of statistics requested in output file
+ * @param compression Compression format
+ * @param dict_policy Policy for dictionary use
+ * @param max_dictionary_size Maximum dictionary size, in bytes
+ * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
+ * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A tuple of the intermediate results containing the processed data
  */
 auto convert_table_to_parquet_data(table_view const& input,
                                    std::vector<partition_info> const& partitions,
@@ -2032,9 +2053,9 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          chunks,
                          batch_list,
                          rg_to_part,
-                         uncomp_bfr,   // unused, but contains data for later sink write
-                         comp_bfr,     // unused, but contains data for later sink write
-                         col_idx_bfr,  // unused, but contains data for later sink write
+                         uncomp_bfr,   // unused, but contains data for later write to sink
+                         comp_bfr,     // unused, but contains data for later write to sink
+                         col_idx_bfr,  // unused, but contains data for later write to sink
                          pages,
                          out_buff,
                          num_columns] = [&] {
