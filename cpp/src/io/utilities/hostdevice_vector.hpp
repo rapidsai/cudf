@@ -170,6 +170,7 @@ class hostdevice_vector {
    */
   [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
   {
+    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
     CUDF_EXPECTS(count <= d_data.size() - offset,
                  "The span with given offset and count is out of bounds.");
     return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
