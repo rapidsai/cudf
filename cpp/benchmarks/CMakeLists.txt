@@ -91,14 +91,14 @@ endfunction()
 # This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
 # setting all of the associated properties and linking to build the benchmark
 function(ConfigureNVBench CMAKE_BENCH_NAME)
-  add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+  add_executable(${CMAKE_BENCH_NAME} ${ARGN} fixture/nvbench_main.cu)
   set_target_properties(
     ${CMAKE_BENCH_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::nvbench
                                 $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
