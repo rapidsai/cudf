@@ -178,7 +178,10 @@ template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
- * @brief Function that translates GDF compression to parquet compression
+ * @brief Function that translates GDF compression to parquet compression.
+ *
+ * @param compression The compression type
+ * @return The supported Parquet compression
  */
 parquet::Compression to_parquet_compression(compression_type compression)
 {
@@ -191,6 +194,13 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+/**
+ * @brief Compute size (in bytes) of the data stored in the given column.
+ *
+ * @param column The input column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The data size of the input
+ */
 size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.size() == 0) { return 0; }
