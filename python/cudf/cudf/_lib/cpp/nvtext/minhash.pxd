@@ -1,6 +1,5 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
