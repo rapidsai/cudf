@@ -935,9 +935,10 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
  *
  * @param frag Destination row group fragments
  * @param col_desc column description array
- * @param[in] partitions Information about partitioning of table
- * @param[in] part_frag_offset A Partition's offset into fragment array
+ * @param partitions Information about partitioning of table
+ * @param part_frag_offset A Partition's offset into fragment array
  * @param fragment_size Number of rows per fragment
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void init_row_group_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                               device_span<gpu::parquet_column_device_view const> col_desc,
@@ -960,6 +961,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragmen
  *
  * @param frag Destination page fragments
  * @param frag_sizes Array of fragment sizes for each column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void calculate_page_fragments(device_span<gpu::PageFragment> frag,
                               host_span<size_type const> frag_sizes,
@@ -975,6 +977,8 @@ void calculate_page_fragments(device_span<gpu::PageFragment> frag,
  *
  * @param frag_stats output statistics
  * @param frags Input page fragments
+ * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
                                 device_span<gpu::PageFragment const> frags,
@@ -1205,17 +1209,21 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 }
 
 /**
- * @brief Initialize encoder pages
+ * @brief Initialize encoder pages.
  *
- * @param chunks column chunk array
- * @param col_desc column description array
- * @param pages encoder pages array
- * @param page_stats page statistics array
- * @param frag_stats fragment statistics array
- * @param max_page_comp_data_size max compressed
+ * @param chunks Column chunk array
+ * @param col_desc Column description array
+ * @param pages Encoder pages array
+ * @param comp_page_sizes Per-page max compressed size
+ * @param page_stats Page statistics array
+ * @param frag_stats Fragment statistics array
  * @param num_columns Total number of columns
  * @param num_pages Total number of pages
  * @param num_stats_bfr Number of statistics buffers
+ * @param compression Compression format
+ * @param max_page_size_bytes Maximum uncompressed page size, in bytes
+ * @param max_page_size_rows Maximum page size, in rows
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         device_span<gpu::parquet_column_device_view const> col_desc,
@@ -1261,7 +1269,7 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 }
 
 /**
- * @brief Encode a batch of pages
+ * @brief Encode a batch of pages.
  *
  * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
  *
@@ -1275,6 +1283,9 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  * @param page_stats optional page-level statistics (nullptr if none)
  * @param chunk_stats optional chunk-level statistics (nullptr if none)
  * @param column_stats optional page-level statistics for column index (nullptr if none)
+ * @param compression compression format
+ * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                   device_span<gpu::EncPage> pages,
@@ -1357,9 +1368,11 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
 /**
  * @brief Function to calculate the memory needed to encode the column index of the given
- * column chunk
+ * column chunk.
  *
- * @param chunk pointer to column chunk
+ * @param ck pointer to column chunk
+ * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
+ * @return Computed buffer size needed to encode the column index
  */
 size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_truncate_length)
 {
@@ -1390,6 +1403,12 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
+/**
+ * @brief Fill the table metadata with default column names.
+ *
+ * @param table_meta The table metadata to fill
+ * @param input The input CUDF table
+ */
 void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
                      table_view const& input)
 {
