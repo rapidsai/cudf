@@ -23,13 +23,11 @@
 
 #include <nvbench/nvbench.cuh>
 
-enum class encoding_type { UTF8 = 0, ASCII = 1 };
-
-template <encoding_type encoding>
-void bench_case(nvbench::state& state, nvbench::type_list<nvbench::enum_type<encoding>>)
+void bench_case(nvbench::state& state)
 {
   auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const max_width = static_cast<int32_t>(state.get_int64("width"));
+  auto const encoding  = state.get_string("encoding");
 
   if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
@@ -43,7 +41,7 @@ void bench_case(nvbench::state& state, nvbench::type_list<nvbench::enum_type<enc
   auto col_view = column->view();
 
   cudf::column::contents ascii_contents;
-  if constexpr (encoding == encoding_type::ASCII) {
+  if (encoding == "ascii") {
     data_profile ascii_profile = data_profile_builder().no_validity().distribution(
       cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
     auto input = cudf::strings_column_view(col_view);
@@ -73,21 +71,8 @@ void bench_case(nvbench::state& state, nvbench::type_list<nvbench::enum_type<enc
              [&](nvbench::launch& launch) { auto result = cudf::strings::to_lower(input); });
 }
 
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  encoding_type,
-  [](auto value) {
-    switch (value) {
-      case encoding_type::ASCII: return "ASCII";
-      case encoding_type::UTF8: return "UTF8";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-using type_list = nvbench::enum_type_list<encoding_type::UTF8, encoding_type::ASCII>;
-
-NVBENCH_BENCH_TYPES(bench_case, NVBENCH_TYPE_AXES(type_list))
+NVBENCH_BENCH(bench_case)
   .set_name("strings_case")
-  .set_type_axes_names({"encoding"})
   .add_int64_axis("width", {32, 64, 128, 256, 512, 1024, 2048})
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_string_axis("encoding", {"ascii", "utf8"});
