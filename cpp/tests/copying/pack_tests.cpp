@@ -18,7 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
 
 struct PackUnpackTest : public cudf::test::BaseFixture {
   void run_test(cudf::table_view const& t)

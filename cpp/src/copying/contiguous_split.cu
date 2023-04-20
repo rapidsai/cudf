@@ -16,7 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
+#include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>

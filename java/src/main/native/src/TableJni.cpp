@@ -20,6 +20,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
