@@ -134,6 +134,54 @@ struct escape_strings_fn {
   }
 };
 
+// Struct - scatter string_views of each element in a struct column
+struct struct_scatter_strings_fn {
+  table_device_view const tbl;
+  column_device_view const col_names;
+  size_type const strviews_per_column;
+  size_type const num_strviews_per_row;
+  string_view const row_prefix;       //{
+  string_view const row_suffix;       //} or }\n for json-lines
+  string_view const value_separator;  //,
+  string_view const narep;            // null
+  bool const include_nulls;
+  string_view* d_strviews;
+
+  /**
+   * @brief Scatters string_views for each element in a struct column
+   *
+   * @param idx Column-major index of the element to scatter
+   */
+  __device__ void operator()(size_type idx)
+  {
+    auto const row        = idx / tbl.num_columns();
+    auto const col        = idx % tbl.num_columns();
+    auto const d_str_null = tbl.column(col).is_null(row);
+    auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
+    // prefix
+    if (col == 0) { d_strviews[this_index - 1] = row_prefix; }
+    if (!include_nulls && d_str_null) {
+      if (col != 0) d_strviews[this_index - 1] = string_view{};
+      d_strviews[this_index]     = string_view{};
+      d_strviews[this_index + 1] = string_view{};
+    } else {
+      // if previous column was null, then we skip the value separator
+      if (col != 0)
+        if (tbl.column(col - 1).is_null(row) && !include_nulls)
+          d_strviews[this_index - 1] = string_view{};
+        else
+          d_strviews[this_index - 1] = value_separator;
+      auto const d_col_name = col_names.element<string_view>(col);
+      auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
+      // column_name: value
+      d_strviews[this_index]     = d_col_name;
+      d_strviews[this_index + 1] = d_str;
+    }
+    // suffix
+    if (col == tbl.num_columns() - 1) { d_strviews[this_index + 2] = row_suffix; }
+  }
+};
+
 /**
  * @brief Concatenate the strings from each row of the given table as structs in JSON string
  *
@@ -186,48 +234,21 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto const total_strings = num_strviews_per_row * strings_columns.num_rows();
   auto const total_rows    = strings_columns.num_rows() * strings_columns.num_columns();
   rmm::device_uvector<string_view> d_strviews(total_strings, stream);
-
+  struct_scatter_strings_fn scatter_fn{*tbl_device_view,
+                                       *d_column_names,
+                                       strviews_per_column,
+                                       num_strviews_per_row,
+                                       row_prefix,
+                                       row_suffix,
+                                       value_separator,
+                                       narep.value(stream),
+                                       include_nulls,
+                                       d_strviews.begin()};
   // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(total_rows),
-    [tbl       = *tbl_device_view,
-     col_names = *d_column_names,
-     strviews_per_column,
-     num_strviews_per_row,
-     row_prefix,
-     row_suffix,
-     value_separator,
-     narep = narep.value(stream),
-     include_nulls,
-     d_strviews = d_strviews.begin()] __device__(auto idx) {
-      auto const row        = idx / tbl.num_columns();
-      auto const col        = idx % tbl.num_columns();
-      auto const d_str_null = tbl.column(col).is_null(row);
-      auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
-      // prefix
-      if (col == 0) { d_strviews[this_index - 1] = row_prefix; }
-      if (!include_nulls && d_str_null) {
-        if (col != 0) d_strviews[this_index - 1] = string_view{};
-        d_strviews[this_index]     = string_view{};
-        d_strviews[this_index + 1] = string_view{};
-      } else {
-        // if previous column was null, then we skip the value separator
-        if (col != 0)
-          if (tbl.column(col - 1).is_null(row) && !include_nulls)
-            d_strviews[this_index - 1] = string_view{};
-          else
-            d_strviews[this_index - 1] = value_separator;
-        auto const d_col_name = col_names.element<string_view>(col);
-        auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
-        // column_name: value
-        d_strviews[this_index]     = d_col_name;
-        d_strviews[this_index + 1] = d_str;
-      }
-      // suffix
-      if (col == tbl.num_columns() - 1) { d_strviews[this_index + 2] = row_suffix; }
-    });
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator<size_type>(0),
+                   thrust::make_counting_iterator<size_type>(total_rows),
+                   scatter_fn);
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
