@@ -91,6 +91,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column_factories.hpp
         - test -f $PREFIX/include/cudf/column/column_view.hpp
         - test -f $PREFIX/include/cudf/concatenate.hpp
+        - test -f $PREFIX/include/cudf/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
         - test -f $PREFIX/include/cudf/timezone.hpp
@@ -99,6 +100,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/detail/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
         - test -f $PREFIX/include/cudf/detail/fill.hpp
