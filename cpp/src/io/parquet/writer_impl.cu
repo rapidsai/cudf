@@ -1405,6 +1405,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
 }
 
 // TODO
+#if 0
 using table_device_view_owner =
   std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
@@ -1413,23 +1414,25 @@ struct return_type {
   std::vector<parquet_column_view> parquet_columns;
   table_view single_streams_table;
   hostdevice_vector<gpu::parquet_column_device_view> col_desc;
-  std::vector<size_type> column_frag_size;
-  std::vector<SchemaElement> this_table_schema;
-  std::vector<int> part_frag_offset;
+  //  std::vector<size_type> column_frag_size;
+//  std::vector<SchemaElement> this_table_schema;
+  //  std::vector<int> part_frag_offset;
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments;
   table_device_view_owner parent_column_table_device_view;    // unused
   rmm::device_uvector<column_device_view> leaf_column_views;  // unused
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   std::vector<size_t> global_rowgroup_base;
-  std::vector<int> num_rg_in_part;
+  //  std::vector<int> num_rg_in_part;
   std::vector<int> first_rg_in_part;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks;
   rmm::device_uvector<statistics_chunk> frag_stats;
   hostdevice_vector<gpu::PageFragment> page_fragments;
-  std::vector<size_type> frag_offsets;  // delete
+  //  std::vector<size_type> frag_offsets;  // delete
+
   std::pair<std::vector<rmm::device_uvector<size_type>>,
             std::vector<rmm::device_uvector<size_type>>>
     dict_info_owner;  // unused
+
   std::vector<size_type> batch_list;
   std::vector<int> rg_to_part;
 
@@ -1441,41 +1444,31 @@ struct return_type {
   rmm::device_uvector<statistics_chunk> page_stats;
 
   pinned_buffer<uint8_t> host_bfr;
-
-  size_type max_page_fragment_size;
-  size_type num_fragments;
-  size_type num_rowgroups;
-  size_type num_chunks;
-  size_type total_frags;  // delete
-  size_type num_pages;
-  size_type max_page_uncomp_data_size;
-  size_t max_chunk_bfr_size;
 };
+#endif
 
 /**
  * @brief TODO
  * @return
  */
-return_type convert_table_to_parquet_data(
-  table_view const& input,
-  table_input_metadata& table_meta,
-  bool single_write_mode,
-  bool int96_timestamps,
-  std::optional<size_type> const max_page_fragment_size_opt,
-  size_t max_row_group_size,
-  size_t max_page_size_bytes,
-  size_type max_row_group_rows,
-  size_type max_page_size_rows,
-  int32_t column_index_truncate_length,
-  std::vector<partition_info> const& partitions,
-  std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
-  statistics_freq stats_granularity,
-  std::vector<std::map<std::string, std::string>> const& kv_meta,
-  //                                                   data_sink const& out_sink,
-  Compression compression,
-  dictionary_policy dict_policy,
-  size_t const max_dictionary_size,
-  rmm::cuda_stream_view stream)
+auto convert_table_to_parquet_data(table_view const& input,
+                                   std::vector<partition_info> const& partitions,
+                                   table_input_metadata& table_meta,
+                                   std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
+                                   std::vector<std::map<std::string, std::string>> const& kv_meta,
+                                   std::optional<size_type> max_page_fragment_size_opt,
+                                   size_t max_row_group_size,
+                                   size_t max_page_size_bytes,
+                                   size_type max_row_group_rows,
+                                   size_type max_page_size_rows,
+                                   int32_t column_index_truncate_length,
+                                   statistics_freq stats_granularity,
+                                   Compression compression,
+                                   dictionary_policy dict_policy,
+                                   size_t max_dictionary_size,
+                                   bool single_write_mode,
+                                   bool int96_timestamps,
+                                   rmm::cuda_stream_view stream)
 {
   auto vec         = table_to_linked_columns(input);
   auto schema_tree = construct_schema_tree(vec, table_meta, single_write_mode, int96_timestamps);
@@ -1580,8 +1573,7 @@ return_type convert_table_to_parquet_data(
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
   // These are unused but needs to be kept alive.
-  table_device_view_owner parent_column_table_device_view =
-    table_device_view::create(single_streams_table, stream);
+  auto parent_column_table_device_view = table_device_view::create(single_streams_table, stream);
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
   if (num_fragments != 0) {
@@ -1985,44 +1977,31 @@ return_type convert_table_to_parquet_data(
     if (need_sync) { stream.synchronize(); }
   }
 
-  return return_type{std::move(parquet_columns),
-                     std::move(single_streams_table),
-                     std::move(col_desc),
-                     std::move(column_frag_size),
-                     std::move(this_table_schema),
-                     std::move(part_frag_offset),
-                     std::move(row_group_fragments),
-                     std::move(parent_column_table_device_view),
-                     std::move(leaf_column_views),
-                     std::move(agg_meta),
-                     std::move(global_rowgroup_base),
-                     std::move(num_rg_in_part),
-                     std::move(first_rg_in_part),
-                     std::move(chunks),
-                     std::move(frag_stats),
-                     std::move(page_fragments),
-                     std::move(frag_offsets),
-                     std::move(dict_info_owner),
-                     std::move(batch_list),
-                     std::move(rg_to_part),
+  return std::tuple{std::move(parquet_columns),
+                    std::move(single_streams_table),
+                    std::move(col_desc),
+                    std::move(row_group_fragments),
+                    std::move(parent_column_table_device_view),
+                    std::move(leaf_column_views),
+                    std::move(agg_meta),
+                    std::move(global_rowgroup_base),
+                    std::move(first_rg_in_part),
+                    std::move(chunks),
+                    std::move(frag_stats),
+                    std::move(page_fragments),
+                    std::move(frag_offsets),
+                    std::move(dict_info_owner),
+                    std::move(batch_list),
+                    std::move(rg_to_part),
 
-                     std::move(uncomp_bfr),
-                     std::move(comp_bfr),
-                     std::move(col_idx_bfr),
+                    std::move(uncomp_bfr),
+                    std::move(comp_bfr),
+                    std::move(col_idx_bfr),
 
-                     std::move(pages),
-                     std::move(page_stats),
+                    std::move(pages),
+                    std::move(page_stats),
 
-                     std::move(host_bfr),
-
-                     max_page_fragment_size,
-                     num_fragments,
-                     num_rowgroups,
-                     num_chunks,
-                     total_frags,
-                     num_pages,
-                     max_page_uncomp_data_size,
-                     max_chunk_bfr_size};
+                    std::move(host_bfr)};
 }
 
 }  // namespace
@@ -2108,21 +2087,18 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   [[maybe_unused]] auto [parquet_columns,
                          single_streams_table,
                          col_desc,
-                         column_frag_size,
-                         this_table_schema,
-                         part_frag_offset,
                          row_group_fragments,
                          parent_column_table_device_view,  // unused, but needs to be kept alive
                          leaf_column_views,                // unused, but needs to be kept alive
                          updated_agg_meta,
                          global_rowgroup_base,
-                         num_rg_in_part,
                          first_rg_in_part,
                          chunks,
                          frag_stats,
                          page_fragments,
                          frag_offsets,
                          dict_info_owner,
+
                          batch_list,
                          rg_to_part,
 
@@ -2132,35 +2108,25 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
                          pages,
                          page_stats,
-                         host_bfr,
-                         //
-                         //
-                         max_page_fragment_size,
-                         num_fragments,
-                         num_rowgroups,
-                         num_chunks,
-                         total_frags,
-                         num_pages,
-                         max_page_uncomp_data_size,
-                         max_chunk_bfr_size] = [&] {
+                         host_bfr] = [&] {
     try {
       return convert_table_to_parquet_data(input,
+                                           partitions,
                                            *_table_meta,
-                                           _single_write_mode,
-                                           _int96_timestamps,
+                                           _agg_meta,
+                                           _kv_meta,
                                            _max_page_fragment_size,
                                            _max_row_group_size,
                                            _max_page_size_bytes,
                                            _max_row_group_rows,
                                            _max_page_size_rows,
                                            _column_index_truncate_length,
-                                           partitions,
-                                           _agg_meta,
                                            _stats_granularity,
-                                           _kv_meta,
                                            _compression,
                                            _dict_policy,
                                            _max_dictionary_size,
+                                           _single_write_mode,
+                                           _int96_timestamps,
                                            _stream);
     } catch (...) {  // catch any exception type
       CUDF_LOG_ERROR(

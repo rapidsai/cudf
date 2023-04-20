@@ -129,16 +129,6 @@ class writer::impl {
                                   hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
                                   rmm::device_uvector<gpu::EncPage> const& pages,
                                   uint8_t* host_bfr);
-  //  orc_streams& streams,
-  //                                  hostdevice_vector<compression_result> const& comp_results,
-  //                                  hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-  //                                  encoded_data const& enc_data,
-  //                                  file_segmentation const& segmentation,
-  //                                  std::vector<StripeInformation>& stripes,
-  //                                  orc_table_view const& orc_table,
-  //                                  rmm::device_buffer const& compressed_data,
-  //                                  intermediate_statistics& intermediate_stats,
-  //                                  uint8_t* stream_output);
 
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;
