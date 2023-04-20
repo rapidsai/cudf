@@ -667,7 +667,7 @@ make_definition_idx(BlockIdxMax, float64, double);
 
 __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
 {
-  udf_string* ptr = reinterpret_cast<udf_string*>(udf_str);
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
   ptr->~udf_string();
 }
 
@@ -682,7 +682,7 @@ Create a new MemInfo object holding the reference count of a udf_string. When re
 new strings, shim functions expect a pointer to a stack allocated buffer into which it
 will construct the udf_string it returns. Since one can not safely build a MemInfo object
 around this stack memory, we store a copy of the udf_string itself next to the MemInfo
-where it can be later used to destroy the underlying data.
+which manages the lifetime of the udf_string.
 */
 extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
 {
@@ -692,13 +692,17 @@ extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_s
     auto mi_ptr        = &(mi_and_str->mi);
     udf_string* st_ptr = &(mi_and_str->st);
 
+    // We pass a null size here because the udf_string actually exists on the stack
+    // and tracks the size of the string data that it points to.
     NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
 
     // copy the udf_string to the extra heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
     memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    *nb_retval = &(mi_and_str->mi);
+  } else {
+    *nb_retval = NULL;
   }
 
-  *nb_retval = &(mi_and_str->mi);
   return 0;
 }
