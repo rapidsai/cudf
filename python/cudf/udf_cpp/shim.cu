@@ -692,13 +692,16 @@ extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_s
     auto mi_ptr        = &(mi_and_str->mi);
     udf_string* st_ptr = &(mi_and_str->st);
 
+    // We pass a null size here because the udf_string actually exists on the stack
     NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
 
     // copy the udf_string to the extra heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
     memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    *nb_retval = &(mi_and_str->mi);
+  } else {
+    *nb_retval = NULL;
   }
 
-  *nb_retval = &(mi_and_str->mi);
   return 0;
 }
