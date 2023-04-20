@@ -1968,12 +1968,12 @@ auto convert_table_to_parquet_data(table_view const& input,
     if (need_sync) { stream.synchronize(); }
   }
 
-  auto out_buff = pinned_buffer<uint8_t>{[](size_t size) {
-                                           uint8_t* ptr = nullptr;
-                                           CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                           return ptr;
-                                         }(max_chunk_bfr_size),
-                                         cudaFreeHost};
+  auto write_buff = pinned_buffer<uint8_t>{[](size_t size) {
+                                             uint8_t* ptr = nullptr;
+                                             CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+                                             return ptr;
+                                           }(max_chunk_bfr_size),
+                                           cudaFreeHost};
 
   return std::tuple{std::move(agg_meta),
                     std::move(global_rowgroup_base),
@@ -1985,7 +1985,7 @@ auto convert_table_to_parquet_data(table_view const& input,
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
                     std::move(pages),
-                    std::move(out_buff),
+                    std::move(write_buff),
                     single_streams_table.num_columns()};
 }
 
@@ -2078,7 +2078,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
                          pages,
-                         out_buff,
+                         write_buff,
                          num_columns] = [&] {
     try {
       return convert_table_to_parquet_data(input,
@@ -2116,7 +2116,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                              chunks,
                              pages,
                              num_columns,
-                             out_buff.get());
+                             write_buff.get());
 
   _last_write_successful = true;
 }
@@ -2130,7 +2130,7 @@ void writer::impl::write_parquet_data_to_sink(
   hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
   rmm::device_uvector<gpu::EncPage> const& pages,
   size_type num_columns,
-  uint8_t* out_buff)
+  uint8_t* write_buff)
 {
   _agg_meta = std::move(updated_agg_meta);
 
@@ -2152,13 +2152,13 @@ void writer::impl::write_parquet_data_to_sink(
           write_tasks.push_back(_out_sink[p]->device_write_async(
             dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
         } else {
-          CUDF_CUDA_TRY(cudaMemcpyAsync(out_buff,
+          CUDF_CUDA_TRY(cudaMemcpyAsync(write_buff,
                                         dev_bfr + ck.ck_stat_size,
                                         ck.compressed_size,
                                         cudaMemcpyDefault,
                                         _stream.value()));
           _stream.synchronize();
-          _out_sink[p]->host_write(out_buff, ck.compressed_size);
+          _out_sink[p]->host_write(write_buff, ck.compressed_size);
         }
 
         auto& column_chunk_meta = row_group.columns[i].meta_data;

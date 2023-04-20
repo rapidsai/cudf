@@ -130,7 +130,7 @@ class writer::impl {
    * @param chunks Column chunks
    * @param pages Encoded pages
    * @param num_columns Number of encoded columns
-   * @param out_buff Temporary host output buffer
+   * @param write_buff Temporary host output buffer
    *
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
@@ -141,7 +141,7 @@ class writer::impl {
                                   hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
                                   rmm::device_uvector<gpu::EncPage> const& pages,
                                   size_type num_columns,
-                                  uint8_t* out_buff);
+                                  uint8_t* write_buff);
 
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;
