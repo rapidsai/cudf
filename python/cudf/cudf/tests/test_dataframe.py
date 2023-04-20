@@ -8273,8 +8273,8 @@ def test_dataframe_iterrows_itertuples():
 def test_describe_misc_include(df, include):
     pdf = df.to_pandas()
 
-    expected = pdf.describe(include=include, datetime_is_numeric=True)
-    actual = df.describe(include=include, datetime_is_numeric=True)
+    expected = pdf.describe(include=include)
+    actual = df.describe(include=include)
 
     for col in expected.columns:
         if expected[col].dtype == np.dtype("object"):
