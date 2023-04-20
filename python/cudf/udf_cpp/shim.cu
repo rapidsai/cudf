@@ -667,7 +667,7 @@ make_definition_idx(BlockIdxMax, float64, double);
 
 __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
 {
-  udf_string* ptr = reinterpret_cast<udf_string*>(udf_str);
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
   ptr->~udf_string();
 }
 
@@ -682,7 +682,7 @@ Create a new MemInfo object holding the reference count of a udf_string. When re
 new strings, shim functions expect a pointer to a stack allocated buffer into which it
 will construct the udf_string it returns. Since one can not safely build a MemInfo object
 around this stack memory, we store a copy of the udf_string itself next to the MemInfo
-where it can be later used to destroy the underlying data.
+which manages the lifetime of the udf_string.
 */
 extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
 {
