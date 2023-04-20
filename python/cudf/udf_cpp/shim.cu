@@ -693,6 +693,7 @@ extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_s
     udf_string* st_ptr = &(mi_and_str->st);
 
     // We pass a null size here because the udf_string actually exists on the stack
+    // and tracks the size of the string data that it points to.
     NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
 
     // copy the udf_string to the extra heap space
