@@ -167,7 +167,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
                           10,
                           12,
                           false);  // Nulls in third group.
-      col->set_null_mask(std::move(new_null_mask));
+      col->set_null_mask(std::move(new_null_mask), 6);
       return col;
     }();
 
