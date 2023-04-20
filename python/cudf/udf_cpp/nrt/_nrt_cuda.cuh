@@ -59,7 +59,7 @@ struct NRT_MemSys {
     cuda::atomic<size_t, cuda::thread_scope_device> free;
     cuda::atomic<size_t, cuda::thread_scope_device> mi_alloc;
     cuda::atomic<size_t, cuda::thread_scope_device> mi_free;
-} stats;
+  } stats;
 };
 
 /* The Memory System object */
@@ -75,10 +75,7 @@ extern "C" __device__ void NRT_MemInfo_init(
   mi->dtor_info = dtor_info;
   mi->data      = data;
   mi->size      = size;
-  if (TheMSys.stats.enabled)
-  {
-    TheMSys.stats.mi_alloc++;
-  }
+  if (TheMSys.stats.enabled) { TheMSys.stats.mi_alloc++; }
 }
 
 __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
@@ -91,12 +88,19 @@ __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
   return mi;
 }
 
-extern "C" __device__ void NRT_Free(void* ptr) { free(ptr); }
+extern "C" __device__ void NRT_Free(void* ptr)
+{
+  TheMSys.allocator.free(ptr);
+  if (TheMSys.stats.enabled) { TheMSys.stats.free++; }
+}
 
 extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
 
-extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi) { NRT_dealloc(mi); }
-
+extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi)
+{
+  NRT_dealloc(mi);
+  if (TheMSys.stats.enabled) { TheMSys.stats.mi_free++; }
+}
 extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
 {
   if (mi->dtor) /* We have a destructor */
