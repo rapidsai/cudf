@@ -138,7 +138,7 @@ struct upper_lower_fn {
 /**
  * @brief Count output bytes in warp-parallel threads
  *
- * This executes as is one warp per string.
+ * This executes as one warp per string and just computes the output sizes.
  */
 struct count_bytes_fn {
   convert_char_fn converter;
@@ -245,12 +245,13 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
     data_type{type_to_id<size_type>()}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<size_type>();
 
-  auto const count_itr = thrust::make_counting_iterator<size_type>(0);
-
   // first pass, compute output sizes
+  // note: tried to use segmented-reduce approach instead here and it was consistently slower
   count_bytes_fn counter{ccfn, *d_strings, d_offsets};
+  auto const count_itr = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each_n(
     rmm::exec_policy(stream), count_itr, input.size() * cudf::detail::warp_size, counter);
+
   // convert sizes to offsets
   auto const bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
