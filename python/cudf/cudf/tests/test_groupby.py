@@ -2648,7 +2648,13 @@ def test_groupby_freq_week(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2675,7 +2681,13 @@ def test_groupby_freq_day(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2702,7 +2714,13 @@ def test_groupby_freq_min(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2729,7 +2747,13 @@ def test_groupby_freq_s(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(

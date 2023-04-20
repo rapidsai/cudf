@@ -664,6 +664,13 @@ def test_parquet_reader_microsecond_timestamps(datadir):
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        assert got["a"].dtype == cudf.dtype("datetime64[us]")
+        got = got.astype("datetime64[ns]")
+
     assert_eq(expect, got)
 
 
@@ -2513,6 +2520,16 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
 
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        gdf["col_datetime64[ms]"] = gdf["col_datetime64[ms]"].astype(
+            "datetime64[ns]"
+        )
+        gdf["col_datetime64[us]"] = gdf["col_datetime64[us]"].astype(
+            "datetime64[ns]"
+        )
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
