@@ -120,7 +120,15 @@ class writer::impl {
    * @brief Write the intermediate Parquet data into the data sink.
    *
    */
-  void write_parquet_data_to_sink();
+  void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
+                                  table_view const& single_streams_table,
+                                  std::vector<size_type> const& batch_list,
+                                  std::vector<int> const& rg_to_part,
+                                  std::vector<size_t> const& global_rowgroup_base,
+                                  std::vector<int> const& first_rg_in_part,
+                                  hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
+                                  rmm::device_uvector<gpu::EncPage> const& pages,
+                                  uint8_t* host_bfr);
   //  orc_streams& streams,
   //                                  hostdevice_vector<compression_result> const& comp_results,
   //                                  hostdevice_2dvector<gpu::StripeStream> const& strm_descs,

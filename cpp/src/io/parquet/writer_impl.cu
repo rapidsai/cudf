@@ -2101,9 +2101,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
   fill_table_meta(_table_meta, input);
 
-  // int const num_fragments{0};
-  // int const max_page_fragment_size{0};
-
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current
   // writer is still intact. Note that `out_sink_` is intentionally passed by const reference to
@@ -2174,32 +2171,33 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   }();
 
   // Compression/encoding were all successful. Now write the intermediate results.
-  write_parquet_data_to_sink();
+  write_parquet_data_to_sink(updated_agg_meta,
+                             single_streams_table,
+                             batch_list,
+                             rg_to_part,
+                             global_rowgroup_base,
+                             first_rg_in_part,
+                             chunks,
+                             pages,
+                             host_bfr.get());
 
+  _last_write_successful = true;
+}
+
+void writer::impl::write_parquet_data_to_sink(
+  std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
+  table_view const& single_streams_table,
+  std::vector<size_type> const& batch_list,
+  std::vector<int> const& rg_to_part,
+  std::vector<size_t> const& global_rowgroup_base,
+  std::vector<int> const& first_rg_in_part,
+  hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
+  rmm::device_uvector<gpu::EncPage> const& pages,
+  uint8_t* host_bfr)
+{
   _agg_meta = std::move(updated_agg_meta);
 
   auto const num_columns = single_streams_table.num_columns();
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-
-  //
-  //
-  //
-  //
-  //
-
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto const rnext = r + batch_list[b];
     std::vector<std::future<void>> write_tasks;
@@ -2218,13 +2216,13 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
           write_tasks.push_back(_out_sink[p]->device_write_async(
             dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
         } else {
-          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr,
                                         dev_bfr + ck.ck_stat_size,
                                         ck.compressed_size,
                                         cudaMemcpyDefault,
                                         _stream.value()));
           _stream.synchronize();
-          _out_sink[p]->host_write(host_bfr.get(), ck.compressed_size);
+          _out_sink[p]->host_write(host_bfr, ck.compressed_size);
         }
 
         auto& column_chunk_meta = row_group.columns[i].meta_data;
@@ -2289,11 +2287,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
       }
     }
   }
-
-  _last_write_successful = true;
 }
-
-void writer::impl::write_parquet_data_to_sink() {}
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   std::vector<std::string> const& column_chunks_file_path)
