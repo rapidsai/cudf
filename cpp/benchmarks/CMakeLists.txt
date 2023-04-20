@@ -91,7 +91,7 @@ endfunction()
 # This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
 # setting all of the associated properties and linking to build the benchmark
 function(ConfigureNVBench CMAKE_BENCH_NAME)
-  add_executable(${CMAKE_BENCH_NAME} ${ARGN} fixture/nvbench_main.cu)
+  add_executable(${CMAKE_BENCH_NAME} ${ARGN} fixture/nvbench_main.cpp)
   set_target_properties(
     ${CMAKE_BENCH_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
