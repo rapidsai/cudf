@@ -1,24 +1,17 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from libc.stdint cimport int32_t, int64_t, uint8_t
-from libcpp cimport bool
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.exception_handler cimport cudf_exception_handler
 
-ctypedef const scalar constscalar
 
-cdef extern from "cudf/contiguous_split.hpp" namespace "cudf::packed_columns" nogil:
+cdef extern from "cudf/contiguous_split.hpp" namespace \
+        "cudf::packed_columns" nogil:
     cdef struct metadata:
         metadata(vector[uint8_t]&& v)
         const uint8_t* data () except +
