@@ -32,32 +32,24 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/binary_search.h>
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/host_vector.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cstring>
 #include <numeric>
-#include <type_traits>
 #include <utility>
 
 namespace cudf {
