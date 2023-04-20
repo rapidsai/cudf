@@ -396,6 +396,48 @@ TEST_F(TransformTest, StringComparison)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, StringScalarComparison)
+{
+  auto c_0 =
+    cudf::test::strings_column_wrapper({"1", "12", "123", "23"}, {true, true, false, true});
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::string_scalar("2");
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{{true, true, true, false}, {true, true, false, true}};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  // compare with null literal
+  literal_value.set_valid_async(false);
+  auto expected2 = column_wrapper<bool>{{false, false, false, false}, {false, false, false, false}};
+  auto result2   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, NumericScalarComparison)
+{
+  auto c_0   = column_wrapper<int32_t>{1, 12, 123, 23};
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(2);
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{true, false, false, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, CopyColumn)
 {
   auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
