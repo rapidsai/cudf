@@ -119,16 +119,29 @@ class writer::impl {
   /**
    * @brief Write the intermediate Parquet data into the data sink.
    *
+   * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
+   * by `convert_table_to_parquet_data` called in the `write()` function.
+   *
+   * @param updated_agg_meta The updated aggregate data after processing the input
+   * @param batch_list
+   * @param rg_to_part
+   * @param global_rowgroup_base
+   * @param first_rg_in_part
+   * @param chunks
+   * @param pages
+   * @param num_columns
+   * @param out_buff Temporary host output buffer
+   *
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-                                  table_view const& single_streams_table,
                                   std::vector<size_type> const& batch_list,
                                   std::vector<int> const& rg_to_part,
                                   std::vector<size_t> const& global_rowgroup_base,
                                   std::vector<int> const& first_rg_in_part,
                                   hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
                                   rmm::device_uvector<gpu::EncPage> const& pages,
-                                  uint8_t* host_bfr);
+                                  size_type num_columns,
+                                  uint8_t* out_buff);
 
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;
