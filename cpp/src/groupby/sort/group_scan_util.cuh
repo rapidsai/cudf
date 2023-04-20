@@ -124,7 +124,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
         make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
         thrust::identity<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
-      result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr));
+      result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     } else {
       auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
                                                    thrust::identity<ResultDeviceType>{});
