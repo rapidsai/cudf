@@ -1976,15 +1976,15 @@ auto convert_table_to_parquet_data(table_view const& input,
                                            cudaFreeHost};
 
   return std::tuple{std::move(agg_meta),
+                    std::move(chunks),
+                    std::move(pages),
                     std::move(global_rowgroup_base),
                     std::move(first_rg_in_part),
-                    std::move(chunks),
                     std::move(batch_list),
                     std::move(rg_to_part),
                     std::move(uncomp_bfr),
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
-                    std::move(pages),
                     std::move(write_buff),
                     single_streams_table.num_columns()};
 }
@@ -2069,15 +2069,15 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   // If any error occurs, such as out-of-memory exception, the internal state of the current
   // writer is still intact.
   [[maybe_unused]] auto [updated_agg_meta,
+                         chunks,
+                         pages,
                          global_rowgroup_base,
                          first_rg_in_part,
-                         chunks,
                          batch_list,
                          rg_to_part,
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
-                         pages,
                          write_buff,
                          num_columns] = [&] {
     try {
@@ -2109,12 +2109,12 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
   // Compression/encoding were all successful. Now write the intermediate results.
   write_parquet_data_to_sink(updated_agg_meta,
-                             batch_list,
-                             rg_to_part,
-                             global_rowgroup_base,
-                             first_rg_in_part,
                              chunks,
                              pages,
+                             global_rowgroup_base,
+                             first_rg_in_part,
+                             batch_list,
+                             rg_to_part,
                              num_columns,
                              write_buff.get());
 
@@ -2123,12 +2123,12 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
 void writer::impl::write_parquet_data_to_sink(
   std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-  std::vector<size_type> const& batch_list,
-  std::vector<int> const& rg_to_part,
-  std::vector<size_t> const& global_rowgroup_base,
-  std::vector<int> const& first_rg_in_part,
   hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
   rmm::device_uvector<gpu::EncPage> const& pages,
+  std::vector<size_t> const& global_rowgroup_base,
+  std::vector<int> const& first_rg_in_part,
+  std::vector<size_type> const& batch_list,
+  std::vector<int> const& rg_to_part,
   size_type num_columns,
   uint8_t* write_buff)
 {
