@@ -46,8 +46,8 @@ def _quantile_75(x):
 
 def _is_row_of(chunk, obj):
     if isinstance(chunk, cudf.Series) and isinstance(obj, cudf.DataFrame):
-        if len(chunk.index) == len(obj.columns):
-            if (chunk.index.to_pandas() == obj.columns).all():
+        if len(chunk.index) == len(obj._column_names):
+            if (chunk.index.to_pandas() == pd.Index(obj._column_names)).all():
                 return True
     return False
 
