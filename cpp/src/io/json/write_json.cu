@@ -140,9 +140,9 @@ struct struct_scatter_strings_fn {
   column_device_view const col_names;
   size_type const strviews_per_column;
   size_type const num_strviews_per_row;
-  string_view const row_prefix;       //{
-  string_view const row_suffix;       //} or }\n for json-lines
-  string_view const value_separator;  //,
+  string_view const row_prefix;       // {
+  string_view const row_suffix;       // } or }\n for json-lines
+  string_view const value_separator;  // ,
   string_view const narep;            // null
   bool const include_nulls;
   string_view* d_strviews;
@@ -225,7 +225,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                "All columns must be of type string");
   auto constexpr strviews_per_column = 3;  // (for each "column_name:", "value",  "separator")
   auto const num_strviews_per_row    = strings_columns.num_columns() * strviews_per_column + 1;
-  // Eg. { col1: value , col2: value , col3: value } = 1+ 3+3+(3-1) +1 = 10
+  // e.g. {col1: value, col2: value, col3: value} = 1 + 3 + 3 + (3-1) + 1 = 10
 
   auto tbl_device_view = cudf::table_device_view::create(strings_columns, stream);
   auto d_column_names  = column_device_view::create(column_names, stream);

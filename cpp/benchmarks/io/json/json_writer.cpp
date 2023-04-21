@@ -86,7 +86,7 @@ void BM_json_writer_options(nvbench::state& state)
   bool const include_nulls  = state.get_int64("include_nulls");
   auto const rows_per_chunk = state.get_int64("rows_per_chunk");
 
-  if (!(json_lines == false and include_nulls == false) and rows_per_chunk != 1 << 20) {
+  if ((json_lines or include_nulls) and rows_per_chunk != 1 << 20) {
     state.skip("Skipping for unrequired rows_per_chunk combinations");
     return;
   }
