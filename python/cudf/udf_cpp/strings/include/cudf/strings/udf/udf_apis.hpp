@@ -48,8 +48,6 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
  *
  * This will make a copy of the strings in d_string in order to build
  * the output column.
- * The individual udf_strings are also cleared freeing each of their internal
- * device memory buffers.
  *
  * @param d_strings Pointer to device memory of udf_string objects
  * @param size The number of elements in the d_strings array
@@ -63,8 +61,6 @@ std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings
  *
  * This will make a copy of the strings in managed_strings in order to build
  * the output column.
- * The individual managed_udf_strings are also cleared freeing each of their internal
- * device memory buffers.
  *
  * @param managed_strings Pointer to device memory of managed_udf_string objects
  * @param size The number of elements in the managed_strings array
