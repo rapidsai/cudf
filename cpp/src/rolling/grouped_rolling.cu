@@ -279,7 +279,11 @@ __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
                                              size_type idx,
                                              ElementT delta)
 {
-  return subtract_safe(orderby_iter[idx], delta);
+  if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
+    return orderby_iter[idx];
+  } else {
+    return subtract_safe(orderby_iter[idx], delta);
+  }
 }
 
 /**
@@ -291,7 +295,11 @@ __device__ ElementT compute_highest_in_window(ElementIter orderby_iter,
                                               size_type idx,
                                               ElementT delta)
 {
-  return add_safe(orderby_iter[idx], delta);
+  if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
+    return orderby_iter[idx];
+  } else {
+    return add_safe(orderby_iter[idx], delta);
+  }
 }
 
 /**
@@ -869,10 +877,21 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto preceding_value =
-    detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream);
-  auto following_value =
-    detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream);
+  auto [preceding_value, following_value] = [&] {
+    if constexpr (std::is_same_v<OrderByT, cudf::string_view>) {
+      CUDF_EXPECTS(
+        preceding_window.is_unbounded() || preceding_window.is_current_row(),
+        "For STRING order-by column, preceding range has to be either UNBOUNDED or CURRENT ROW.");
+      CUDF_EXPECTS(
+        following_window.is_unbounded() || following_window.is_current_row(),
+        "For STRING order-by column, following range has to be either UNBOUNDED or CURRENT ROW.");
+      return std::pair{cudf::string_view{}, cudf::string_view{}};
+    } else {
+      return std::pair{
+        detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream),
+        detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream)};
+    }
+  }();
 
   if (order_of_orderby_column == cudf::order::ASCENDING) {
     return group_offsets.is_empty() ? range_window_ASC(input,
