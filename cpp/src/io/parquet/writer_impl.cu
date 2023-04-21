@@ -2147,7 +2147,8 @@ void writer::impl::write_parquet_data_to_sink(
         auto const& ck     = chunks[r][i];
         auto const dev_bfr = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
 
-        // Skip the range [0, ck.ck_stat_size) since it has already been copied to host before.
+        // Skip the range [0, ck.ck_stat_size) since it has already been copied to host
+        // and stored in _agg_meta before.
         if (_out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
           write_tasks.push_back(_out_sink[p]->device_write_async(
             dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
@@ -2217,8 +2218,8 @@ void writer::impl::write_parquet_data_to_sink(
           }
 
           _stream.synchronize();
-          _agg_meta->file(p).offset_indexes.push_back(offset_idx);
-          _agg_meta->file(p).column_indexes.push_back(column_idx);
+          _agg_meta->file(p).offset_indexes.emplace_back(std::move(offset_idx));
+          _agg_meta->file(p).column_indexes.emplace_back(std::move(column_idx));
         }
       }
     }
