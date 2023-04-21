@@ -188,7 +188,7 @@ auto two_table_equality(cudf::table_view lhs,
 }
 
 template <typename PhysicalElementComparator>
-auto sort_table(
+auto sorted_order(
   std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
@@ -275,9 +275,9 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
                                   auto const& input,
                                   auto const& comparator,
                                   auto const& expected) {
-    auto const output = sort_table(
+    auto const order = sorted_order(
       preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
   };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
@@ -354,9 +354,9 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
                                   auto const& input,
                                   auto const& comparator,
                                   auto const& expected) {
-    auto const output = sort_table(
+    auto const order = sorted_order(
       preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
   };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
