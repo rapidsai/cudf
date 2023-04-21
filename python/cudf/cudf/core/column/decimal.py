@@ -144,12 +144,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
-                if (
-                    self.dtype.precision == other.dtype.precision
-                    and self.dtype.scale == other.dtype.scale
-                ):
+                if _same_precision_and_scale(self.dtype, other.dtype):
                     other = other.astype(self.dtype)
-
             return other
         if isinstance(other, cudf.Scalar) and isinstance(
             # TODO: Should it be possible to cast scalars of other numerical
@@ -157,9 +153,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
             other.dtype,
             cudf.core.dtypes.DecimalDtype,
         ):
+            if _same_precision_and_scale(self.dtype, other.dtype):
+                other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            return cudf.Scalar(Decimal(other))
+            return cudf.Scalar(Decimal(other), dtype=self.dtype)
         return NotImplemented
 
     def _decimal_quantile(
@@ -404,3 +402,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     )
     precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
     return cudf.Decimal128Dtype(precision=precision, scale=scale)
+
+
+def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
+    return lhs.precision == rhs.precision and lhs.scale == rhs.scale

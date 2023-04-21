@@ -44,8 +44,7 @@ constexpr int32_t XXX{70};  // Mark for null elements
 constexpr int32_t YYY{3};   // Mark for null elements
 
 template <typename T>
-struct TypedUniqueCount : public cudf::test::BaseFixture {
-};
+struct TypedUniqueCount : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedUniqueCount, cudf::test::NumericTypes);
 
@@ -89,15 +88,14 @@ TYPED_TEST(TypedUniqueCount, TableNoNull)
   EXPECT_EQ(gold, cudf::unique_count(input_table, null_equality::EQUAL));
 }
 
-struct UniqueCount : public cudf::test::BaseFixture {
-};
+struct UniqueCount : public cudf::test::BaseFixture {};
 
 TEST_F(UniqueCount, WithNull)
 {
   using T = int32_t;
 
   std::vector<T> input               = {1,   3,  3,  XXX, 31, 1, 8,  2, 0, XXX, XXX,
-                          XXX, 10, 40, 31,  42, 0, 42, 8, 5, XXX};
+                                        XXX, 10, 40, 31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -113,7 +111,7 @@ TEST_F(UniqueCount, IgnoringNull)
   using T = int32_t;
 
   std::vector<T> input               = {1,   YYY, YYY, XXX, 31, 1, 8,  2, 0, XXX, 1,
-                          XXX, 10,  40,  31,  42, 0, 42, 8, 5, XXX};
+                                        XXX, 10,  40,  31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -130,7 +128,7 @@ TEST_F(UniqueCount, WithNansAndNull)
   using T = float;
 
   std::vector<T> input               = {1,   3,  NAN, XXX, 31,  1, 8,   2, 0, XXX, 1,
-                          XXX, 10, 40,  31,  NAN, 0, NAN, 8, 5, XXX};
+                                        XXX, 10, 40,  31,  NAN, 0, NAN, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 

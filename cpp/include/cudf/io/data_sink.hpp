@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
 #include <future>
 #include <memory>
 #include <string>

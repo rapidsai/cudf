@@ -27,8 +27,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringContains : public cudf::benchmark {
-};
+class StringContains : public cudf::benchmark {};
 
 std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t hit_rate)
 {
