@@ -238,7 +238,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - scikit-build>=0.13.1
+          - scikit-build>=0.13.1,<0.17.2
           - rmm==23.4.*
       - output_types: conda
         packages:
