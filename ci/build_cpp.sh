@@ -8,7 +8,7 @@ source rapids-env-update
 export CMAKE_GENERATOR=Ninja
 
 RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/5a58857/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/e67075d/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
 
 rapids-print-env
 
