@@ -19,18 +19,58 @@
 
 #include <cuda_runtime.h>
 
+#include <cstdlib>
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 
-/**
- * @brief Print a backtrace and raise an error if stream is a default stream.
- */
-void check_stream_and_error(cudaStream_t stream)
+// We control whether to override cudf::test::get_default_stream or
+// cudf::get_default_stream with a compile-time flag. Thesee are the two valid
+// options:
+// 1. STREAM_MODE_TESTING=OFF: In this mode, cudf::get_default_stream will
+//    return a custom stream and stream_is_invalid will return true if any CUDA
+//    API is called using any of CUDA's default stream constants
+//    (cudaStreamLegacy, cudaStreamDefault, or cudaStreamPerThread). This check
+//    is sufficient to ensure that cudf is using cudf::get_default_stream
+//    everywhere internally rather than implicitly using stream 0,
+//    cudaStreamDefault, cudaStreamLegacy, thrust execution policies, etc. It
+//    is not sufficient to guarantee a stream-ordered API because it will not
+//    identify places in the code that use cudf::get_default_stream instead of
+//    properly forwarding along a user-provided stream.
+// 2. STREAM_MODE_TESTING=ON: In this mode, cudf::test::get_default_stream
+//    returns a custom stream and stream_is_invalid returns true if any CUDA
+//    API is called using any stream other than cudf::test::get_default_stream.
+//    This is a necessary and sufficient condition to ensure that libcudf is
+//    properly passing streams through all of its (tested) APIs.
+
+namespace cudf {
+
+#ifdef STREAM_MODE_TESTING
+namespace test {
+#endif
+
+rmm::cuda_stream_view const get_default_stream()
 {
+  static rmm::cuda_stream stream{};
+  return {stream};
+}
+
+#ifdef STREAM_MODE_TESTING
+}  // namespace test
+#endif
+
+}  // namespace cudf
+
+bool stream_is_invalid(cudaStream_t stream)
+{
+#ifdef STREAM_MODE_TESTING
+  // In this mode the _only_ valid stream is the one returned by cudf::test::get_default_stream.
+  return (stream != cudf::test::get_default_stream().value());
+#else
   // We explicitly list the possibilities rather than using
   // `cudf::get_default_stream().value()` for two reasons:
   // 1. There is no guarantee that `thrust::device` and the default value of
@@ -39,8 +79,17 @@ void check_stream_and_error(cudaStream_t stream)
   // 2. Using the cudf default stream would require linking against cudf, which
   //    adds unnecessary complexity to the build process (especially in CI)
   //    when this simple approach is sufficient.
-  if (stream == cudaStreamDefault || (stream == cudaStreamLegacy) ||
-      (stream == cudaStreamPerThread)) {
+  return (stream == cudaStreamDefault) || (stream == cudaStreamLegacy) ||
+         (stream == cudaStreamPerThread);
+#endif
+}
+
+/**
+ * @brief Print a backtrace and raise an error if stream is a default stream.
+ */
+void check_stream_and_error(cudaStream_t stream)
+{
+  if (stream_is_invalid(stream)) {
 #ifdef __GNUC__
     // If we're on the wrong stream, print the stack trace from the current frame.
     // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
@@ -109,7 +158,12 @@ void check_stream_and_error(cudaStream_t stream)
 #else
     std::cout << "Backtraces are only when built with a GNU compiler." << std::endl;
 #endif  // __GNUC__
-    throw std::runtime_error("Found unexpected default stream!");
+    char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
+    if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
+      std::cout << "Found unexpected stream!" << std::endl;
+    } else {
+      throw std::runtime_error("Found unexpected stream!");
+    }
   }
 }
 
@@ -288,23 +342,6 @@ DEFINE_OVERLOAD(cudaMallocAsync,
 DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
                 ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                 ARG(ptr, size, memPool, stream));
-
-namespace cudf {
-
-/**
- * @brief Get the current default stream
- *
- * Overload the default function to return a new stream here.
- *
- * @return The current default stream.
- */
-rmm::cuda_stream_view const get_default_stream()
-{
-  static rmm::cuda_stream stream{};
-  return {stream};
-}
-
-}  // namespace cudf
 
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.

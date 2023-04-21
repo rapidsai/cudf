@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,10 +146,9 @@ RepT range_comparable_value_impl(scalar const& range_scalar,
  * @return RepType Value of the range scalar
  */
 template <typename OrderByType>
-range_rep_type<OrderByType> range_comparable_value(
-  range_window_bounds const& range_bounds,
-  data_type const& order_by_data_type = data_type{type_to_id<OrderByType>()},
-  rmm::cuda_stream_view stream        = cudf::get_default_stream())
+range_rep_type<OrderByType> range_comparable_value(range_window_bounds const& range_bounds,
+                                                   data_type const& order_by_data_type,
+                                                   rmm::cuda_stream_view stream)
 {
   auto const& range_scalar = range_bounds.range_scalar();
   using range_type         = cudf::detail::range_type<OrderByType>;

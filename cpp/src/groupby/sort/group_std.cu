@@ -26,6 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -33,6 +34,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace groupby {
@@ -48,7 +50,7 @@ struct var_transform {
   size_type const* d_group_labels;
   size_type ddof;
 
-  __device__ ResultType operator()(size_type i)
+  __device__ ResultType operator()(size_type i) const
   {
     if (d_values.is_null(i)) return 0.0;
 
@@ -75,15 +77,19 @@ void reduce_by_key_fn(column_device_view const& values,
                       ResultType* d_result,
                       rmm::cuda_stream_view stream)
 {
-  auto var_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    var_transform<ResultType, decltype(values_iter)>{
-      values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof});
+  auto var_fn = var_transform<ResultType, decltype(values_iter)>{
+    values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof};
+  auto const itr = thrust::make_counting_iterator<size_type>(0);
+  // Using a temporary buffer for intermediate transform results instead of
+  // using the transform-iterator directly in thrust::reduce_by_key
+  // improves compile-time significantly.
+  auto vars = rmm::device_uvector<ResultType>(values.size(), stream);
+  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), vars.begin(), var_fn);
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
-                        var_iter,
+                        vars.begin(),
                         thrust::make_discard_iterator(),
                         d_result);
 }

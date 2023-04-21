@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "timezone.cuh"
+#include <cudf/detail/timezone.cuh>
 
 #include "orc.hpp"
 
@@ -294,7 +294,7 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint32_t num_columns,
                          uint32_t num_stripes,
                          size_t first_row,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level,

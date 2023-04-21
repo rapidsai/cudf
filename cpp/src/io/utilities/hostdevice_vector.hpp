@@ -30,6 +30,13 @@
 
 #include <variant>
 
+inline bool hostdevice_vector_uses_pageable_buffer()
+{
+  static bool const use_pageable =
+    cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
+  return use_pageable;
+}
+
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
  * a mirror host pinned memory for the CPU.
@@ -56,9 +63,7 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    auto const use_pageable_buffer =
-      cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
-    if (use_pageable_buffer) {
+    if (hostdevice_vector_uses_pageable_buffer()) {
       h_data_owner = thrust::host_vector<T>();
     } else {
       h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();

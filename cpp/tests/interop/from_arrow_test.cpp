@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -264,7 +264,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));

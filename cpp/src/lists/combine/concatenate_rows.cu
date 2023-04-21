@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // concatenate the input table into one column.
   std::vector<column_view> cols(input.num_columns());
   std::copy(input.begin(), input.end(), cols.begin());
-  auto concat = cudf::detail::concatenate(cols, stream);
+  auto concat = cudf::detail::concatenate(cols, stream, rmm::mr::get_current_device_resource());
 
   // whether or not we should be generating a null mask at all
   auto const build_null_mask = concat->has_nulls();
@@ -246,7 +246,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
             auto const row_index = i % num_rows;
             return row_null_counts[row_index] != num_columns;
           },
-          stream);
+          stream,
+          rmm::mr::get_current_device_resource());
       }
       // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
       return cudf::detail::valid_if(
@@ -257,7 +258,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
           auto const row_index = i % num_rows;
           return row_null_counts[row_index] == 0;
         },
-        stream);
+        stream,
+        rmm::mr::get_current_device_resource());
     }();
     concat->set_null_mask(std::move(null_mask), null_count);
   }

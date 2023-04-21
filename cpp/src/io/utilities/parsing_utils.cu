@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,7 +126,8 @@ cudf::size_type find_all_from_set(device_span<char const> data,
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
   const int grid_size = divCeil(data.size(), (size_t)block_size);
 
-  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(1, stream);
+  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
+    1, stream, rmm::mr::get_current_device_resource());
   for (char key : keys) {
     count_and_set_positions<T><<<grid_size, block_size, 0, stream.value()>>>(
       data.data(), data.size(), result_offset, key, d_count.data(), positions);
@@ -143,7 +144,8 @@ cudf::size_type find_all_from_set(host_span<char const> data,
                                   rmm::cuda_stream_view stream)
 {
   rmm::device_buffer d_chunk(std::min(max_chunk_bytes, data.size()), stream);
-  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(1, stream);
+  auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
+    1, stream, rmm::mr::get_current_device_resource());
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
