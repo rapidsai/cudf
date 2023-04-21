@@ -1148,7 +1148,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         # Nulls are not yet supported
         # TODO: don't check this twice under `engine='auto'`
-        if self.grouping.has_nulls:
+        if self.grouping._obj._has_nulls:
             raise ValueError("Nulls not yet supported with groupby JIT engine")
 
         chunk_results = jit_groupby_apply(
@@ -1291,6 +1291,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         1  2     1
         2  3     1
         """
+
+        if self.obj.empty:
+            return self.obj
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()

@@ -93,7 +93,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     def _has_nulls(self):
-        any(col.has_nulls() for col in self._data.values())
+        return any(col.has_nulls() for col in self._data.values())
 
     def serialize(self):
         header = {

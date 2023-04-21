@@ -206,7 +206,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
 
 def _jit_groupby_eligible(frame, func, args):
-    return (not frame.has_nulls) and _can_be_jitted(frame, func, args)
+    return (not frame._has_nulls) and _can_be_jitted(frame, func, args)
 
 
 def _can_be_jitted(frame, func, args):
