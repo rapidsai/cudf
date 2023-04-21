@@ -9,18 +9,7 @@ from cudf._lib.cpp.expressions cimport (
     literal,
     operation,
 )
-from cudf._lib.cpp.scalar.scalar cimport numeric_scalar, string_scalar
-
-ctypedef enum scalar_type_t:
-    INT
-    DOUBLE
-    STRING
-
-
-ctypedef union int_or_double_or_string_scalar_ptr:
-    unique_ptr[numeric_scalar[int64_t]] int_ptr
-    unique_ptr[numeric_scalar[double]] double_ptr
-    unique_ptr[string_scalar] string_ptr
+from cudf._lib.cpp.scalar.scalar cimport numeric_scalar, scalar, string_scalar
 
 
 cdef class Expression:
@@ -28,8 +17,7 @@ cdef class Expression:
 
 
 cdef class Literal(Expression):
-    cdef scalar_type_t c_scalar_type
-    cdef int_or_double_or_string_scalar_ptr c_scalar
+    cdef unique_ptr[scalar] c_scalar
 
 
 cdef class ColumnReference(Expression):

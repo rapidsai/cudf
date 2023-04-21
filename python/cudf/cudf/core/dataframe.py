@@ -7070,7 +7070,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               Specifically, `&` must be used for bitwise operators on integers,
               not `and`, which is specifically for the logical and between
               booleans.
-            * Only numerical types are currently supported.
+            * Only numerical types are currently supported on all operators.
+            * String types are supported only on comparison operators.
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.

@@ -5,7 +5,6 @@ from enum import Enum
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
-from libcpp.string cimport string
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
 from cudf._lib.cpp.types cimport size_type
@@ -78,37 +77,20 @@ class TableReference(Enum):
 # restrictive at the moment.
 cdef class Literal(Expression):
     def __cinit__(self, value):
-        # TODO: Would love to find a better solution than unions for literals.
-        cdef int intval
-        cdef double doubleval
-        cdef string stringval
-
         if isinstance(value, int):
-            self.c_scalar_type = scalar_type_t.INT
-            intval = value
-            self.c_scalar.int_ptr = make_unique[numeric_scalar[int64_t]](
-                intval, True
-            )
+            self.c_scalar.reset(new numeric_scalar[int64_t](value, True))
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
-                <numeric_scalar[int64_t] &>dereference(self.c_scalar.int_ptr)
+                <numeric_scalar[int64_t] &>dereference(self.c_scalar)
             )
         elif isinstance(value, float):
-            self.c_scalar_type = scalar_type_t.DOUBLE
-            doubleval = value
-            self.c_scalar.double_ptr = make_unique[numeric_scalar[double]](
-                doubleval, True
-            )
+            self.c_scalar.reset(new numeric_scalar[double](value, True))
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
-                <numeric_scalar[double] &>dereference(self.c_scalar.double_ptr)
+                <numeric_scalar[double] &>dereference(self.c_scalar)
             )
         elif isinstance(value, str):
-            self.c_scalar_type = scalar_type_t.STRING
-            stringval = value.encode()
-            self.c_scalar.string_ptr = make_unique[string_scalar](
-                stringval, True
-            )
+            self.c_scalar.reset(new string_scalar(value.encode(), True))
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
-                <string_scalar &>dereference(self.c_scalar.string_ptr)
+                <string_scalar &>dereference(self.c_scalar)
             )
 
 
