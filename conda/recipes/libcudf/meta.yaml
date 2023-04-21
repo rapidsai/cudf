@@ -39,12 +39,13 @@ requirements:
     {% if cuda_major == "11" %}
     - {{ compiler('cuda11') }} {{ cuda_version }}
     {% else %}
-    - {{ compiler('cuda') }} {{ cuda_version }}
-    - cuda-cudart ={{ cuda_version }}
-    - cuda-cudart-dev ={{ cuda_version }}
-    - cuda-cudart-static ={{ cuda_version }}
-    - cuda-cupti ={{ cuda_version }}
-    - cuda-driver-dev {{ cuda_driver_version }}
+    - cuda-version {{ cuda_version }}
+    - {{ compiler('cuda') }}
+    - cuda-cudart
+    - cuda-cudart-dev
+    - cuda-cudart-static
+    - cuda-cupti
+    - cuda-driver-dev
     - libcufile         # [linux64]
     - libcufile-dev     # [linux64]
     - libcufile-static  # [linux64]
@@ -57,16 +58,20 @@ requirements:
     - cudatoolkit ={{ cuda_version }}
     - libcurand {{ cuda11_libcurand_host_version }}
     - libcurand-dev {{ cuda11_libcurand_host_version }}
-    {% else %}
-    - cuda-cudart ={{ cuda_version }}
-    - cuda-cudart-dev ={{ cuda_version }}
-    - cuda-cudart-static ={{ cuda_version }}
-    - libcurand {{ libcurand_host_version }}
-    - libcurand-dev {{ libcurand_host_version }}
-    {% endif %}
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
+    {% else %}
+    - cuda-version {{ cuda_version }}
+    - cuda-cudart
+    - cuda-cudart-dev
+    - cuda-cudart-static
+    - libcurand
+    - libcurand-dev
+    - cuda-nvrtc
+    - cuda-nvrtc-dev
+    - cuda-nvtx
+    {% endif %}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -398,16 +403,22 @@ outputs:
         {% if cuda_major == "11" %}
         - {{ compiler('cuda11') }} {{ cuda_version }}
         {% else %}
-        - {{ compiler('cuda') }} {{ cuda_version }}
-        - cuda-cudart ={{ cuda_version }}
-        - cuda-cudart-dev ={{ cuda_version }}
-        - cuda-cudart-static ={{ cuda_version }}
+        - cuda-version {{ cuda_version }}
+        - {{ compiler('cuda') }}
+        - cuda-cudart
+        - cuda-cudart-dev
+        - cuda-cudart-static
         {% endif %}
         - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        {% if cuda_major == "11" %}
         - cuda-nvtx ={{ cuda_version }}
+        {% else %}
+        - cuda-version {{ cuda_version }}
+        - cuda-nvtx
+        {% endif %}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
