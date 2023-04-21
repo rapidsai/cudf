@@ -34,8 +34,6 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <random>
-
 namespace cudf {
 namespace experimental {
 
@@ -145,8 +143,10 @@ table_view remove_struct_child_offsets(table_view table)
  * `List<int>`, and `float`.
  *
  * When list columns are present, depending on the input flag `decompose_lists`, the decomposition
- * can be performed similarly to pure structs but list parent columns are NOT pruned. For example,
- * if the original table has a column `List<Struct<int, float>>`,
+ * can be performed similarly to pure structs but list parent columns are NOT pruned. The list
+ * parents are still needed to define the range of elements in the leaf that belong to the same row.
+ *
+ * For example, if the original table has a column `List<Struct<int, float>>`,
  *
  *    L
  *    |
@@ -162,12 +162,13 @@ table_view remove_struct_child_offsets(table_view table)
  *  |
  *  i
  *
- * The list parents are still needed to define the range of elements in the leaf that belong to the
- * same row.
+ * Note that the `decompose_lists` flag should be specified as follow:
+ *  - `true` when preprocessing a table for equality comparison.
+ *  - `false` when preprocessing a table for lexicographic comparision, since we need to keep all
+ *    lists columns intact to input into the next preprocessing step.
  *
  * @param table The table whose struct columns to decompose.
- * @param decompose_lists Whether to decompose lists columns (preprocessing for equality comparator)
- *        or output them unchanged (preprocessing for lexicographic comparator)
+ * @param decompose_lists Whether to decompose lists columns
  * @param column_order The per-column order if using output with lexicographic comparison
  * @param null_precedence The per-column null precedence
  * @return A tuple containing a table with all struct columns decomposed, new corresponding column
@@ -544,14 +545,8 @@ transform_lists_of_structs(column_view const& lhs,
     }
     // else == child is not STRUCT or LIST: just go to the end of this function, no transformation.
   }
-  // Any structs-of-lists should be decomposed into empty struct type `Struct<>` before being
-  // processed by this function.
-  else if (lhs.type().id() == type_id::STRUCT) {
-    CUDF_EXPECTS(std::all_of(lhs.child_begin(),
-                             lhs.child_end(),
-                             [](auto const& child) { return child.type().id() != type_id::LIST; }),
-                 "Structs columns should be decomposed before reaching this function.");
-  }
+  // else if (lhs.type().id() == type_id::STRUCT): Any structs-of-lists should be decomposed into
+  // empty struct type `Struct<>` before being processed by this function so we do nothing here.
 
   // Passthrough: nothing changed.
   return {lhs, rhs_opt, std::move(out_cols_lhs), std::move(out_cols_rhs)};
@@ -617,67 +612,15 @@ transform_lists_of_structs(table_view const& lhs,
           std::move(out_cols_rhs)};
 }
 
-/**
- * @brief Check if there is any lists-of-structs column in the input table that has a floating-point
- * column nested inside it.
- *
- * @param input The tables to check
- * @return The check result
- */
-bool lists_of_structs_have_floating_point(table_view const& input)
-{
-  // Check if any (nested) column is floating-point type.
-  std::function<bool(column_view const&)> const has_nested_floating_point = [&](auto const& col) {
-    return col.type().id() == type_id::FLOAT32 || col.type().id() == type_id::FLOAT64 ||
-           std::any_of(col.child_begin(), col.child_end(), has_nested_floating_point);
-  };
-
-  return std::any_of(input.begin(), input.end(), [&](auto const& col) {
-    // Any structs-of-lists should be decomposed into empty struct type `Struct<>` before being
-    // processed by this function.
-    if (col.type().id() == type_id::STRUCT) {
-      CUDF_EXPECTS(
-        std::all_of(col.child_begin(),
-                    col.child_end(),
-                    [](auto const& child) { return child.type().id() != type_id::LIST; }),
-        "Structs columns should be decomposed before reaching this function.");
-    }
-
-    // We are looking for lists-of-structs.
-    if (col.type().id() != type_id::LIST) { return false; }
-
-    auto const child = col.child(lists_column_view::child_column_index);
-    if (child.type().id() == type_id::STRUCT &&
-        std::any_of(child.child_begin(), child.child_end(), has_nested_floating_point)) {
-      return true;
-    }
-    if (child.type().id() == type_id::LIST &&
-        lists_of_structs_have_floating_point(table_view{{child}})) {
-      return true;
-    }
-
-    // Found a lists column of some-type other than STRUCT or LIST.
-    return false;
-  });
-}
-
-uint64_t generate_random_id()
-{
-  auto gen  = std::mt19937{std::random_device{}()};
-  auto dist = std::uniform_int_distribution<uint64_t>{};
-  return dist(gen);
-}
-
 }  // namespace
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
   table_view const& preprocessed_input,
   std::vector<int>&& verticalized_col_depths,
-  std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
+  std::vector<std::unique_ptr<column>>&& transformed_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
-  uint64_t preprocessed_id,
-  bool ranked_floating_point,
+  bool ranked_children,
   rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(preprocessed_input);
@@ -699,18 +642,16 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(d_depths),
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
-                             std::move(structs_transformed_columns),
-                             preprocessed_id,
-                             ranked_floating_point));
+                             std::move(transformed_columns),
+                             ranked_children));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_t),
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
-                             std::move(structs_transformed_columns),
-                             preprocessed_id,
-                             ranked_floating_point));
+                             std::move(transformed_columns),
+                             ranked_children));
   }
 }
 
@@ -724,18 +665,16 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
   // Unused variables are generated for rhs table which is not available here.
-  [[maybe_unused]] auto [transformed_t, unused_0, structs_transformed_columns, unused_1] =
+  [[maybe_unused]] auto [transformed_t, unused_0, transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
 
-  auto const ranked_floating_point = structs_transformed_columns.size() > 0 &&
-                                     lists_of_structs_have_floating_point(decomposed_input);
+  auto const ranked_children = transformed_columns.size() > 0;
   return create_preprocessed_table(transformed_t,
                                    std::move(verticalized_col_depths),
-                                   std::move(structs_transformed_columns),
+                                   std::move(transformed_columns),
                                    new_column_order,
                                    new_null_precedence,
-                                   generate_random_id(),
-                                   ranked_floating_point,
+                                   ranked_children,
                                    stream);
 }
 
@@ -760,38 +699,27 @@ preprocessed_table::create(table_view const& lhs,
     decompose_structs(rhs, false /*no decompose lists*/, column_order, null_precedence);
 
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
-  auto [transformed_lhs,
-        transformed_rhs_opt,
-        structs_transformed_columns_lhs,
-        structs_transformed_columns_rhs] =
+  auto [transformed_lhs, transformed_rhs_opt, transformed_columns_lhs, transformed_columns_rhs] =
     transform_lists_of_structs(decomposed_lhs, decomposed_rhs, new_null_precedence_lhs, stream);
 
   // This should be the same for both lhs and rhs but not all the time, such as when one table
-  // has 0 rows  so we check separately for each of them.
-  auto const ranked_floating_point_lhs = structs_transformed_columns_lhs.size() > 0 &&
-                                         lists_of_structs_have_floating_point(decomposed_lhs);
-  auto const ranked_floating_point_rhs = structs_transformed_columns_rhs.size() > 0 &&
-                                         lists_of_structs_have_floating_point(decomposed_rhs);
-
-  // The same ID will be assigned to all preprocessed_table(s) so we can know later if they are
-  // compatible to compare against each other.
-  auto const preprocessed_id = generate_random_id();
+  // has 0 rows while the other has >0 rows. So we check separately for each of them.
+  auto const ranked_children_lhs = transformed_columns_lhs.size() > 0;
+  auto const ranked_children_rhs = transformed_columns_rhs.size() > 0;
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(verticalized_col_depths_lhs),
-                                    std::move(structs_transformed_columns_lhs),
+                                    std::move(transformed_columns_lhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    preprocessed_id,
-                                    ranked_floating_point_lhs,
+                                    ranked_children_lhs,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(verticalized_col_depths_rhs),
-                                    std::move(structs_transformed_columns_rhs),
+                                    std::move(transformed_columns_rhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    preprocessed_id,
-                                    ranked_floating_point_rhs,
+                                    ranked_children_rhs,
                                     stream)};
 }
 
@@ -802,38 +730,33 @@ preprocessed_table::preprocessed_table(
   rmm::device_uvector<size_type>&& depths,
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-  std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
-  uint64_t preprocessed_id,
-  bool ranked_floating_point)
+  std::vector<std::unique_ptr<column>>&& transformed_columns,
+  bool ranked_children)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
     _depths(std::move(depths)),
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
-    _structs_transformed_columns(std::move(structs_transformed_columns)),
-    _preprocessed_id(preprocessed_id),
-    _ranked_floating_point(ranked_floating_point)
+    _transformed_columns(std::move(transformed_columns)),
+    _ranked_children(ranked_children)
 {
 }
 
-preprocessed_table::preprocessed_table(
-  table_device_view_owner&& table,
-  rmm::device_uvector<order>&& column_order,
-  rmm::device_uvector<null_order>&& null_precedence,
-  rmm::device_uvector<size_type>&& depths,
-  std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
-  uint64_t preprocessed_id,
-  bool ranked_floating_point)
+preprocessed_table::preprocessed_table(table_device_view_owner&& table,
+                                       rmm::device_uvector<order>&& column_order,
+                                       rmm::device_uvector<null_order>&& null_precedence,
+                                       rmm::device_uvector<size_type>&& depths,
+                                       std::vector<std::unique_ptr<column>>&& transformed_columns,
+                                       bool ranked_children)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
     _depths(std::move(depths)),
     _dremel_data{},
     _dremel_device_views{},
-    _structs_transformed_columns(std::move(structs_transformed_columns)),
-    _preprocessed_id(preprocessed_id),
-    _ranked_floating_point(ranked_floating_point)
+    _transformed_columns(std::move(transformed_columns)),
+    _ranked_children(ranked_children)
 {
 }
 
