@@ -1,7 +1,4 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
-
-from types import MethodType
-
 from llvmlite import ir
 from numba.core import cgutils, config
 from numba.core.runtime.nrtdynmod import (
@@ -12,12 +9,8 @@ from numba.core.runtime.nrtdynmod import (
     _pointer_type,
     incref_decref_ty,
 )
-
-# install numpy registries into numba contexts
-from numba.core.typing import npydecl, templates
 from numba.cuda import descriptor
 from numba.cuda.target import CUDATargetContext
-from numba.np import arraymath, linalg, polynomial  # noqa: F401
 
 
 def _define_nrt_decref(module, atomic_decr):
@@ -114,35 +107,3 @@ _cuda_nrt_library = compile_nrt_functions(
     descriptor.cuda_target.target_context
 )
 numba_cuda_runtime = _cuda_nrt_library._get_ptxes()[0].encode()
-
-
-def install_registry(self, registry):
-    """
-    Install a *registry* (a templates.Registry instance) of function,
-    attribute and global declarations.
-    """
-    try:
-        loader = self._registries[registry]
-    except KeyError:
-        loader = templates.RegistryLoader(registry)
-        self._registries[registry] = loader
-    for ftcls in loader.new_registrations("functions"):
-        self.insert_function(ftcls(self))
-    for ftcls in loader.new_registrations("attributes"):
-        self.insert_attributes(ftcls(self))
-    for gv, gty in loader.new_registrations("globals"):
-        existing = self._lookup_global(gv)
-        if existing is None:
-            self.insert_global(gv, gty)
-        else:
-            # A type was already inserted, see if we can add to it
-            newty = existing.augment(gty)
-            if newty is None and existing != gty:
-                raise TypeError("cannot augment %s with %s" % (existing, gty))
-            self._remove_global(gv)
-            self._insert_global(gv, newty)
-
-
-meth = MethodType(install_registry, descriptor.cuda_target.typing_context)
-descriptor.cuda_target.typing_context.install_registry = meth
-descriptor.cuda_target.typing_context.install_registry(npydecl.registry)
