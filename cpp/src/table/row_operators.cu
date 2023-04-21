@@ -627,7 +627,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
 {
   check_lex_compatibility(preprocessed_input);
 
-  auto d_t = table_device_view::create(preprocessed_input, stream);
+  auto d_table = table_device_view::create(preprocessed_input, stream);
   auto d_column_order =
     detail::make_device_uvector_async(column_order, stream, rmm::mr::get_current_device_resource());
   auto d_null_precedence = detail::make_device_uvector_async(
@@ -638,7 +638,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   if (detail::has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
     return std::shared_ptr<preprocessed_table>(
-      new preprocessed_table(std::move(d_t),
+      new preprocessed_table(std::move(d_table),
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
@@ -648,7 +648,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              ranked_children));
   } else {
     return std::shared_ptr<preprocessed_table>(
-      new preprocessed_table(std::move(d_t),
+      new preprocessed_table(std::move(d_table),
                              std::move(d_column_order),
                              std::move(d_null_precedence),
                              std::move(d_depths),
@@ -667,11 +667,11 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
 
   // Unused variables are generated for rhs table which is not available here.
-  [[maybe_unused]] auto [transformed_t, unused_0, transformed_columns, unused_1] =
+  [[maybe_unused]] auto [transformed_input, unused_0, transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
 
   auto const ranked_children = transformed_columns.size() > 0;
-  return create_preprocessed_table(transformed_t,
+  return create_preprocessed_table(transformed_input,
                                    std::move(verticalized_col_depths),
                                    std::move(transformed_columns),
                                    new_column_order,
