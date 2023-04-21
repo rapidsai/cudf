@@ -576,7 +576,7 @@ struct parse_duration {
           item_length++;  // :
           timeparts->second = parse_second(ptr + item_length, item_length);
           break;
-        case 'r':  // hh:MM:SS AM/PM
+        case 'r':         // hh:MM:SS AM/PM
           timeparts->hour = parse_hour(ptr, item_length);
           item_length++;  // :
           timeparts->minute = parse_minute(ptr + item_length, item_length);

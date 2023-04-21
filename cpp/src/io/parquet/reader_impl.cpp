@@ -236,8 +236,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
   }
 }
 
-void reader::impl::prepare_data(size_type skip_rows,
-                                size_type num_rows,
+void reader::impl::prepare_data(int64_t skip_rows,
+                                std::optional<size_type> const& num_rows,
                                 bool uses_custom_row_bounds,
                                 host_span<std::vector<size_type> const> row_group_indices)
 {
@@ -323,7 +323,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     // Return user metadata
     out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
     out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                              out_metadata.per_file_user_data[0].end()};
+                                       out_metadata.per_file_user_data[0].end()};
 
     // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
@@ -332,8 +332,8 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read(size_type skip_rows,
-                                       size_type num_rows,
+table_with_metadata reader::impl::read(int64_t skip_rows,
+                                       std::optional<size_type> const& num_rows,
                                        bool uses_custom_row_bounds,
                                        host_span<std::vector<size_type> const> row_group_indices)
 {
@@ -354,7 +354,7 @@ table_with_metadata reader::impl::read_chunk()
   }
 
   prepare_data(0 /*skip_rows*/,
-               -1 /*num_rows, `-1` means unlimited*/,
+               std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/);
   return read_chunk_internal(true);
@@ -363,7 +363,7 @@ table_with_metadata reader::impl::read_chunk()
 bool reader::impl::has_next()
 {
   prepare_data(0 /*skip_rows*/,
-               -1 /*num_rows, `-1` means unlimited*/,
+               std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/);
   return _current_read_chunk < _chunk_read_info.size();

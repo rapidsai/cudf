@@ -89,7 +89,7 @@ struct replace_multi_regex_fn {
         auto begin = ch_pos;
         auto end   = nchars;
         if (!prog.is_empty() && prog.find(idx, d_str, begin, end) > 0)
-          d_ranges[ptn_idx] = found_range{begin, end};  // found a match
+          d_ranges[ptn_idx] = found_range{begin, end};      // found a match
         else
           d_ranges[ptn_idx] = found_range{nchars, nchars};  // this pattern is done
       }

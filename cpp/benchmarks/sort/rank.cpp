@@ -22,8 +22,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class Rank : public cudf::benchmark {
-};
+class Rank : public cudf::benchmark {};
 
 static void BM_rank(benchmark::State& state, bool nulls)
 {

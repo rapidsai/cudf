@@ -74,7 +74,7 @@ ConfigureTest(
   COLUMN_TEST
   column/bit_cast_test.cpp
   column/column_device_view_test.cu
-  column/column_test.cu
+  column/column_test.cpp
   column/column_view_device_span_test.cpp
   column/column_view_shallow_test.cpp
   column/compound_test.cu
@@ -248,6 +248,7 @@ ConfigureTest(
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
+ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
 
 ConfigureTest(
   CSV_TEST io/csv_test.cpp
@@ -295,8 +296,8 @@ endif()
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
-  sort/rank_test.cpp
+  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp sort/sort_test.cpp
+  sort/stable_sort_tests.cpp sort/rank_test.cpp
   GPUS 1
   PERCENT 70
 )
@@ -305,7 +306,7 @@ ConfigureTest(
 # * copying tests ---------------------------------------------------------------------------------
 ConfigureTest(
   COPYING_TEST
-  copying/concatenate_tests.cu
+  copying/concatenate_tests.cpp
   copying/copy_if_else_nested_tests.cpp
   copying/copy_range_tests.cpp
   copying/copy_tests.cpp
@@ -506,6 +507,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
   text/normalize_tests.cpp

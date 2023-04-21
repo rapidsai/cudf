@@ -29,8 +29,7 @@
 
 #include <limits>
 
-class StringReplace : public cudf::benchmark {
-};
+class StringReplace : public cudf::benchmark {};
 
 enum replace_type { scalar, slice, multi };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,10 +95,10 @@ class groupby {
  public:
   groupby() = delete;
   ~groupby();
-  groupby(groupby const&) = delete;
-  groupby(groupby&&)      = delete;
+  groupby(groupby const&)            = delete;
+  groupby(groupby&&)                 = delete;
   groupby& operator=(groupby const&) = delete;
-  groupby& operator=(groupby&&) = delete;
+  groupby& operator=(groupby&&)      = delete;
 
   /**
    * @brief Construct a groupby object with the specified `keys`
@@ -377,8 +377,8 @@ class groupby {
                                                          ///< indicates null order
                                                          ///< of each column
   std::unique_ptr<detail::sort::sort_groupby_helper>
-    _helper;  ///< Helper object
-              ///< used by sort based implementation
+    _helper;                                             ///< Helper object
+                                                         ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object
