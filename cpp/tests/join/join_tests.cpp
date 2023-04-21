@@ -1584,8 +1584,7 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   EXPECT_EQ(col_size * col_size, output_size);
 }
 
-struct JoinDictionaryTest : public cudf::test::BaseFixture {
-};
+struct JoinDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
 {
@@ -1880,7 +1879,7 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
                                          ""},
                                         {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
   auto gold_ages0_col  = column_wrapper<int32_t>{{48, 27, 25, 31, 351, -1, -1, -1, -1, -1},
-                                                {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+                                                 {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
 
   auto gold_is_human0_col =
     column_wrapper<bool>{{true, true, false, false, false, false, false, false, false, false},
@@ -1907,7 +1906,7 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
                                          "Angua von Überwald"},
                                         {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
   auto gold_ages1_col  = column_wrapper<int32_t>{{-1, -1, -1, -1, -1, 27, 27, 48, 27, 25},
-                                                {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                                                 {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
 
   auto gold_is_human1_col =
     column_wrapper<bool>{{false, false, false, false, false, true, true, true, true, false},

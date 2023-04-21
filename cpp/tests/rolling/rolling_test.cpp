@@ -41,8 +41,7 @@
 #include <type_traits>
 #include <vector>
 
-class RollingStringTest : public cudf::test::BaseFixture {
-};
+class RollingStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingStringTest, NoNullStringMinMaxCount)
 {
@@ -164,8 +163,7 @@ TEST_F(RollingStringTest, ZeroWindowSize)
 }
 
 // =========================================================================================
-class RollingStructTest : public cudf::test::BaseFixture {
-};
+class RollingStructTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 {
@@ -646,16 +644,13 @@ class RollingTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-class RollingVarStdTest : public cudf::test::BaseFixture {
-};
+class RollingVarStdTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
 
-class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {
-};
+class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {};
 
-class RollingErrorTest : public cudf::test::BaseFixture {
-};
+class RollingErrorTest : public cudf::test::BaseFixture {};
 
 // negative sizes
 TEST_F(RollingErrorTest, NegativeMinPeriods)
@@ -1394,8 +1389,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 }
 
 template <typename T>
-struct FixedPointTests : public cudf::test::BaseFixture {
-};
+struct FixedPointTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
@@ -1564,8 +1558,7 @@ TYPED_TEST(FixedPointTests, VarStd)
   }
 }
 
-class RollingDictionaryTest : public cudf::test::BaseFixture {
-};
+class RollingDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingDictionaryTest, Count)
 {

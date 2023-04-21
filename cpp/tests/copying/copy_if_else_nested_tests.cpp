@@ -26,12 +26,10 @@
 
 using namespace cudf::test::iterators;
 
-struct CopyIfElseNestedTest : cudf::test::BaseFixture {
-};
+struct CopyIfElseNestedTest : cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedCopyIfElseNestedTest : CopyIfElseNestedTest {
-};
+struct TypedCopyIfElseNestedTest : CopyIfElseNestedTest {};
 
 TYPED_TEST_SUITE(TypedCopyIfElseNestedTest, cudf::test::FixedWidthTypes);
 

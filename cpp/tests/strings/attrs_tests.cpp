@@ -26,8 +26,7 @@
 
 #include <vector>
 
-struct StringsAttributesTest : public cudf::test::BaseFixture {
-};
+struct StringsAttributesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsAttributesTest, CodePoints)
 {

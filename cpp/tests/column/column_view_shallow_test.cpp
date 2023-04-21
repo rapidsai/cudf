@@ -75,8 +75,7 @@ std::unique_ptr<cudf::column> example_column()
 }
 
 template <typename T>
-struct ColumnViewShallowTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewShallowTests : public cudf::test::BaseFixture {};
 
 using AllTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::CompoundTypes>;
 TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);
@@ -160,7 +159,7 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
@@ -262,7 +261,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL),
+        col->child(0).size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_child_updated));
     }
@@ -326,7 +326,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
@@ -428,7 +428,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL), col->size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_FALSE(is_shallow_equivalent(col_view, col_child_updated));
     }

@@ -25,19 +25,15 @@
 using FCW = cudf::test::fixed_width_column_wrapper<int32_t>;
 using LCW = cudf::test::lists_column_wrapper<int32_t>;
 
-class ExplodeTest : public cudf::test::BaseFixture {
-};
+class ExplodeTest : public cudf::test::BaseFixture {};
 
-class ExplodeOuterTest : public cudf::test::BaseFixture {
-};
+class ExplodeOuterTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class ExplodeTypedTest : public cudf::test::BaseFixture {
-};
+class ExplodeTypedTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class ExplodeOuterTypedTest : public cudf::test::BaseFixture {
-};
+class ExplodeOuterTypedTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ExplodeTypedTest, cudf::test::FixedPointTypes);
 

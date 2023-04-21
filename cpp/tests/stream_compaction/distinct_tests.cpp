@@ -54,11 +54,9 @@ using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
-struct DistinctKeepAny : public cudf::test::BaseFixture {
-};
+struct DistinctKeepAny : public cudf::test::BaseFixture {};
 
-struct DistinctKeepFirstLastNone : public cudf::test::BaseFixture {
-};
+struct DistinctKeepFirstLastNone : public cudf::test::BaseFixture {};
 
 TEST_F(DistinctKeepAny, StringKeyColumn)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,8 +57,7 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
 }
 
 template <typename T>
-struct IsNull : public cudf::test::BaseFixture {
-};
+struct IsNull : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNull, cudf::test::NumericTypes);
 
@@ -108,8 +107,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 }
 
 template <typename T>
-struct IsNotNull : public cudf::test::BaseFixture {
-};
+struct IsNotNull : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNotNull, cudf::test::NumericTypes);
 
@@ -159,8 +157,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
 }
 
 template <typename T>
-struct IsNAN : public cudf::test::BaseFixture {
-};
+struct IsNAN : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNAN, cudf::test::FloatingPointTypes);
 
@@ -212,8 +209,7 @@ TYPED_TEST(IsNAN, NonFloatingColumn)
 }
 
 template <typename T>
-struct IsNotNAN : public cudf::test::BaseFixture {
-};
+struct IsNotNAN : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNotNAN, cudf::test::FloatingPointTypes);
 
@@ -265,8 +261,7 @@ TYPED_TEST(IsNotNAN, NonFloatingColumn)
 }
 
 template <typename T>
-struct FixedPointUnaryTests : public cudf::test::BaseFixture {
-};
+struct FixedPointUnaryTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointUnaryTests, cudf::test::FixedPointTypes);
 

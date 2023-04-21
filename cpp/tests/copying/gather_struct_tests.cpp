@@ -56,12 +56,10 @@ using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
 auto constexpr null_index = std::numeric_limits<cudf::offset_type>::max();
 
-struct StructGatherTest : public cudf::test::BaseFixture {
-};
+struct StructGatherTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedStructGatherTest : public cudf::test::BaseFixture {
-};
+struct TypedStructGatherTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedStructGatherTest, cudf::test::FixedWidthTypes);
 

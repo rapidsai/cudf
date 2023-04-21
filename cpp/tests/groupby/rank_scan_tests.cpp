@@ -71,15 +71,12 @@ void test_rank_scans(cudf::column_view const& keys,
                    cudf::sorted::YES);
 }
 
-struct groupby_rank_scan_test : public cudf::test::BaseFixture {
-};
+struct groupby_rank_scan_test : public cudf::test::BaseFixture {};
 
-struct groupby_rank_scan_test_failures : public cudf::test::BaseFixture {
-};
+struct groupby_rank_scan_test_failures : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct typed_groupby_rank_scan_test : public cudf::test::BaseFixture {
-};
+struct typed_groupby_rank_scan_test : public cudf::test::BaseFixture {};
 
 using testing_type_set = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                             cudf::test::FloatingPointTypes,
@@ -357,7 +354,8 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
 
   auto const definitely_null_structs = [&] {
     auto struct_column = get_struct_column();
-    struct_column->set_null_mask(cudf::create_null_mask(num_rows, cudf::mask_state::ALL_NULL));
+    struct_column->set_null_mask(cudf::create_null_mask(num_rows, cudf::mask_state::ALL_NULL),
+                                 num_rows);
     return struct_column;
   }();
 

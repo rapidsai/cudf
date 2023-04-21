@@ -26,8 +26,7 @@
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-class HashTest : public cudf::test::BaseFixture {
-};
+class HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(HashTest, MultiValue)
 {
@@ -343,8 +342,7 @@ TEST_F(HashTest, EmptyDeepList)
 }
 
 template <typename T>
-class HashTestTyped : public cudf::test::BaseFixture {
-};
+class HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashTestTyped, cudf::test::FixedWidthTypes);
 
@@ -392,8 +390,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
 }
 
 template <typename T>
-class HashTestFloatTyped : public cudf::test::BaseFixture {
-};
+class HashTestFloatTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
@@ -431,8 +428,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*spark_col, *spark_col_neg_nan);
 }
 
-class SparkMurmurHash3Test : public cudf::test::BaseFixture {
-};
+class SparkMurmurHash3Test : public cudf::test::BaseFixture {};
 
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
@@ -846,8 +842,7 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
   */
 }
 
-class MD5HashTest : public cudf::test::BaseFixture {
-};
+class MD5HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(MD5HashTest, MultiValue)
 {
@@ -971,8 +966,7 @@ TEST_F(MD5HashTest, StringListsNulls)
 }
 
 template <typename T>
-class MD5HashTestTyped : public cudf::test::BaseFixture {
-};
+class MD5HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MD5HashTestTyped, cudf::test::NumericTypes);
 
@@ -1031,8 +1025,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
 }
 
 template <typename T>
-class MD5HashListTestTyped : public cudf::test::BaseFixture {
-};
+class MD5HashListTestTyped : public cudf::test::BaseFixture {};
 
 using NumericTypesNoBools =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -1065,8 +1058,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 }
 
 template <typename T>
-class MD5HashTestFloatTyped : public cudf::test::BaseFixture {
-};
+class MD5HashTestFloatTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MD5HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
