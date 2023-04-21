@@ -164,6 +164,7 @@
  *   @defgroup nvtext_edit_distance Edit Distance
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
+ *   @defgroup nvtext_minhash MinHashing
  * @}
  * @defgroup utility_apis Utilities
  * @{
