@@ -164,7 +164,7 @@ table_view remove_struct_child_offsets(table_view table)
  *
  * Note that the `decompose_lists` flag should be specified as follow:
  *  - `true` when preprocessing a table for equality comparison.
- *  - `false` when preprocessing a table for lexicographic comparision, since we need to keep all
+ *  - `false` when preprocessing a table for lexicographic comparison, since we need to keep all
  *    lists columns intact to input into the next preprocessing step.
  *
  * @param table The table whose struct columns to decompose.
