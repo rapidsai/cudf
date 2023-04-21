@@ -454,7 +454,7 @@ transform_lists_of_structs(column_view const& lhs,
   // (`order::ASCENDING`), we have `transformed_input = [ [0, 2], [0, 1] ]`. Sorting of
   // `transformed_input` will produce the same result as sorting `input` regardless of sorting
   // order (ASC or DESC).
-  auto const compute_ranks = [&](column_view const& input) {
+  auto const compute_ranks = [&](auto const& input) {
     return cudf::detail::rank(input,
                               rank_method::DENSE,
                               order::ASCENDING,
@@ -543,10 +543,12 @@ transform_lists_of_structs(column_view const& lhs,
         }
       }
     }
-    // else == child is not STRUCT or LIST: just go to the end of this function, no transformation.
+    // else: child is not STRUCT or LIST: just go to the end of this function, no transformation.
   }
-  // else if (lhs.type().id() == type_id::STRUCT): Any structs-of-lists should be decomposed into
-  // empty struct type `Struct<>` before being processed by this function so we do nothing here.
+  // else: lhs.type().id() != type_id::LIST.
+  // In such situations, lhs.type().id() can still be type_id::STRUCT. However, any
+  // structs-of-lists should be decomposed into empty struct type `Struct<>` before being
+  // processed by this function so we do nothing here.
 
   // Passthrough: nothing changed.
   return {lhs, rhs_opt, std::move(out_cols_lhs), std::move(out_cols_rhs)};
@@ -566,8 +568,8 @@ transform_lists_of_structs(column_view const& lhs,
  *        the order `null_order::BEFORE` will be used for all columns.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple consisting of new table_view representing the transformed input, along with
- *         the ranks column (of `size_type` type) and possibly new list offsets generated during the
- *         transformation process
+ *         the ranks columns (of `size_type` type) and possibly new list offsets generated during
+ *         the transformation process
  */
 std::tuple<table_view,
            std::optional<table_view>,
@@ -595,8 +597,8 @@ transform_lists_of_structs(table_view const& lhs,
         null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
         stream);
 
-    transformed_lhs_cvs.push_back(transformed_lhs);
-    if (rhs) { transformed_rhs_cvs.push_back(transformed_rhs_opt.value()); }
+    transformed_lhs_cvs.emplace_back(std::move(transformed_lhs));
+    if (rhs) { transformed_rhs_cvs.emplace_back(std::move(transformed_rhs_opt.value())); }
 
     out_cols_lhs.insert(out_cols_lhs.end(),
                         std::make_move_iterator(curr_out_cols_lhs.begin()),
