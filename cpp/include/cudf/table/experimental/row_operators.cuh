@@ -1085,7 +1085,7 @@ class two_table_comparator {
    * multiple comparators.
    *
    * If the input tables have nested types such as lists-of-structs,
-   * which will be transformed into lists-of-integers during preprocesing,
+   * which will be transformed into lists-of-integers during preprocessing,
    * the preprocessed_table(s) must have been generated together using the factory function
    * `preprocessed_table::create(table_view const&, table_view const&)`.
    *
