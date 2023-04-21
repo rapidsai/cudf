@@ -373,27 +373,16 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
               cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
               expected_rhs);
 
-    if constexpr (std::is_floating_point_v<TypeParam>) {
-      EXPECT_THROW(test_sort(preprocessed_lhs,
-                             lhs,
-                             cudf::experimental::row::lexicographic::physical_element_comparator{},
-                             expected_lhs),
-                   cudf::logic_error);
-      EXPECT_THROW(test_sort(preprocessed_rhs,
-                             rhs,
-                             cudf::experimental::row::lexicographic::physical_element_comparator{},
-                             expected_rhs),
-                   cudf::logic_error);
-    } else {
-      test_sort(preprocessed_lhs,
-                lhs,
-                cudf::experimental::row::lexicographic::physical_element_comparator{},
-                expected_lhs);
-      test_sort(preprocessed_rhs,
-                rhs,
-                cudf::experimental::row::lexicographic::physical_element_comparator{},
-                expected_rhs);
-    }
+    EXPECT_THROW(test_sort(preprocessed_lhs,
+                           lhs,
+                           cudf::experimental::row::lexicographic::physical_element_comparator{},
+                           expected_lhs),
+                 cudf::logic_error);
+    EXPECT_THROW(test_sort(preprocessed_rhs,
+                           rhs,
+                           cudf::experimental::row::lexicographic::physical_element_comparator{},
+                           expected_rhs),
+                 cudf::logic_error);
   };
 
   // Generate preprocessed data for both lhs and lhs at the same time.
@@ -410,26 +399,6 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
       cudf::experimental::row::lexicographic::preprocessed_table::create(
         rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
-  }
-
-  // Test creating two_table_comparator using preprocessed_table(s).
-  {
-    auto const [preprocessed_lhs, preprocessed_rhs] =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
-        lhs, rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
-    EXPECT_NO_THROW(cudf::experimental::row::lexicographic::two_table_comparator(preprocessed_lhs,
-                                                                                 preprocessed_rhs));
-  }
-  {
-    auto const preprocessed_lhs =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
-        lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
-    auto const preprocessed_rhs =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
-        rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
-    EXPECT_THROW(cudf::experimental::row::lexicographic::two_table_comparator(preprocessed_lhs,
-                                                                              preprocessed_rhs),
-                 cudf::logic_error);
   }
 }
 
