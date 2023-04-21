@@ -77,9 +77,6 @@ struct page_state_s {
   int32_t dict_pos;  // write position of dictionary indices
   int32_t src_pos;   // input read position of final output value
   int32_t ts_scale;  // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
-  uint32_t nz_idx[non_zero_buffer_size];    // circular buffer of non-null value positions
-  uint32_t dict_idx[non_zero_buffer_size];  // Dictionary index, boolean, or string offset values
-  uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
 
   // repetition/definition level decoding
   int32_t input_value_count;                  // how many values of the input we've processed
@@ -97,6 +94,14 @@ struct page_state_s {
   PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info];
   // points to either nesting_decode_cache above when possible, or to the global source otherwise
   PageNestingDecodeInfo* nesting_info;
+};
+
+// buffers only used in the decode kernel.  separated from page_state_s to keep
+// shared memory usage in other kernels (eg, gpuComputePageSizes) down.
+struct page_state_buffers_s {
+  uint32_t nz_idx[non_zero_buffer_size];    // circular buffer of non-null value positions
+  uint32_t dict_idx[non_zero_buffer_size];  // Dictionary index, boolean, or string offset values
+  uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
 };
 
 /**
@@ -323,6 +328,7 @@ __device__ void gpuDecodeStream(
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
  * @param[in] t Warp1 thread ID (0..31)
@@ -333,9 +339,11 @@ __device__ void gpuDecodeStream(
  * additional values.
  */
 template <bool sizes_only>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
+  volatile page_state_s* s,
+  [[maybe_unused]] volatile page_state_buffers_s* sb,
+  int target_pos,
+  int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -411,7 +419,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_st
       }
 
       // if we're not computing sizes, store off the dictionary index
-      if constexpr (!sizes_only) { s->dict_idx[rolling_index(pos + t)] = dict_idx; }
+      if constexpr (!sizes_only) { sb->dict_idx[rolling_index(pos + t)] = dict_idx; }
     }
 
     // if we're computing sizes, add the length(s)
@@ -441,12 +449,16 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_st
  * @brief Performs RLE decoding of dictionary indexes, for when dict_size=1
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target write position
  * @param[in] t Thread ID
  *
  * @return The new output position
  */
-__device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, int t)
+__device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
+                                    volatile page_state_buffers_s* sb,
+                                    int target_pos,
+                                    int t)
 {
   const uint8_t* end = s->data_end;
   int pos            = s->dict_pos;
@@ -493,7 +505,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
       } else {
         dict_idx = s->dict_val;
       }
-      s->dict_idx[rolling_index(pos + t)] = dict_idx;
+      sb->dict_idx[rolling_index(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -505,13 +517,17 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
  * processed
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
  * @param[in] t Thread ID
  *
  * @return Total length of strings processed
  */
 template <bool sizes_only>
-__device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int target_pos, int t)
+__device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
+                                              [[maybe_unused]] volatile page_state_buffers_s* sb,
+                                              int target_pos,
+                                              int t)
 {
   int pos       = s->dict_pos;
   int total_len = 0;
@@ -532,8 +548,8 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
         len = 0;
       }
       if constexpr (!sizes_only) {
-        s->dict_idx[rolling_index(pos)] = k;
-        s->str_len[rolling_index(pos)]  = len;
+        sb->dict_idx[rolling_index(pos)] = k;
+        sb->str_len[rolling_index(pos)]  = len;
       }
       k += len;
       total_len += len;
@@ -550,12 +566,13 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
  * @brief Retrieves string information for a string at the specified source position
  *
  * @param[in] s Page state input
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  *
  * @return A pair containing a pointer to the string and its length
  */
-inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s,
-                                                                        int src_pos)
+inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(
+  volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos)
 {
   const char* ptr = nullptr;
   size_t len      = 0;
@@ -563,7 +580,7 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile
   if (s->dict_base) {
     // String dictionary
     uint32_t dict_pos =
-      (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] * sizeof(string_index_pair) : 0;
+      (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] * sizeof(string_index_pair) : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
       const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
       ptr             = src->first;
@@ -571,10 +588,10 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile
     }
   } else {
     // Plain encoding
-    uint32_t dict_pos = s->dict_idx[rolling_index(src_pos)];
+    uint32_t dict_pos = sb->dict_idx[rolling_index(src_pos)];
     if (dict_pos <= (uint32_t)s->dict_size) {
       ptr = reinterpret_cast<const char*>(s->data_start + dict_pos);
-      len = s->str_len[rolling_index(src_pos)];
+      len = sb->str_len[rolling_index(src_pos)];
     }
   }
 
@@ -585,12 +602,16 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile
  * @brief Output a string descriptor
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
-inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, void* dstv)
+inline __device__ void gpuOutputString(volatile page_state_s* s,
+                                       volatile page_state_buffers_s* sb,
+                                       int src_pos,
+                                       void* dstv)
 {
-  auto [ptr, len] = gpuGetStringData(s, src_pos);
+  auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
   if (s->dtype_len == 4) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
@@ -608,13 +629,15 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
 /**
  * @brief Output a boolean
  *
- * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputBoolean(volatile page_state_s* s, int src_pos, uint8_t* dst)
+inline __device__ void gpuOutputBoolean(volatile page_state_buffers_s* sb,
+                                        int src_pos,
+                                        uint8_t* dst)
 {
-  *dst = s->dict_idx[rolling_index(src_pos)];
+  *dst = sb->dict_idx[rolling_index(src_pos)];
 }
 
 /**
@@ -681,10 +704,14 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @brief Convert an INT96 Spark timestamp to 64-bit timestamp
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[out] dst Pointer to row output data
  */
-inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src_pos, int64_t* dst)
+inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
+                                               volatile page_state_buffers_s* sb,
+                                               int src_pos,
+                                               int64_t* dst)
 {
   using cuda::std::chrono::duration_cast;
 
@@ -693,7 +720,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
+    dict_pos = (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -750,10 +777,14 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
  * @brief Output a 64-bit timestamp
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src_pos, int64_t* dst)
+inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
+                                               volatile page_state_buffers_s* sb,
+                                               int src_pos,
+                                               int64_t* dst)
 {
   const uint8_t* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
@@ -761,7 +792,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
+    dict_pos = (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -827,16 +858,20 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @brief Output a fixed-length byte array as int.
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
 template <typename T>
-__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s, int src_pos, T* dst)
+__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
+                                                volatile page_state_buffers_s* sb,
+                                                int src_pos,
+                                                T* dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
   uint32_t const pos =
-    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0) : src_pos) *
+    (s->dict_base ? ((s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0) : src_pos) *
     dtype_len_in;
   uint32_t const dict_size = s->dict_size;
 
@@ -858,18 +893,22 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s, int sr
  * @brief Output a small fixed-length value
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
 template <typename T>
-inline __device__ void gpuOutputFast(volatile page_state_s* s, int src_pos, T* dst)
+inline __device__ void gpuOutputFast(volatile page_state_s* s,
+                                     volatile page_state_buffers_s* sb,
+                                     int src_pos,
+                                     T* dst)
 {
   const uint8_t* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
+    dict_pos = (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain
@@ -884,21 +923,20 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s, int src_pos, T* d
  * @brief Output a N-byte value
  *
  * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
  * @param[in] src_pos Source position
  * @param[in] dst8 Pointer to row output data
  * @param[in] len Length of element
  */
-static __device__ void gpuOutputGeneric(volatile page_state_s* s,
-                                        int src_pos,
-                                        uint8_t* dst8,
-                                        int len)
+static __device__ void gpuOutputGeneric(
+  volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos, uint8_t* dst8, int len)
 {
   const uint8_t* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
+    dict_pos = (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain
@@ -956,7 +994,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   int chunk_idx;
 
   // Fetch page info
-  if (!t) s->page = *p;
+  if (!t) {
+    s->page         = *p;
+    s->nesting_info = nullptr;
+  }
   __syncthreads();
 
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
@@ -1369,10 +1410,12 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  *
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] s Local page information
+ * @param[out] sb Page state buffer output
  * @param[in] t Thread index
  */
 static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
                                                              page_state_s* s,
+                                                             page_state_buffers_s* sb,
                                                              int t)
 {
   // max nesting depth of the column
@@ -1457,7 +1500,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
         int const src_pos = nesting_info->valid_count + thread_valid_count;
         int const dst_pos = nesting_info->value_count + thread_value_count;
         // nz_idx is a mapping of src buffer indices to destination buffer indices
-        s->nz_idx[rolling_index(src_pos)] = dst_pos;
+        sb->nz_idx[rolling_index(src_pos)] = dst_pos;
       }
 
       // compute warp and thread value counts for the -next- nesting level. we need to
@@ -1540,10 +1583,14 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
  * Only runs on 1 warp.
  *
  * @param[in] s The local page state
+ * @param[out] sb Page state buffer output
  * @param[in] target_leaf_count Target count of non-null leaf values to generate indices for
  * @param[in] t Thread index
  */
-__device__ void gpuDecodeLevels(page_state_s* s, int32_t target_leaf_count, int t)
+__device__ void gpuDecodeLevels(page_state_s* s,
+                                page_state_buffers_s* sb,
+                                int32_t target_leaf_count,
+                                int t)
 {
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -1563,7 +1610,7 @@ __device__ void gpuDecodeLevels(page_state_s* s, int32_t target_leaf_count, int 
                                            : s->lvl_count[level_type::DEFINITION];
 
     // process what we got back
-    gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, t);
+    gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, sb, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     __syncwarp();
   }
@@ -1672,11 +1719,11 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   if (s->dict_base) {
-    auto const [new_target_pos, len] = gpuDecodeDictionaryIndices<true>(s, target_pos, t);
+    auto const [new_target_pos, len] = gpuDecodeDictionaryIndices<true>(s, nullptr, target_pos, t);
     target_pos                       = new_target_pos;
     str_len                          = len;
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-    str_len = gpuInitStringDescriptors<true>(s, target_pos, t);
+    str_len = gpuInitStringDescriptors<true>(s, nullptr, target_pos, t);
   }
   if (!t) { *(volatile int32_t*)&s->dict_pos = target_pos; }
   return str_len;
@@ -1845,6 +1892,26 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+// Copies null counts back to `nesting_decode` at the end of scope
+struct null_count_back_copier {
+  page_state_s* s;
+  int t;
+  __device__ ~null_count_back_copier()
+  {
+    if (s->nesting_info != nullptr and s->nesting_info == s->nesting_decode_cache) {
+      int depth = 0;
+      while (depth < s->page.num_output_nesting_levels) {
+        int const thread_depth = depth + t;
+        if (thread_depth < s->page.num_output_nesting_levels) {
+          s->page.nesting_decode[thread_depth].null_count =
+            s->nesting_decode_cache[thread_depth].null_count;
+        }
+        depth += blockDim.x;
+      }
+    }
+  }
+};
+
 /**
  * @brief Kernel for co the column data stored in the pages
  *
@@ -1862,11 +1929,14 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) page_state_buffers_s state_buffers;
 
-  page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
+  page_state_s* const s          = &state_g;
+  page_state_buffers_s* const sb = &state_buffers;
+  int page_idx                   = blockIdx.x;
+  int t                          = threadIdx.x;
   int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
@@ -1915,18 +1985,18 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, target_pos, t);
+      gpuDecodeLevels(s, sb, target_pos, t);
     } else if (t < out_thread0) {
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
-        src_target_pos = gpuDecodeDictionaryIndices<false>(s, src_target_pos, t & 0x1f).first;
+        src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
       } else if ((s->col.data_type & 7) == BOOLEAN) {
-        src_target_pos = gpuDecodeRleBooleans(s, src_target_pos, t & 0x1f);
+        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-        gpuInitStringDescriptors<false>(s, src_target_pos, t & 0x1f);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
@@ -1935,7 +2005,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
-      int dst_pos = s->nz_idx[rolling_index(src_pos)];
+      int dst_pos = sb->nz_idx[rolling_index(src_pos)];
 
       // for the flat hierarchy case we will be reading from the beginning of the value stream,
       // regardless of the value of first_row. so adjust our destination offset accordingly.
@@ -1967,7 +2037,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (dtype == BYTE_ARRAY) {
           if (s->col.converted_type == DECIMAL) {
-            auto const [ptr, len]        = gpuGetStringData(s, val_src_pos);
+            auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
             auto const decimal_precision = s->col.decimal_precision;
             if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
               gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
@@ -1977,60 +2047,47 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
               gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
             }
           } else {
-            gpuOutputString(s, val_src_pos, dst);
+            gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == BOOLEAN) {
-          gpuOutputBoolean(s, val_src_pos, static_cast<uint8_t*>(dst));
+          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
-            case INT32: gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst)); break;
-            case INT64: gpuOutputFast(s, val_src_pos, static_cast<uint2*>(dst)); break;
+            case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
+            case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
             default:
               if (s->dtype_len_in <= sizeof(int32_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int32_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
               } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int64_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
               } else {
-                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<__int128_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<__int128_t*>(dst));
               }
               break;
           }
         } else if (dtype == INT96) {
-          gpuOutputInt96Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
+          gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst));
+            gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
           } else if (s->ts_scale) {
-            gpuOutputInt64Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
+            gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
           } else {
-            gpuOutputFast(s, val_src_pos, static_cast<uint2*>(dst));
+            gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
           }
         } else if (dtype_len == 4) {
-          gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst));
+          gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
         } else {
-          gpuOutputGeneric(s, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
+          gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
         }
       }
 
       if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
     }
     __syncthreads();
-  }
-
-  // if we are using the nesting decode cache, copy null count back
-  if (s->nesting_info == s->nesting_decode_cache) {
-    int depth = 0;
-    while (depth < s->page.num_output_nesting_levels) {
-      int const thread_depth = depth + t;
-      if (thread_depth < s->page.num_output_nesting_levels) {
-        s->page.nesting_decode[thread_depth].null_count =
-          s->nesting_decode_cache[thread_depth].null_count;
-      }
-      depth += blockDim.x;
-    }
   }
 }
 

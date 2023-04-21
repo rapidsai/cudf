@@ -30,8 +30,7 @@
 #include <thrust/sequence.h>
 
 template <typename T>
-struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
-};
+struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -112,8 +111,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
   EXPECT_FALSE(s.is_valid());
 }
 
-struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {
-};
+struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
 __global__ void test_string_value(cudf::string_scalar_device_view s,
                                   const char* value,

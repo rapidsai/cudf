@@ -46,8 +46,7 @@ auto make_view_vector(std::vector<T> const& columns)
   return views;
 }
 
-class HashPartition : public cudf::test::BaseFixture {
-};
+class HashPartition : public cudf::test::BaseFixture {};
 
 TEST_F(HashPartition, InvalidColumnsToHash)
 {
@@ -238,8 +237,7 @@ TEST_F(HashPartition, CustomSeedValue)
 }
 
 template <typename T>
-class HashPartitionFixedWidth : public cudf::test::BaseFixture {
-};
+class HashPartitionFixedWidth : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
 

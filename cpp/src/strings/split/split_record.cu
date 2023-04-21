@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
@@ -46,7 +47,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return make_empty_column(type_id::LIST); }
+  if (input.is_empty()) {
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
+  }
   if (input.size() == input.null_count()) {
     auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
     auto results = make_empty_column(type_id::STRING);
