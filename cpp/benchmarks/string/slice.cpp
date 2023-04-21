@@ -31,8 +31,7 @@
 
 #include <limits>
 
-class StringSlice : public cudf::benchmark {
-};
+class StringSlice : public cudf::benchmark {};
 
 enum slice_type { position, multi_position, delimiter, multi_delimiter };
 
@@ -44,7 +43,7 @@ static void BM_slice(benchmark::State& state, slice_type rt)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   cudf::strings_column_view input(column->view());
-  auto starts_itr = thrust::constant_iterator<cudf::size_type>(1);
+  auto starts_itr = thrust::constant_iterator<cudf::size_type>(max_str_length / 3);
   auto stops_itr  = thrust::constant_iterator<cudf::size_type>(max_str_length / 2);
   cudf::test::fixed_width_column_wrapper<int32_t> starts(starts_itr, starts_itr + n_rows);
   cudf::test::fixed_width_column_wrapper<int32_t> stops(stops_itr, stops_itr + n_rows);
@@ -54,7 +53,9 @@ static void BM_slice(benchmark::State& state, slice_type rt)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
-      case position: cudf::strings::slice_strings(input, 1, max_str_length / 2); break;
+      case position:
+        cudf::strings::slice_strings(input, max_str_length / 3, max_str_length / 2);
+        break;
       case multi_position: cudf::strings::slice_strings(input, starts, stops); break;
       case delimiter: cudf::strings::slice_strings(input, std::string{" "}, 1); break;
       case multi_delimiter:
@@ -73,7 +74,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int const len_mult   = 2;
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 

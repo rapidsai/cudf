@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,18 +81,18 @@ class string_view {
     using pointer           = char_utf8*;
     using iterator_category = std::input_iterator_tag;
     __device__ inline const_iterator(const string_view& str, size_type pos);
-    const_iterator(const const_iterator& mit) = default;
-    const_iterator(const_iterator&& mit)      = default;
+    const_iterator(const const_iterator& mit)        = default;
+    const_iterator(const_iterator&& mit)             = default;
     const_iterator& operator=(const const_iterator&) = default;
-    const_iterator& operator=(const_iterator&&) = default;
+    const_iterator& operator=(const_iterator&&)      = default;
     __device__ inline const_iterator& operator++();
     __device__ inline const_iterator operator++(int);
     __device__ inline const_iterator& operator+=(difference_type);
-    __device__ inline const_iterator operator+(difference_type);
+    __device__ inline const_iterator operator+(difference_type) const;
     __device__ inline const_iterator& operator--();
     __device__ inline const_iterator operator--(int);
     __device__ inline const_iterator& operator-=(difference_type);
-    __device__ inline const_iterator operator-(difference_type);
+    __device__ inline const_iterator operator-(difference_type) const;
     __device__ inline bool operator==(const const_iterator&) const;
     __device__ inline bool operator!=(const const_iterator&) const;
     __device__ inline bool operator<(const const_iterator&) const;
@@ -104,10 +104,12 @@ class string_view {
     [[nodiscard]] __device__ inline size_type byte_offset() const;
 
    private:
+    friend class string_view;
     const char* p{};
     size_type bytes{};
     size_type char_pos{};
     size_type byte_pos{};
+    __device__ inline const_iterator(string_view const& str, size_type pos, size_type offset);
     /// @endcond
   };
 

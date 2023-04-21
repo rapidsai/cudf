@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,13 +93,13 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
     list_int64_data.begin(), list_int64_data.end(), list_int64_data_validity.begin());
   auto list_offsets_column =
     cudf::test::fixed_width_column_wrapper<int32_t>(list_offsets.begin(), list_offsets.end());
-  auto list_mask = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
+  auto [list_mask, list_nulls] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
     bool_data_validity.begin(), bool_data_validity.end()));
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
-                                               cudf::UNKNOWN_NULL_COUNT,
-                                               std::move(*(list_mask.first))));
+                                               list_nulls,
+                                               std::move(*list_mask)));
   auto int_column = cudf::test::fixed_width_column_wrapper<int64_t>(
                       int64_data.begin(), int64_data.end(), validity.begin())
                       .release();
@@ -109,10 +109,10 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   vector_of_columns cols;
   cols.push_back(move(int_column));
   cols.push_back(move(str_column));
-  auto mask = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
+  auto [null_mask, null_count] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
     bool_data_validity.begin(), bool_data_validity.end()));
-  columns.emplace_back(cudf::make_structs_column(
-    length, std::move(cols), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first))));
+  columns.emplace_back(
+    cudf::make_structs_column(length, std::move(cols), null_count, std::move(*null_mask)));
 
   auto int64array = get_arrow_array<int64_t>(int64_data, validity);
 
@@ -154,12 +154,10 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
       schema, {int64array, string_array, dict_array, boolarray, list_array, struct_array}));
 }
 
-struct ToArrowTest : public cudf::test::BaseFixture {
-};
+struct ToArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -287,10 +285,10 @@ TEST_F(ToArrowTest, StructColumn)
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
-  auto mask =
+  auto [null_mask, null_count] =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), null_count, std::move(*null_mask));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
@@ -556,8 +554,7 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
 
 struct ToArrowTestSlice
   : public ToArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(ToArrowTestSlice, SliceTest)
 {

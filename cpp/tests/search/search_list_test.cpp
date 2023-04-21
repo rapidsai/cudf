@@ -44,8 +44,7 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::TimestampTypes>;
 
 template <typename T>
-struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {
-};
+struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TypedListsContainsTestScalarNeedle, TestTypes);
 
 TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInput)
@@ -220,8 +219,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
 }
 
 template <typename T>
-struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {
-};
+struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedListContainsTestColumnNeedles, TestTypes);
 
@@ -349,8 +347,7 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
-struct ListLowerBound : public cudf::test::BaseFixture {
-};
+struct ListLowerBound : public cudf::test::BaseFixture {};
 
 TEST_F(ListLowerBound, ListWithNulls)
 {
