@@ -228,16 +228,13 @@ TEST_F(StringsCaseTest, Ascii)
   results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto sview = cudf::slice(input, {1, 3}).front();
-  auto eview = cudf::slice(expected, {1, 3}).front();
-
-  results = cudf::strings::to_upper(cudf::strings_column_view(sview));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, eview);
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 
 TEST_F(StringsCaseTest, LongStrings)
 {
-  // average larger than AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
+  // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
   cudf::test::strings_column_wrapper input{
     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
@@ -260,11 +257,8 @@ TEST_F(StringsCaseTest, LongStrings)
   results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto sview = cudf::slice(input, {1, 3}).front();
-  auto eview = cudf::slice(expected, {1, 3}).front();
-
-  results = cudf::strings::to_upper(cudf::strings_column_view(sview));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, eview);
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)

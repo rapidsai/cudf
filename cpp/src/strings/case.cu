@@ -221,7 +221,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // This check incurs ~20% performance hit for smaller strings and so we only use it
   // after the threshold check above. The check makes very little impact for larger strings
   // but results in a large performance gain when the input contains only single-byte characters.
-  // Using count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
+  // The count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
   bool const multi_byte_chars =
     thrust::count_if(
       rmm::exec_policy(stream), input.chars_begin(), input.chars_end(), [] __device__(auto chr) {
