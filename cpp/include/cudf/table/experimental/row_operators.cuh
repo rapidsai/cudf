@@ -682,9 +682,10 @@ struct preprocessed_table {
    * be passed to the constructor of `lexicographic::self_comparator` or
    * `lexicographic::two_table_comparator` to avoid preprocessing again.
    *
-   * Note that the output of this factory function cannot be used in `two_table_comparator` if the
-   * input table contains lists-of-structs having floating-point children column. In such cases,
-   * please use the overload `preprocessed_table::create(table_view const&, table_view const&,...)`.
+   * Note that the output of this factory function should not be used in `two_table_comparator` if
+   * the input table contains lists-of-structs. In such cases, please use the overload
+   * `preprocessed_table::create(table_view const&, table_view const&,...)` to preprocess both input
+   * tables at the same time.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
@@ -693,8 +694,8 @@ struct preprocessed_table {
    * @param null_precedence Optional, an array having the same length as the number of columns in
    *        the input tables that indicates how null values compare to all other. If it is empty,
    *        the order `null_order::BEFORE` will be used for all columns.
-   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
-   * @return A shared pointer to a preprocessed table.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
+   * @return A shared pointer to a preprocessed table
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     host_span<order const> column_order,
@@ -719,7 +720,7 @@ struct preprocessed_table {
    * @param null_precedence Optional, an array having the same length as the number of columns in
    *        the input tables that indicates how null values compare to all other. If it is empty,
    *        the order `null_order::BEFORE` will be used for all columns.
-   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
    * @return A pair of shared pointers to the preprocessed tables
    */
   static std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>> create(
@@ -750,6 +751,7 @@ struct preprocessed_table {
    * @param ranked_children Flag indicating if the input table was preprocessed to transform
    *        any nested child column into an integer column using `cudf::rank`
    * @param stream The stream to launch kernels and h->d copies on while preprocessing
+   * @return A shared pointer to a preprocessed table
    */
   static std::shared_ptr<preprocessed_table> create_preprocessed_table(
     table_view const& preprocessed_input,
@@ -781,8 +783,8 @@ struct preprocessed_table {
    *        contain an empty `dremel_device_view`. As such, this uvector has as many elements as
    *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
    *        long as the number of list columns).
-   * @param structs_transformed_columns Store the intermediate columns generated from transforming
-   *        lists-of-structs columns into lists-of-integers columns using `cudf::rank()`
+   * @param transformed_columns Store the intermediate columns generated from transforming
+   *        nested children columns into integers columns using `cudf::rank()`
    * @param ranked_children Flag indicating if the input table was preprocessed to transform
    *        any lists-of-structs column having floating-point children using `cudf::rank`
    */
@@ -792,14 +794,14 @@ struct preprocessed_table {
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<detail::dremel_data>&& dremel_data,
                      rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
-                     std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
+                     std::vector<std::unique_ptr<column>>&& transformed_columns,
                      bool ranked_children);
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
-                     std::vector<std::unique_ptr<column>>&& structs_transformed_columns,
+                     std::vector<std::unique_ptr<column>>&& transformed_columns,
                      bool ranked_children);
 
   /**
@@ -870,8 +872,8 @@ struct preprocessed_table {
   // integers columns using `cudf::rank()`, need to be kept alive.
   std::vector<std::unique_ptr<column>> _transformed_columns;
 
-  // Flag to record if the input table was preprocessed to transform any lists-of-structs column
-  // having at least one floating-point child (at any nested level) using `cudf::rank`.
+  // Flag to record if the input table was preprocessed to transform any nested children column(s)
+  // into integer column(s) using `cudf::rank`.
   bool const _ranked_children;
 };
 
@@ -944,9 +946,9 @@ class self_comparator {
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    *         values rather than logical elements, defaults to `NaN` aware relational comparator
    *         that evaluates `NaN` as greater than all other values.
-   * @throw cudf::logic_error if the input table were preprocessed to transform any
-   *        lists-of-structs column having floating-point children into lists-of-integers column,
-   *        but `PhysicalElementComparator` is not `sorting_physical_element_comparator`.
+   * @throw cudf::logic_error if the input table was preprocessed to transform any nested children
+   *        columns into integer columns but `PhysicalElementComparator` is not
+   *        `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
@@ -1084,7 +1086,7 @@ class two_table_comparator {
    *
    * If the input tables have nested types such as lists-of-structs,
    * which will be transformed into lists-of-integers during preprocesing,
-   * the preprocessed_table(s) must be generated together using the factory function
+   * the preprocessed_table(s) must have been generated together using the factory function
    * `preprocessed_table::create(table_view const&, table_view const&)`.
    *
    * @param left A table preprocessed for lexicographic comparison
@@ -1125,9 +1127,9 @@ class two_table_comparator {
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    *         values rather than logical elements, defaults to `NaN` aware relational comparator
    *         that evaluates `NaN` as greater than all other values.
-   * @throw cudf::logic_error if the input tables were preprocessed to transform any
-   *        lists-of-structs column having floating-point children into lists-of-integers column,
-   *        but `PhysicalElementComparator` is not `sorting_physical_element_comparator`.
+   * @throw cudf::logic_error if the input tables were preprocessed to transform any nested children
+   *        columns into integer columns but `PhysicalElementComparator` is not
+   *        `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
