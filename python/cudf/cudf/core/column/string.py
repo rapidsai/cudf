@@ -5226,6 +5226,55 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance_matrix(self._column)
         )
 
+    def minhash(
+        self,
+        seeds: Optional[cudf.Series] = None,
+        n: int = 4,
+        method: str = "murmur3",
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+
+        Parameters
+        ----------
+        seeds : Series
+            The seeds used for the hash algorithm.
+            Must be of type uint32.
+        n : int
+            The width of the substring to hash.
+            Default is 4 characters.
+        method : str
+            Hash function to use.
+            Only 'murmur3' (MurmurHash3_32) is supported.
+            Default is 'murmur3'.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> seeds = cudf.Series([0], dtype=np.uint32)
+        >>> str_series.str.minhash(seeds)
+        0     21141582
+        1    962346254
+        dtype: uint32
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        >>> str_series.str.minhash(seeds)
+        0    [21141582, 403093213, 1258052021]
+        1    [962346254, 677440381, 122618762]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint32, length=1)
+        elif isinstance(seeds, cudf.Series) and seeds.dtype == np.uint32:
+            seeds_column = seeds._column
+        else:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(seeds)}"
+            )
+        return self._return_or_inplace(
+            libstrings.minhash(self._column, seeds_column, n, method)
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
