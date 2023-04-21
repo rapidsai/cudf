@@ -55,6 +55,8 @@ requirements:
     - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
+    - libcurand {{ cuda11_libcurand_host_version }}
+    - libcurand-dev {{ cuda11_libcurand_host_version }}
     {% else %}
     - cuda-cudart ={{ cuda_version }}
     - cuda-cudart-dev ={{ cuda_version }}
@@ -65,8 +67,6 @@ requirements:
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
-    - libcurand {{ cuda11_libcurand_host_version }}
-    - libcurand-dev {{ cuda11_libcurand_host_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
