@@ -52,8 +52,6 @@ public class WindowOptions implements AutoCloseable {
   private final FrameType frameType;
   private final RangeExtentType precedingBoundsExtent;
   private final RangeExtentType followingBoundsExtent;
-//  private RangeExtentType precedingBoundsExtent = RangeExtentType.BOUNDED;
-//  private RangeExtentType followingBoundsExtent = RangeExtentType.BOUNDED;
 
   private WindowOptions(Builder builder) {
     this.minPeriods = builder.minPeriods;
