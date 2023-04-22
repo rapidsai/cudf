@@ -609,7 +609,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype="uint8",
+    dtype="bool",
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -640,7 +640,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        Output dtype, default 'uint8'
+        Output dtype, default 'bool'
 
     Examples
     --------
@@ -648,15 +648,15 @@ def get_dummies(
     >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
     >>> cudf.get_dummies(df)
        b  a_value1  a_value2
-    0  0         1         0
-    1  0         0         1
-    2  0         0         0
+    0  0      True     False
+    1  0     False      True
+    2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_None  a_value1  a_value2
-    0  0       0         1         0
-    1  0       0         0         1
-    2  0       1         0         0
+       b  a_<NA>  a_value1  a_value2
+    0  0   False      True     False
+    1  0   False     False      True
+    2  0    True     False     False
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -669,11 +669,11 @@ def get_dummies(
     3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_1.0  a_2.0  a_nan  a_null
-    0      1      0      0       0
-    1      0      1      0       0
-    2      0      0      1       0
-    3      0      0      0       1
+       a_<NA>  a_1.0  a_2.0  a_nan
+    0   False   True  False  False
+    1   False  False   True  False
+    2   False  False  False   True
+    3    True  False  False  False
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -684,12 +684,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-       null  1  2  4
-    0     0  1  0  0
-    1     0  0  1  0
-    2     1  0  0  0
-    3     0  0  1  0
-    4     0  0  0  1
+        <NA>      1      2      4
+    0  False   True  False  False
+    1  False  False   True  False
+    2   True  False  False  False
+    3  False  False   True  False
+    4  False  False  False   True
     """
 
     if cats is None:

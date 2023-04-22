@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from string import ascii_lowercase
 
@@ -23,19 +23,13 @@ pytestmark = pytest.mark.spilling
         (range(10), [1, 2, 3, 4, 5] * 2),
     ],
 )
-def test_get_dummies(data, index):
+@pytest.mark.parametrize("dtype", ["bool", "uint8"])
+def test_get_dummies(data, index, dtype):
     gdf = DataFrame({"x": data}, index=index)
     pdf = pd.DataFrame({"x": data}, index=index)
 
-    encoded_expected = pd.get_dummies(pdf, prefix="test")
-    encoded_actual = cudf.get_dummies(gdf, prefix="test")
-
-    utils.assert_eq(
-        encoded_expected,
-        encoded_actual,
-        check_dtype=len(data) != 0,
-    )
-    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
+    encoded_expected = pd.get_dummies(pdf, prefix="test", dtype=dtype)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=dtype)
 
     utils.assert_eq(
         encoded_expected,
@@ -63,16 +57,13 @@ def test_onehot_get_dummies_multicol(n_cols):
 @pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("dummy_na", [True, False])
 def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
-    pdf = pd.DataFrame({"a": [0, 1, np.nan]})
-    df = DataFrame.from_pandas(pdf, nan_as_null=nan_as_null)
+    df = cudf.DataFrame({"a": [0, 1, np.nan]}, nan_as_null=nan_as_null)
+    pdf = df.to_pandas(nullable=nan_as_null)
 
     expected = pd.get_dummies(pdf, dummy_na=dummy_na, columns=["a"])
     got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
 
-    if dummy_na and nan_as_null:
-        got = got.rename(columns={"a_null": "a_nan"})[expected.columns]
-
-    utils.assert_eq(expected, got)
+    utils.assert_eq(expected, got, check_like=True)
 
 
 @pytest.mark.parametrize(
@@ -120,12 +111,12 @@ def test_get_dummies_with_nan():
     )
     expected = cudf.DataFrame(
         {
-            "a_null": [0, 0, 0, 1],
-            "a_1.0": [1, 0, 0, 0],
-            "a_2.0": [0, 1, 0, 0],
-            "a_nan": [0, 0, 1, 0],
+            "a_<NA>": [False, False, False, True],
+            "a_1.0": [True, False, False, False],
+            "a_2.0": [False, True, False, False],
+            "a_nan": [False, False, True, False],
         },
-        dtype="uint8",
+        dtype="bool",
     )
     actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
 
@@ -163,13 +154,13 @@ def test_get_dummies_array_like_with_nan():
     ser = cudf.Series([0.1, 2, 3, None, np.nan], nan_as_null=False)
     expected = cudf.DataFrame(
         {
-            "a_null": [0, 0, 0, 1, 0],
-            "a_0.1": [1, 0, 0, 0, 0],
-            "a_2.0": [0, 1, 0, 0, 0],
-            "a_3.0": [0, 0, 1, 0, 0],
-            "a_nan": [0, 0, 0, 0, 1],
+            "a_<NA>": [False, False, False, True, False],
+            "a_0.1": [True, False, False, False, False],
+            "a_2.0": [False, True, False, False, False],
+            "a_3.0": [False, False, True, False, False],
+            "a_nan": [False, False, False, False, True],
         },
-        dtype="uint8",
+        dtype="bool",
     )
     actual = cudf.get_dummies(ser, dummy_na=True, prefix="a", prefix_sep="_")
 
