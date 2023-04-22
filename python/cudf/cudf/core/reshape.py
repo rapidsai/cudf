@@ -13,6 +13,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.api.extensions import no_default
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -905,7 +906,7 @@ def _pivot(df, index, columns):
     )
 
 
-def pivot(data, index=None, columns=None, values=None):
+def pivot(data, columns=None, index=no_default, values=no_default):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -915,10 +916,10 @@ def pivot(data, index=None, columns=None, values=None):
 
     Parameters
     ----------
-    index : column name, optional
-        Column used to construct the index of the result.
     columns : column name, optional
         Column used to construct the columns of the result.
+    index : column name, optional
+        Column used to construct the index of the result.
     values : column name or list of column names, optional
         Column(s) whose values are rearranged to produce the result.
         If not specified, all remaining columns of the DataFrame
@@ -957,7 +958,7 @@ def pivot(data, index=None, columns=None, values=None):
     """
     df = data
     values_is_list = True
-    if values is None:
+    if values is no_default:
         values = df._columns_view(
             col for col in df._column_names if col not in (index, columns)
         )
@@ -966,7 +967,7 @@ def pivot(data, index=None, columns=None, values=None):
             values = [values]
             values_is_list = False
         values = df._columns_view(values)
-    if index is None:
+    if index is no_default:
         index = df.index
     else:
         index = cudf.core.index.Index(df.loc[:, index])
