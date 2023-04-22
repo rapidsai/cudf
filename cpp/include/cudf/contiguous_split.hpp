@@ -45,33 +45,7 @@ struct packed_columns {
    *
    * @ingroup copy_split
    */
-  struct metadata {
-    metadata() = default;
-
-    /**
-     * @brief Construct a new metadata object
-     *
-     * @param v Host-side buffer containing metadata
-     */
-    metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-
-    /**
-     * @brief Returns pointer to the host-side metadata buffer data
-     *
-     * @return Pointer to the host-side metadata buffer
-     */
-    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
-
-    /**
-     * @brief Returns size of the metadata buffer
-     *
-     * @return Size of the metadata buffer
-     */
-    [[nodiscard]] size_t size() const { return data_.size(); }
-
-   private:
-    std::vector<uint8_t> data_;
-  };
+  using metadata = std::vector<uint8_t>;
 
   packed_columns()
     : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
