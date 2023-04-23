@@ -344,12 +344,12 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
       [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
 
     auto const d_hasher = strong_index_hasher_adapter{
-      row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
-    auto const d_eqcomp =
-      strong_index_comparator_adapter{row_equality{cudf::nullate::DYNAMIC{haystack_has_nulls},
-                                                   *haystack_tdv_ptr,
-                                                   *haystack_tdv_ptr,
-                                                   compare_nulls}};
+      row_hash_legacy{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
+    auto const d_eqcomp = strong_index_comparator_adapter{
+      row_equality_legacy{cudf::nullate::DYNAMIC{haystack_has_nulls},
+                          *haystack_tdv_ptr,
+                          *haystack_tdv_ptr,
+                          compare_nulls}};
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
@@ -383,9 +383,9 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
       size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
 
     auto const d_hasher = strong_index_hasher_adapter{
-      row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *needles_tdv_ptr}};
+      row_hash_legacy{cudf::nullate::DYNAMIC{has_any_nulls}, *needles_tdv_ptr}};
 
-    auto const d_eqcomp = strong_index_comparator_adapter{row_equality{
+    auto const d_eqcomp = strong_index_comparator_adapter{row_equality_legacy{
       cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr, *needles_tdv_ptr, compare_nulls}};
 
     map.contains(needles_it,

@@ -73,7 +73,7 @@ dependencies:
 - pytorch<1.12.0
 - rmm==23.6.*
 - s3fs>=2022.3.0
-- scikit-build>=0.13.1
+- scikit-build>=0.13.1,<0.17.2
 - scipy
 - spdlog>=1.11.0,<1.12
 - sphinx
