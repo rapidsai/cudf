@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ TEST_F(ValidIfTest, EmptyRange)
   auto actual        = cudf::detail::valid_if(thrust::make_counting_iterator(0),
                                        thrust::make_counting_iterator(0),
                                        odds_valid{},
-                                       cudf::get_default_stream());
+                                       cudf::get_default_stream(),
+                                       rmm::mr::get_current_device_resource());
   auto const& buffer = actual.first;
   EXPECT_EQ(0u, buffer.size());
   EXPECT_EQ(nullptr, buffer.data());
@@ -55,7 +56,8 @@ TEST_F(ValidIfTest, InvalidRange)
   EXPECT_THROW(cudf::detail::valid_if(thrust::make_counting_iterator(1),
                                       thrust::make_counting_iterator(0),
                                       odds_valid{},
-                                      cudf::get_default_stream()),
+                                      cudf::get_default_stream(),
+                                      rmm::mr::get_current_device_resource()),
                cudf::logic_error);
 }
 
@@ -66,7 +68,8 @@ TEST_F(ValidIfTest, OddsValid)
   auto actual   = cudf::detail::valid_if(thrust::make_counting_iterator(0),
                                        thrust::make_counting_iterator(10000),
                                        odds_valid{},
-                                       cudf::get_default_stream());
+                                       cudf::get_default_stream(),
+                                       rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(5000, actual.second);
 }
@@ -78,7 +81,8 @@ TEST_F(ValidIfTest, AllValid)
   auto actual   = cudf::detail::valid_if(thrust::make_counting_iterator(0),
                                        thrust::make_counting_iterator(10000),
                                        all_valid{},
-                                       cudf::get_default_stream());
+                                       cudf::get_default_stream(),
+                                       rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(0, actual.second);
 }
@@ -90,7 +94,8 @@ TEST_F(ValidIfTest, AllNull)
   auto actual   = cudf::detail::valid_if(thrust::make_counting_iterator(0),
                                        thrust::make_counting_iterator(10000),
                                        all_null{},
-                                       cudf::get_default_stream());
+                                       cudf::get_default_stream(),
+                                       rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(10000, actual.second);
 }

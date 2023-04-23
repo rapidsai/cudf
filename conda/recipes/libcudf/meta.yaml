@@ -45,12 +45,15 @@ requirements:
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
-    - libcurand-dev
+    - libcurand {{ libcurand_host_version }}
+    - libcurand-dev {{ libcurand_host_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - spdlog {{ spdlog_version }}
+    - gtest {{ gtest_version }}
+    - gmock {{ gtest_version }}
 
 outputs:
   - name: libcudf
@@ -71,10 +74,14 @@ outputs:
         - librmm ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
         - test -f $PREFIX/lib/libcudftestutil.a
+        - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_cudf.so
+        - test -f $PREFIX/lib/libcudf_identify_stream_usage_mode_testing.so
         - test -f $PREFIX/include/cudf/aggregation.hpp
         - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
         - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
@@ -86,6 +93,7 @@ outputs:
         - test -f $PREFIX/include/cudf/concatenate.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
+        - test -f $PREFIX/include/cudf/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
         - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
@@ -107,7 +115,6 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
         - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
         - test -f $PREFIX/include/cudf/detail/quantiles.hpp
-        - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
         - test -f $PREFIX/include/cudf/detail/repeat.hpp
         - test -f $PREFIX/include/cudf/detail/replace.hpp
         - test -f $PREFIX/include/cudf/detail/reshape.hpp
@@ -116,12 +123,13 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/scan.hpp
         - test -f $PREFIX/include/cudf/detail/scatter.hpp
         - test -f $PREFIX/include/cudf/detail/search.hpp
-        - test -f $PREFIX/include/cudf/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/detail/sequence.hpp
         - test -f $PREFIX/include/cudf/detail/sorting.hpp
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
+        - test -f $PREFIX/include/cudf/detail/timezone.cuh
+        - test -f $PREFIX/include/cudf/detail/timezone.hpp
         - test -f $PREFIX/include/cudf/detail/transform.hpp
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
@@ -209,6 +217,8 @@ outputs:
         - test -f $PREFIX/include/cudf/partitioning.hpp
         - test -f $PREFIX/include/cudf/quantiles.hpp
         - test -f $PREFIX/include/cudf/reduction.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/reduction_functions.hpp
+        - test -f $PREFIX/include/cudf/reduction/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/replace.hpp
         - test -f $PREFIX/include/cudf/reshape.hpp
         - test -f $PREFIX/include/cudf/rolling.hpp
@@ -294,11 +304,12 @@ outputs:
         - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
         - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
         - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+        - test -f $PREFIX/include/cudf_test/default_stream.hpp
         - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
         - test -f $PREFIX/include/cudf_test/file_utilities.hpp
         - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
         - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adapter.hpp
+        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adaptor.hpp
         - test -f $PREFIX/include/cudf_test/table_utilities.hpp
         - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
         - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
@@ -376,8 +387,7 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
+        - libcurand {{ libcurand_run_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0

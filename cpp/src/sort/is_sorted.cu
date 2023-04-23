@@ -27,13 +27,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
 
-auto is_sorted(cudf::table_view const& in,
+bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence,
                rmm::cuda_stream_view stream)
@@ -44,16 +46,25 @@ auto is_sorted(cudf::table_view const& in,
   if (cudf::detail::has_nested_columns(in)) {
     auto const device_comparator = comparator.less<true>(has_nested_nulls(in));
 
-    return thrust::is_sorted(rmm::exec_policy(stream),
-                             thrust::make_counting_iterator(0),
-                             thrust::make_counting_iterator(in.num_rows()),
-                             device_comparator);
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly over using the comparator directly
+    // in thrust::is_sorted.
+    auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::counting_iterator<size_type>(0),
+                      thrust::counting_iterator<size_type>(in.num_rows()),
+                      d_results.begin(),
+                      [device_comparator] __device__(auto idx) -> bool {
+                        return (idx == 0) || device_comparator(idx - 1, idx);
+                      });
+
+    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), false) == 0;
   } else {
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
     return thrust::is_sorted(rmm::exec_policy(stream),
-                             thrust::make_counting_iterator(0),
-                             thrust::make_counting_iterator(in.num_rows()),
+                             thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator<size_type>(in.num_rows()),
                              device_comparator);
   }
 }

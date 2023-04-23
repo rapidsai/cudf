@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,9 +141,10 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
 
-    auto dev_data = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
-    auto dev_result =
-      cudf::detail::make_device_uvector_sync(result_init, cudf::get_default_stream());
+    auto dev_data = cudf::detail::make_device_uvector_sync(
+      v, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto dev_result = cudf::detail::make_device_uvector_sync(
+      result_init, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
     if (block_size == 0) { block_size = vec_size; }
 
@@ -294,8 +295,10 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     exact[2] = std::accumulate(
       v.begin(), v.end(), identity[2], [](T acc, uint64_t i) { return acc ^ T(i); });
 
-    auto dev_result = cudf::detail::make_device_uvector_sync(identity, cudf::get_default_stream());
-    auto dev_data   = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
+    auto dev_result = cudf::detail::make_device_uvector_sync(
+      identity, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto dev_data = cudf::detail::make_device_uvector_sync(
+      v, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
     if (block_size == 0) { block_size = vec_size; }
 

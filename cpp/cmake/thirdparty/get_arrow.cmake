@@ -379,6 +379,8 @@ endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
+      # This version must be kept in sync with the libarrow version pinned for builds in
+      # dependencies.yaml.
       10.0.1
       CACHE STRING "The version of Arrow to find (or build)"
   )

@@ -535,7 +535,9 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class nunique_aggregation final : public groupby_aggregation,
+                                  public reduce_aggregation,
+                                  public segmented_reduce_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}

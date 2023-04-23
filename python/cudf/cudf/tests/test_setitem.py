@@ -353,3 +353,18 @@ def test_scatter_by_slice_with_start_and_step():
     target[1::2] = source
     ctarget[1::2] = csource
     assert_eq(target, ctarget)
+
+
+@pytest.mark.parametrize("n", [1, 3])
+def test_setitem_str_trailing_null(n):
+    trailing_nulls = "\x00" * n
+    s = cudf.Series(["a", "b", "c" + trailing_nulls])
+    assert s[2] == "c" + trailing_nulls
+    s[0] = "a" + trailing_nulls
+    assert s[0] == "a" + trailing_nulls
+    s[1] = trailing_nulls
+    assert s[1] == trailing_nulls
+    s[0] = ""
+    assert s[0] == ""
+    s[0] = "\x00"
+    assert s[0] == "\x00"
