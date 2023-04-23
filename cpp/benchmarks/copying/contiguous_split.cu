@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,8 @@ void BM_contiguous_split_common(benchmark::State& state,
   for (auto const& col : src_cols)
     // computing the null count is not a part of the benchmark's target code path, and we want the
     // property to be pre-computed so that we measure the performance of only the intended code path
-    [[maybe_unused]] auto const nulls = col->null_count();
+    [[maybe_unused]]
+    auto const nulls = col->null_count();
 
   auto const src_table = cudf::table(std::move(src_cols));
 
@@ -63,8 +64,7 @@ void BM_contiguous_split_common(benchmark::State& state,
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total * 2);
 }
 
-class ContiguousSplit : public cudf::benchmark {
-};
+class ContiguousSplit : public cudf::benchmark {};
 
 void BM_contiguous_split(benchmark::State& state)
 {
@@ -94,8 +94,7 @@ void BM_contiguous_split(benchmark::State& state)
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
 
-class ContiguousSplitStrings : public cudf::benchmark {
-};
+class ContiguousSplitStrings : public cudf::benchmark {};
 
 void BM_contiguous_split_strings(benchmark::State& state)
 {

@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct StringsFindallTests : public cudf::test::BaseFixture {
-};
+struct StringsFindallTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindallTests, FindallTest)
 {

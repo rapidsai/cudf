@@ -92,8 +92,7 @@ std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_colum
 }
 
 // Base test fixture for tests
-struct OrcWriterTest : public cudf::test::BaseFixture {
-};
+struct OrcWriterTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -117,8 +116,7 @@ using SupportedTimestampTypes =
 TYPED_TEST_SUITE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
-struct OrcChunkedWriterTest : public cudf::test::BaseFixture {
-};
+struct OrcChunkedWriterTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -130,16 +128,13 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 TYPED_TEST_SUITE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 
 // Test fixture for reader tests
-struct OrcReaderTest : public cudf::test::BaseFixture {
-};
+struct OrcReaderTest : public cudf::test::BaseFixture {};
 
 // Test fixture for statistics tests
-struct OrcStatisticsTest : public cudf::test::BaseFixture {
-};
+struct OrcStatisticsTest : public cudf::test::BaseFixture {};
 
 // Test fixture for metadata tests
-struct OrcMetadataReaderTest : public cudf::test::BaseFixture {
-};
+struct OrcMetadataReaderTest : public cudf::test::BaseFixture {};
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -613,13 +608,13 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   // seconds from UNIX epoch is read as that timestamp + 1 second. We mimic that behavior and so
   // this test has to hardcode test values which are < -1 second.
   // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
-  using namespace cudf::test;
-  auto timestamps_ns = fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
-    -131968727238000000,
-    -1530705634500000000,
-    -1674638741932929000,
-  };
-  table_view expected({timestamps_ns});
+  auto timestamps_ns =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+      -131968727238000000,
+      -1530705634500000000,
+      -1674638741932929000,
+    };
+  cudf::table_view expected({timestamps_ns});
 
   auto filepath = temp_env->get_temp_filepath("OrcNegTimestamp.orc");
   cudf::io::orc_writer_options out_opts =
@@ -1161,8 +1156,7 @@ TEST_F(OrcReaderTest, MultipleInputs)
 }
 
 struct OrcWriterTestDecimal : public OrcWriterTest,
-                              public ::testing::WithParamInterface<std::tuple<int, int>> {
-};
+                              public ::testing::WithParamInterface<std::tuple<int, int>> {};
 
 TEST_P(OrcWriterTestDecimal, Decimal64)
 {
@@ -1321,8 +1315,7 @@ TEST_F(OrcStatisticsTest, HasNull)
 
 struct OrcWriterTestStripes
   : public OrcWriterTest,
-    public ::testing::WithParamInterface<std::tuple<size_t, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<size_t, cudf::size_type>> {};
 
 TEST_P(OrcWriterTestStripes, StripeSize)
 {
@@ -1426,13 +1419,10 @@ TEST_F(OrcWriterTest, TestMap)
   }
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
-  auto num_list_rows = static_cast<cudf::column_view>(offsets).size() - 1;
-  auto list_col =
-    cudf::make_lists_column(num_list_rows,
-                            offsets.release(),
-                            std::move(s_col),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            cudf::test::detail::make_null_mask(valids, valids + num_list_rows));
+  auto num_list_rows           = static_cast<cudf::column_view>(offsets).size() - 1;
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_list_rows);
+  auto list_col                = cudf::make_lists_column(
+    num_list_rows, offsets.release(), std::move(s_col), null_count, std::move(null_mask));
 
   table_view expected({*list_col});
 

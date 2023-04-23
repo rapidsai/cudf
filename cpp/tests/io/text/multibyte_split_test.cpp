@@ -34,8 +34,7 @@ using cudf::test::strings_column_wrapper;
 // 😀 | F0 9F 98 80 | 11110000 10011111 10011000 10000000
 // 😎 | F0 9F 98 8E | 11110000 10011111 10011000 10001110
 
-struct MultibyteSplitTest : public cudf::test::BaseFixture {
-};
+struct MultibyteSplitTest : public cudf::test::BaseFixture {};
 
 TEST_F(MultibyteSplitTest, Simple)
 {

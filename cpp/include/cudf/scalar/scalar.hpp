@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ namespace cudf {
  */
 class scalar {
  public:
-  virtual ~scalar() = default;
+  virtual ~scalar()                      = default;
   scalar& operator=(scalar const& other) = delete;
-  scalar& operator=(scalar&& other) = delete;
+  scalar& operator=(scalar&& other)      = delete;
 
   /**
    * @brief Returns the scalar's logical value type.
@@ -154,7 +154,7 @@ class fixed_width_scalar : public scalar {
   fixed_width_scalar(fixed_width_scalar&& other) = default;
 
   fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
-  fixed_width_scalar& operator=(fixed_width_scalar&& other) = delete;
+  fixed_width_scalar& operator=(fixed_width_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new fixed-width scalar object by deep copying another.
@@ -254,7 +254,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   numeric_scalar(numeric_scalar&& other) = default;
 
   numeric_scalar& operator=(numeric_scalar const& other) = delete;
-  numeric_scalar& operator=(numeric_scalar&& other) = delete;
+  numeric_scalar& operator=(numeric_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new numeric scalar object by deep copying another.
@@ -317,7 +317,7 @@ class fixed_point_scalar : public scalar {
   fixed_point_scalar(fixed_point_scalar&& other) = default;
 
   fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
-  fixed_point_scalar& operator=(fixed_point_scalar&& other) = delete;
+  fixed_point_scalar& operator=(fixed_point_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new fixed_point scalar object by deep copying another.
@@ -441,7 +441,7 @@ class string_scalar : public scalar {
 
   // string_scalar(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar const& other) = delete;
-  string_scalar& operator=(string_scalar&& other) = delete;
+  string_scalar& operator=(string_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new string scalar object by deep copying another string_scalar.
@@ -572,7 +572,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   chrono_scalar(chrono_scalar&& other) = default;
 
   chrono_scalar& operator=(chrono_scalar const& other) = delete;
-  chrono_scalar& operator=(chrono_scalar&& other) = delete;
+  chrono_scalar& operator=(chrono_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new chrono scalar object by deep copying another.
@@ -734,7 +734,7 @@ class list_scalar : public scalar {
   list_scalar(list_scalar&& other) = default;
 
   list_scalar& operator=(list_scalar const& other) = delete;
-  list_scalar& operator=(list_scalar&& other) = delete;
+  list_scalar& operator=(list_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new list scalar object by deep copying another.
@@ -797,9 +797,9 @@ class struct_scalar : public scalar {
    * @brief Move constructor for struct_scalar.
    * @param other The other struct_scalar to move from.
    */
-  struct_scalar(struct_scalar&& other) = default;
+  struct_scalar(struct_scalar&& other)                 = default;
   struct_scalar& operator=(struct_scalar const& other) = delete;
-  struct_scalar& operator=(struct_scalar&& other) = delete;
+  struct_scalar& operator=(struct_scalar&& other)      = delete;
 
   /**
    * @brief Construct a new struct scalar object by deep copying another.

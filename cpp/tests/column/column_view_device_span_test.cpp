@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,7 @@ std::unique_ptr<cudf::column> example_column()
 }
 
 template <typename T>
-struct ColumnViewDeviceSpanTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewDeviceSpanTests : public cudf::test::BaseFixture {};
 
 using DeviceSpanTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 TYPED_TEST_SUITE(ColumnViewDeviceSpanTests, DeviceSpanTypes);
@@ -56,8 +55,7 @@ TYPED_TEST(ColumnViewDeviceSpanTests, conversion_round_trip)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, col_view_from_device_span);
 }
 
-struct ColumnViewDeviceSpanErrorTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewDeviceSpanErrorTests : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnViewDeviceSpanErrorTests, type_mismatch)
 {

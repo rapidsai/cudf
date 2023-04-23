@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,11 +85,11 @@ struct column_buffer {
   }
 
   // move constructor
-  column_buffer(column_buffer&& col) = default;
+  column_buffer(column_buffer&& col)            = default;
   column_buffer& operator=(column_buffer&& col) = default;
 
   // copy constructor
-  column_buffer(column_buffer const& col) = delete;
+  column_buffer(column_buffer const& col)            = delete;
   column_buffer& operator=(column_buffer const& col) = delete;
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for

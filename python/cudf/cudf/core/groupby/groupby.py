@@ -1972,6 +1972,28 @@ class GroupBy(Serializable, Reducible, Scannable):
     def pad(self, limit=None):
         """Forward fill NA values.
 
+        .. deprecated:: 23.06
+           `pad` is deprecated, use `ffill` instead.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        warnings.warn(
+            "pad is deprecated and will be removed in a future version. "
+            "Use ffill instead.",
+            FutureWarning,
+        )
+        return self._scan_fill("ffill", limit)
+
+    def ffill(self, limit=None):
+        """Forward fill NA values.
+
         Parameters
         ----------
         limit : int, default None
@@ -1983,10 +2005,29 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self._scan_fill("ffill", limit)
 
-    ffill = pad
-
     @_cudf_nvtx_annotate
     def backfill(self, limit=None):
+        """Backward fill NA values.
+
+        .. deprecated:: 23.06
+           `backfill` is deprecated, use `bfill` instead.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        warnings.warn(
+            "backfill is deprecated and will be removed in a future version. "
+            "Use bfill instead.",
+            FutureWarning,
+        )
+        return self._scan_fill("bfill", limit)
+
+    def bfill(self, limit=None):
         """Backward fill NA values.
 
         Parameters
@@ -1998,8 +2039,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError("Does not support limit param yet.")
 
         return self._scan_fill("bfill", limit)
-
-    bfill = backfill
 
     @_cudf_nvtx_annotate
     def fillna(

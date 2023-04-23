@@ -183,14 +183,11 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
   auto child             = cudf::make_lists_column(
     child_offsets_size, child_offsets.release(), child_data.release(), 0, rmm::device_buffer{});
 
-  int offsets_size = static_cast<cudf::column_view>(offsets).size() - 1;
+  int offsets_size             = static_cast<cudf::column_view>(offsets).size() - 1;
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + offsets_size);
   return include_validity
            ? cudf::make_lists_column(
-               offsets_size,
-               offsets.release(),
-               std::move(child),
-               cudf::UNKNOWN_NULL_COUNT,
-               cudf::test::detail::make_null_mask(valids, valids + offsets_size))
+               offsets_size, offsets.release(), std::move(child), null_count, std::move(null_mask))
            : cudf::make_lists_column(
                offsets_size, offsets.release(), std::move(child), 0, rmm::device_buffer{});
 }
@@ -316,16 +313,13 @@ cudf::io::parquet::PageHeader read_page_header(const std::unique_ptr<cudf::io::d
 }
 
 // Base test fixture for tests
-struct ParquetWriterTest : public cudf::test::BaseFixture {
-};
+struct ParquetWriterTest : public cudf::test::BaseFixture {};
 
 // Base test fixture for tests
-struct ParquetReaderTest : public cudf::test::BaseFixture {
-};
+struct ParquetReaderTest : public cudf::test::BaseFixture {};
 
 // Base test fixture for "stress" tests
-struct ParquetWriterStressTest : public cudf::test::BaseFixture {
-};
+struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -358,8 +352,7 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 };
 
 template <typename T>
-struct ParquetReaderSourceTest : public ParquetReaderTest {
-};
+struct ParquetReaderSourceTest : public ParquetReaderTest {};
 
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
@@ -377,8 +370,7 @@ using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, st
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
 
 // Base test fixture for chunked writer tests
-struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
-};
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -390,8 +382,7 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
 // Base test fixture for size-parameterized tests
-class ParquetSizedTest : public ::testing::TestWithParam<int> {
-};
+class ParquetSizedTest : public ::testing::TestWithParam<int> {};
 
 // test the allowed bit widths for dictionary encoding
 // values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
@@ -2150,7 +2141,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   cudf::io::table_input_metadata metadata(table1);
   metadata.column_metadata[0].set_nullability(true);  // List is nullable at first (root) level
   metadata.column_metadata[0].child(1).set_nullability(
-    false);  // non-nullable at second (leaf) level
+    false);                                           // non-nullable at second (leaf) level
   metadata.column_metadata[1].set_nullability(true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
@@ -2603,9 +2594,7 @@ TEST_F(ParquetReaderTest, UserBounds)
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
   }
 
-  // trying to read 0 rows should result in reading the whole file
-  // at the moment we get back 4.  when that bug gets fixed, this
-  // test can be flipped.
+  // trying to read 0 rows should result in empty columns
   {
     srand(31337);
     auto expected = create_random_fixed_table<int>(4, 4, false);
@@ -2706,12 +2695,11 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     c1_offset_iter, c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<float> c1_floats(
     values, values + (num_rows * floats_per_row), valids);
-  auto _c1 = cudf::make_lists_column(num_rows,
-                                     c1_offsets.release(),
-                                     c1_floats.release(),
-                                     cudf::UNKNOWN_NULL_COUNT,
-                                     cudf::test::detail::make_null_mask(valids, valids + num_rows));
-  auto c1  = cudf::purge_nonempty_nulls(*_c1);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+  auto _c1 = cudf::make_lists_column(
+    num_rows, c1_offsets.release(), c1_floats.release(), null_count, std::move(null_mask));
+  auto c1 = cudf::purge_nonempty_nulls(*_c1);
 
   // list<list<int>>
   auto c2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
@@ -2734,12 +2722,9 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 200; });
   std::vector<bool> c3_valids(num_rows);
   std::copy(_c3_valids, _c3_valids + num_rows, c3_valids.begin());
-  auto _c3_list =
-    cudf::make_lists_column(num_rows,
-                            offsets.release(),
-                            string_col.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
-                            cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+  auto _c3_list                   = cudf::make_lists_column(
+    num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
   auto c3_list = cudf::purge_nonempty_nulls(*_c3_list);
   cudf::test::fixed_width_column_wrapper<int> c3_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> c3_floats(values, values + num_rows, valids);

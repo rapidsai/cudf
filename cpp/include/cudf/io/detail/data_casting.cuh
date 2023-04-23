@@ -299,6 +299,7 @@ template <typename str_tuple_it>
 struct string_parse {
   str_tuple_it str_tuples;
   bitmask_type* null_mask;
+  size_type* null_count_data;
   cudf::io::parse_options_view const options;
   size_type* d_offsets{};
   char* d_chars{};
@@ -319,6 +320,7 @@ struct string_parse {
       serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
     if (is_null_literal && null_mask != nullptr) {
       clear_bit(null_mask, idx);
+      atomicAdd(null_count_data, 1);
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
@@ -326,7 +328,10 @@ struct string_parse {
     char* d_buffer        = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto str_process_info = process_string(in_begin, in_end, d_buffer, options);
     if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
-      if (null_mask != nullptr) clear_bit(null_mask, idx);
+      if (null_mask != nullptr) {
+        clear_bit(null_mask, idx);
+        atomicAdd(null_count_data, 1);
+      }
       if (!d_chars) d_offsets[idx] = 0;
     } else {
       if (!d_chars) d_offsets[idx] = str_process_info.bytes;
@@ -350,28 +355,35 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    size_type col_size,
                                    data_type col_type,
                                    B&& null_mask,
+                                   size_type null_count,
                                    cudf::io::parse_options_view const& options,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
+  auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
+  auto null_count_data = d_null_count.data();
+
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    // this utility calls the functor to build the offsets and chars columns
+    // this utility calls the functor to build the offsets and chars columns;
+    // the bitmask and null count may be updated by parse failures
     auto [offsets, chars] = cudf::strings::detail::make_strings_children(
       string_parse<decltype(str_tuples)>{
-        str_tuples, static_cast<bitmask_type*>(null_mask.data()), options},
+        str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options},
       col_size,
       stream,
       mr);
 
-    auto null_count =
-      cudf::detail::null_count(static_cast<bitmask_type*>(null_mask.data()), 0, col_size, stream);
-    return make_strings_column(
-      col_size, std::move(offsets), std::move(chars), null_count, std::move(null_mask));
+    return make_strings_column(col_size,
+                               std::move(offsets),
+                               std::move(chars),
+                               d_null_count.value(stream),
+                               std::move(null_mask));
   }
 
-  auto out_col = make_fixed_width_column(
-    col_type, col_size, std::move(null_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto out_col =
+    make_fixed_width_column(col_type, col_size, std::move(null_mask), null_count, stream, mr);
   auto output_dv_ptr = mutable_column_device_view::create(*out_col, stream);
 
   // use existing code (`ConvertFunctor`) to convert values
@@ -379,7 +391,8 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     col_size,
-    [str_tuples, col = *output_dv_ptr, options, col_type] __device__(size_type row) {
+    [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(
+      size_type row) {
       if (col.is_null(row)) { return; }
       auto const in = str_tuples[row];
 
@@ -388,6 +401,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 
       if (is_null_literal) {
         col.set_null(row);
+        atomicAdd(null_count_data, 1);
         return;
       }
 
@@ -403,8 +417,13 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                                    col_type,
                                                    options,
                                                    false);
-      if (not is_parsed) { col.set_null(row); }
+      if (not is_parsed) {
+        col.set_null(row);
+        atomicAdd(null_count_data, 1);
+      }
     });
+
+  out_col->set_null_count(d_null_count.value(stream));
 
   return out_col;
 }

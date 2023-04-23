@@ -30,8 +30,7 @@
 #include <string>
 #include <vector>
 
-struct StringsSliceTest : public cudf::test::BaseFixture {
-};
+struct StringsSliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsSliceTest, Substring)
 {
@@ -51,8 +50,7 @@ TEST_F(StringsSliceTest, Substring)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-class Parameters : public StringsSliceTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class Parameters : public StringsSliceTest, public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(Parameters, Substring)
 {
@@ -92,6 +90,24 @@ TEST_P(Parameters, Substring_From)
     h_expected.push_back(h_strings[idx].substr(starts[idx], stops[idx] - starts[idx]));
 
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_P(Parameters, SubstringStopZero)
+{
+  cudf::size_type start = GetParam();
+  cudf::test::strings_column_wrapper input({"abc", "défgh", "", "XYZ"});
+  auto view = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::slice_strings(view, start, 0);
+  cudf::test::strings_column_wrapper expected({"", "", "", ""});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto starts =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({start, start, start, start});
+  auto stops = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 0, 0, 0});
+
+  results = cudf::strings::slice_strings(view, starts, stops);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -485,7 +501,7 @@ TEST_F(StringsSliceTest, SearchColumnDelimiter)
   }
 
   {
-    auto col0      = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi ™◎ooﬀ™ff™",
+    auto col0 = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi ™◎ooﬀ™ff™",
                                                     "tﬀﬀhﬀesé",
                                                     "",
                                                     "lﬀ fooﬀ ffﬀ eaﬀse™",

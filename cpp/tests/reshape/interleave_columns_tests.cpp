@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,7 @@ constexpr int32_t NOT_USE{-1};  // mark for elements that we don't care
 }  // namespace
 
 template <typename T>
-struct InterleaveColumnsTest : public cudf::test::BaseFixture {
-};
+struct InterleaveColumnsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(InterleaveColumnsTest, cudf::test::FixedWidthTypes);
 
@@ -186,8 +185,7 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
   }
 }
 
-struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {
-};
+struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {};
 
 TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
 {
@@ -356,8 +354,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
@@ -383,8 +380,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointInterleave)
   }
 }
 
-struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListsColumnsInterleaveTest, InvalidInput)
 {
@@ -404,8 +400,7 @@ TEST_F(ListsColumnsInterleaveTest, InvalidInput)
 }
 
 template <typename T>
-struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
@@ -811,7 +806,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfListsWithNulls)
     ListsCol{ListsCol{{null, 11}, null_at(0)},
              ListsCol{{22, null, null}, nulls_at({1, 2})}},  // don't care
     ListsCol{ListsCol{{null, 11}, null_at(0)},
-             ListsCol{{22, null, null}, nulls_at({1, 2})}}  // don't care
+             ListsCol{{22, null, null}, nulls_at({1, 2})}}   // don't care
   };
 
   auto const col1 = cudf::slice(col1_original, {3, 6})[0];
@@ -1038,8 +1033,7 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
-struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {
-};
+struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructsColumnsInterleaveTest, InvalidInput)
 {
@@ -1094,8 +1088,7 @@ TEST_F(StructsColumnsInterleaveTest, InterleaveEmptyColumns)
 }
 
 template <typename T>
-struct StructsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
-};
+struct StructsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,

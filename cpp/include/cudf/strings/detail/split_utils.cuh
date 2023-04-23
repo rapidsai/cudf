@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ struct whitespace_string_tokenizer {
    */
   __device__ bool next_token()
   {
-    if (itr != d_str.begin()) {  // skip these 2 lines the first time through
+    if (itr != d_str.begin()) {            // skip these 2 lines the first time through
       ++itr;
       start_position = itr.byte_offset();  // end_position + 1;
     }

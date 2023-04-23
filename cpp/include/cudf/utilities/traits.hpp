@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,32 +63,26 @@ using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
 
 namespace detail {
 template <typename L, typename R, typename = void>
-struct is_relationally_comparable_impl : std::false_type {
-};
+struct is_relationally_comparable_impl : std::false_type {};
 
 template <typename L, typename R>
 struct is_relationally_comparable_impl<L,
                                        R,
                                        void_t<less_comparable<L, R>, greater_comparable<L, R>>>
-  : std::true_type {
-};
+  : std::true_type {};
 
 template <typename L, typename R, typename = void>
-struct is_equality_comparable_impl : std::false_type {
-};
+struct is_equality_comparable_impl : std::false_type {};
 
 template <typename L, typename R>
-struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
-};
+struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {};
 
 // has common type
 template <typename AlwaysVoid, typename... Ts>
-struct has_common_type_impl : std::false_type {
-};
+struct has_common_type_impl : std::false_type {};
 
 template <typename... Ts>
-struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
-};
+struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {};
 }  // namespace detail
 
 /// Checks if types have a common type
@@ -590,16 +584,14 @@ bool is_nested(data_type type);
 bool is_bit_castable(data_type from, data_type to);
 
 template <typename From, typename To>
-struct is_convertible : std::is_convertible<From, To> {
-};
+struct is_convertible : std::is_convertible<From, To> {};
 
 // This will ensure that timestamps can be promoted to a higher precision. Presently, they can't
 // do that due to nvcc/gcc compiler issues
 template <typename Duration1, typename Duration2>
 struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestamp<Duration2>>
   : std::is_convertible<typename cudf::detail::time_point<Duration1>::duration,
-                        typename cudf::detail::time_point<Duration2>::duration> {
-};
+                        typename cudf::detail::time_point<Duration2>::duration> {};
 
 /** @} */
 

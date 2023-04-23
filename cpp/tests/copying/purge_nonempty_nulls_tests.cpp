@@ -131,7 +131,7 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
     auto const expected           = LCW<T>{{
                                    LCW<T>{}  // NULL.
                                  },
-                                 null_at(0)};
+                                           null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.child(), values_col_t{});
@@ -306,7 +306,7 @@ TEST_F(PurgeNonEmptyNullsTest, ListOfStrings)
                                    {"55555"},
                                    {"11", "22", "33", "44"},
                                  },
-                                 null_at(0)};
+                                          null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_list_view.offsets(), offsets_col_t{0, 0, 3, 4, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(
@@ -343,12 +343,12 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
   );
 
   // Construct a list column from the strings column.
-  auto const lists =
-    cudf::make_lists_column(4,
-                            offsets_col_t{0, 4, 5, 7, 10}.release(),
-                            std::move(strings),
-                            0,
-                            cudf::test::detail::make_null_mask(no_nulls(), no_nulls() + 4));
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(no_nulls(), no_nulls() + 4);
+  auto const lists             = cudf::make_lists_column(4,
+                                             offsets_col_t{0, 4, 5, 7, 10}.release(),
+                                             std::move(strings),
+                                             null_count,
+                                             std::move(null_mask));
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
 
   // The child column has non-empty nulls but it has already been sanitized during lists column
@@ -405,14 +405,14 @@ TEST_F(PurgeNonEmptyNullsTest, StructOfList)
     EXPECT_FALSE(cudf::has_nonempty_nulls(child));
     return cudf::test::structs_column_wrapper{{child}}.release();
   }();
-  auto null_mask_buff = [&] {
+  auto [null_mask, null_count] = [&] {
     auto const valid_iter = null_at(2);
     return cudf::test::detail::make_null_mask(valid_iter, valid_iter + structs_input->size());
   }();
 
   // Manually set the null mask for the columns, leaving the null at list index 2 unsanitized.
-  structs_input->child(0).set_null_mask(null_mask_buff);
-  structs_input->set_null_mask(std::move(null_mask_buff));
+  structs_input->child(0).set_null_mask(null_mask, null_count, cudf::get_default_stream());
+  structs_input->set_null_mask(std::move(null_mask), null_count);
 
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*structs_input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*structs_input));
