@@ -45,6 +45,10 @@ constexpr int MAX_DICT_BITS = 24;
 // Total number of unsigned 24 bit values
 constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 
+// level decode buffer size.
+// at size 4096, each page requires 32kb of memory
+constexpr int LEVEL_DECODE_BUF_SIZE = 4096;
+
 /**
  * @brief Struct representing an input column in the file.
  */
@@ -193,6 +197,9 @@ struct PageInfo {
   int32_t nesting_info_size;
   PageNestingInfo* nesting;
   PageNestingDecodeInfo* nesting_decode;
+
+  // level decode buffers
+  uint32_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
 };
 
 /**
@@ -284,6 +291,7 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
   hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
+  rmm::device_buffer level_decode_data;
 };
 
 /**

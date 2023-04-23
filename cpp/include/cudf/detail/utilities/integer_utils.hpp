@@ -44,7 +44,7 @@ namespace util {
  * `modulus` is positive. The safety is in regard to rollover.
  */
 template <typename S>
-S round_up_safe(S number_to_round, S modulus)
+constexpr S round_up_safe(S number_to_round, S modulus)
 {
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
@@ -67,7 +67,7 @@ S round_up_safe(S number_to_round, S modulus)
  * `modulus` is positive and does not check for overflow.
  */
 template <typename S>
-S round_down_safe(S number_to_round, S modulus) noexcept
+constexpr S round_down_safe(S number_to_round, S modulus) noexcept
 {
   auto remainder    = number_to_round % modulus;
   auto rounded_down = number_to_round - remainder;

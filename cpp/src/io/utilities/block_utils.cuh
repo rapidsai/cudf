@@ -27,6 +27,13 @@ inline __device__ T shuffle(T var, int lane = 0)
 }
 
 template <typename T>
+inline __device__ T shuffle_ptr(T var, int lane = 0)
+{
+  uintptr_t ptr_val = reinterpret_cast<uintptr_t>(var);
+  return reinterpret_cast<T>(shuffle(ptr_val));
+}
+
+template <typename T>
 inline __device__ T shuffle_xor(T var, uint32_t delta)
 {
   return __shfl_xor_sync(~0, var, delta);

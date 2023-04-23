@@ -565,9 +565,6 @@ void reader::impl::allocate_nesting_info()
   page_nesting_decode_info =
     hostdevice_vector<gpu::PageNestingDecodeInfo>{total_page_nesting_infos, _stream};
 
-  // retrieve from the gpu so we can update
-  pages.device_to_host(_stream, true);
-
   // update pointers in the PageInfos
   int target_page_index = 0;
   int src_info_index    = 0;
@@ -592,9 +589,6 @@ void reader::impl::allocate_nesting_info()
     }
     target_page_index += chunks[idx].num_data_pages;
   }
-
-  // copy back to the gpu
-  pages.host_to_device(_stream);
 
   // fill in
   int nesting_info_index = 0;
@@ -671,6 +665,28 @@ void reader::impl::allocate_nesting_info()
   // copy nesting info to the device
   page_nesting_info.host_to_device(_stream);
   page_nesting_decode_info.host_to_device(_stream);
+}
+
+void reader::impl::allocate_level_decode_space()
+{
+  auto& pages = _file_itm_data.pages_info;
+
+  // TODO: this could be made smaller if we ignored dictionary pages and pages with no
+  // repetition data.
+  size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * sizeof(uint32_t);
+  auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
+  _file_itm_data.level_decode_data      = rmm::device_buffer(decode_buf_size, _stream, _mr);
+
+  // distribute the buffers
+  uint32_t* buf = static_cast<uint32_t*>(_file_itm_data.level_decode_data.data());
+  for (size_t idx = 0; idx < pages.size(); idx++) {
+    auto& p = pages[idx];
+
+    p.lvl_decode_buf[gpu::level_type::DEFINITION] = buf;
+    buf += LEVEL_DECODE_BUF_SIZE;
+    p.lvl_decode_buf[gpu::level_type::REPETITION] = buf;
+    buf += LEVEL_DECODE_BUF_SIZE;
+  }
 }
 
 std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_column_chunks(
@@ -776,7 +792,7 @@ void reader::impl::load_and_decompress_data(
   auto& raw_page_data    = _file_itm_data.raw_page_data;
   auto& decomp_page_data = _file_itm_data.decomp_page_data;
   auto& chunks           = _file_itm_data.chunks;
-  auto& pages_info       = _file_itm_data.pages_info;
+  auto& pages            = _file_itm_data.pages_info;
 
   auto const [has_compressed_data, read_rowgroup_tasks] =
     create_and_read_column_chunks(row_groups_info, num_rows);
@@ -787,13 +803,13 @@ void reader::impl::load_and_decompress_data(
 
   // Process dataset chunk pages into output columns
   auto const total_pages = count_page_headers(chunks, _stream);
-  pages_info             = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
+  pages                  = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   if (total_pages > 0) {
     // decoding of column/page information
-    decode_page_headers(chunks, pages_info, _stream);
+    decode_page_headers(chunks, pages, _stream);
     if (has_compressed_data) {
-      decomp_page_data = decompress_page_data(chunks, pages_info, _stream);
+      decomp_page_data = decompress_page_data(chunks, pages, _stream);
       // Free compressed data
       for (size_t c = 0; c < chunks.size(); c++) {
         if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { raw_page_data[c].reset(); }
@@ -815,9 +831,17 @@ void reader::impl::load_and_decompress_data(
     // create it ourselves.
     // std::vector<output_column_info> output_info = build_output_column_info();
 
-    // nesting information (sizes, etc) stored -per page-
-    // note : even for flat schemas, we allocate 1 level of "nesting" info
-    allocate_nesting_info();
+    // the following two allocate functions modify the page data
+    pages.device_to_host(_stream, true);
+    {
+      // nesting information (sizes, etc) stored -per page-
+      // note : even for flat schemas, we allocate 1 level of "nesting" info
+      allocate_nesting_info();
+
+      // level decode space
+      allocate_level_decode_space();
+    }
+    pages.host_to_device(_stream);
   }
 }
 
