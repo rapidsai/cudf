@@ -1337,7 +1337,7 @@ __global__ void __launch_bounds__(32) gpuDecideCompression(device_span<EncColumn
     auto& curr_page           = ck_g.pages[page];
     auto const page_data_size = curr_page.max_data_size;
     uncompressed_data_size += page_data_size;
-    if (auto comp_res = curr_page.comp_res; and comp_res != nullptr) {
+    if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
       compressed_data_size += comp_res->bytes_written;
       if (comp_res->status != compression_status::SUCCESS) { atomicOr(&compression_error, 1); }
     }
