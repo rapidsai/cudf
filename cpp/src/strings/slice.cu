@@ -59,7 +59,7 @@ struct substring_from_fn {
 
     auto const stop = stops[idx];
     auto const end  = (((stop < 0) || (stop > length)) ? length : stop);
-    return d_str.substr(start, end - start);
+    return start < end ? d_str.substr(start, end - start) : string_view{};
   }
 
   substring_from_fn(column_device_view const& d_column, IndexIterator starts, IndexIterator stops)

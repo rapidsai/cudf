@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,19 @@ struct feature_status_parameters {
   {
   }
 };
+
+/**
+ * @brief Equality operator overload. Required to use `feature_status_parameters` as a map key.
+ */
+inline bool operator==(feature_status_parameters const& lhs, feature_status_parameters const& rhs)
+{
+  return lhs.lib_major_version == rhs.lib_major_version and
+         lhs.lib_minor_version == rhs.lib_minor_version and
+         lhs.lib_patch_version == rhs.lib_patch_version and
+         lhs.are_all_integrations_enabled == rhs.are_all_integrations_enabled and
+         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled and
+         lhs.compute_capability_major == rhs.compute_capability_major;
+}
 
 /**
  * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
