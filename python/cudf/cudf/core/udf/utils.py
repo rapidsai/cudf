@@ -24,6 +24,7 @@ from cudf._lib.strings_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
 )
+from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
@@ -253,14 +254,14 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     - The types of the columns utilized by the UDF
     - The existence of the input columns masks
     """
-    scalar_argtys = tuple(typeof(arg) for arg in args)
+    scalar_argtypes = tuple(typeof(arg) for arg in args)
     return (
         *cudautils.make_cache_key(
             func, tuple(_all_dtypes_from_frame(frame).values())
         ),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
-        scalar_argtys,
+        scalar_argtypes,
         suffix,
     )
 
@@ -287,6 +288,8 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     we then obtain the return type from that separate compilation and
     use it to allocate an output column of the right dtype.
     """
+    if not all(is_scalar(arg) for arg in args):
+        raise TypeError("only scalar valued args are supported by apply")
 
     # check to see if we already compiled this function
     cache_key = _generate_cache_key(frame, func, args)
