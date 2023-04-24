@@ -61,7 +61,7 @@ class CategoricalAccessor(ColumnMethods):
     dtype: category
     Categories (3, int64): [1, 2, 3]
     >>> s.cat.categories
-    Int64Index([1, 2, 3], dtype='int64')
+    Index([1, 2, 3], dtype='int64')
     >>> s.cat.reorder_categories([3,2,1])
     0    1
     1    2

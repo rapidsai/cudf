@@ -169,7 +169,7 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype.categories
-        StringIndex(['b' 'a'], dtype='object')
+        Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
             return cudf.core.index.as_index(

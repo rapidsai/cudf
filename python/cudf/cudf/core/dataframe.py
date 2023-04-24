@@ -6603,7 +6603,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Columns: [0, 1, 2, 3]
         Index: []
         >>> df.keys()
-        Int64Index([0, 1, 2, 3], dtype='int64')
+        Index([0, 1, 2, 3], dtype='int64')
         """
         return self._data.to_pandas_index()
 
@@ -7303,14 +7303,14 @@ def from_pandas(obj, nan_as_null=None):
 
     >>> pidx = pd.Index([1, 2, 10, 20])
     >>> pidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> gidx = cudf.from_pandas(pidx)
     >>> gidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> type(gidx)
-    <class 'cudf.core.index.Int64Index'>
+    <class 'cudf.core.index.Index'>
     >>> type(pidx)
-    <class 'pandas.core.indexes.numeric.Int64Index'>
+    <class 'pandas.core.indexes.base.Index'>
 
     Converting a Pandas MultiIndex to cuDF MultiIndex:
 

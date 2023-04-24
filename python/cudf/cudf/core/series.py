@@ -3328,7 +3328,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         c    3
         dtype: int64
         >>> sr.keys()
-        StringIndex(['a' 'b' 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='object')
         """
         return self.index
 

@@ -1383,7 +1383,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Dropping multiple levels:
 
         >>> idx.droplevel(["first", "second"])
-        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
         mi = self.copy(deep=False)
         mi._poplevels(level)

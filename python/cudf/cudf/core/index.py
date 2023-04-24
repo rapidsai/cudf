@@ -1317,9 +1317,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
-            output = repr(self._clean_nulls_from_index().to_pandas())
-
-            if not isinstance(self._values, StringColumn):
+            if isinstance(self._values, StringColumn):
+                output = repr(self.to_pandas(nullable=True))
+            else:
+                output = repr(self._clean_nulls_from_index().to_pandas())
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1670,7 +1671,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
         >>> datetime_index
         DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
         >>> datetime_index.year
-        Int16Index([2000, 2001, 2002], dtype='int16')
+        Index([2000, 2001, 2002], dtype='int16')
         """  # noqa: E501
         return self._get_dt_field("year")
 
@@ -1689,7 +1690,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
         >>> datetime_index
         DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
         >>> datetime_index.month
-        Int16Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int16')
         """  # noqa: E501
         return self._get_dt_field("month")
 
@@ -1708,7 +1709,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
         >>> datetime_index
         DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
         >>> datetime_index.day
-        Int16Index([1, 2, 3], dtype='int16')
+        Index([1, 2, 3], dtype='int16')
         """  # noqa: E501
         return self._get_dt_field("day")
 
@@ -1729,7 +1730,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2000-01-01 02:00:00'],
                     dtype='datetime64[ns]')
         >>> datetime_index.hour
-        Int16Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int16')
         """
         return self._get_dt_field("hour")
 
@@ -1750,7 +1751,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2000-01-01 00:02:00'],
                     dtype='datetime64[ns]')
         >>> datetime_index.minute
-        Int16Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int16')
         """
         return self._get_dt_field("minute")
 
@@ -1771,7 +1772,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2000-01-01 00:00:02'],
                     dtype='datetime64[ns]')
         >>> datetime_index.second
-        Int16Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int16')
         """
         return self._get_dt_field("second")
 
@@ -1792,7 +1793,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[ns]')
         >>> datetime_index.microsecond
-        Int32Index([0, 1, 2], dtype='int32')
+        Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
         return as_index(
             (
@@ -1824,7 +1825,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                        '2000-01-01 00:00:00.000000002'],
                       dtype='datetime64[ns]')
         >>> datetime_index.nanosecond
-        Int16Index([0, 1, 2], dtype='int16')
+        Index([0, 1, 2], dtype='int16')
         """
         return self._get_dt_field("nanosecond")
 
@@ -1846,7 +1847,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2017-01-08'],
                     dtype='datetime64[ns]')
         >>> datetime_index.weekday
-        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
         return self._get_dt_field("weekday")
 
@@ -1868,7 +1869,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2017-01-08'],
                     dtype='datetime64[ns]')
         >>> datetime_index.dayofweek
-        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
         return self._get_dt_field("weekday")
 
@@ -1891,7 +1892,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2017-01-08'],
                     dtype='datetime64[ns]')
         >>> datetime_index.dayofyear
-        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
         return self._get_dt_field("day_of_year")
 
@@ -1914,7 +1915,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
                     '2017-01-08'],
                     dtype='datetime64[ns]')
         >>> datetime_index.day_of_year
-        Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
+        Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
         return self._get_dt_field("day_of_year")
 
@@ -1949,7 +1950,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
 
         Returns
         -------
-        Int8Index
+        Index
         Integer indicating which quarter the date belongs to.
 
         Examples
@@ -1958,7 +1959,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
         >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
         ...    "1999-12-31 18:40:00"])
         >>> gIndex.quarter
-        Int8Index([2, 4], dtype='int8')
+        Index([2, 4], dtype='int8')
         """
         res = extract_quarter(self._values)
         return Index(res, dtype="int8")

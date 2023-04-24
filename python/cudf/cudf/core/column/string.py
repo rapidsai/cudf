@@ -706,7 +706,7 @@ class StringMethods(ColumnMethods):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
         >>> idx = cudf.Index(data)
         >>> idx
-        StringIndex(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
+        Index(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
         >>> idx.str.contains('23', regex=False)
         GenericIndex([False, False, False, True, <NA>], dtype='bool')
 
@@ -2794,7 +2794,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123' 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -2859,7 +2859,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123' 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -3525,7 +3525,7 @@ class StringMethods(ColumnMethods):
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Int64Index([0, 0, 2, 1], dtype='int64')
+        Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U

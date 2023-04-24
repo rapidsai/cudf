@@ -310,7 +310,7 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index([None, None, None], name="hello"),
-            "Index([None None None], dtype='object', name='hello')",
+            "Index([<NA>, <NA>, <NA>], dtype='object', name='hello')",
         ),
         (
             cudf.Index([None, None, None], dtype="float", name="hello"),
@@ -326,11 +326,12 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index([None] * 50, dtype="object"),
-            "Index([None None None None None None None None "
-            "None None None None None None\n None None None None None None "
-            "None None None None None None None None\n None None None None "
-            "None None None None None None None None None None\n None None "
-            "None None None None None None], dtype='object')",
+            "Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>"
+            ", <NA>, <NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>,\n       <NA>, <NA>, <NA>, <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>,\n       <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>],\n      dtype='object')",
         ),
         (
             cudf.Index([None] * 20, dtype="uint32"),
