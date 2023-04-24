@@ -302,7 +302,7 @@ class writer::impl {
    * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
    * @param compressed_data Compressed stream data
    * @param intermediate_stats Statistics data stored between calls to write
-   * @param stream_output Temporary host output buffer
+   * @param bounce_buffer Temporary host output buffer
    */
   void write_orc_data_to_sink(orc_streams& streams,
                               hostdevice_vector<compression_result> const& comp_results,
@@ -313,7 +313,7 @@ class writer::impl {
                               orc_table_view const& orc_table,
                               rmm::device_buffer const& compressed_data,
                               intermediate_statistics& intermediate_stats,
-                              host_span<uint8_t> stream_output);
+                              host_span<uint8_t> bounce_buffer);
 
   /**
    * @brief Add the processed table data into the internal file footer.

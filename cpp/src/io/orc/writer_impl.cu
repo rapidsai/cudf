@@ -2273,17 +2273,17 @@ auto convert_table_to_orc_data(table_view const& input,
   auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
 
   if (num_rows == 0) {
-    return {std::move(streams),
-            hostdevice_vector<compression_result>{},  // comp_results
-            std::move(strm_descs),
-            std::move(enc_data),
-            std::move(segmentation),
-            std::move(stripe_dict),
-            std::move(stripes),
-            std::move(orc_table),
-            rmm::device_buffer{},  // compressed_data
-            intermediate_statistics{stream},
-            cudf::detail::pinned_host_vector<uint8_t>{}};
+    return std::tuple{std::move(streams),
+                      hostdevice_vector<compression_result>{},  // comp_results
+                      std::move(strm_descs),
+                      std::move(enc_data),
+                      std::move(segmentation),
+                      std::move(stripe_dict),
+                      std::move(stripes),
+                      std::move(orc_table),
+                      rmm::device_buffer{},  // compressed_data
+                      intermediate_statistics{stream},
+                      cudf::detail::pinned_host_vector<uint8_t>()};
   }
 
   // Allocate intermediate output stream buffer
@@ -2297,7 +2297,7 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const padded_block_header_size =
     util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
 
-  auto stream_output = [&]() {
+  auto bounce_buffer = [&]() {
     size_t max_stream_size = 0;
     bool all_device_write  = true;
 
@@ -2318,7 +2318,7 @@ auto convert_table_to_orc_data(table_view const& input,
       max_stream_size = std::max(max_stream_size, stream_size);
     }
 
-    return cudf::detail::pinned_host_vector{all_device_write ? 0 : max_stream_size};
+    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_stream_size);
   }();
 
   // Compress the data streams
@@ -2350,17 +2350,17 @@ auto convert_table_to_orc_data(table_view const& input,
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 
-  return {std::move(streams),
-          std::move(comp_results),
-          std::move(strm_descs),
-          std::move(enc_data),
-          std::move(segmentation),
-          std::move(stripe_dict),
-          std::move(stripes),
-          std::move(orc_table),
-          std::move(compressed_data),
-          std::move(intermediate_stats),
-          std::move(stream_output)};
+  return std::tuple{std::move(streams),
+                    std::move(comp_results),
+                    std::move(strm_descs),
+                    std::move(enc_data),
+                    std::move(segmentation),
+                    std::move(stripe_dict),
+                    std::move(stripes),
+                    std::move(orc_table),
+                    std::move(compressed_data),
+                    std::move(intermediate_stats),
+                    std::move(bounce_buffer)};
 }
 
 }  // namespace
@@ -2434,7 +2434,7 @@ void writer::impl::write(table_view const& input)
                          orc_table,
                          compressed_data,
                          intermediate_stats,
-                         stream_output] = [&] {
+                         bounce_buffer] = [&] {
     try {
       return convert_table_to_orc_data(input,
                                        *_table_meta,
@@ -2465,7 +2465,7 @@ void writer::impl::write(table_view const& input)
                          orc_table,
                          compressed_data,
                          intermediate_stats,
-                         stream_output);
+                         bounce_buffer);
 
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
@@ -2480,7 +2480,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
                                           orc_table_view const& orc_table,
                                           rmm::device_buffer const& compressed_data,
                                           intermediate_statistics& intermediate_stats,
-                                          host_span<uint8_t> stream_output)
+                                          host_span<uint8_t> bounce_buffer)
 {
   if (orc_table.num_rows() == 0) { return; }
 
@@ -2520,7 +2520,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
         strm_desc,
         enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
         static_cast<uint8_t const*>(compressed_data.data()),
-        stream_output.data(),
+        bounce_buffer.data(),
         &stripe,
         &streams,
         _compression_kind,
