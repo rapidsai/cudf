@@ -154,7 +154,7 @@ class hostdevice_vector {
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] operator hostdevice_span<T>()
   {
@@ -164,13 +164,16 @@ class hostdevice_vector {
   /**
    * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @param offset The offset of the first element in the subspan
+   * @param count The number of elements in the subspan
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
   {
-    CUDF_EXPECTS(count >= offset, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(count <= d_data.size(), "Slice range out of bounds.");
-    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count - offset};
+    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
+    CUDF_EXPECTS(count <= d_data.size() - offset,
+                 "The span with given offset and count is out of bounds.");
+    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
   }
 
  private:
