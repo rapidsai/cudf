@@ -93,6 +93,24 @@ TEST_P(Parameters, Substring_From)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_P(Parameters, SubstringStopZero)
+{
+  cudf::size_type start = GetParam();
+  cudf::test::strings_column_wrapper input({"abc", "défgh", "", "XYZ"});
+  auto view = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::slice_strings(view, start, 0);
+  cudf::test::strings_column_wrapper expected({"", "", "", ""});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto starts =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({start, start, start, start});
+  auto stops = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 0, 0, 0});
+
+  results = cudf::strings::slice_strings(view, starts, stops);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_P(Parameters, AllEmpty)
 {
   std::vector<std::string> h_strings{"", "", "", ""};
