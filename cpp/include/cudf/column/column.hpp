@@ -47,10 +47,10 @@ namespace cudf {
 
 class column {
  public:
-  column()        = default;
-  ~column()       = default;
+  column()                               = default;
+  ~column()                              = default;
   column& operator=(column const& other) = delete;
-  column& operator=(column&& other) = delete;
+  column& operator=(column&& other)      = delete;
 
   /**
    * @brief Construct a new column object by deep copying the contents of

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct TransformedIteratorTest : public IteratorTest<int8_t> {
-};
+struct TransformedIteratorTest : public IteratorTest<int8_t> {};
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by transform_iterator and

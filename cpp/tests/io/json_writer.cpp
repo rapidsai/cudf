@@ -26,8 +26,7 @@
 #include <string>
 #include <vector>
 
-struct JsonWriterTest : public cudf::test::BaseFixture {
-};
+struct JsonWriterTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonWriterTest, EmptyInput)
 {

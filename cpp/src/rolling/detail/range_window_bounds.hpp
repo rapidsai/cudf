@@ -33,12 +33,13 @@ constexpr bool is_supported_range_type()
 }
 
 /// Checks if the specified type is a supported target type,
-/// as an orderby column, for comparisons with a range_window_bounds scalar.
+/// as an order-by column, for comparisons with a range_window_bounds scalar.
 template <typename ColumnType>
 constexpr bool is_supported_order_by_column_type()
 {
   return cudf::is_timestamp<ColumnType>() || cudf::is_fixed_point<ColumnType>() ||
-         (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>());
+         (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>()) ||
+         std::is_same_v<ColumnType, cudf::string_view>;
 }
 
 /// Range-comparable representation type for an orderby column type.
