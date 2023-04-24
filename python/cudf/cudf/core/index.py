@@ -990,7 +990,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             # pandas returns numpy arrays when the outputs are boolean.
             for i, o in enumerate(out):
                 # We explicitly _do not_ use isinstance here: we want only
-                # boolean GenericIndexes, not dtype-specific subclasses.
+                # boolean Indexes, not dtype-specific subclasses.
                 if type(o) is Index and o.dtype.kind == "b":
                     out[i] = o.values
 
@@ -1042,7 +1042,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
-        # GenericIndexes, not dtype-specific subclasses.
+        # Indexes, not dtype-specific subclasses.
         if type(ret) is Index and ret.dtype.kind == "b":
             return ret.values
         return ret

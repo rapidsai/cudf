@@ -664,11 +664,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
 
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
-    # Test with a GenericIndex
+    # Test with a Index
     pdf2 = pd.DataFrame(
         {"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4]
     )
-    # Test with a GenericIndex in a different order
+    # Test with a Index in a different order
     pdf3 = pd.DataFrame(
         {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
         index=[0, 3, 5, 3],

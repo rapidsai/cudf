@@ -22,7 +22,7 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class IndexedFrame
 % class SingleColumnFrame
 % class BaseIndex
-% class GenericIndex
+% class Index
 % class MultiIndex
 % class RangeIndex
 % class DataFrame
@@ -42,8 +42,8 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
 %
-% BaseIndex <|-- GenericIndex
-% SingleColumnFrame <|-- GenericIndex
+% BaseIndex <|-- Index
+% SingleColumnFrame <|-- Index
 %
 % @enduml
 
@@ -89,12 +89,12 @@ While we've highlighted some exceptional cases of Indexes before, let's start wi
 In practice, `BaseIndex` does have concrete implementations of a small set of methods.
 However, currently many of these implementations are not applicable to all subclasses and will be eventually be removed.
 
-Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
+Almost all indexes are subclasses of `Index`, a single-columned index with the class hierarchy:
 ```python
-class GenericIndex(SingleColumnFrame, BaseIndex)
+class Index(SingleColumnFrame, BaseIndex)
 ```
 Integer, float, or string indexes are all composed of a single column of data.
-Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
+Most `Index` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
 We now consider the three main exceptions to this model:
 

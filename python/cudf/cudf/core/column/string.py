@@ -708,7 +708,7 @@ class StringMethods(ColumnMethods):
         >>> idx
         Index(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
         >>> idx.str.contains('23', regex=False)
-        GenericIndex([False, False, False, True, <NA>], dtype='bool')
+        Index([False, False, False, True, <NA>], dtype='bool')
 
         Returning 'house' or 'dog' when either expression occurs in a string.
 
