@@ -223,8 +223,8 @@ packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resour
  * @copydoc cudf::pack_metadata
  */
 std::vector<uint8_t> pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size)
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()

@@ -9,6 +9,7 @@ from rmm._lib.device_buffer cimport device_buffer
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
+
 cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef cppclass packed_columns:
         unique_ptr[vector[uint8_t]] metadata_
