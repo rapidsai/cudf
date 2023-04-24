@@ -2456,30 +2456,30 @@ void writer::impl::write(table_view const& input)
   }();
 
   // Compression/encoding were all successful. Now write the intermediate results.
-  write_orc_data_to_sink(streams,
-                         comp_results,
+  write_orc_data_to_sink(comp_results,
                          strm_descs,
                          enc_data,
                          segmentation,
-                         stripes,
                          orc_table,
                          compressed_data,
                          intermediate_stats,
+                         streams,
+                         stripes,
                          bounce_buffer);
 
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
 }
 
-void writer::impl::write_orc_data_to_sink(orc_streams& streams,
-                                          hostdevice_vector<compression_result> const& comp_results,
+void writer::impl::write_orc_data_to_sink(hostdevice_vector<compression_result> const& comp_results,
                                           hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
                                           encoded_data const& enc_data,
                                           file_segmentation const& segmentation,
-                                          host_span<StripeInformation> stripes,
                                           orc_table_view const& orc_table,
                                           rmm::device_buffer const& compressed_data,
                                           intermediate_statistics& intermediate_stats,
+                                          orc_streams& streams,
+                                          host_span<StripeInformation> stripes,
                                           host_span<uint8_t> bounce_buffer)
 {
   if (orc_table.num_rows() == 0) { return; }

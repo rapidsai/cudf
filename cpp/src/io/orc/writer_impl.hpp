@@ -293,26 +293,26 @@ class writer::impl {
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
    * by `process_for_write` called in the `write()` function.
    *
-   * @param streams List of stream descriptors
-   * @param comp_results Status of data compression
-   * @param strm_descs List of stream descriptors
-   * @param enc_data ORC per-chunk streams of encoded data
-   * @param segmentation Description of how the ORC file is segmented into stripes and rowgroups
-   * @param stripes List of stripe description
-   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
-   * @param compressed_data Compressed stream data
-   * @param intermediate_stats Statistics data stored between calls to write
-   * @param bounce_buffer Temporary host output buffer
+   * @param[in] comp_results Status of data compression
+   * @param[in] strm_descs List of stream descriptors
+   * @param[in] enc_data ORC per-chunk streams of encoded data
+   * @param[in] segmentation Description of how the ORC file is segmented into stripes and rowgroups
+   * @param[in] orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param[in] compressed_data Compressed stream data
+   * @param[in,out] intermediate_stats Statistics data stored between calls to write
+   * @param[in,out] streams List of stream descriptors
+   * @param[in,out] stripes List of stripe description
+   * @param[in,out] bounce_buffer Temporary host output buffer
    */
-  void write_orc_data_to_sink(orc_streams& streams,
-                              hostdevice_vector<compression_result> const& comp_results,
+  void write_orc_data_to_sink(hostdevice_vector<compression_result> const& comp_results,
                               hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
                               encoded_data const& enc_data,
                               file_segmentation const& segmentation,
-                              host_span<StripeInformation> stripes,
                               orc_table_view const& orc_table,
                               rmm::device_buffer const& compressed_data,
                               intermediate_statistics& intermediate_stats,
+                              orc_streams& streams,
+                              host_span<StripeInformation> stripes,
                               host_span<uint8_t> bounce_buffer);
 
   /**
