@@ -65,26 +65,25 @@ def _check_types(
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
-            and isinstance(
-                right,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(right, cudf.Index)
+                and str(right.dtype) in {"int8", "int16", "int32", "int64"}
             )
         ) or (
             isinstance(right, cudf.RangeIndex)
-            and isinstance(
-                left,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(left, cudf.Index)
+                and str(left.dtype) in {"int8", "int16", "int32", "int64"}
             )
+            # and isinstance(
+            #     left,
+            #     (
+            #         cudf.Int8Index,
+            #         cudf.Int16Index,
+            #         cudf.Int32Index,
+            #         cudf.Int64Index,
+            #     ),
+            # )
         ):
             return
 

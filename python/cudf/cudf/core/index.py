@@ -9,12 +9,10 @@ from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
-    Dict,
     List,
     MutableMapping,
     Optional,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -35,7 +33,6 @@ from cudf.api.types import (
     is_interval_dtype,
     is_list_like,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
 from cudf.core.column import (
@@ -69,8 +66,39 @@ from cudf.core._compat import PANDAS_GE_200
 T = TypeVar("T", bound="Frame")
 
 
+class IndexMeta(type):
+    """Custom metaclass for Index that overrides instance/subclass tests."""
+
+    def __call__(cls, data, *args, **kwargs):
+        if cls is Index:
+            return as_index(
+                arbitrary=data,
+                *args,
+                **kwargs,
+            )
+        return super().__call__(data, *args, **kwargs)
+
+    def __instancecheck__(self, instance):
+        return isinstance(instance, BaseIndex)
+
+    def __subclasscheck__(self, subclass):
+        return issubclass(subclass, BaseIndex)
+
+
+class ChildIndexMeta(IndexMeta):
+    def __instancecheck__(self, instance):
+        if isinstance(instance, Index):
+            return False
+        return super().__instancecheck__(instance)
+
+    def __subclasscheck__(self, instance):
+        if issubclass(instance, Index):
+            return False
+        return super().__subclasscheck__(instance)
+
+
 def _lexsorted_equal_range(
-    idx: Union[GenericIndex, cudf.MultiIndex],
+    idx: Union[Index, cudf.MultiIndex],
     key_as_table: Frame,
     is_sorted: bool,
 ) -> Tuple[int, int, Optional[ColumnBase]]:
@@ -103,18 +131,18 @@ def _index_from_data(data: MutableMapping, name: Any = None):
         values = next(iter(data.values()))
 
         if isinstance(values, NumericalColumn):
-            try:
-                index_class_type: Type[
-                    Union[GenericIndex, cudf.MultiIndex]
-                ] = _dtype_to_index[values.dtype.type]
-            except KeyError:
-                index_class_type = GenericIndex
+            # try:
+            #     index_class_type: Type[
+            #         Union[Index, cudf.MultiIndex]
+            #     ] = _dtype_to_index[values.dtype.type]
+            # except KeyError:
+            index_class_type = Index
         elif isinstance(values, DatetimeColumn):
             index_class_type = DatetimeIndex
         elif isinstance(values, TimeDeltaColumn):
             index_class_type = TimedeltaIndex
         elif isinstance(values, StringColumn):
-            index_class_type = StringIndex
+            index_class_type = Index
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
         elif isinstance(values, (IntervalColumn, StructColumn)):
@@ -567,7 +595,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _as_int_index(self):
         # Convert self to an integer index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        return _dtype_to_index[self.dtype.type]._from_data(self._data)
+        return cudf.Index._from_data(self._data)
 
     @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -773,13 +801,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return _dtype_to_index[self.dtype.type]._from_columns(
+        return cudf.Index._from_columns(
             [self._values.take(gather_map, nullify, check_bounds)], [self.name]
         )
 
     @_cudf_nvtx_annotate
     def _apply_boolean_mask(self, boolean_mask):
-        return _dtype_to_index[self.dtype.type]._from_columns(
+        return cudf.Index._from_columns(
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
@@ -787,7 +815,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return _dtype_to_index[self.dtype.type]._from_columns(
+        return cudf.Index._from_columns(
             [self._as_int_index()._split(splits)], [self.name]
         )
 
@@ -920,7 +948,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return abs(self._as_int_index())
 
 
-class GenericIndex(SingleColumnFrame, BaseIndex):
+class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
     An array of orderable values that represent the indices of another Column
 
@@ -939,26 +967,26 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Column's, the data Column will be cloned to adopt this name.
     """
 
-    @_cudf_nvtx_annotate
-    def __init__(self, data, **kwargs):
-        kwargs = _setdefault_name(data, **kwargs)
+    # @_cudf_nvtx_annotate
+    # def __init__(self, data, **kwargs):
+    #     kwargs = _setdefault_name(data, **kwargs)
 
-        # normalize the input
-        if isinstance(data, cudf.Series):
-            data = data._column
-        elif isinstance(data, column.ColumnBase):
-            data = data
-        else:
-            if isinstance(data, (list, tuple)):
-                if len(data) == 0:
-                    data = np.asarray([], dtype="int64")
-                else:
-                    data = np.asarray(data)
-            data = column.as_column(data)
-            assert isinstance(data, (NumericalColumn, StringColumn))
+    #     # normalize the input
+    #     if isinstance(data, cudf.Series):
+    #         data = data._column
+    #     elif isinstance(data, column.ColumnBase):
+    #         data = data
+    #     else:
+    #         if isinstance(data, (list, tuple)):
+    #             if len(data) == 0:
+    #                 data = np.asarray([], dtype="int64")
+    #             else:
+    #                 data = np.asarray(data)
+    #         data = column.as_column(data)
+    #         assert isinstance(data, (NumericalColumn, StringColumn))
 
-        name = kwargs.get("name")
-        super().__init__({name: data})
+    #     name = kwargs.get("name")
+    #     super().__init__({name: data})
 
     @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -989,22 +1017,40 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             for i, o in enumerate(out):
                 # We explicitly _do not_ use isinstance here: we want only
                 # boolean GenericIndexes, not dtype-specific subclasses.
-                if type(o) is GenericIndex and o.dtype.kind == "b":
+                if type(o) is Index and o.dtype.kind == "b":
                     out[i] = o.values
 
             return out[0] if ufunc.nout == 1 else tuple(out)
 
         return NotImplemented
 
+    @copy_docstring(StringMethods)  # type: ignore
+    @property
+    @_cudf_nvtx_annotate
+    def str(self):
+        if isinstance(self._values, cudf.core.column.StringColumn):
+            return StringMethods(parent=self)
+        else:
+            raise AttributeError(
+                "Can only use .str accessor with string values!"
+            )
+
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(
-        cls, data: MutableMapping, name: Any = None
-    ) -> GenericIndex:
+    def _from_data(cls, data: MutableMapping, name: Any = None) -> Index:
         out = super()._from_data(data=data)
         if name is not None:
             out.name = name
         return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
+    def from_arrow(cls, obj):
+        try:
+            return cls(ColumnBase.from_arrow(obj))
+        except TypeError:
+            # Try interpreting object as a MultiIndex before failing.
+            return cudf.MultiIndex.from_arrow(obj)
 
     def _binaryop(
         self,
@@ -1023,15 +1069,15 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
-        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+        if type(ret) is Index and ret.dtype.kind == "b":
             return ret.values
         return ret
 
     # Override just to make mypy happy.
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
-        self: GenericIndex, other: GenericIndex, *, override_dtypes=None
-    ) -> GenericIndex:
+        self: Index, other: Index, *, override_dtypes=None
+    ) -> Index:
         return super()._copy_type_metadata(
             other, override_dtypes=override_dtypes
         )
@@ -1299,7 +1345,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         elif preprocess._values.nullable:
             output = repr(self._clean_nulls_from_index().to_pandas())
 
-            if not isinstance(self, StringIndex):
+            if not isinstance(self._values, StringColumn):
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1344,7 +1390,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @_cudf_nvtx_annotate
     def dtype(self):
         """
-        `dtype` of the underlying values in GenericIndex.
+        `dtype` of the underlying values in Index.
         """
         return self._values.dtype
 
@@ -1385,19 +1431,21 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._values.get_slice_bound(label, side)
 
     def _is_numeric(self):
-        return False
+        return isinstance(
+            self._values, cudf.core.column.NumericalColumn
+        ) and self.dtype != cudf.dtype("bool")
 
     def _is_boolean(self):
-        return True
+        return self.dtype == cudf.dtype("bool")
 
     def _is_integer(self):
-        return False
+        return cudf.api.types.is_integer_dtype(self.dtype)
 
     def _is_floating(self):
-        return False
+        return cudf.api.types.is_float_dtype(self.dtype)
 
     def _is_object(self):
-        return False
+        return isinstance(self._values, cudf.core.column.StringColumn)
 
     def _is_categorical(self):
         return False
@@ -1540,332 +1588,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._values.isin(values).values
 
 
-class NumericIndex(GenericIndex):
-    """Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-    """
-
-    # Subclasses must define the dtype they are associated with.
-    _dtype: Union[None, Type[np.number]] = None
-
-    @_cudf_nvtx_annotate
-    def __init__(self, data=None, dtype=None, copy=False, name=None):
-        warnings.warn(
-            f"cudf.{self.__class__.__name__} is deprecated and will be "
-            "removed from cudf in a future version. Use cudf.Index with the "
-            "appropriate dtype instead.",
-            FutureWarning,
-        )
-
-        dtype = type(self)._dtype
-        if copy:
-            data = column.as_column(data, dtype=dtype).copy()
-
-        kwargs = _setdefault_name(data, name=name)
-
-        data = column.as_column(data, dtype=dtype)
-
-        super().__init__(data, **kwargs)
-
-    def _is_numeric(self):
-        return True
-
-    def _is_boolean(self):
-        return False
-
-    def _is_integer(self):
-        return True
-
-    def _is_floating(self):
-        return False
-
-    def _is_object(self):
-        return False
-
-    def _is_categorical(self):
-        return False
-
-    def _is_interval(self):
-        return False
-
-
-class Int8Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Int8Index is a special case of Index with purely
-    integer(``int8``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Int8Index
-    """
-
-    _dtype = np.int8
-
-
-class Int16Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Int16Index is a special case of Index with purely
-    integer(``int16``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Int16Index
-    """
-
-    _dtype = np.int16
-
-
-class Int32Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Int32Index is a special case of Index with purely
-    integer(``int32``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Int32Index
-    """
-
-    _dtype = np.int32
-
-
-class Int64Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Int64Index is a special case of Index with purely
-    integer(``int64``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Int64Index
-    """
-
-    _dtype = np.int64
-
-
-class UInt8Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt8Index is a special case of Index with purely
-    integer(``uint64``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    UInt8Index
-    """
-
-    _dtype = np.uint8
-
-
-class UInt16Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt16Index is a special case of Index with purely
-    integer(``uint16``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    UInt16Index
-    """
-
-    _dtype = np.uint16
-
-
-class UInt32Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt32Index is a special case of Index with purely
-    integer(``uint32``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    UInt32Index
-    """
-
-    _dtype = np.uint32
-
-
-class UInt64Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt64Index is a special case of Index with purely
-    integer(``uint64``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    UInt64Index
-    """
-
-    _dtype = np.uint64
-
-
-class Float32Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Float32Index is a special case of Index with purely
-    float(``float32``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Float32Index
-    """
-
-    _dtype = np.float32
-
-    def _is_integer(self):
-        return False
-
-    def _is_floating(self):
-        return True
-
-
-class Float64Index(NumericIndex):
-    """
-    Immutable, ordered and sliceable sequence of labels.
-    The basic object storing row labels for all cuDF objects.
-    Float64Index is a special case of Index with purely
-    float(``float64``) labels.
-
-    Parameters
-    ----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype,
-            but not used.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Float64Index
-    """
-
-    _dtype = np.float64
-
-    def _is_integer(self):
-        return False
-
-    def _is_floating(self):
-        return True
-
-
-class DatetimeIndex(GenericIndex):
+class DatetimeIndex(Index, metaclass=ChildIndexMeta):
     """
     Immutable , ordered and sliceable sequence of datetime64 data,
     represented internally as int64.
@@ -1955,8 +1678,8 @@ class DatetimeIndex(GenericIndex):
 
         if copy:
             data = data.copy()
-
-        super().__init__(data, **kwargs)
+        name = kwargs.pop("name", None)
+        super().__init__({name: data}, **kwargs)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2300,7 +2023,7 @@ class DatetimeIndex(GenericIndex):
     def _get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # column.column_empty_like always returns a Column object
-        # but we need a NumericalColumn for GenericIndex..
+        # but we need a NumericalColumn for Index..
         # how should this be handled?
         out_column = column.build_column(
             data=out_column.base_data,
@@ -2420,7 +2143,7 @@ class DatetimeIndex(GenericIndex):
         return self.__class__._from_data({self.name: out_column})
 
 
-class TimedeltaIndex(GenericIndex):
+class TimedeltaIndex(Index, metaclass=ChildIndexMeta):
     """
     Immutable, ordered and sliceable sequence of timedelta64 data,
     represented internally as int64.
@@ -2494,8 +2217,8 @@ class TimedeltaIndex(GenericIndex):
 
         if copy:
             data = data.copy()
-
-        super().__init__(data, **kwargs)
+        name = kwargs.pop("name", None)
+        super().__init__({name: data}, **kwargs)
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
@@ -2570,7 +2293,7 @@ class TimedeltaIndex(GenericIndex):
         return False
 
 
-class CategoricalIndex(GenericIndex):
+class CategoricalIndex(Index, metaclass=ChildIndexMeta):
     """
     A categorical of orderable values that represent the indices of another
     Column
@@ -2665,8 +2388,8 @@ class CategoricalIndex(GenericIndex):
             data = data.as_ordered()
         elif ordered is False and data.ordered is True:
             data = data.as_unordered()
-
-        super().__init__(data, **kwargs)
+        name = kwargs.pop("name", None)
+        super().__init__({name: data}, **kwargs)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2835,7 +2558,7 @@ def interval_range(
     return IntervalIndex(interval_col)
 
 
-class IntervalIndex(GenericIndex):
+class IntervalIndex(Index, metaclass=ChildIndexMeta):
     """
     Immutable index of intervals that are closed on the same side.
 
@@ -2890,7 +2613,8 @@ class IntervalIndex(GenericIndex):
             data.dtype.closed = closed
 
         self.closed = closed
-        super().__init__(data, **kwargs)
+        name = kwargs.pop("name", None)
+        super().__init__({name: data}, **kwargs)
 
     @_cudf_nvtx_annotate
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
@@ -2945,69 +2669,69 @@ class IntervalIndex(GenericIndex):
         return False
 
 
-class StringIndex(GenericIndex):
-    """String defined indices into another Column
+# class StringIndex(Index):
+#     """String defined indices into another Column
 
-    Attributes
-    ----------
-    _values: A StringColumn object or NDArray of strings
-    name: A string
-    """
+#     Attributes
+#     ----------
+#     _values: A StringColumn object or NDArray of strings
+#     name: A string
+#     """
 
-    @_cudf_nvtx_annotate
-    def __init__(self, values, copy=False, **kwargs):
-        kwargs = _setdefault_name(values, **kwargs)
-        if isinstance(values, StringColumn):
-            values = values.copy(deep=copy)
-        elif isinstance(values, StringIndex):
-            values = values._values.copy(deep=copy)
-        else:
-            values = column.as_column(values, dtype="str")
-            if not is_string_dtype(values.dtype):
-                raise ValueError(
-                    "Couldn't create StringIndex from passed in object"
-                )
+#     @_cudf_nvtx_annotate
+#     def __init__(self, values, copy=False, **kwargs):
+#         kwargs = _setdefault_name(values, **kwargs)
+#         if isinstance(values, StringColumn):
+#             values = values.copy(deep=copy)
+#         elif isinstance(values, StringIndex):
+#             values = values._values.copy(deep=copy)
+#         else:
+#             values = column.as_column(values, dtype="str")
+#             if not is_string_dtype(values.dtype):
+#                 raise ValueError(
+#                     "Couldn't create StringIndex from passed in object"
+#                 )
 
-        super().__init__(values, **kwargs)
+#         super().__init__(values, **kwargs)
 
-    @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False):
-        return pd.Index(
-            self.to_numpy(na_value=None),
-            name=self.name,
-            dtype=pd.StringDtype() if nullable else "object",
-        )
+#     @_cudf_nvtx_annotate
+#     def to_pandas(self, nullable=False):
+#         return pd.Index(
+#             self.to_numpy(na_value=None),
+#             name=self.name,
+#             dtype=pd.StringDtype() if nullable else "object",
+#         )
 
-    @_cudf_nvtx_annotate
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}({self._values.values_host},"
-            f" dtype='object'"
-            + (
-                f", name={pd.io.formats.printing.default_pprint(self.name)}"
-                if self.name is not None
-                else ""
-            )
-            + ")"
-        )
+#     @_cudf_nvtx_annotate
+#     def __repr__(self):
+#         return (
+#             f"{self.__class__.__name__}({self._values.values_host},"
+#             f" dtype='object'"
+#             + (
+#                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
+#                 if self.name is not None
+#                 else ""
+#             )
+#             + ")"
+#         )
 
-    @copy_docstring(StringMethods)  # type: ignore
-    @property
-    @_cudf_nvtx_annotate
-    def str(self):
-        return StringMethods(parent=self)
+#     @copy_docstring(StringMethods)  # type: ignore
+#     @property
+#     @_cudf_nvtx_annotate
+#     def str(self):
+#         return StringMethods(parent=self)
 
-    def _clean_nulls_from_index(self):
-        if self._values.has_nulls():
-            return self.fillna(cudf._NA_REP)
-        else:
-            return self
+#     def _clean_nulls_from_index(self):
+#         if self._values.has_nulls():
+#             return self.fillna(cudf._NA_REP)
+#         else:
+#             return self
 
-    def _is_boolean(self):
-        return False
+#     def _is_boolean(self):
+#         return False
 
-    def _is_object(self):
-        return True
+#     def _is_object(self):
+#         return True
 
 
 @_cudf_nvtx_annotate
@@ -3030,7 +2754,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     result : subclass of Index
         - CategoricalIndex for Categorical input.
         - DatetimeIndex for Datetime input.
-        - GenericIndex for all other inputs.
+        - Index for all other inputs.
     """
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
@@ -3067,18 +2791,18 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     )
 
 
-_dtype_to_index: Dict[Any, Type[NumericIndex]] = {
-    np.int8: Int8Index,
-    np.int16: Int16Index,
-    np.int32: Int32Index,
-    np.int64: Int64Index,
-    np.uint8: UInt8Index,
-    np.uint16: UInt16Index,
-    np.uint32: UInt32Index,
-    np.uint64: UInt64Index,
-    np.float32: Float32Index,
-    np.float64: Float64Index,
-}
+# _dtype_to_index: Dict[Any, Type[NumericIndex]] = {
+#     np.int8: Int8Index,
+#     np.int16: Int16Index,
+#     np.int32: Int32Index,
+#     np.int64: Int64Index,
+#     np.uint8: UInt8Index,
+#     np.uint16: UInt16Index,
+#     np.uint32: UInt32Index,
+#     np.uint64: UInt64Index,
+#     np.float32: Float32Index,
+#     np.float64: Float64Index,
+# }
 
 
 def _setdefault_name(values, **kwargs):
@@ -3087,97 +2811,88 @@ def _setdefault_name(values, **kwargs):
     return kwargs
 
 
-class IndexMeta(type):
-    """Custom metaclass for Index that overrides instance/subclass tests."""
+# class Index(BaseIndex, metaclass=IndexMeta):
+#     """The basic object storing row labels for all cuDF objects.
 
-    def __instancecheck__(self, instance):
-        return isinstance(instance, BaseIndex)
+#     Parameters
+#     ----------
+#     data : array-like (1-dimensional)/ DataFrame
+#         If it is a DataFrame, it will return a MultiIndex
+#     dtype : NumPy dtype (default: object)
+#         If dtype is None, we find the dtype that best fits the data.
+#     copy : bool
+#         Make a copy of input data.
+#     name : object
+#         Name to be stored in the index.
+#     tupleize_cols : bool (default: True)
+#         When True, attempt to create a MultiIndex if possible.
+#         tupleize_cols == False is not yet supported.
+#     nan_as_null : bool, Default True
+#         If ``None``/``True``, converts ``np.nan`` values to
+#         ``null`` values.
+#         If ``False``, leaves ``np.nan`` values as is.
 
-    def __subclasscheck__(self, subclass):
-        return issubclass(subclass, BaseIndex)
+#     Returns
+#     -------
+#     Index
+#         cudf Index
 
+#     Warnings
+#     --------
+#     This class should not be subclassed. It is designed as a factory for
+#     different subclasses of :class:`BaseIndex` depending on the provided
+#     input.
+#     If you absolutely must, and if you're intimately familiar with the
+#     internals of cuDF, subclass :class:`BaseIndex` instead.
 
-class Index(BaseIndex, metaclass=IndexMeta):
-    """The basic object storing row labels for all cuDF objects.
+#     Examples
+#     --------
+#     >>> import cudf
+#     >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
+#     UInt64Index([1, 2, 3], dtype='uint64', name='a')
 
-    Parameters
-    ----------
-    data : array-like (1-dimensional)/ DataFrame
-        If it is a DataFrame, it will return a MultiIndex
-    dtype : NumPy dtype (default: object)
-        If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-    tupleize_cols : bool (default: True)
-        When True, attempt to create a MultiIndex if possible.
-        tupleize_cols == False is not yet supported.
-    nan_as_null : bool, Default True
-        If ``None``/``True``, converts ``np.nan`` values to
-        ``null`` values.
-        If ``False``, leaves ``np.nan`` values as is.
+#     >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
+#     MultiIndex([(1, 2),
+#                 (2, 3)],
+#                 names=['a', 'b'])
+#     """
 
-    Returns
-    -------
-    Index
-        cudf Index
+# @_cudf_nvtx_annotate
+# def __new__(
+#     cls,
+#     data=None,
+#     dtype=None,
+#     copy=False,
+#     name=None,
+#     tupleize_cols=True,
+#     nan_as_null=True,
+#     **kwargs,
+# ):
+#     assert (
+#         cls is Index
+#     ), "Index cannot be subclassed, extend BaseIndex instead."
+#     if tupleize_cols is not True:
+#         raise NotImplementedError(
+#             "tupleize_cols != True is not yet supported"
+#         )
 
-    Warnings
-    --------
-    This class should not be subclassed. It is designed as a factory for
-    different subclasses of :class:`BaseIndex` depending on the provided input.
-    If you absolutely must, and if you're intimately familiar with the
-    internals of cuDF, subclass :class:`BaseIndex` instead.
+#     return as_index(
+#         data,
+#         copy=copy,
+#         dtype=dtype,
+#         name=name,
+#         nan_as_null=nan_as_null,
+#         **kwargs,
+#     )
 
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
-    UInt64Index([1, 2, 3], dtype='uint64', name='a')
-
-    >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-    MultiIndex([(1, 2),
-                (2, 3)],
-                names=['a', 'b'])
-    """
-
-    @_cudf_nvtx_annotate
-    def __new__(
-        cls,
-        data=None,
-        dtype=None,
-        copy=False,
-        name=None,
-        tupleize_cols=True,
-        nan_as_null=True,
-        **kwargs,
-    ):
-        assert (
-            cls is Index
-        ), "Index cannot be subclassed, extend BaseIndex instead."
-        if tupleize_cols is not True:
-            raise NotImplementedError(
-                "tupleize_cols != True is not yet supported"
-            )
-
-        return as_index(
-            data,
-            copy=copy,
-            dtype=dtype,
-            name=name,
-            nan_as_null=nan_as_null,
-            **kwargs,
-        )
-
-    @classmethod
-    @_cudf_nvtx_annotate
-    def from_arrow(cls, obj):
-        try:
-            return cls(ColumnBase.from_arrow(obj))
-        except TypeError:
-            # Try interpreting object as a MultiIndex before failing.
-            return cudf.MultiIndex.from_arrow(obj)
+# @classmethod
+# @_cudf_nvtx_annotate
+# def from_arrow(cls, obj):
+#     try:
+#         return cls(ColumnBase.from_arrow(obj))
+#     except TypeError:
+#         # Try interpreting object as a MultiIndex before failing.
+#         return cudf.MultiIndex.from_arrow(obj)
 
 
 @_cudf_nvtx_annotate

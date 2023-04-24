@@ -1416,9 +1416,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = cudf.core.index.GenericIndex._concat(
-                    [o.index for o in objs]
-                )
+                index = cudf.core.index.Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:

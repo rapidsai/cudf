@@ -104,7 +104,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.GenericIndex":
+    def categories(self) -> "cudf.core.index.Index":
         """
         The categories of this categorical.
         """

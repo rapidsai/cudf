@@ -15,7 +15,7 @@ from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
-    GenericIndex,
+    Index,
     IntervalIndex,
     RangeIndex,
     as_index,
@@ -204,9 +204,9 @@ def test_pandas_as_index():
     gdf_category_index = as_index(pdf_category_index)
 
     # Check instance types
-    assert isinstance(gdf_int_index, GenericIndex)
-    assert isinstance(gdf_uint_index, GenericIndex)
-    assert isinstance(gdf_float_index, GenericIndex)
+    assert isinstance(gdf_int_index, Index)
+    assert isinstance(gdf_uint_index, Index)
+    assert isinstance(gdf_float_index, Index)
     assert isinstance(gdf_datetime_index, DatetimeIndex)
     assert isinstance(gdf_category_index, CategoricalIndex)
 
@@ -329,7 +329,7 @@ def test_index_copy_datetime(name, deep=True):
 
 @pytest.mark.parametrize("name", ["x"])
 def test_index_copy_string(name, deep=True):
-    cidx = cudf.StringIndex(["a", "b", "c"])
+    cidx = cudf.Index(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep)
@@ -379,7 +379,7 @@ def test_index_copy_category(name, deep=True):
     "idx",
     [
         cudf.DatetimeIndex(["2001", "2002", "2003"]),
-        cudf.StringIndex(["a", "b", "c"]),
+        cudf.Index(["a", "b", "c"]),
         cudf.Index([1, 2, 3]),
         cudf.Index([1.0, 2.0, 3.0]),
         cudf.CategoricalIndex([1, 2, 3]),
@@ -393,7 +393,7 @@ def test_index_copy_deep(idx, deep, copy_on_write):
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", copy_on_write)
     if (
-        isinstance(idx, cudf.StringIndex)
+        isinstance(idx._values, cudf.core.column.StringColumn)
         or not deep
         or (cudf.get_option("copy_on_write") and not deep)
     ):
@@ -433,7 +433,7 @@ def test_rangeindex_slice_attr_name():
 def test_from_pandas_str():
     idx = ["a", "b", "c"]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.StringIndex(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
@@ -1207,91 +1207,48 @@ def test_index_basic(data, dtype, name):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
-    with pytest.warns(FutureWarning):
-        pindex = pd.Int64Index(data, dtype=dtype, name=name)
-    # Int8Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Int8Index(data, dtype=dtype, name=name)
+    if PANDAS_GE_200:
+        pindex = pd.Index(data, dtype=dtype, name=name)
+    else:
+        with pytest.warns(FutureWarning):
+            pindex = pd.Int64Index(data, dtype=dtype, name=name)
+
+    gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("int8")
-
-    # Int16Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Int16Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("int16")
-
-    # Int32Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Int32Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("int32")
-
-    # Int64Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Int64Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("int64")
+    assert gindex.dtype == dtype
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", UNSIGNED_TYPES)
 def test_unsigned_integer_index_apis(data, name, dtype):
-    with pytest.warns(FutureWarning):
-        pindex = pd.UInt64Index(data, dtype=dtype, name=name)
-    # UInt8Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.UInt8Index(data, dtype=dtype, name=name)
+    if PANDAS_GE_200:
+        pindex = pd.Index(data, dtype=dtype, name=name)
+    else:
+        with pytest.warns(FutureWarning):
+            pindex = pd.UInt64Index(data, dtype=dtype, name=name)
+
+    gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("uint8")
-
-    # UInt16Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.UInt16Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("uint16")
-
-    # UInt32Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.UInt32Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("uint32")
-
-    # UInt64Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.UInt64Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("uint64")
+    assert gindex.dtype == dtype
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_float_index_apis(data, name, dtype):
-    with pytest.warns(FutureWarning):
-        pindex = pd.Float64Index(data, dtype=dtype, name=name)
-    # Float32Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Float32Index(data, dtype=dtype, name=name)
+    if PANDAS_GE_200:
+        pindex = pd.Index(data, dtype=dtype, name=name)
+    else:
+        with pytest.warns(FutureWarning):
+            pindex = pd.Float64Index(data, dtype=dtype, name=name)
+
+    gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("float32")
-
-    # Float64Index
-    with pytest.warns(FutureWarning):
-        gindex = cudf.Float64Index(data, dtype=dtype, name=name)
-
-    assert_eq(pindex, gindex)
-    assert gindex.dtype == np.dtype("float64")
+    assert gindex.dtype == dtype
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
