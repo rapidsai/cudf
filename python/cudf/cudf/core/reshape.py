@@ -13,6 +13,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.api.extensions import no_default
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -609,7 +610,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype="uint8",
+    dtype="bool",
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -640,7 +641,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        Output dtype, default 'uint8'
+        Output dtype, default 'bool'
 
     Examples
     --------
@@ -648,15 +649,15 @@ def get_dummies(
     >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
     >>> cudf.get_dummies(df)
        b  a_value1  a_value2
-    0  0         1         0
-    1  0         0         1
-    2  0         0         0
+    0  0      True     False
+    1  0     False      True
+    2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_None  a_value1  a_value2
-    0  0       0         1         0
-    1  0       0         0         1
-    2  0       1         0         0
+       b  a_<NA>  a_value1  a_value2
+    0  0   False      True     False
+    1  0   False     False      True
+    2  0    True     False     False
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -669,11 +670,11 @@ def get_dummies(
     3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_1.0  a_2.0  a_nan  a_null
-    0      1      0      0       0
-    1      0      1      0       0
-    2      0      0      1       0
-    3      0      0      0       1
+       a_<NA>  a_1.0  a_2.0  a_nan
+    0   False   True  False  False
+    1   False  False   True  False
+    2   False  False  False   True
+    3    True  False  False  False
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -684,12 +685,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-       null  1  2  4
-    0     0  1  0  0
-    1     0  0  1  0
-    2     1  0  0  0
-    3     0  0  1  0
-    4     0  0  0  1
+        <NA>      1      2      4
+    0  False   True  False  False
+    1  False  False   True  False
+    2   True  False  False  False
+    3  False  False   True  False
+    4  False  False  False   True
     """
 
     if cats is None:
@@ -905,7 +906,7 @@ def _pivot(df, index, columns):
     )
 
 
-def pivot(data, index=None, columns=None, values=None):
+def pivot(data, columns=None, index=no_default, values=no_default):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -915,10 +916,10 @@ def pivot(data, index=None, columns=None, values=None):
 
     Parameters
     ----------
-    index : column name, optional
-        Column used to construct the index of the result.
     columns : column name, optional
         Column used to construct the columns of the result.
+    index : column name, optional
+        Column used to construct the index of the result.
     values : column name or list of column names, optional
         Column(s) whose values are rearranged to produce the result.
         If not specified, all remaining columns of the DataFrame
@@ -957,7 +958,7 @@ def pivot(data, index=None, columns=None, values=None):
     """
     df = data
     values_is_list = True
-    if values is None:
+    if values is no_default:
         values = df._columns_view(
             col for col in df._column_names if col not in (index, columns)
         )
@@ -966,7 +967,7 @@ def pivot(data, index=None, columns=None, values=None):
             values = [values]
             values_is_list = False
         values = df._columns_view(values)
-    if index is None:
+    if index is no_default:
         index = df.index
     else:
         index = cudf.core.index.Index(df.loc[:, index])

@@ -104,6 +104,7 @@ from cudf.utils.utils import (
     _external_only_api,
 )
 from cudf.core._compat import PANDAS_GE_200
+from cudf.api.extensions import no_default
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -6636,7 +6637,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
-    def pivot(self, index, columns, values=None):
+    def pivot(self, *, columns, index=no_default, values=no_default):
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
         )
