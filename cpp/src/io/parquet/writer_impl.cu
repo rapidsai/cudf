@@ -1904,6 +1904,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        stream);
   }
 
+  // Check device write support for all chunks and initialize bounce_buffer.
+  bool all_device_write   = true;
+  uint32_t max_write_size = 0;
+
   // Encode row groups in batches
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
@@ -1942,6 +1946,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto& column_chunk_meta = row_group.columns[i].meta_data;
 
         if (ck.is_compressed) { column_chunk_meta.codec = compression; }
+        if (!out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
+          all_device_write = false;
+        }
+        max_write_size = std::max(max_write_size, ck.compressed_size);
 
         if (ck.ck_stat_size != 0) {
           column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
@@ -1963,31 +1971,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     if (need_sync) { stream.synchronize(); }
   }
 
-  auto bounce_buffer = [&] {
-    uint32_t max_write_size = 0;
-    bool all_device_write   = true;
-
-    for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
-      auto const rnext = r + batch_list[b];
-      for (; r < rnext; r++) {
-        int p = rg_to_part[r];
-        for (int i = 0; i < num_columns; i++) {
-          auto const& ck = chunks[r][i];
-          if (!out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
-            all_device_write = false;
-          }
-          max_write_size = std::max(max_write_size, ck.compressed_size);
-        }
-      }
-    }
-
-    // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
-    //    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
-    return all_device_write
-             ? thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(0)
-             : thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(
-                 max_write_size);
-  }();
+  // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
+  //    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
+  auto bounce_buffer = thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(
+    all_device_write ? 0 : max_write_size);
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),
