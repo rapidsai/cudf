@@ -379,7 +379,7 @@ void persisted_statistics::persist(int num_table_rows,
                                    intermediate_statistics& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
-  if (single_write_mode == SingleWriteMode::YES) {
+  if (single_write_mode == SingleWriteMode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
     // min offset and max offset + 1 for total size
