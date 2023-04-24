@@ -209,7 +209,7 @@ struct persisted_statistics {
   }
 
   void persist(int num_table_rows,
-               SingleWriteMode single_write_mode,
+               SingleWriteMode write_mode,
                intermediate_statistics& intermediate_stats,
                rmm::cuda_stream_view stream);
 

@@ -375,11 +375,11 @@ __global__ void copy_string_data(char* string_pool,
 }  // namespace
 
 void persisted_statistics::persist(int num_table_rows,
-                                   SingleWriteMode single_write_mode,
+                                   SingleWriteMode write_mode,
                                    intermediate_statistics& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
-  if (single_write_mode == SingleWriteMode::NO) {
+  if (write_mode == SingleWriteMode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
     // min offset and max offset + 1 for total size
@@ -666,7 +666,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                            std::map<uint32_t, size_t> const& decimal_column_sizes,
                            bool enable_dictionary,
                            CompressionKind compression_kind,
-                           SingleWriteMode single_write_mode)
+                           SingleWriteMode write_mode)
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -681,7 +681,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
   for (auto& column : columns) {
     auto const is_nullable = [&]() -> bool {
-      if (single_write_mode == SingleWriteMode::YES) {
+      if (write_mode == SingleWriteMode::YES) {
         return column.nullable();
       } else {
         // For chunked write, when not provided nullability, we assume the worst case scenario
@@ -2187,7 +2187,7 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
  * @param compression_kind The compression kind
  * @param compression_blocksize The block size used for compression
  * @param stats_freq Column statistics granularity type for parquet/orc writers
- * @param single_write_mode Flag to indicate if there is only a single table write
+ * @param write_mode Flag to indicate if there is only a single table write
  * @param out_sink Sink for writing data
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple of the intermediate results containing the processed data
@@ -2200,7 +2200,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                CompressionKind compression_kind,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
-                               SingleWriteMode single_write_mode,
+                               SingleWriteMode write_mode,
                                data_sink const& out_sink,
                                rmm::cuda_stream_view stream)
 {
@@ -2254,7 +2254,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                 decimal_column_sizes(dec_chunk_sizes.rg_sizes),
                                 enable_dictionary,
                                 compression_kind,
-                                single_write_mode);
+                                write_mode);
   auto enc_data = encode_columns(orc_table,
                                  std::move(dictionaries),
                                  std::move(dec_chunk_sizes),

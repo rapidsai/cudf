@@ -506,7 +506,7 @@ struct leaf_schema_fn {
 
 inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            SingleWriteMode single_write_mode)
+                            SingleWriteMode write_mode)
 {
   if (col_meta.is_nullability_defined()) {
     CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
@@ -516,7 +516,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return single_write_mode == SingleWriteMode::NO or col->nullable();
+  return write_mode == SingleWriteMode::NO or col->nullable();
 }
 
 /**
@@ -528,7 +528,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
 std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
-  SingleWriteMode single_write_mode,
+  SingleWriteMode write_mode,
   bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -542,7 +542,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
+      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -679,7 +679,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
-        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode),
+        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, write_mode),
                      "key column cannot be nullable. For chunked writing, explicitly set the "
                      "nullability to false in metadata");
         // process key
