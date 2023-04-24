@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/pinned_allocator.hpp>
-
-#include <thrust/host_vector.h>
-
 namespace cudf {
 namespace io {
 namespace detail {
@@ -27,13 +23,6 @@ namespace detail {
  * @brief Whether writer writes in chunks or all at once
  */
 enum class SingleWriteMode : bool { YES, NO };
-
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_host_vector = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
-
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf
