@@ -309,7 +309,7 @@ class writer::impl {
                               hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
                               encoded_data const& enc_data,
                               file_segmentation const& segmentation,
-                              std::vector<StripeInformation>& stripes,
+                              host_span<StripeInformation> stripes,
                               orc_table_view const& orc_table,
                               rmm::device_buffer const& compressed_data,
                               intermediate_statistics& intermediate_stats,
