@@ -78,18 +78,18 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-    cdef pylibcudf.ColumnView cv
-    cdef pylibcudf.Column c
+    cdef pylibcudf.libcudf_types.ColumnView cv
+    cdef pylibcudf.libcudf_types.Column c
     cdef column_view input_column_view
     cdef unique_ptr[column] c_result
 
     if cudf.get_option("_use_pylibcudf") == 2:
         cv = input_column.to_ColumnView()
-        c = pylibcudf.Column_from_ColumnView(cv)
+        c = pylibcudf.libcudf_types.Column_from_ColumnView(cv)
         return Column.from_Column(c)
     elif cudf.get_option("_use_pylibcudf") == 1:
         cv_ = input_column.to_ColumnView()
-        c_ = pylibcudf.Column_from_ColumnView(cv_)
+        c_ = pylibcudf.libcudf_types.Column_from_ColumnView(cv_)
         return Column.from_Column(c_)
     else:
         input_column_view = input_column.view()
@@ -193,11 +193,13 @@ def gather(
     cdef column_view gather_map_view
     cdef cpp_copying.out_of_bounds_policy policy
 
-    cdef pylibcudf.Table tbl
+    cdef pylibcudf.libcudf_types.Table tbl
 
     if cudf.get_option("_use_pylibcudf") > 0:
         tbl = pylibcudf.copying.gather(
-            pylibcudf.TableView([col.to_ColumnView() for col in columns]),
+            pylibcudf.libcudf_types.TableView(
+                [col.to_ColumnView() for col in columns]
+            ),
             gather_map.to_ColumnView(),
             pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
             else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK

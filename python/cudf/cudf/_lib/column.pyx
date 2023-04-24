@@ -444,7 +444,7 @@ cdef class Column:
     # TODO: For now the function name reflects the CapsCase of the pylibcudf
     # class to differentiate from libcudf's snake_case column_view, but we will
     # want to change that once cudf stops interfacing directly with libcudf.
-    cpdef pylibcudf.ColumnView to_ColumnView(self):
+    cpdef pylibcudf.libcudf_types.ColumnView to_ColumnView(self):
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
         # categoricals due to the ordering question.
@@ -471,7 +471,7 @@ cdef class Column:
             for child_column in col.base_children:
                 children.append(child_column.to_ColumnView())
 
-        return pylibcudf.ColumnView(
+        return pylibcudf.libcudf_types.ColumnView(
             dtype,
             self.size,
             data,
@@ -560,7 +560,7 @@ cdef class Column:
 
     @staticmethod
     def from_Column(
-        pylibcudf.Column col, bint data_ptr_exposed=False
+        pylibcudf.libcudf_types.Column col, bint data_ptr_exposed=False
     ):
         """Create a Column from a column
 
@@ -569,7 +569,7 @@ cdef class Column:
         `data_ptr_exposed=True` to expose the memory of the returned Column
         as well.
         """
-        cdef pylibcudf.ColumnView view = col.view()
+        cdef pylibcudf.libcudf_types.ColumnView view = col.view()
         cdef size_type size = view.size()
         cdef size_type null_count = view.null_count()
 
@@ -591,7 +591,7 @@ cdef class Column:
         #     with nogil:
         #         c_col = move(make_numeric_column(c_dtype, size, mask_state))
 
-        cdef pylibcudf.ColumnContents contents = col.release()
+        cdef pylibcudf.libcudf_types.ColumnContents contents = col.release()
 
         data = as_buffer(contents.data, exposed=data_ptr_exposed)
 
@@ -602,7 +602,7 @@ cdef class Column:
         # Because of a bug in Cython, we cannot set the optional
         # `data_ptr_exposed` argument within a comprehension.
         children = []
-        cdef pylibcudf.Column child
+        cdef pylibcudf.libcudf_types.Column child
         for child in contents.children:
             children.append(Column.from_Column(child, data_ptr_exposed))
 

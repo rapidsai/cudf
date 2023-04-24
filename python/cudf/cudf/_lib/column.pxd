@@ -27,7 +27,7 @@ cdef class Column:
     cdef column_view _view(self, size_type null_count) except *
     cdef column_view view(self) except *
     cdef mutable_column_view mutable_view(self) except *
-    cpdef pylibcudf.ColumnView to_ColumnView(self)
+    cpdef pylibcudf.libcudf_types.ColumnView to_ColumnView(self)
 
     @staticmethod
     cdef Column from_unique_ptr(

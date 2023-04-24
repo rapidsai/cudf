@@ -12,12 +12,12 @@
 # the License.
 # =============================================================================
 
-set(cython_sources aggregation.pyx copying.pyx gpumemoryview.pyx groupby.pyx types.pyx utils.pyx)
+set(cython_sources column.pyx column_view.pyx table.pyx table_view.pyx)
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_libcudf_ ASSOCIATED_TARGETS cudf
 )
 
 # set(targets_using_numpy io_datasource io_utils) foreach(target IN LISTS targets_using_numpy)
@@ -27,5 +27,3 @@ rapids_cython_create_modules(
 foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/..)
 endforeach()
-
-add_subdirectory(libcudf_types)

@@ -6,9 +6,9 @@ from libcpp.vector cimport vector
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport bitmask_type, size_type
 
-from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+from ..gpumemoryview cimport gpumemoryview
+from ..types cimport DataType
+from ..utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
 cdef class ColumnView:

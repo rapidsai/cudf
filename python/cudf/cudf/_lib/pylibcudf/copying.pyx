@@ -11,9 +11,9 @@ from libcpp.utility cimport move
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.table.table cimport table
 
-from .column_view cimport ColumnView
-from .table cimport Table
-from .table_view cimport TableView
+from .libcudf_types.column_view cimport ColumnView
+from .libcudf_types.table cimport Table
+from .libcudf_types.table_view cimport TableView
 
 
 # Cython doesn't support scoped enumerations. It assumes that enums correspond

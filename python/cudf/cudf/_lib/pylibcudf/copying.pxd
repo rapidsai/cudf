@@ -4,9 +4,9 @@ from libcpp cimport bool as cbool
 
 from cudf._lib.cpp cimport copying as cpp_copying
 
-from .column_view cimport ColumnView
-from .table cimport Table
-from .table_view cimport TableView
+from .libcudf_types.column_view cimport ColumnView
+from .libcudf_types.table cimport Table
+from .libcudf_types.table_view cimport TableView
 
 ctypedef cbool underlying_type_t_out_of_bounds_policy
 cpdef enum OutOfBoundsPolicy:
