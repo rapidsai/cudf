@@ -270,11 +270,12 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   auto content              = input->release();
 
   // Build new children columns.
-  std::for_each(
-    content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-      child = superimpose_nulls_no_sanitize(
-        current_mask, cudf::UNKNOWN_NULL_COUNT, std::move(child), stream, mr);
-    });
+  std::for_each(content.children.begin(),
+                content.children.end(),
+                [current_mask, new_null_count, stream, mr](auto& child) {
+                  child = superimpose_nulls_no_sanitize(
+                    current_mask, new_null_count, std::move(child), stream, mr);
+                });
 
   // Replace the children columns.
   return cudf::make_structs_column(num_rows,
