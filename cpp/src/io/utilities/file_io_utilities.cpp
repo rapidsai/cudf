@@ -117,7 +117,7 @@ void cufile_shim::modify_cufile_json() const
 
 void cufile_shim::load_cufile_lib()
 {
-  cf_lib = dlopen("libcufile.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+  cf_lib = dlopen("libcufile.so.0", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
   CUDF_EXPECTS(cf_lib != nullptr, "Failed to load cuFile library");
   driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
   CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
