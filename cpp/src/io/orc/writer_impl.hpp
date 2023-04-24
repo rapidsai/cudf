@@ -209,7 +209,7 @@ struct persisted_statistics {
   }
 
   void persist(int num_table_rows,
-               bool single_write_mode,
+               SingleWriteMode single_write_mode,
                intermediate_statistics& intermediate_stats,
                rmm::cuda_stream_view stream);
 
@@ -334,9 +334,9 @@ class writer::impl {
   CompressionKind const _compression_kind;
   size_t const _compression_blocksize;
   statistics_freq const _stats_freq;
-  bool const _single_write_mode;  // Special parameter only used by `write()` to indicate that
-                                  // we are guaranteeing a single table write. This enables some
-                                  // internal optimizations.
+  SingleWriteMode const _single_write_mode;  // Special parameter only used by `write()` to indicate
+                                             // that we are guaranteeing a single table write. This
+                                             // enables some internal optimizations.
   std::map<std::string, std::string> const _kv_meta;  // Optional user metadata.
   std::unique_ptr<data_sink> const _out_sink;
 

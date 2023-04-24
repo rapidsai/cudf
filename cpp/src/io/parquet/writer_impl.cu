@@ -506,7 +506,7 @@ struct leaf_schema_fn {
 
 inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            bool single_write_mode)
+                            SingleWriteMode single_write_mode)
 {
   if (col_meta.is_nullability_defined()) {
     CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
@@ -516,7 +516,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return not single_write_mode or col->nullable();
+  return single_write_mode == SingleWriteMode::NO or col->nullable();
 }
 
 /**
@@ -528,7 +528,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
 std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
-  bool single_write_mode,
+  SingleWriteMode single_write_mode,
   bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -1330,7 +1330,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {
@@ -1356,7 +1356,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {

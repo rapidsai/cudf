@@ -229,9 +229,9 @@ class writer::impl {
   bool const _int96_timestamps;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
-  bool const _single_write_mode = true;  // Special parameter only used by `write()` to indicate
-                                         // that we are guaranteeing a single table write.
-                                         // This enables some internal optimizations.
+  SingleWriteMode const _single_write_mode;  // Special parameter only used by `write()` to indicate
+                                             // that we are guaranteeing a single table write.
+                                             // This enables some internal optimizations.
   std::vector<std::unique_ptr<data_sink>> const _out_sink;
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.

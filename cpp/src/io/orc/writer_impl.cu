@@ -375,11 +375,11 @@ __global__ void copy_string_data(char* string_pool,
 }  // namespace
 
 void persisted_statistics::persist(int num_table_rows,
-                                   bool single_write_mode,
+                                   SingleWriteMode single_write_mode,
                                    intermediate_statistics& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
-  if (not single_write_mode) {
+  if (single_write_mode == SingleWriteMode::YES) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
     // min offset and max offset + 1 for total size
@@ -666,7 +666,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                            std::map<uint32_t, size_t> const& decimal_column_sizes,
                            bool enable_dictionary,
                            CompressionKind compression_kind,
-                           bool single_write_mode)
+                           SingleWriteMode single_write_mode)
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -681,7 +681,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
   for (auto& column : columns) {
     auto const is_nullable = [&]() -> bool {
-      if (single_write_mode) {
+      if (single_write_mode == SingleWriteMode::YES) {
         return column.nullable();
       } else {
         // For chunked write, when not provided nullability, we assume the worst case scenario
@@ -2200,7 +2200,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                CompressionKind compression_kind,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
-                               bool single_write_mode,
+                               SingleWriteMode single_write_mode,
                                data_sink const& out_sink,
                                rmm::cuda_stream_view stream)
 {
@@ -2375,7 +2375,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _compression_kind(to_orc_compression(options.get_compression())),
     _compression_blocksize(compression_block_size(_compression_kind)),
     _stats_freq(options.get_statistics_freq()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
     _out_sink(std::move(sink))
 {
@@ -2395,7 +2395,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _compression_kind(to_orc_compression(options.get_compression())),
     _compression_blocksize(compression_block_size(_compression_kind)),
     _stats_freq(options.get_statistics_freq()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
     _out_sink(std::move(sink))
 {
