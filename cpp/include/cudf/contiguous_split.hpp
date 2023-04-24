@@ -123,7 +123,7 @@ struct packed_table {
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
- * @param[in] mr Device memory resource used to allocate the returned result's device memory
+ * @param mr An optional memory resource to use for all returned device allocations
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer
  */
@@ -140,7 +140,7 @@ std::vector<packed_table> contiguous_split(
  * `cudf::unpack` to deserialize.
  *
  * @param input View of the table to pack
- * @param[in] mr An optional memory resource to use for all returned device allocations
+ * @param mr An optional memory resource to use for all returned device allocations
  * @return packed_columns A struct containing the serialized metadata and data in contiguous host
  *         and device memory respectively
  */
