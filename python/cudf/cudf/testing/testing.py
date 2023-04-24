@@ -75,15 +75,6 @@ def _check_types(
                 isinstance(left, cudf.Index)
                 and str(left.dtype) in {"int8", "int16", "int32", "int64"}
             )
-            # and isinstance(
-            #     left,
-            #     (
-            #         cudf.Int8Index,
-            #         cudf.Int16Index,
-            #         cudf.Int32Index,
-            #         cudf.Int64Index,
-            #     ),
-            # )
         ):
             return
 
