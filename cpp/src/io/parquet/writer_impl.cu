@@ -1444,6 +1444,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
+ * @param out_sink Sink for writing data
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple of the intermediate results containing the processed data
  */
@@ -1464,6 +1465,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    size_t max_dictionary_size,
                                    bool single_write_mode,
                                    bool int96_timestamps,
+                                   host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
   auto vec         = table_to_linked_columns(input);
@@ -1961,9 +1963,31 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     if (need_sync) { stream.synchronize(); }
   }
 
-  // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
-  auto write_buff =
-    thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(max_chunk_bfr_size);
+  auto bounce_buffer = [&] {
+    uint32_t max_write_size = 0;
+    bool all_device_write   = true;
+
+    for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+      auto const rnext = r + batch_list[b];
+      for (; r < rnext; r++) {
+        int p = rg_to_part[r];
+        for (int i = 0; i < num_columns; i++) {
+          auto const& ck = chunks[r][i];
+          if (!out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
+            all_device_write = false;
+          }
+          max_write_size = std::max(max_write_size, ck.compressed_size);
+        }
+      }
+    }
+
+    // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
+    //    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
+    return all_device_write
+             ? thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(0)
+             : thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(
+                 max_write_size);
+  }();
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),
@@ -1975,7 +1999,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                     std::move(uncomp_bfr),
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
-                    std::move(write_buff),
+                    std::move(bounce_buffer),
                     single_streams_table.num_columns()};
 }
 
@@ -2058,6 +2082,8 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current
   // writer is still intact.
+  // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
+  // writing anything to it.
   [[maybe_unused]] auto [updated_agg_meta,
                          pages,
                          chunks,
@@ -2068,7 +2094,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
-                         write_buff,
+                         bounce_buffer,
                          num_columns] = [&] {
     try {
       return convert_table_to_parquet_data(*_table_meta,
@@ -2088,6 +2114,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _max_dictionary_size,
                                            _single_write_mode,
                                            _int96_timestamps,
+                                           _out_sink,
                                            _stream);
     } catch (...) {  // catch any exception type
       CUDF_LOG_ERROR(
@@ -2105,7 +2132,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                              first_rg_in_part,
                              batch_list,
                              rg_to_part,
-                             write_buff);
+                             bounce_buffer);
 
   _last_write_successful = true;
 }
@@ -2142,6 +2169,8 @@ void writer::impl::write_parquet_data_to_sink(
           write_tasks.push_back(_out_sink[p]->device_write_async(
             dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
         } else {
+          CUDF_EXPECTS(bounce_buffer.size() >= ck.compressed_size,
+                       "Bounce buffer was not properly initialized.");
           CUDF_CUDA_TRY(cudaMemcpyAsync(bounce_buffer.data(),
                                         dev_bfr + ck.ck_stat_size,
                                         ck.compressed_size,
