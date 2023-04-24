@@ -123,24 +123,22 @@ class writer::impl {
    * by `convert_table_to_parquet_data` called in the `write()` function.
    *
    * @param updated_agg_meta The updated aggregate data after processing the input
-   * @param chunks Column chunks
    * @param pages Encoded pages
+   * @param chunks Column chunks
    * @param global_rowgroup_base Numbers of rowgroups in each file/partition
    * @param first_rg_in_part The first rowgroup in each partition
    * @param batch_list The batches of rowgroups to encode
    * @param rg_to_part A map from rowgroup to partition
-   * @param num_columns Number of encoded columns
-   * @param write_buff Temporary host output buffer
+   * @param[out] bounce_buffer Temporary host output buffer
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-                                  hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
-                                  rmm::device_uvector<gpu::EncPage> const& pages,
-                                  std::vector<size_t> const& global_rowgroup_base,
-                                  std::vector<int> const& first_rg_in_part,
-                                  std::vector<size_type> const& batch_list,
-                                  std::vector<int> const& rg_to_part,
-                                  size_type num_columns,
-                                  uint8_t* write_buff);
+                                  device_span<gpu::EncPage const> pages,
+                                  host_2dspan<gpu::EncColumnChunk const> chunks,
+                                  host_span<size_t const> global_rowgroup_base,
+                                  host_span<int const> first_rg_in_part,
+                                  host_span<size_type const> batch_list,
+                                  host_span<int const> rg_to_part,
+                                  host_span<uint8_t> bounce_buffer);
 
   // Cuda stream to be used
   rmm::cuda_stream_view _stream;

@@ -60,12 +60,14 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 struct aggregate_writer_metadata {
-  aggregate_writer_metadata(std::vector<partition_info> const& partitions,
+  aggregate_writer_metadata(host_span<partition_info const> partitions,
+                            host_span<std::map<std::string, std::string> const> kv_md,
+                            host_span<SchemaElement const> tbl_schema,
                             size_type num_columns,
-                            std::vector<SchemaElement> schema,
-                            statistics_freq stats_granularity,
-                            std::vector<std::map<std::string, std::string>> const& kv_md)
-    : version(1), schema(std::move(schema)), files(partitions.size())
+                            statistics_freq stats_granularity)
+    : version(1),
+      schema(std::vector<SchemaElement>(tbl_schema.begin(), tbl_schema.end())),
+      files(partitions.size())
   {
     for (size_t i = 0; i < partitions.size(); ++i) {
       this->files[i].num_rows = partitions[i].num_rows;
@@ -85,7 +87,7 @@ struct aggregate_writer_metadata {
 
   aggregate_writer_metadata(aggregate_writer_metadata const&) = default;
 
-  void update_files(std::vector<partition_info> const& partitions)
+  void update_files(host_span<partition_info const> partitions)
   {
     CUDF_EXPECTS(partitions.size() == this->files.size(),
                  "New partitions must be same size as previously passed number of partitions");
@@ -108,7 +110,7 @@ struct aggregate_writer_metadata {
     return meta;
   }
 
-  void set_file_paths(std::vector<std::string> const& column_chunks_file_path)
+  void set_file_paths(host_span<std::string const> column_chunks_file_path)
   {
     for (size_t p = 0; p < this->files.size(); ++p) {
       auto& file            = this->files[p];
@@ -171,11 +173,6 @@ struct aggregate_writer_metadata {
 };
 
 namespace {
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to parquet compression.
@@ -1429,12 +1426,12 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
  * @brief Perform the processing steps needed to convert the input table into the output Parquet
  * data for writing, such as compression and encoding.
  *
+ * @param[in,out] table_meta The table metadata
  * @param input The input table
  * @param partitions Optional partitions to divide the table into, if specified then must be same
  *        size as number of sinks
- * @param table_meta The table metadata
- * @param curr_agg_meta The current aggregate writer metadata
  * @param kv_meta Optional user metadata
+ * @param curr_agg_meta The current aggregate writer metadata
  * @param max_page_fragment_size_opt Optional maximum number of rows in a page fragment
  * @param max_row_group_size Maximum row group size, in bytes
  * @param max_page_size_bytes Maximum uncompressed page size, in bytes
@@ -1450,11 +1447,11 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple of the intermediate results containing the processed data
  */
-auto convert_table_to_parquet_data(table_view const& input,
-                                   std::vector<partition_info> const& partitions,
-                                   table_input_metadata& table_meta,
+auto convert_table_to_parquet_data(table_input_metadata& table_meta,
+                                   table_view const& input,
+                                   host_span<partition_info const> partitions,
+                                   host_span<std::map<std::string, std::string> const> kv_meta,
                                    std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
-                                   std::vector<std::map<std::string, std::string>> const& kv_meta,
                                    std::optional<size_type> max_page_fragment_size_opt,
                                    size_t max_row_group_size,
                                    size_t max_page_size_bytes,
@@ -1553,7 +1550,7 @@ auto convert_table_to_parquet_data(table_view const& input,
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [&, max_page_fragment_size](auto const& part) {
+                 [max_page_fragment_size](auto const& part) {
                    return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
                  });
 
@@ -1592,11 +1589,7 @@ auto convert_table_to_parquet_data(table_view const& input,
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   if (!curr_agg_meta) {
     agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions,
-      num_columns,
-      std::vector<SchemaElement>(this_table_schema.begin(), this_table_schema.end()),
-      stats_granularity,
-      kv_meta);
+      partitions, kv_meta, this_table_schema, num_columns, stats_granularity);
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
@@ -1968,16 +1961,13 @@ auto convert_table_to_parquet_data(table_view const& input,
     if (need_sync) { stream.synchronize(); }
   }
 
-  auto write_buff = pinned_buffer<uint8_t>{[](size_t size) {
-                                             uint8_t* ptr = nullptr;
-                                             CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                             return ptr;
-                                           }(max_chunk_bfr_size),
-                                           cudaFreeHost};
+  // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
+  auto write_buff =
+    thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(max_chunk_bfr_size);
 
   return std::tuple{std::move(agg_meta),
-                    std::move(chunks),
                     std::move(pages),
+                    std::move(chunks),
                     std::move(global_rowgroup_base),
                     std::move(first_rg_in_part),
                     std::move(batch_list),
@@ -2069,8 +2059,8 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   // If any error occurs, such as out-of-memory exception, the internal state of the current
   // writer is still intact.
   [[maybe_unused]] auto [updated_agg_meta,
-                         chunks,
                          pages,
+                         chunks,
                          global_rowgroup_base,
                          first_rg_in_part,
                          batch_list,
@@ -2081,11 +2071,11 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          write_buff,
                          num_columns] = [&] {
     try {
-      return convert_table_to_parquet_data(input,
+      return convert_table_to_parquet_data(*_table_meta,
+                                           input,
                                            partitions,
-                                           *_table_meta,
-                                           _agg_meta,
                                            _kv_meta,
+                                           _agg_meta,
                                            _max_page_fragment_size,
                                            _max_row_group_size,
                                            _max_page_size_bytes,
@@ -2109,30 +2099,29 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
 
   // Compression/encoding were all successful. Now write the intermediate results.
   write_parquet_data_to_sink(updated_agg_meta,
-                             chunks,
                              pages,
+                             chunks,
                              global_rowgroup_base,
                              first_rg_in_part,
                              batch_list,
                              rg_to_part,
-                             num_columns,
-                             write_buff.get());
+                             write_buff);
 
   _last_write_successful = true;
 }
 
 void writer::impl::write_parquet_data_to_sink(
   std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-  hostdevice_2dvector<gpu::EncColumnChunk> const& chunks,
-  rmm::device_uvector<gpu::EncPage> const& pages,
-  std::vector<size_t> const& global_rowgroup_base,
-  std::vector<int> const& first_rg_in_part,
-  std::vector<size_type> const& batch_list,
-  std::vector<int> const& rg_to_part,
-  size_type num_columns,
-  uint8_t* write_buff)
+  device_span<gpu::EncPage const> pages,
+  host_2dspan<gpu::EncColumnChunk const> chunks,
+  host_span<size_t const> global_rowgroup_base,
+  host_span<int const> first_rg_in_part,
+  host_span<size_type const> batch_list,
+  host_span<int const> rg_to_part,
+  host_span<uint8_t> bounce_buffer)
 {
-  _agg_meta = std::move(updated_agg_meta);
+  _agg_meta              = std::move(updated_agg_meta);
+  auto const num_columns = chunks.size().second;
 
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto const rnext = r + batch_list[b];
@@ -2143,7 +2132,7 @@ void writer::impl::write_parquet_data_to_sink(
       int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
       auto& row_group = _agg_meta->file(p).row_groups[global_r];
 
-      for (auto i = 0; i < num_columns; i++) {
+      for (std::size_t i = 0; i < num_columns; i++) {
         auto const& ck     = chunks[r][i];
         auto const dev_bfr = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
 
@@ -2153,13 +2142,13 @@ void writer::impl::write_parquet_data_to_sink(
           write_tasks.push_back(_out_sink[p]->device_write_async(
             dev_bfr + ck.ck_stat_size, ck.compressed_size, _stream));
         } else {
-          CUDF_CUDA_TRY(cudaMemcpyAsync(write_buff,
+          CUDF_CUDA_TRY(cudaMemcpyAsync(bounce_buffer.data(),
                                         dev_bfr + ck.ck_stat_size,
                                         ck.compressed_size,
                                         cudaMemcpyDefault,
                                         _stream.value()));
           _stream.synchronize();
-          _out_sink[p]->host_write(write_buff, ck.compressed_size);
+          _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
         auto& column_chunk_meta = row_group.columns[i].meta_data;
@@ -2187,7 +2176,7 @@ void writer::impl::write_parquet_data_to_sink(
         int p                 = rg_to_part[r];
         int global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
-        for (auto i = 0; i < num_columns; i++) {
+        for (std::size_t i = 0; i < num_columns; i++) {
           gpu::EncColumnChunk const& ck = chunks[r][i];
           auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
