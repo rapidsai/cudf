@@ -302,7 +302,7 @@ class writer::impl {
    * @param[in,out] intermediate_stats Statistics data stored between calls to write
    * @param[in,out] streams List of stream descriptors
    * @param[in,out] stripes List of stripe description
-   * @param[in,out] bounce_buffer Temporary host output buffer
+   * @param[out] bounce_buffer Temporary host output buffer
    */
   void write_orc_data_to_sink(encoded_data const& enc_data,
                               file_segmentation const& segmentation,
