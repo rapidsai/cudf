@@ -12,10 +12,7 @@ from cudf._lib.cpp.types cimport size_type
 
 cdef extern from "cudf/contiguous_split.hpp" namespace \
         "cudf::packed_columns" nogil:
-    cdef struct metadata:
-        metadata(vector[uint8_t]&& v)
-        const uint8_t* data () except +
-        size_type size () except +
+    ctypedef vector[uint8_t] metadata 
 
 cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef cppclass packed_columns:
