@@ -79,22 +79,24 @@ class IndexMeta(type):
         return super().__call__(data, *args, **kwargs)
 
     def __instancecheck__(self, instance):
+        if self in {
+            cudf.CategoricalIndex,
+            cudf.TimedeltaIndex,
+            cudf.DatetimeIndex,
+            cudf.IntervalIndex,
+        }:
+            return False
         return isinstance(instance, BaseIndex)
 
     def __subclasscheck__(self, subclass):
+        if self in {
+            cudf.CategoricalIndex,
+            cudf.TimedeltaIndex,
+            cudf.DatetimeIndex,
+            cudf.IntervalIndex,
+        }:
+            return False
         return issubclass(subclass, BaseIndex)
-
-
-class ChildIndexMeta(IndexMeta):
-    def __instancecheck__(self, instance):
-        if isinstance(instance, Index):
-            return False
-        return super().__instancecheck__(instance)
-
-    def __subclasscheck__(self, instance):
-        if issubclass(instance, Index):
-            return False
-        return super().__subclasscheck__(instance)
 
 
 def _lexsorted_equal_range(
@@ -1563,7 +1565,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._values.isin(values).values
 
 
-class DatetimeIndex(Index, metaclass=ChildIndexMeta):
+class DatetimeIndex(Index):
     """
     Immutable , ordered and sliceable sequence of datetime64 data,
     represented internally as int64.
@@ -2118,7 +2120,7 @@ class DatetimeIndex(Index, metaclass=ChildIndexMeta):
         return self.__class__._from_data({self.name: out_column})
 
 
-class TimedeltaIndex(Index, metaclass=ChildIndexMeta):
+class TimedeltaIndex(Index):
     """
     Immutable, ordered and sliceable sequence of timedelta64 data,
     represented internally as int64.
@@ -2268,7 +2270,7 @@ class TimedeltaIndex(Index, metaclass=ChildIndexMeta):
         return False
 
 
-class CategoricalIndex(Index, metaclass=ChildIndexMeta):
+class CategoricalIndex(Index):
     """
     A categorical of orderable values that represent the indices of another
     Column
@@ -2533,7 +2535,7 @@ def interval_range(
     return IntervalIndex(interval_col)
 
 
-class IntervalIndex(Index, metaclass=ChildIndexMeta):
+class IntervalIndex(Index):
     """
     Immutable index of intervals that are closed on the same side.
 
