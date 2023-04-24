@@ -2273,16 +2273,16 @@ auto convert_table_to_orc_data(table_view const& input,
   auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
 
   if (num_rows == 0) {
-    return std::tuple{std::move(streams),
+    return std::tuple{std::move(enc_data),
+                      std::move(segmentation),
+                      std::move(orc_table),
+                      rmm::device_buffer{},                     // compressed_data
                       hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
-                      std::move(enc_data),
-                      std::move(segmentation),
-                      std::move(stripe_dict),
-                      std::move(stripes),
-                      std::move(orc_table),
-                      rmm::device_buffer{},  // compressed_data
                       intermediate_statistics{stream},
+                      std::move(streams),
+                      std::move(stripes),
+                      std::move(stripe_dict),
                       cudf::detail::pinned_host_vector<uint8_t>()};
   }
 
@@ -2350,16 +2350,16 @@ auto convert_table_to_orc_data(table_view const& input,
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 
-  return std::tuple{std::move(streams),
-                    std::move(comp_results),
-                    std::move(strm_descs),
-                    std::move(enc_data),
+  return std::tuple{std::move(enc_data),
                     std::move(segmentation),
-                    std::move(stripe_dict),
-                    std::move(stripes),
                     std::move(orc_table),
                     std::move(compressed_data),
+                    std::move(comp_results),
+                    std::move(strm_descs),
                     std::move(intermediate_stats),
+                    std::move(streams),
+                    std::move(stripes),
+                    std::move(stripe_dict),
                     std::move(bounce_buffer)};
 }
 
@@ -2424,16 +2424,16 @@ void writer::impl::write(table_view const& input)
   // is still intact.
   // Note that `out_sink_` is intentionally passed by const reference to prevent accidentally
   // writing anything to it.
-  [[maybe_unused]] auto [streams,
-                         comp_results,
-                         strm_descs,
-                         enc_data,
+  [[maybe_unused]] auto [enc_data,
                          segmentation,
-                         stripe_dict, /* unused, but its data will be accessed via pointer later */
-                         stripes,
                          orc_table,
                          compressed_data,
+                         comp_results,
+                         strm_descs,
                          intermediate_stats,
+                         streams,
+                         stripes,
+                         stripe_dict, /* unused, but its data will be accessed via pointer later */
                          bounce_buffer] = [&] {
     try {
       return convert_table_to_orc_data(input,
