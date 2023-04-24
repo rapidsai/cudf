@@ -206,6 +206,6 @@ class pinned_allocator {
  * @brief A vector class with pinned host memory allocator
  */
 template <typename T>
-using pinned_host_vector = thrust::host_vector<T, pinned_allocator<T>>();
+using pinned_host_vector = thrust::host_vector<T, pinned_allocator<T>>;
 
 }  // namespace cudf::detail
