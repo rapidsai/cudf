@@ -73,13 +73,13 @@ struct packed_columns {
  * @ingroup copy_split
  *
  * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `packed_table`.  The table_view and internal
+ * will be returned wrapped in a `packed_table`. The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
  * The backing memory and metadata is instead owned by the `data` field and is in one
  * contiguous block.
  *
  * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `data`
+ * not outlive the memory owned by `data`.
  */
 struct packed_table {
   cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
@@ -87,8 +87,8 @@ struct packed_table {
 };
 
 /**
- * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single
- * contiguous block of memory.
+ * @brief Performs a deep-copy split of a `table_view` into a vector of `packed_table` where each
+ * `packed_table` is using a single contiguous block of memory for all of the split's column data.
  *
  * @ingroup copy_split
  *
@@ -100,8 +100,8 @@ struct packed_table {
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
  * `[splits[i-1], splits[i]]` otherwise.
  *
- * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
- * For a `splits` size N, there will always be N+1 splits in the output
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`.
+ * For a `splits` size N, there will always be N+1 splits in the output.
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory contained in the `all_data` field of the
@@ -125,7 +125,7 @@ struct packed_table {
  * @param splits A vector of indices where the view will be split
  * @param[in] mr Device memory resource used to allocate the returned result's device memory
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
- * buffer.
+ * buffer
  */
 std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
@@ -133,14 +133,14 @@ std::vector<packed_table> contiguous_split(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Deep-copy a `table_view` into a serialized contiguous memory format
+ * @brief Deep-copy a `table_view` into a serialized contiguous memory format.
  *
  * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
  * `table_view` is copied into a `device_buffer`. Pass the output of this function into
  * `cudf::unpack` to deserialize.
  *
  * @param input View of the table to pack
- * @param[in] mr Optional, The resource to use for all returned device allocations
+ * @param[in] mr An optional memory resource to use for all returned device allocations
  * @return packed_columns A struct containing the serialized metadata and data in contiguous host
  *         and device memory respectively
  */
@@ -151,12 +151,12 @@ packed_columns pack(cudf::table_view const& input,
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
  *
  * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
- * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
+ * construct a `packed_columns` or `packed_table` structure. The caller is responsible for
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
  * @param table View of the table to pack
  * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
- * by the columns in `table`
+ *        by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct
  */
@@ -165,7 +165,7 @@ packed_columns::metadata pack_metadata(table_view const& table,
                                        size_t buffer_size);
 
 /**
- * @brief Deserialize the result of `cudf::pack`
+ * @brief Deserialize the result of `cudf::pack`.
  *
  * Converts the result of a serialized table into a `table_view` that points to the data stored in
  * the contiguous device buffer contained in `input`.
@@ -181,7 +181,7 @@ packed_columns::metadata pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input);
 
 /**
- * @brief Deserialize the result of `cudf::pack`
+ * @brief Deserialize the result of `cudf::pack`.
  *
  * Converts the result of a serialized table into a `table_view` that points to the data stored in
  * the contiguous device buffer contained in `gpu_data` using the metadata contained in the host
@@ -194,7 +194,7 @@ table_view unpack(packed_columns const& input);
  *
  * @param metadata The host-side metadata buffer resulting from the initial pack() call
  * @param gpu_data The device-side contiguous buffer storing the data that will be referenced by
- * the resulting `table_view`
+ *        the resulting `table_view`
  * @return The unpacked `table_view`
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
