@@ -34,6 +34,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -67,11 +68,6 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 namespace {
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to parquet compression
@@ -1835,7 +1831,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                        num_stats_bfr);
   }
 
-  pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
+  cudf::detail::pinned_host_vector<uint8_t> host_bfr(max_chunk_bfr_size);
 
   // Encode row groups in batches
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -1889,25 +1885,17 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             _stream.synchronize();
           }
         } else {
-          if (!host_bfr) {
-            host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t* ptr = nullptr;
-                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                                return ptr;
-                                              }(max_chunk_bfr_size),
-                                              cudaFreeHost};
-          }
           // copy the full data
-          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.data(),
                                         dev_bfr,
                                         ck.ck_stat_size + ck.compressed_size,
                                         cudaMemcpyDefault,
                                         _stream.value()));
           _stream.synchronize();
-          _out_sink[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
+          _out_sink[p]->host_write(host_bfr.data() + ck.ck_stat_size, ck.compressed_size);
           if (ck.ck_stat_size != 0) {
             column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.get(), ck.ck_stat_size);
+            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.data(), ck.ck_stat_size);
           }
         }
         row_group.total_byte_size += ck.compressed_size;

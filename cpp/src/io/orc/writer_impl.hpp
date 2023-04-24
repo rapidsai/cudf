@@ -313,7 +313,7 @@ class writer::impl {
                               orc_table_view const& orc_table,
                               rmm::device_buffer const& compressed_data,
                               intermediate_statistics& intermediate_stats,
-                              uint8_t* stream_output);
+                              host_span<uint8_t> stream_output);
 
   /**
    * @brief Add the processed table data into the internal file footer.

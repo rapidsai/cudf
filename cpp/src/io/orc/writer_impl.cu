@@ -28,6 +28,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -79,11 +80,6 @@ struct row_group_index_info {
 };
 
 namespace {
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Translates ORC compression to nvCOMP compression
@@ -2196,28 +2192,17 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple of the intermediate results containing the processed data
  */
-std::tuple<orc_streams,
-           hostdevice_vector<compression_result>,
-           hostdevice_2dvector<gpu::StripeStream>,
-           encoded_data,
-           file_segmentation,
-           hostdevice_2dvector<gpu::StripeDictionary>,
-           std::vector<StripeInformation>,
-           orc_table_view,
-           rmm::device_buffer,
-           intermediate_statistics,
-           pinned_buffer<uint8_t>>
-convert_table_to_orc_data(table_view const& input,
-                          table_input_metadata const& table_meta,
-                          stripe_size_limits max_stripe_size,
-                          size_type row_index_stride,
-                          bool enable_dictionary,
-                          CompressionKind compression_kind,
-                          size_t compression_blocksize,
-                          statistics_freq stats_freq,
-                          bool single_write_mode,
-                          data_sink const& out_sink,
-                          rmm::cuda_stream_view stream)
+auto convert_table_to_orc_data(table_view const& input,
+                               table_input_metadata const& table_meta,
+                               stripe_size_limits max_stripe_size,
+                               size_type row_index_stride,
+                               bool enable_dictionary,
+                               CompressionKind compression_kind,
+                               size_t compression_blocksize,
+                               statistics_freq stats_freq,
+                               bool single_write_mode,
+                               data_sink const& out_sink,
+                               rmm::cuda_stream_view stream)
 {
   auto const input_tview = table_device_view::create(input, stream);
 
@@ -2298,7 +2283,7 @@ convert_table_to_orc_data(table_view const& input,
             std::move(orc_table),
             rmm::device_buffer{},  // compressed_data
             intermediate_statistics{stream},
-            pinned_buffer<uint8_t>{nullptr, cudaFreeHost}};
+            cudf::detail::pinned_host_vector<uint8_t>{}};
   }
 
   // Allocate intermediate output stream buffer
@@ -2333,16 +2318,7 @@ convert_table_to_orc_data(table_view const& input,
       max_stream_size = std::max(max_stream_size, stream_size);
     }
 
-    if (all_device_write) {
-      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
-    } else {
-      return pinned_buffer<uint8_t>{[](size_t size) {
-                                      uint8_t* ptr = nullptr;
-                                      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                      return ptr;
-                                    }(max_stream_size),
-                                    cudaFreeHost};
-    }
+    return cudf::detail::pinned_host_vector{all_device_write ? 0 : max_stream_size};
   }();
 
   // Compress the data streams
@@ -2489,7 +2465,7 @@ void writer::impl::write(table_view const& input)
                          orc_table,
                          compressed_data,
                          intermediate_stats,
-                         stream_output.get());
+                         stream_output);
 
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
@@ -2504,7 +2480,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
                                           orc_table_view const& orc_table,
                                           rmm::device_buffer const& compressed_data,
                                           intermediate_statistics& intermediate_stats,
-                                          uint8_t* stream_output)
+                                          host_span<uint8_t> stream_output)
 {
   if (orc_table.num_rows() == 0) { return; }
 
@@ -2544,7 +2520,7 @@ void writer::impl::write_orc_data_to_sink(orc_streams& streams,
         strm_desc,
         enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
         static_cast<uint8_t const*>(compressed_data.data()),
-        stream_output,
+        stream_output.data(),
         &stripe,
         &streams,
         _compression_kind,
