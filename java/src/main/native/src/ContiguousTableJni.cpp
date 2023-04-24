@@ -144,7 +144,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
     auto data_addr = reinterpret_cast<uint8_t const *>(j_buffer_addr);
     auto data_size = static_cast<size_t>(j_buffer_length);
     auto metadata_ptr =
-        new cudf::packed_columns::metadata(cudf::pack_metadata(*table, data_addr, data_size));
+        new std::vector<uint8_t>(cudf::pack_metadata(*table, data_addr, data_size));
     return reinterpret_cast<jlong>(metadata_ptr);
   }
   CATCH_STD(env, 0);
@@ -154,7 +154,7 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ContiguousTable_createMetadataDire
     JNIEnv *env, jclass, jlong j_metadata_ptr) {
   JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
   try {
-    auto metadata = reinterpret_cast<cudf::packed_columns::metadata *>(j_metadata_ptr);
+    auto metadata = reinterpret_cast<std::vector<uint8_t>*>(j_metadata_ptr);
     return env->NewDirectByteBuffer(const_cast<uint8_t *>(metadata->data()), metadata->size());
   }
   CATCH_STD(env, nullptr);
@@ -164,7 +164,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ContiguousTable_closeMetadata(JNIEnv 
                                                                          jlong j_metadata_ptr) {
   JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", );
   try {
-    auto metadata = reinterpret_cast<cudf::packed_columns::metadata *>(j_metadata_ptr);
+    auto metadata = reinterpret_cast<std::vector<uint8_t>*>(j_metadata_ptr);
     delete metadata;
   }
   CATCH_STD(env, );

@@ -40,15 +40,9 @@ namespace cudf {
  * table metadata and one on device which contains the table data.
  */
 struct packed_columns {
-  /**
-   * @brief Host-side metadata buffer used for reconstructing columns via unpack.
-   *
-   * @ingroup copy_split
-   */
-  using metadata = std::vector<uint8_t>;
-
   packed_columns()
-    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
+    : metadata_(std::make_unique<std::vector<uint8_t>>()), 
+      gpu_data(std::make_unique<rmm::device_buffer>())
   {
   }
 
@@ -58,12 +52,13 @@ struct packed_columns {
    * @param md Host-side metadata buffer
    * @param gd Device-side data buffer
    */
-  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
+  packed_columns(std::unique_ptr<std::vector<uint8_t>>&& md, 
+                 std::unique_ptr<rmm::device_buffer>&& gd)
     : metadata_(std::move(md)), gpu_data(std::move(gd))
   {
   }
 
-  std::unique_ptr<metadata> metadata_;           ///< Host-side metadata buffer
+  std::unique_ptr<std::vector<uint8_t>> metadata_;           ///< Host-side metadata buffer
   std::unique_ptr<rmm::device_buffer> gpu_data;  ///< Device-side data buffer
 };
 
@@ -160,9 +155,9 @@ packed_columns pack(cudf::table_view const& input,
  * @param buffer_size The size of `contiguous_buffer`
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct
  */
-packed_columns::metadata pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size);
+std::vector<uint8_t> pack_metadata(table_view const& table,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size);
 
 /**
  * @brief Deserialize the result of `cudf::pack`.

@@ -151,10 +151,10 @@ packed_columns pack(cudf::table_view const& input,
 }
 
 template <typename ColumnIter>
-packed_columns::metadata pack_metadata(ColumnIter begin,
-                                       ColumnIter end,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size)
+std::vector<uint8_t> pack_metadata(ColumnIter begin,
+                                   ColumnIter end,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size)
 {
   std::vector<serialized_column> metadata;
 
@@ -174,7 +174,7 @@ packed_columns::metadata pack_metadata(ColumnIter begin,
             metadata_begin + (metadata.size() * sizeof(serialized_column)),
             std::back_inserter(metadata_bytes));
 
-  return packed_columns::metadata{std::move(metadata_bytes)};
+  return metadata_bytes;
 }
 
 /**
@@ -222,13 +222,13 @@ packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resour
 /**
  * @copydoc cudf::pack_metadata
  */
-packed_columns::metadata pack_metadata(table_view const& table,
+std::vector<uint8_t> pack_metadata(table_view const& table,
                                        uint8_t const* contiguous_buffer,
                                        size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()
-           ? packed_columns::metadata{}
+           ? std::vector<uint8_t>()
            : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 

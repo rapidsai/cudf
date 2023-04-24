@@ -1001,7 +1001,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                    [&empty_inputs](int partition_index) {
                      return packed_table{
                        empty_inputs,
-                       packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
+                       packed_columns{std::make_unique<std::vector<uint8_t>>(pack_metadata(
                                         empty_inputs, static_cast<uint8_t const*>(nullptr), 0)),
                                       std::make_unique<rmm::device_buffer>()}};
                    });
@@ -1251,7 +1251,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     result.push_back(packed_table{
       t,
       packed_columns{
-        std::make_unique<packed_columns::metadata>(cudf::pack_metadata(
+        std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
           t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
         std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
 

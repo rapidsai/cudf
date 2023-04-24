@@ -772,7 +772,7 @@ cdef class _CPackedColumns:
 
         cdef cpp_contiguous_split.packed_columns data
         data.metadata_ = move(
-            make_unique[cpp_contiguous_split.metadata](
+            make_unique[vector[uint8_t]](
                 move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
