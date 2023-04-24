@@ -45,11 +45,12 @@ def _quantile_75(x):
 
 
 def _is_row_of(chunk, obj):
-    if isinstance(chunk, cudf.Series) and isinstance(obj, cudf.DataFrame):
-        if len(chunk.index) == len(obj._column_names):
-            if (chunk.index.to_pandas() == pd.Index(obj._column_names)).all():
-                return True
-    return False
+    return (
+        isinstance(chunk, cudf.Series)
+        and isinstance(obj, cudf.DataFrame)
+        and len(chunk.index) == len(obj._column_names)
+        and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
+    )
 
 
 groupby_doc_template = textwrap.dedent(
@@ -1199,6 +1200,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 {None: chunk_results}, index=group_names
             )
             result.index.names = self.grouping.names
+            return result
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
@@ -1216,6 +1218,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
                 result.index = cudf.MultiIndex._from_data(index_data)
+            else:
+                raise TypeError(
+                    "Error handling Groupby apply output with input of "
+                    f"type {type(self.obj)} and output of "
+                    f"type {type(chunk_results[0])}"
+                )
         else:
             result = cudf.concat(chunk_results)
             if self._group_keys:
