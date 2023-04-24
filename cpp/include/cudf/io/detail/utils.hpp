@@ -22,7 +22,7 @@ namespace detail {
 /**
  * @brief Whether writer writes in chunks or all at once
  */
-enum class SingleWriteMode : bool { YES, NO };
+enum class single_write_mode : bool { YES, NO };
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf

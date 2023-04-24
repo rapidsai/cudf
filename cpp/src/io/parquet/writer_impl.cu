@@ -506,7 +506,7 @@ struct leaf_schema_fn {
 
 inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            SingleWriteMode write_mode)
+                            single_write_mode write_mode)
 {
   if (col_meta.is_nullability_defined()) {
     CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
@@ -516,7 +516,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return write_mode == SingleWriteMode::NO or col->nullable();
+  return write_mode == single_write_mode::NO or col->nullable();
 }
 
 /**
@@ -528,7 +528,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
 std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
-  SingleWriteMode write_mode,
+  single_write_mode write_mode,
   bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -1315,7 +1315,7 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -1341,7 +1341,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -2042,7 +2042,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 // Forward to implementation
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
@@ -2050,7 +2050,7 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {

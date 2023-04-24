@@ -375,11 +375,11 @@ __global__ void copy_string_data(char* string_pool,
 }  // namespace
 
 void persisted_statistics::persist(int num_table_rows,
-                                   SingleWriteMode write_mode,
+                                   single_write_mode write_mode,
                                    intermediate_statistics& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
-  if (write_mode == SingleWriteMode::NO) {
+  if (write_mode == single_write_mode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
     // min offset and max offset + 1 for total size
@@ -666,7 +666,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                            std::map<uint32_t, size_t> const& decimal_column_sizes,
                            bool enable_dictionary,
                            CompressionKind compression_kind,
-                           SingleWriteMode write_mode)
+                           single_write_mode write_mode)
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -681,7 +681,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
   for (auto& column : columns) {
     auto const is_nullable = [&]() -> bool {
-      if (write_mode == SingleWriteMode::YES) {
+      if (write_mode == single_write_mode::YES) {
         return column.nullable();
       } else {
         // For chunked write, when not provided nullability, we assume the worst case scenario
@@ -2200,7 +2200,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                CompressionKind compression_kind,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
-                               SingleWriteMode write_mode,
+                               single_write_mode write_mode,
                                data_sink const& out_sink,
                                rmm::cuda_stream_view stream)
 {
@@ -2367,7 +2367,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
@@ -2387,7 +2387,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_orc_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
@@ -2688,7 +2688,7 @@ void writer::impl::close()
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream))
 {
@@ -2697,7 +2697,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream))
 {
