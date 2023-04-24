@@ -1,4 +1,6 @@
 /*
+* SPDX-FileCopyrightText: Copyright (c) <2023> NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* SPDX-License-Identifier: Apache-2.0
 Copyright (c) 2012, Anaconda, Inc.
 All rights reserved.
 
@@ -24,6 +26,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef _NRT_CUDA_H
+#define _NRT_CUDA_H
+
 #include <cuda/atomic>
 
 typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
@@ -120,3 +125,4 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   /* Clear and release MemInfo */
   NRT_MemInfo_destroy(mi);
 }
+#endif
