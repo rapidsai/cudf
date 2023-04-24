@@ -2276,7 +2276,7 @@ auto convert_table_to_orc_data(table_view const& input,
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
                       std::move(orc_table),
-                      rmm::device_buffer{},                     // compressed_data
+                      rmm::device_uvector<uint8_t>{0, stream},  // compressed_data
                       hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{stream},
@@ -2322,7 +2322,7 @@ auto convert_table_to_orc_data(table_view const& input,
   }();
 
   // Compress the data streams
-  rmm::device_buffer compressed_data(compressed_bfr_size, stream);
+  rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
   hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),
@@ -2330,7 +2330,7 @@ auto convert_table_to_orc_data(table_view const& input,
                compression_result{0, compression_status::FAILURE});
   if (compression_kind != NONE) {
     strm_descs.host_to_device(stream);
-    gpu::CompressOrcDataStreams(static_cast<uint8_t*>(compressed_data.data()),
+    gpu::CompressOrcDataStreams(compressed_data.data(),
                                 num_compressed_blocks,
                                 compression_kind,
                                 compression_blocksize,
@@ -2456,18 +2456,16 @@ void writer::impl::write(table_view const& input)
   }();
 
   // Compression/encoding were all successful. Now write the intermediate results.
-  write_orc_data_to_sink(
-    enc_data,
-    segmentation,
-    orc_table,
-    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(compressed_data.data()),
-                               compressed_data.size()),
-    comp_results,
-    strm_descs,
-    intermediate_stats,
-    streams,
-    stripes,
-    bounce_buffer);
+  write_orc_data_to_sink(enc_data,
+                         segmentation,
+                         orc_table,
+                         compressed_data,
+                         comp_results,
+                         strm_descs,
+                         intermediate_stats,
+                         streams,
+                         stripes,
+                         bounce_buffer);
 
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
