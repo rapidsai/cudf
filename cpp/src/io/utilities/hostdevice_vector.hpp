@@ -19,7 +19,7 @@
 #include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -67,7 +67,7 @@ class hostdevice_vector {
     if (hostdevice_vector_uses_pageable_buffer()) {
       h_data_owner = thrust::host_vector<T>();
     } else {
-      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
+      h_data_owner = cudf::detail::pinned_host_vector<T>();
     }
 
     std::visit(
@@ -177,8 +177,7 @@ class hostdevice_vector {
   }
 
  private:
-  std::variant<thrust::host_vector<T>, thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>
-    h_data_owner;
+  std::variant<thrust::host_vector<T>, cudf::detail::pinned_host_vector<T>> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
