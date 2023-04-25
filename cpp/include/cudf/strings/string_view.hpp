@@ -104,10 +104,12 @@ class string_view {
     [[nodiscard]] __device__ inline size_type byte_offset() const;
 
    private:
+    friend class string_view;
     const char* p{};
     size_type bytes{};
     size_type char_pos{};
     size_type byte_pos{};
+    __device__ inline const_iterator(string_view const& str, size_type pos, size_type offset);
     /// @endcond
   };
 

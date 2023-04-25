@@ -125,6 +125,16 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
   }
 }
 
+std::string compression_type_name(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::SNAPPY: return "Snappy";
+    case compression_type::ZSTD: return "Zstandard";
+    case compression_type::DEFLATE: return "Deflate";
+  }
+  return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
+}
+
 size_t batched_decompress_temp_size(compression_type compression,
                                     size_t num_chunks,
                                     size_t max_uncomp_chunk_size,
@@ -439,8 +449,23 @@ feature_status_parameters::feature_status_parameters()
     cudaDeviceGetAttribute(&compute_capability_major, cudaDevAttrComputeCapabilityMajor, device));
 }
 
-std::optional<std::string> is_compression_disabled(compression_type compression,
-                                                   feature_status_parameters params)
+// Represents all parameters required to determine status of a compression/decompression feature
+using feature_status_inputs = std::pair<compression_type, feature_status_parameters>;
+struct hash_feature_status_inputs {
+  size_t operator()(feature_status_inputs const& fsi) const
+  {
+    // Outside of unit tests, the same `feature_status_parameters` value will always be passed
+    // within a run; for simplicity, only use `compression_type` for the hash
+    return std::hash<compression_type>{}(fsi.first);
+  }
+};
+
+// Hash map type that stores feature status for different combinations of input parameters
+using feature_status_memo_map =
+  std::unordered_map<feature_status_inputs, std::optional<std::string>, hash_feature_status_inputs>;
+
+std::optional<std::string> is_compression_disabled_impl(compression_type compression,
+                                                        feature_status_parameters params)
 {
   switch (compression) {
     case compression_type::DEFLATE: {
@@ -477,6 +502,30 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   return "Unsupported compression type";
 }
 
+std::optional<std::string> is_compression_disabled(compression_type compression,
+                                                   feature_status_parameters params)
+{
+  static feature_status_memo_map comp_status_reason;
+  if (auto mem_res_it = comp_status_reason.find(feature_status_inputs{compression, params});
+      mem_res_it != comp_status_reason.end()) {
+    return mem_res_it->second;
+  }
+
+  // The rest of the function will execute only once per run, the memoized result will be returned
+  // in all subsequent calls with the same compression type
+  auto const reason                         = is_compression_disabled_impl(compression, params);
+  comp_status_reason[{compression, params}] = reason;
+  if (reason.has_value()) {
+    CUDF_LOG_INFO("nvCOMP is disabled for {} compression; reason: {}",
+                  compression_type_name(compression),
+                  reason.value());
+  } else {
+    CUDF_LOG_INFO("nvCOMP is enabled for {} compression", compression_type_name(compression));
+  }
+
+  return reason;
+}
+
 std::optional<std::string> is_zstd_decomp_disabled(feature_status_parameters const& params)
 {
   if (not NVCOMP_HAS_ZSTD_DECOMP(
@@ -503,8 +552,8 @@ std::optional<std::string> is_zstd_decomp_disabled(feature_status_parameters con
   return std::nullopt;
 }
 
-std::optional<std::string> is_decompression_disabled(compression_type compression,
-                                                     feature_status_parameters params)
+std::optional<std::string> is_decompression_disabled_impl(compression_type compression,
+                                                          feature_status_parameters params)
 {
   switch (compression) {
     case compression_type::DEFLATE: {
@@ -529,6 +578,30 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
+}
+
+std::optional<std::string> is_decompression_disabled(compression_type compression,
+                                                     feature_status_parameters params)
+{
+  static feature_status_memo_map decomp_status_reason;
+  if (auto mem_res_it = decomp_status_reason.find(feature_status_inputs{compression, params});
+      mem_res_it != decomp_status_reason.end()) {
+    return mem_res_it->second;
+  }
+
+  // The rest of the function will execute only once per run, the memoized result will be returned
+  // in all subsequent calls with the same compression type
+  auto const reason                           = is_decompression_disabled_impl(compression, params);
+  decomp_status_reason[{compression, params}] = reason;
+  if (reason.has_value()) {
+    CUDF_LOG_INFO("nvCOMP is disabled for {} decompression; reason: {}",
+                  compression_type_name(compression),
+                  reason.value());
+  } else {
+    CUDF_LOG_INFO("nvCOMP is enabled for {} decompression", compression_type_name(compression));
+  }
+
+  return reason;
 }
 
 size_t compress_input_alignment_bits(compression_type compression)
