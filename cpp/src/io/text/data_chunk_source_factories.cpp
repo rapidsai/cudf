@@ -17,7 +17,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -30,16 +30,16 @@ namespace cudf::io::text {
 
 namespace {
 
+struct host_ticket {
+  cudaEvent_t event;
+  cudf::detail::pinned_host_vector<char> buffer;
+};
+
 /**
  * @brief A reader which produces owning chunks of device memory which contain a copy of the data
  * from an istream.
  */
 class datasource_chunk_reader : public data_chunk_reader {
-  struct host_ticket {
-    cudaEvent_t event;
-    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
-  };
-
   constexpr static int num_tickets = 2;
 
  public:
@@ -114,11 +114,6 @@ class datasource_chunk_reader : public data_chunk_reader {
  * from an istream.
  */
 class istream_data_chunk_reader : public data_chunk_reader {
-  struct host_ticket {
-    cudaEvent_t event;
-    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
-  };
-
   constexpr static int num_tickets = 2;
 
  public:

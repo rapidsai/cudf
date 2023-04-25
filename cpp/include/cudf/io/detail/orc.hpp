@@ -96,7 +96,7 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  SingleWriteMode mode,
+                  single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**
@@ -109,7 +109,7 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
-                  SingleWriteMode mode,
+                  single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**
