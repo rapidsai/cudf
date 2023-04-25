@@ -216,10 +216,13 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
     )
     test_pdf.columns.name = None
 
-    # Randomly but reproducibly mark subset of rows as invalid
-    random.seed(1337)
-    mask = random.sample(range(nrows), nvalids)
-    test_pdf[test_pdf.index.isin(mask)] = np.NaN
+    if nvalids:
+        # Randomly but reproducibly mark subset of rows as invalid
+        random.seed(1337)
+        mask = random.sample(range(nrows), nvalids)
+        test_pdf[test_pdf.index.isin(mask)] = np.NaN
+    if dtype:
+        test_pdf = test_pdf.astype(dtype)
 
     return test_pdf
 
@@ -693,7 +696,7 @@ def test_parquet_reader_select_columns(datadir):
 
 
 def test_parquet_reader_invalids(tmpdir):
-    test_pdf = make_pdf(nrows=1000, nvalids=1000 // 4, dtype=np.int64)
+    test_pdf = make_pdf(nrows=1000, nvalids=1000 // 4, dtype="Int64")
 
     fname = tmpdir.join("invalids.parquet")
     test_pdf.to_parquet(fname, engine="pyarrow")
@@ -701,7 +704,7 @@ def test_parquet_reader_invalids(tmpdir):
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got.to_pandas(nullable=True))
 
 
 def test_parquet_reader_filenotfound(tmpdir):
@@ -788,8 +791,8 @@ def create_parquet_source(df, src_type, fname):
     "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
 )
 def test_parquet_reader_multiple_files(tmpdir, src):
-    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 2)
-    test_pdf2 = make_pdf(nrows=500)
+    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 2, dtype="float64")
+    test_pdf2 = make_pdf(nrows=500, dtype="float64")
     expect = pd.concat([test_pdf1, test_pdf2])
 
     src1 = create_parquet_source(test_pdf1, src, tmpdir.join("multi1.parquet"))
@@ -1465,8 +1468,8 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 def test_multifile_parquet_folder(tmpdir):
 
-    test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
-    test_pdf2 = make_pdf(nrows=20)
+    test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
+    test_pdf2 = make_pdf(nrows=20, dtype="float64")
     expect = pd.concat([test_pdf1, test_pdf2])
 
     tmpdir.mkdir("multi_part")
