@@ -1973,10 +1973,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     if (need_sync) { stream.synchronize(); }
   }
 
-  // TODO: Replace this after https://github.com/rapidsai/cudf/pull/13206 merged.
-  //    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
-  auto bounce_buffer = thrust::host_vector<uint8_t, cudf::detail::pinned_allocator<uint8_t>>(
-    all_device_write ? 0 : max_write_size);
+  auto bounce_buffer =
+    cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),
