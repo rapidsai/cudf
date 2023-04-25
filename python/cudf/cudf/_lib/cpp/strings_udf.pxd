@@ -15,6 +15,7 @@ from cudf._lib.cpp.types cimport size_type
 cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
         "cudf::strings::udf" nogil:
     cdef cppclass udf_string
+    cdef cppclass managed_udf_string
 
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         "cudf::strings::udf" nogil:
@@ -24,6 +25,12 @@ cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
     ) except +
     cdef void free_udf_string_array(
         udf_string* strings, size_type size
+    ) except +
+    cdef void free_managed_udf_string_array(
+        managed_udf_string* strings, size_type size
+    ) except +
+    cdef unique_ptr[column] column_from_managed_udf_string_array(
+        managed_udf_string* managed_strings, size_type size
     ) except +
 
 cdef extern from "cudf/strings/detail/char_tables.hpp" namespace \
