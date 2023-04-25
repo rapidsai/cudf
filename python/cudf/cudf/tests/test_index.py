@@ -1548,6 +1548,9 @@ def test_interval_index_from_breaks(closed):
             [[1, 2, 3, 4], ["yellow", "violet", "pink", "white"]],
             names=("number1", "color2"),
         ),
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["red", "blue", "red", "blue"]],
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -1560,6 +1563,9 @@ def test_interval_index_from_breaks(closed):
         pd.MultiIndex.from_arrays(
             [[1, 2, 3, 4], ["yellow", "violet", "pink", "white"]],
             names=("number1", "color2"),
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["red", "blue", "red", "blue"]],
         ),
     ],
 )
