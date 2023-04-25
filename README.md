@@ -71,7 +71,7 @@ conda install -c rapidsai -c conda-forge -c nvidia \
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
 of our latest development branch.
 
-Note: cuDF is supported only on Linux, and with Python versions 3.8 and later.
+Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
 
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
 
