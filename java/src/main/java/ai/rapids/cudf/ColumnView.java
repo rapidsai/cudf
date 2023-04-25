@@ -52,6 +52,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
     this.offHeap = null;
+    AssertEmptyNulls.assertNullsAreEmpty(this);
   }
 
 
@@ -67,6 +68,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     rows = ColumnView.getNativeRowCount(viewHandle);
     nullCount = ColumnView.getNativeNullCount(viewHandle);
+    AssertEmptyNulls.assertNullsAreEmpty(this);
   }
 
   /**
