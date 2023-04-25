@@ -29,6 +29,7 @@
 namespace cudf::io::detail::parquet {
 
 using namespace cudf::io::parquet;
+using column_buffer = cudf::io::detail::utilities::column_buffer<true>;
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum

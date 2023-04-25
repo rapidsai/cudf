@@ -113,6 +113,7 @@ struct PageNestingDecodeInfo {
   int32_t valid_count;
   int32_t value_count;
   uint8_t* data_out;
+  uint8_t* string_out;
   bitmask_type* valid_map;
 };
 
@@ -188,6 +189,7 @@ struct PageInfo {
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
+  int64_t str_offset;  // offset into string data for this page
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
@@ -242,6 +244,7 @@ struct ColumnChunkDesc {
       str_dict_index(nullptr),
       valid_map_base{nullptr},
       column_data_base{nullptr},
+      column_string_base{nullptr},
       codec(codec_),
       converted_type(converted_type_),
       logical_type(logical_type_),
@@ -271,6 +274,7 @@ struct ColumnChunkDesc {
   string_index_pair* str_dict_index;          // index for string dictionary
   bitmask_type** valid_map_base;              // base pointers of valid bit map for this column
   void** column_data_base;                    // base pointers of column data
+  void** column_string_base;                  // base pointers of column string data
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
   LogicalType logical_type;                   // logical type
@@ -474,6 +478,12 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       bool compute_num_rows,
                       bool compute_string_sizes,
                       rmm::cuda_stream_view stream);
+
+void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
+                            hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            size_t min_row,
+                            size_t num_rows,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages

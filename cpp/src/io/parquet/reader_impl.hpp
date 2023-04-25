@@ -24,8 +24,6 @@
 #include "parquet_gpu.hpp"
 #include "reader_impl_helpers.hpp"
 
-#include <io/utilities/column_buffer.hpp>
-
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>

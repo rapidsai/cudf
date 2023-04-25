@@ -37,14 +37,39 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
+  // Here's the plan. Compute string sizes in case it hasn't already been done.  can work out
+  // if this is redundant later.  Then allocate buffers for the string data, and offsets to the
+  // first string.  pass this to decode, where string data will be written to the buffer rather
+  // than to _strings.  also need to allocate a size_type buffer to hold strings offsets, which
+  // will be calculated as we're writing the data.  once done, we'll have for each string column
+  // a char array with the contiguous string data, and a size_type array of offsets.  use these
+  // as child columns and create string column.  no need to call create_strings_column now.
+
   gpu::ComputePageStringSizes(pages, chunks, skip_rows, num_rows, _stream);
+
+  // TODO do the following on device with thrust/kernel to avoid the pages round trip
+  pages.device_to_host(_stream, true);
+  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
+  for (auto& page : pages) {
+    if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0) {
+      auto const& col        = chunks[page.chunk_idx];
+      uint32_t dtype         = col.data_type & 7;
+      uint32_t dtype_len_out = col.data_type >> 3;
+      if (dtype == BYTE_ARRAY && dtype_len_out != 4) {
+        size_t const offset          = col_sizes[col.src_col_index];
+        page.str_offset              = offset;
+        col_sizes[col.src_col_index] = offset + page.str_bytes;
+      }
+    }
+  }
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
-  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, _stream);
-  auto chunk_offsets       = std::vector<size_t>();
+  auto chunk_nested_valids   = hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
+  auto chunk_nested_data     = hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_nested_str_data = hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_offsets         = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, chunk_off = 0; c < chunks.size(); c++) {
@@ -64,6 +89,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     // out data
     auto data                  = chunk_nested_data.host_ptr(chunk_off);
     chunks[c].column_data_base = chunk_nested_data.device_ptr(chunk_off);
+
+    auto str_data                = chunk_nested_str_data.host_ptr(chunk_off);
+    chunks[c].column_string_base = chunk_nested_str_data.device_ptr(chunk_off);
 
     chunk_off += max_depth;
 
@@ -107,6 +135,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
+        // only do string buffer for leaf
+        if (out_buf.string_size() == 0 && col_sizes[chunks[c].src_col_index] > 0) {
+          out_buf.create_string_data(col_sizes[chunks[c].src_col_index], _stream);
+        }
+        str_data[idx] = out_buf.string_data();
         out_buf.user_data |=
           static_cast<uint32_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       } else {
@@ -119,9 +152,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     page_count += chunks[c].max_num_pages;
   }
 
+  pages.host_to_device(_stream);  // FIXME: get rid of this eventually
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
+  chunk_nested_str_data.host_to_device(_stream);
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
 
@@ -145,21 +180,28 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
-      if (out_buf.type.id() != type_id::LIST ||
-          (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED)) {
-        continue;
-      }
-      CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
-      auto& child = (*cols)[input_col.nesting[l_idx + 1]];
+      if (out_buf.type.id() == type_id::LIST &&
+          (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED) == 0) {
+        CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
+        auto& child = (*cols)[input_col.nesting[l_idx + 1]];
 
-      // the final offset for a list at level N is the size of it's child
-      int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-      CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
-                                    &offset,
-                                    sizeof(offset),
-                                    cudaMemcpyDefault,
-                                    _stream.value()));
-      out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
+        // the final offset for a list at level N is the size of it's child
+        int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
+                                      &offset,
+                                      sizeof(offset),
+                                      cudaMemcpyDefault,
+                                      _stream.value()));
+        out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
+      } else if (out_buf.type.id() == type_id::STRING) {
+        // need to cap off the string offsets column
+        size_type sz = col_sizes[idx];
+        cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
+                        &sz,
+                        sizeof(size_type),
+                        cudaMemcpyDefault,
+                        _stream.value());
+      }
     }
   }
 

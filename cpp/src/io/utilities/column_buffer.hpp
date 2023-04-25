@@ -62,11 +62,42 @@ inline rmm::device_buffer create_data(data_type type,
 
 using string_index_pair = thrust::pair<const char*, size_type>;
 
+namespace utilities {
+
+struct column_buffer_with_pointers {
+  void create_strings(size_type _size, rmm::cuda_stream_view stream);
+
+  std::optional<void*> str_data()
+  {
+    return _strings ? std::optional(_strings->data()) : std::nullopt;
+  }
+  std::optional<size_t> str_data_size() const
+  {
+    return _strings ? std::optional(_strings->size()) : std::nullopt;
+  }
+
+  std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
+};
+
+struct column_buffer_with_strings {
+  void create_strings(size_type _size,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr);
+
+  void* string_data() { return _string_data.data(); }
+  size_t string_size() const { return _string_data.size(); }
+
+  rmm::device_buffer _string_data{};
+};
+
 /**
  * @brief Class for holding device memory buffers to column data that eventually
  * will be used to create a column.
  */
-struct column_buffer {
+template <bool contains_strings>
+struct column_buffer : std::conditional<contains_strings,
+                                        column_buffer_with_strings,
+                                        column_buffer_with_pointers>::type {
   column_buffer() = default;
 
   // construct without a known size. call create() later to actually
@@ -85,19 +116,47 @@ struct column_buffer {
   }
 
   // move constructor
-  column_buffer(column_buffer&& col)            = default;
-  column_buffer& operator=(column_buffer&& col) = default;
+  column_buffer(column_buffer<contains_strings>&& col)                              = default;
+  column_buffer<contains_strings>& operator=(column_buffer<contains_strings>&& col) = default;
 
   // copy constructor
-  column_buffer(column_buffer const& col)            = delete;
-  column_buffer& operator=(column_buffer const& col) = delete;
+  column_buffer(column_buffer<contains_strings> const& col)                              = delete;
+  column_buffer<contains_strings>& operator=(column_buffer<contains_strings> const& col) = delete;
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
-  auto data() { return _strings ? _strings->data() : _data.data(); }
-  auto data_size() const { return _strings ? _strings->size() : _data.size(); }
+  template <bool T = contains_strings>
+  typename std::enable_if<T, void>::type create_string_data(size_t num_bytes,
+                                                            rmm::cuda_stream_view stream)
+  {
+    this->create_strings(num_bytes, stream, mr);
+  }
+
+  template <bool T = contains_strings>
+  typename std::enable_if<T, void*>::type data()
+  {
+    return _data.data();
+  }
+
+  template <bool T = contains_strings>
+  typename std::enable_if<!T, void*>::type data()
+  {
+    return this->str_data().value_or(_data.data());
+  }
+
+  template <bool T = contains_strings>
+  typename std::enable_if<T, size_t>::type data_size() const
+  {
+    return _data.size();
+  }
+
+  template <bool T = contains_strings>
+  typename std::enable_if<!T, size_t>::type data_size() const
+  {
+    return this->str_data_size().value_or(_data.size());
+  }
 
   template <typename T = uint32_t>
   auto null_mask()
@@ -110,9 +169,8 @@ struct column_buffer {
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
-  static column_buffer empty_like(column_buffer const& input);
+  static column_buffer<contains_strings> empty_like(column_buffer<contains_strings> const& input);
 
-  std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
@@ -120,12 +178,16 @@ struct column_buffer {
   data_type type{type_id::EMPTY};
   bool is_nullable{false};
   size_type size{0};
-  std::vector<column_buffer> children;
+  std::vector<column_buffer<contains_strings>> children;
   uint32_t user_data{0};  // arbitrary user data
   std::string name;
 
   rmm::mr::device_memory_resource* mr;
 };
+
+}  // namespace utilities
+
+using column_buffer = utilities::column_buffer<false>;
 
 /**
  * @brief Creates a column from an existing set of device memory buffers.
@@ -138,7 +200,8 @@ struct column_buffer {
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-std::unique_ptr<column> make_column(column_buffer& buffer,
+template <bool contains_strings>
+std::unique_ptr<column> make_column(utilities::column_buffer<contains_strings>& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream);
@@ -158,7 +221,8 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-std::unique_ptr<column> empty_like(column_buffer& buffer,
+template <bool contains_strings>
+std::unique_ptr<column> empty_like(utilities::column_buffer<contains_strings>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
