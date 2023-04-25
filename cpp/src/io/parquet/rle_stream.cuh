@@ -17,14 +17,15 @@
 #include "parquet_gpu.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
 
-namespace cudf {namespace io {
+namespace cudf {
+namespace io {
 namespace parquet {
 namespace gpu {
 
 // TODO: consider if these should be template parameters to rle_stream
 constexpr int num_rle_stream_decode_threads = 512;
-constexpr int num_rle_stream_decode_warps = (num_rle_stream_decode_threads / 32) - 1;
-constexpr int run_buffer_size = (num_rle_stream_decode_warps * 2) + 2;
+constexpr int num_rle_stream_decode_warps   = (num_rle_stream_decode_threads / 32) - 1;
+constexpr int run_buffer_size               = (num_rle_stream_decode_warps * 2) + 2;
 constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
 
 /**
@@ -56,23 +57,23 @@ inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
 // an individual batch. processed by a warp.
 // batches should be in shared memory.
 struct rle_batch {
-  uint8_t const* run_start;   // start of the run we are part of
-  int run_offset;             // value offset of this batch from the start of the run
+  uint8_t const* run_start;  // start of the run we are part of
+  int run_offset;            // value offset of this batch from the start of the run
   uint32_t* output;
   int level_run;
   int size;
 
-  __device__ inline void decode(uint8_t const*const end, int level_bits, int lane, int warp_id)
+  __device__ inline void decode(uint8_t const* const end, int level_bits, int lane, int warp_id)
   {
     int output_pos = 0;
-    int remain = size;
+    int remain     = size;
 
     // for bitpacked/literal runs, total size is always a multiple of 8. so we need to take care if
     // we are not starting/ending exactly on a run boundary
     uint8_t const* cur;
-    if(level_run & 1){
+    if (level_run & 1) {
       int const effective_offset = cudf::util::round_down_safe(run_offset, 8);
-      int const lead_values = (run_offset - effective_offset);
+      int const lead_values      = (run_offset - effective_offset);
       output_pos -= lead_values;
       remain += lead_values;
       cur = run_start + ((effective_offset >> 3) * level_bits);
@@ -80,46 +81,38 @@ struct rle_batch {
 
     // if this is a repeated run, compute the repeated value
     int _level_val;
-    if(!(level_run & 1)){
+    if (!(level_run & 1)) {
       _level_val = run_start[0];
-      if(level_bits > 8){ 
-        _level_val |= run_start[0] << 8;
-      }
+      if (level_bits > 8) { _level_val |= run_start[0] << 8; }
     }
 
     // process
-    while(remain > 0){
+    while (remain > 0) {
       int batch_len = min(32, remain);
 
       // if this is a literal run. each thread computes it's own level_val
       if (level_run & 1) {
         int const batch_len8 = (batch_len + 7) >> 3;
         if (lane < batch_len) {
-          int bitpos         = lane * level_bits;
+          int bitpos                = lane * level_bits;
           uint8_t const* cur_thread = cur + (bitpos >> 3);
           bitpos &= 7;
           _level_val = 0;
-          if (cur_thread < end){
-            _level_val = cur_thread[0];
-          }
+          if (cur_thread < end) { _level_val = cur_thread[0]; }
           cur_thread++;
           if (level_bits > 8 - bitpos && cur_thread < end) {
             _level_val |= cur_thread[0] << 8;
             cur_thread++;
-            if (level_bits > 16 - bitpos && cur_thread < end){
-              _level_val |= cur_thread[0] << 16;
-            }
+            if (level_bits > 16 - bitpos && cur_thread < end) { _level_val |= cur_thread[0] << 16; }
           }
           _level_val = (_level_val >> bitpos) & ((1 << level_bits) - 1);
         }
 
         cur += batch_len8 * level_bits;
       }
-      
+
       // store level_val
-      if (lane < batch_len && (lane + output_pos) >= 0) {
-        output[lane + output_pos] = _level_val;
-      }
+      if (lane < batch_len && (lane + output_pos) >= 0) { output[lane + output_pos] = _level_val; }
       remain -= batch_len;
       output_pos += batch_len;
     }
@@ -127,16 +120,16 @@ struct rle_batch {
 };
 
 // a single rle run. may be broken up into multiple rle_batches
-struct rle_run {  
-  int size;               // total size of the run
+struct rle_run {
+  int size;  // total size of the run
   int output_pos;
   uint8_t const* start;
-  int level_run;          // level_run header value
+  int level_run;  // level_run header value
   int remaining;
 
-  __device__ __inline__ rle_batch next_batch(uint32_t *const output, int max_size)
+  __device__ __inline__ rle_batch next_batch(uint32_t* const output, int max_size)
   {
-    int batch_len = min(max_size, remaining);
+    int batch_len        = min(max_size, remaining);
     int const run_offset = size - remaining;
     remaining -= batch_len;
     return rle_batch{start, run_offset, output, level_run, batch_len};
@@ -148,15 +141,15 @@ struct rle_stream {
   int level_bits;
   uint8_t const* start;
   uint8_t const* cur;
-  uint8_t const* end; 
+  uint8_t const* end;
 
   int max_output_values;
   int total_values;
   int cur_values;
 
-  uint32_t *output;
+  uint32_t* output;
 
-  rle_run *runs;
+  rle_run* runs;
   int run_index;
   int run_count;
   int output_pos;
@@ -165,27 +158,32 @@ struct rle_stream {
   int next_batch_run_start;
   int next_batch_run_count;
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs){}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
-  __device__ void init(int _level_bits, uint8_t const* _start, uint8_t const* _end,int _max_output_values, uint32_t* _output, int _total_values)
+  __device__ void init(int _level_bits,
+                       uint8_t const* _start,
+                       uint8_t const* _end,
+                       int _max_output_values,
+                       uint32_t* _output,
+                       int _total_values)
   {
     level_bits = _level_bits;
-    start = _start;
-    cur = _start;
-    end = _end;
+    start      = _start;
+    cur        = _start;
+    end        = _end;
 
     max_output_values = _max_output_values;
-    output = _output;
-    
-    run_index = 0;
-    run_count = 0;
-    output_pos = 0;
-    spill = false;
+    output            = _output;
+
+    run_index            = 0;
+    run_count            = 0;
+    output_pos           = 0;
+    spill                = false;
     next_batch_run_start = 0;
     next_batch_run_count = 0;
 
     total_values = _total_values;
-    cur_values = 0;
+    cur_values   = 0;
   }
 
   __device__ inline thrust::pair<int, int> get_run_batch()
@@ -199,24 +197,24 @@ struct rle_stream {
   {
     // if we spilled over, we've already got a run at the beginning
     next_batch_run_start = spill ? run_index - 1 : run_index;
-    spill = false;
+    spill                = false;
 
-    // generate runs until we either run out of warps to decode them with, or 
+    // generate runs until we either run out of warps to decode them with, or
     // we cross the output limit.
-    while(run_count < num_rle_stream_decode_warps && output_pos < max_count && cur < end){
+    while (run_count < num_rle_stream_decode_warps && output_pos < max_count && cur < end) {
       auto& run = runs[rolling_run_index(run_index)];
-      
+
       // Encoding::RLE
-      
+
       // bytes for the varint header
-      uint8_t const *_cur = cur;
+      uint8_t const* _cur = cur;
       int const level_run = get_vlq32(_cur, end);
-      int run_bytes = _cur - cur;
+      int run_bytes       = _cur - cur;
 
       // literal run
-      if(level_run & 1){
-        int const run_size = (level_run >> 1) * 8;
-        run.size = run_size;
+      if (level_run & 1) {
+        int const run_size  = (level_run >> 1) * 8;
+        run.size            = run_size;
         int const run_size8 = (run_size + 7) >> 3;
         run_bytes += run_size8 * level_bits;
       }
@@ -226,14 +224,12 @@ struct rle_stream {
         run_bytes++;
         // can this ever be > 16?  it effectively encodes nesting depth so that would require
         // a nesting depth > 64k.
-        if(level_bits > 8){
-          run_bytes++;
-        }
-      }      
+        if (level_bits > 8) { run_bytes++; }
+      }
       run.output_pos = output_pos;
-      run.start = _cur;
-      run.level_run = level_run;
-      run.remaining = run.size;
+      run.start      = _cur;
+      run.level_run  = level_run;
+      run.remaining  = run.size;
       cur += run_bytes;
 
       output_pos += run.size;
@@ -244,27 +240,28 @@ struct rle_stream {
     next_batch_run_count = run_count;
 
     // if we've reached the output limit on the last run
-    if(output_pos >= max_count){
+    if (output_pos >= max_count) {
       // first, see if we've spilled over
-      auto& src = runs[rolling_run_index(run_index - 1)];
+      auto& src       = runs[rolling_run_index(run_index - 1)];
       int spill_count = output_pos - max_count;
 
-      // a spill has occurred in the current run. spill the extra values over into the beginning of the next run.
-      if(spill_count > 0){
-        auto &spill_run = runs[rolling_run_index(run_index)];
-        spill_run = src;
+      // a spill has occurred in the current run. spill the extra values over into the beginning of
+      // the next run.
+      if (spill_count > 0) {
+        auto& spill_run      = runs[rolling_run_index(run_index)];
+        spill_run            = src;
         spill_run.output_pos = 0;
-        spill_run.remaining = spill_count;
-                
+        spill_run.remaining  = spill_count;
+
         run_count = 1;
         run_index++;
         output_pos = spill_run.remaining;
-        spill = true;
-      } 
+        spill      = true;
+      }
       // no actual spill needed. just reset the output pos
       else {
         output_pos = 0;
-        run_count = 0;
+        run_count  = 0;
       }
     }
     // didn't cross the limit, so reset the run count
@@ -279,66 +276,65 @@ struct rle_stream {
 
     // special case. if level_bits == 0, just return all zeros. this should tremendously speed up
     // a very common case: columns with no nulls, especially if they are non-nested
-    if(level_bits == 0){
+    if (level_bits == 0) {
       int written = 0;
-      while(written < output_count){
+      while (written < output_count) {
         int const batch_size = min(num_rle_stream_decode_threads, output_count - written);
-        if(t < batch_size){
-          output[written + t] = 0;
-        }
+        if (t < batch_size) { output[written + t] = 0; }
         written += batch_size;
-      }    
+      }
       cur_values += output_count;
       return output_count;
     }
-    
+
     // otherwise, full decode.
-    int const warp_id = t / 32;
+    int const warp_id        = t / 32;
     int const warp_decode_id = warp_id - 1;
-    int const warp_lane = t % 32;
-    
+    int const warp_lane      = t % 32;
+
     __shared__ int run_start;
     __shared__ int num_runs;
     __shared__ int values_processed;
-    if(!t){
+    if (!t) {
       // carryover from the last call.
       thrust::tie(run_start, num_runs) = get_run_batch();
-      values_processed = 0;
+      values_processed                 = 0;
     }
     __syncthreads();
 
     do {
       // warp 0 reads ahead and generates batches of runs to be decoded by remaining warps.
-      if(!warp_id){
+      if (!warp_id) {
         // fill the next set of runs. fill_runs will generally be the bottleneck for any
         // kernel that uses an rle_stream.
-        if(warp_lane == 0){
-          fill_run_batch(output_count);
-        }
+        if (warp_lane == 0) { fill_run_batch(output_count); }
       }
       // remaining warps decode the runs
-      else if(warp_decode_id < num_runs){
+      else if (warp_decode_id < num_runs) {
         // each warp handles 1 run, regardless of size.
-        // TODO: having each warp handle exactly 32 values would be ideal. as an example, the repetition levels
-        // for one of the list benchmarks decodes in ~3ms total, while the definition levels take ~11ms - the
-        // difference is entirely due to long runs in the definition levels.
-        auto& run = runs[rolling_run_index(run_start + warp_decode_id)];
-        auto batch = run.next_batch(output + run.output_pos, min(run.remaining, (output_count - run.output_pos)));
+        // TODO: having each warp handle exactly 32 values would be ideal. as an example, the
+        // repetition levels for one of the list benchmarks decodes in ~3ms total, while the
+        // definition levels take ~11ms - the difference is entirely due to long runs in the
+        // definition levels.
+        auto& run  = runs[rolling_run_index(run_start + warp_decode_id)];
+        auto batch = run.next_batch(output + run.output_pos,
+                                    min(run.remaining, (output_count - run.output_pos)));
         batch.decode(end, level_bits, warp_lane, warp_decode_id);
         // last warp updates total values processed
-        if(warp_lane == 0 && warp_decode_id == num_runs - 1){
+        if (warp_lane == 0 && warp_decode_id == num_runs - 1) {
           values_processed = run.output_pos + batch.size;
         }
       }
       __syncthreads();
-      
-      // if we haven't run out of space, retrieve the next batch. otherwise leave it for the next call.
-      if(!t && values_processed < output_count){
+
+      // if we haven't run out of space, retrieve the next batch. otherwise leave it for the next
+      // call.
+      if (!t && values_processed < output_count) {
         thrust::tie(run_start, num_runs) = get_run_batch();
       }
       __syncthreads();
-    } while(num_runs > 0 && values_processed < output_count);
-    
+    } while (num_runs > 0 && values_processed < output_count);
+
     cur_values += values_processed;
 
     // valid for every thread
