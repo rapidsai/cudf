@@ -156,6 +156,8 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
   }
 }
 
+}  // namespace
+
 /**
  * @brief Check if rows in the given `needles` table exist in the `haystack` table.
  *
@@ -167,12 +169,12 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains_impl(table_view const& haystack,
-                                        table_view const& needles,
-                                        null_equality compare_nulls,
-                                        nan_equality compare_nans,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<bool> contains(table_view const& haystack,
+                                   table_view const& needles,
+                                   null_equality compare_nulls,
+                                   nan_equality compare_nans,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   auto map = static_map(compute_hash_table_size(haystack.num_rows()),
                         cuco::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
@@ -295,18 +297,6 @@ rmm::device_uvector<bool> contains_impl(table_view const& haystack,
   }
 
   return contained;
-}
-
-}  // namespace
-
-rmm::device_uvector<bool> contains(table_view const& haystack,
-                                   table_view const& needles,
-                                   null_equality compare_nulls,
-                                   nan_equality compare_nans,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  return contains_impl(haystack, needles, compare_nulls, compare_nans, stream, mr);
 }
 
 }  // namespace cudf::detail
