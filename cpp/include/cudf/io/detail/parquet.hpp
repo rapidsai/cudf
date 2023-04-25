@@ -156,7 +156,7 @@ class writer {
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
-                  SingleWriteMode mode,
+                  single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**
@@ -171,7 +171,7 @@ class writer {
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
-                  SingleWriteMode mode,
+                  single_write_mode mode,
                   rmm::cuda_stream_view stream);
 
   /**

@@ -273,9 +273,18 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      return std::make_unique<cufile_input_impl>(filepath);
+      auto const cufile_in = std::make_unique<cufile_input_impl>(filepath);
+      CUDF_LOG_INFO("File successfully opened for reading with GDS.");
     } catch (...) {
-      if (cufile_integration::is_always_enabled()) throw;
+      if (cufile_integration::is_always_enabled()) {
+        CUDF_LOG_ERROR(
+          "Failed to open file for reading with GDS. Enable bounce buffer fallback to read this "
+          "file.");
+        throw;
+      }
+      CUDF_LOG_INFO(
+        "Failed to open file for reading with GDS. Data will be read from the file using a bounce "
+        "buffer (possible performance impact).");
     }
   }
   return nullptr;
@@ -285,9 +294,18 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      return std::make_unique<cufile_output_impl>(filepath);
+      auto const cufile_out = std::make_unique<cufile_output_impl>(filepath);
+      CUDF_LOG_INFO("File successfully opened for writing with GDS.");
     } catch (...) {
-      if (cufile_integration::is_always_enabled()) throw;
+      if (cufile_integration::is_always_enabled()) {
+        CUDF_LOG_ERROR(
+          "Failed to open file for writing with GDS. Enable bounce buffer fallback to write to "
+          "this file.");
+        throw;
+      }
+      CUDF_LOG_INFO(
+        "Failed to open file for writing with GDS. Data will be written to the file using a bounce "
+        "buffer (possible performance impact).");
     }
   }
   return nullptr;
