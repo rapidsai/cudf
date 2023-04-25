@@ -228,7 +228,7 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()
-           ? std::vector<uint8_t>()
+           ? std::vector<uint8_t>{}
            : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 
@@ -238,9 +238,9 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return input.metadata_->size() == 0
+  return input.metadata->size() == 0
            ? table_view{}
-           : detail::unpack(input.metadata_->data(),
+           : detail::unpack(input.metadata->data(),
                             reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 

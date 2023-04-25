@@ -108,7 +108,7 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 }
 
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count) {
-  jlong metadata_address = reinterpret_cast<jlong>(split.metadata_.get());
+  jlong metadata_address = reinterpret_cast<jlong>(split.metadata.get());
   jlong data_address = reinterpret_cast<jlong>(split.gpu_data->data());
   jlong data_size = static_cast<jlong>(split.gpu_data->size());
   jlong rmm_buffer_address = reinterpret_cast<jlong>(split.gpu_data.get());
@@ -118,7 +118,7 @@ jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row
       rmm_buffer_address, row_count);
 
   if (contig_table_obj != nullptr) {
-    split.metadata_.release();
+    split.metadata.release();
     split.gpu_data.release();
   }
 

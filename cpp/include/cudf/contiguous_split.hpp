@@ -41,7 +41,7 @@ namespace cudf {
  */
 struct packed_columns {
   packed_columns()
-    : metadata_(std::make_unique<std::vector<uint8_t>>()),
+    : metadata(std::make_unique<std::vector<uint8_t>>()),
       gpu_data(std::make_unique<rmm::device_buffer>())
   {
   }
@@ -54,12 +54,12 @@ struct packed_columns {
    */
   packed_columns(std::unique_ptr<std::vector<uint8_t>>&& md,
                  std::unique_ptr<rmm::device_buffer>&& gd)
-    : metadata_(std::move(md)), gpu_data(std::move(gd))
+    : metadata(std::move(md)), gpu_data(std::move(gd))
   {
   }
 
-  std::unique_ptr<std::vector<uint8_t>> metadata_;  ///< Host-side metadata buffer
-  std::unique_ptr<rmm::device_buffer> gpu_data;     ///< Device-side data buffer
+  std::unique_ptr<std::vector<uint8_t>> metadata;  ///< Host-side metadata buffer
+  std::unique_ptr<rmm::device_buffer> gpu_data;    ///< Device-side data buffer
 };
 
 /**

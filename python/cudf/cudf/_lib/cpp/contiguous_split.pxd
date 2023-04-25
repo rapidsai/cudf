@@ -12,7 +12,7 @@ from cudf._lib.cpp.types cimport size_type
 
 cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef cppclass packed_columns:
-        unique_ptr[vector[uint8_t]] metadata_
+        unique_ptr[vector[uint8_t]] metadata
         unique_ptr[device_buffer] gpu_data
 
     cdef struct contiguous_split_result:

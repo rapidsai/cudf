@@ -741,10 +741,10 @@ cdef class _CPackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        if self.c_obj.metadata_.get()[0].data() != NULL:
+        if self.c_obj.metadata.get()[0].data() != NULL:
             header["metadata"] = list(
-                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-                self.c_obj.metadata_.get()[0].data()
+                <uint8_t[:self.c_obj.metadata.get()[0].size()]>
+                self.c_obj.metadata.get()[0].data()
             )
 
         column_dtypes = {}
@@ -771,7 +771,7 @@ cdef class _CPackedColumns:
         )
 
         cdef cpp_contiguous_split.packed_columns data
-        data.metadata_ = move(
+        data.metadata = move(
             make_unique[vector[uint8_t]](
                 move(<vector[uint8_t]>header.get("metadata", []))
             )
