@@ -126,7 +126,7 @@ inline __device__ bool is_bounds_page(page_state_s* const s, size_t start_row, s
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
-  return ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end));
+  return ((page_begin < begin && page_end > begin) || (page_begin < end && page_end > end));
 }
 
 /**
@@ -2145,14 +2145,25 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   // find start/end value indices
   auto const [start_value, end_value] =
     page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, t);
-  if (t == 0) printf("%05d: start_val %d end_val %d\n", blockIdx.x, start_value, end_value);
+#if 0
+  if (t == 0)
+    printf("%05d: start_val %d end_val %d is_bounds %d is_contained %d (%ld,%ld] (%ld,%ld]\n",
+           blockIdx.x,
+           start_value,
+           end_value,
+           is_bounds_pg,
+           is_page_contained(s, min_row, num_rows),
+           min_row,
+           min_row + num_rows,
+           col->start_row + pp->chunk_row,
+           col->start_row + pp->chunk_row + pp->num_rows);
+#endif
 
   // now process string info in the range [start_value, end_value)
   // set up for decoding strings...can be either plain or dictionary
   uint8_t const* data      = s->data_start;
   uint8_t const* const end = s->data_end;
   uint8_t const* dict_base = nullptr;
-  int dict_bits            = 0;
   int dict_size            = 0;
   size_t str_bytes         = 0;
 
@@ -2169,13 +2180,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
         dict_size = col->page_info[0].uncompressed_page_size;
       }
 
-      dict_bits = (data < end) ? *data++ : 0;
-
-      // FIXME: how to throw?  set error and return?
-      if (dict_bits > 32 || !dict_base) { printf("error\n"); }
+      if (s->dict_bits > 32 || !dict_base) {
+        printf("%03d: error %d %p\n", t, s->dict_bits, dict_base);
+        CUDF_UNREACHABLE("invalid dictionary bit size");
+      }
 
       str_bytes = countDictEntries(
-        data, dict_base, dict_bits, dict_size, (end - data), start_value, end_value, t);
+        data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value, t);
       break;
     case Encoding::PLAIN:
       dict_size = static_cast<int32_t>(end - data);
