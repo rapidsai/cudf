@@ -41,8 +41,7 @@ auto build_lists_col(T& list, Ts&... lists)
 
 }  // namespace
 
-struct ConcatenateListElementsTest : public cudf::test::BaseFixture {
-};
+struct ConcatenateListElementsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ConcatenateListElementsTest, InvalidInput)
 {
@@ -60,8 +59,7 @@ TEST_F(ConcatenateListElementsTest, InvalidInput)
 }
 
 template <typename T>
-struct ConcatenateListElementsTypedTest : public cudf::test::BaseFixture {
-};
+struct ConcatenateListElementsTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
@@ -125,15 +123,15 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputWithNulls)
 {
   using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
   auto row0      = ListsCol{{ListsCol{{1, null, 3, 4}, null_at(1)},
-                        ListsCol{{10, 11, 12, null}, null_at(3)},
-                        ListsCol{} /*NULL*/},
+                             ListsCol{{10, 11, 12, null}, null_at(3)},
+                             ListsCol{} /*NULL*/},
                        null_at(2)};
   auto row1      = ListsCol{ListsCol{{null, 2, 3, 4}, null_at(0)},
                        ListsCol{{13, 14, 15, 16, 17, null}, null_at(5)},
                        ListsCol{{20, null}, null_at(1)}};
   auto row2      = ListsCol{{ListsCol{{null, 2, 3, 4}, null_at(0)},
-                        ListsCol{} /*NULL*/,
-                        ListsCol{{null, 21, null, null}, nulls_at({0, 2, 3})}},
+                             ListsCol{} /*NULL*/,
+                             ListsCol{{null, 21, null, null}, nulls_at({0, 2, 3})}},
                        null_at(1)};
   auto row3      = ListsCol{{ListsCol{} /*NULL*/, ListsCol{{null, 18}, null_at(0)}}, null_at(0)};
   auto row4      = ListsCol{ListsCol{{1, 2, null, 4}, null_at(2)},

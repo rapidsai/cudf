@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #include "reader_impl_helpers.hpp"
+
+#include <io/utilities/row_selection.hpp>
 
 #include <numeric>
 #include <regex>
@@ -227,10 +229,10 @@ aggregate_reader_metadata::collect_keyval_metadata() const
   return kv_maps;
 }
 
-size_type aggregate_reader_metadata::calc_num_rows() const
+int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto& sum, auto& pfm) {
       return sum + pfm.num_rows;
     });
 }
@@ -336,54 +338,49 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<size_type, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
-  size_type row_start,
-  size_type row_count) const
+  int64_t skip_rows_opt,
+  std::optional<size_type> const& num_rows_opt) const
 {
   std::vector<row_group_info> selection;
+  auto [rows_to_skip, rows_to_read] = [&]() {
+    if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
+    auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
+      skip_rows_opt, num_rows_opt, get_num_rows());
+    return std::pair{static_cast<int64_t>(from_opts.first), from_opts.second};
+  }();
 
   if (!row_group_indices.empty()) {
     CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                  "Must specify row groups for each source");
 
-    row_count = 0;
     for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
       for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
         CUDF_EXPECTS(
           rowgroup_idx >= 0 &&
             rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
           "Invalid rowgroup index");
-        selection.emplace_back(rowgroup_idx, row_count, src_idx);
-        row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
+        selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
+        rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
       }
     }
-
-    return {row_start, row_count, std::move(selection)};
-  }
-
-  row_start = std::max(row_start, 0);
-  if (row_count < 0) {
-    row_count = std::min(get_num_rows(), std::numeric_limits<size_type>::max());
-  }
-  row_count = std::min(row_count, get_num_rows() - row_start);
-  CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-  CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
-
-  size_type count = 0;
-  for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
-    for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
-      auto const chunk_start_row = count;
-      count += get_row_group(rg_idx, src_idx).num_rows;
-      if (count > row_start || count == 0) {
-        selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+  } else {
+    size_type count = 0;
+    for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+      for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
+        auto const chunk_start_row = count;
+        count += get_row_group(rg_idx, src_idx).num_rows;
+        if (count > rows_to_skip || count == 0) {
+          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+        }
+        if (count >= rows_to_skip + rows_to_read) { break; }
       }
-      if (count >= row_start + row_count) { break; }
     }
   }
 
-  return {row_start, row_count, std::move(selection)};
+  return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
 std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>

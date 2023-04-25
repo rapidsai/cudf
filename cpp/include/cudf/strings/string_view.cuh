@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,6 +121,13 @@ __device__ inline string_view::const_iterator::const_iterator(const string_view&
 {
 }
 
+__device__ inline string_view::const_iterator::const_iterator(string_view const& str,
+                                                              size_type pos,
+                                                              size_type offset)
+  : p{str.data()}, bytes{str.size_bytes()}, char_pos{pos}, byte_pos{offset}
+{
+}
+
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
   if (byte_pos < bytes)
@@ -137,7 +144,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 }
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator+(
-  string_view::const_iterator::difference_type offset)
+  string_view::const_iterator::difference_type offset) const
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
@@ -181,7 +188,7 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 }
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator-(
-  string_view::const_iterator::difference_type offset)
+  string_view::const_iterator::difference_type offset) const
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
@@ -244,7 +251,7 @@ __device__ inline string_view::const_iterator string_view::begin() const
 
 __device__ inline string_view::const_iterator string_view::end() const
 {
-  return const_iterator(*this, length());
+  return const_iterator(*this, length(), size_bytes());
 }
 // @endcond
 
@@ -338,11 +345,14 @@ __device__ inline size_type string_view::find_impl(const char* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  if (!str || pos < 0) return npos;
   auto const nchars = length();
+  if (!str || pos < 0 || pos > nchars) return npos;
   if (count < 0) count = nchars;
-  auto const spos = byte_offset(pos);
-  auto const epos = byte_offset(std::min(pos + count, nchars));
+
+  // use iterator to help reduce character/byte counting
+  auto itr        = begin() + pos;
+  auto const spos = itr.byte_offset();
+  auto const epos = ((pos + count) < nchars) ? (itr + count).byte_offset() : size_bytes();
 
   auto const find_length = (epos - spos) - bytes + 1;
 
@@ -352,7 +362,9 @@ __device__ inline size_type string_view::find_impl(const char* str,
     for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
       match = (ptr[jdx] == str[jdx]);
     }
-    if (match) { return character_offset(forward ? (idx + spos) : (epos - bytes - idx)); }
+    if (match) { return forward ? pos : character_offset(epos - bytes - idx); }
+    // use pos to record the current find position
+    pos += strings::detail::is_begin_utf8_char(*ptr);
     forward ? ++ptr : --ptr;
   }
   return npos;
@@ -396,12 +408,12 @@ __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, siz
 }
 
 // parameters are character position values
-__device__ inline string_view string_view::substr(size_type pos, size_type length) const
+__device__ inline string_view string_view::substr(size_type pos, size_type count) const
 {
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(pos + length);
-  if (epos > size_bytes()) epos = size_bytes();
-  if (spos >= epos) return string_view("", 0);
+  if (pos < 0 || pos >= length()) { return string_view{}; }
+  auto const itr  = begin() + pos;
+  auto const spos = itr.byte_offset();
+  auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
   return string_view(data() + spos, epos - spos);
 }
 

@@ -9,9 +9,9 @@ from locale import nl_langinfo
 from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
-import pandas as pd
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -21,6 +21,7 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
@@ -200,9 +201,16 @@ class DatetimeColumn(column.ColumnBase):
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `datetime64[ns]`, hence the cast.
+        if PANDAS_GE_200:
+            host_values = self.fillna("NaT").values_host
+        else:
+            # Pandas<2.0 supports only `datetime64[ns]`, hence the cast.
+            host_values = (
+                self.astype("datetime64[ns]").fillna("NaT").values_host
+            )
+
         return pd.Series(
-            self.astype("datetime64[ns]").fillna("NaT").values_host,
+            host_values,
             copy=False,
             index=index,
         )
@@ -243,18 +251,29 @@ class DatetimeColumn(column.ColumnBase):
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                return cudf.Scalar(None, dtype=self.dtype)
+                other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+                if other_time_unit not in {"s", "ms", "ns", "us"}:
+                    other_time_unit = "ns"
+
+                return cudf.Scalar(
+                    None, dtype=f"datetime64[{other_time_unit}]"
+                )
 
             other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
+            if np.isnat(other):
+                return cudf.Scalar(
+                    None,
+                    dtype="timedelta64[ns]"
+                    if other_time_unit not in {"s", "ms", "ns", "us"}
+                    else other.dtype,
+                )
+
             if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
-
-            if np.isnat(other):
-                return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -352,7 +371,7 @@ class DatetimeColumn(column.ColumnBase):
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
-        )
+        ).as_unit(self.time_unit)
 
     def std(
         self,
@@ -366,12 +385,12 @@ class DatetimeColumn(column.ColumnBase):
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
-        )
+        ).as_unit(self.time_unit)
 
     def median(self, skipna: bool = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
-        )
+        ).as_unit(self.time_unit)
 
     def quantile(
         self,
@@ -387,7 +406,9 @@ class DatetimeColumn(column.ColumnBase):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return pd.Timestamp(result, unit=self.time_unit)
+            return pd.Timestamp(result, unit=self.time_unit).as_unit(
+                self.time_unit
+            )
         return result.astype(self.dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -396,7 +417,9 @@ class DatetimeColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)
+            return other._datetime_binop(self, op, reflect=reflect).astype(
+                self.dtype
+            )
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
@@ -441,7 +464,11 @@ class DatetimeColumn(column.ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
+            return result_col  # .astype(lhs.dtype)
+        else:
+            return result_col
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
@@ -525,7 +552,15 @@ def infer_format(element: str, **kwargs) -> str:
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
-        return fmt
+        if ".%f" in fmt:
+            # For context read:
+            # https://github.com/pandas-dev/pandas/issues/52418
+            # We cannot rely on format containing only %f
+            # c++/libcudf expects .%3f, .%6f, .%9f
+            # Logic below handles those cases well.
+            pass
+        else:
+            return fmt
 
     element_parts = element.split(".")
     if len(element_parts) != 2:
@@ -545,11 +580,15 @@ def infer_format(element: str, **kwargs) -> str:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_parts) > 1:
-        # "Z" indicates Zulu time(widely used in aviation) - Which is
-        # UTC timezone that currently cudf only supports. Having any other
-        # unsupported timezone will let the code fail below
-        # with a ValueError.
-        second_parts.remove("Z")
+        if "Z" in second_parts:
+            # "Z" indicates Zulu time(widely used in aviation) - Which is
+            # UTC timezone that currently cudf only supports. Having any other
+            # unsupported timezone will let the code fail below
+            # with a ValueError.
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+
         second_part = "".join(second_parts[1:])
 
         if len(second_part) > 1:

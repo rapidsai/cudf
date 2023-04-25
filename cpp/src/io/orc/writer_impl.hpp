@@ -118,7 +118,7 @@ class orc_streams {
   auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
-  operator std::vector<Stream> const &() const { return streams; }
+  operator std::vector<Stream> const&() const { return streams; }
 
  private:
   std::vector<Stream> streams;
@@ -209,7 +209,7 @@ struct persisted_statistics {
   }
 
   void persist(int num_table_rows,
-               bool single_write_mode,
+               single_write_mode write_mode,
                intermediate_statistics& intermediate_stats,
                rmm::cuda_stream_view stream);
 
@@ -245,13 +245,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
-                SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                single_write_mode mode,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -260,13 +258,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
-                SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                single_write_mode mode,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -297,27 +293,27 @@ class writer::impl {
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
    * by `process_for_write` called in the `write()` function.
    *
-   * @param streams List of stream descriptors
-   * @param comp_results Status of data compression
-   * @param strm_descs List of stream descriptors
-   * @param enc_data ORC per-chunk streams of encoded data
-   * @param segmentation Description of how the ORC file is segmented into stripes and rowgroups
-   * @param stripes List of stripe description
-   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
-   * @param compressed_data Compressed stream data
-   * @param intermediate_stats Statistics data stored between calls to write
-   * @param stream_output Temporary host output buffer
+   * @param[in] enc_data ORC per-chunk streams of encoded data
+   * @param[in] segmentation Description of how the ORC file is segmented into stripes and rowgroups
+   * @param[in] orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param[in] compressed_data Compressed stream data
+   * @param[in] comp_results Status of data compression
+   * @param[in] strm_descs List of stream descriptors
+   * @param[in,out] intermediate_stats Statistics data stored between calls to write
+   * @param[in,out] streams List of stream descriptors
+   * @param[in,out] stripes List of stripe description
+   * @param[out] bounce_buffer Temporary host output buffer
    */
-  void write_orc_data_to_sink(orc_streams& streams,
-                              hostdevice_vector<compression_result> const& comp_results,
-                              hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-                              encoded_data const& enc_data,
+  void write_orc_data_to_sink(encoded_data const& enc_data,
                               file_segmentation const& segmentation,
-                              std::vector<StripeInformation>& stripes,
                               orc_table_view const& orc_table,
-                              rmm::device_buffer const& compressed_data,
+                              device_span<uint8_t const> compressed_data,
+                              host_span<compression_result const> comp_results,
+                              host_2dspan<gpu::StripeStream const> strm_descs,
                               intermediate_statistics& intermediate_stats,
-                              uint8_t* stream_output);
+                              orc_streams& streams,
+                              host_span<StripeInformation> stripes,
+                              host_span<uint8_t> bounce_buffer);
 
   /**
    * @brief Add the processed table data into the internal file footer.
@@ -329,36 +325,30 @@ class writer::impl {
                                 std::vector<StripeInformation>& stripes);
 
  private:
-  rmm::mr::device_memory_resource* _mr = nullptr;
-  // Cuda stream to be used
-  rmm::cuda_stream_view stream;
+  // CUDA stream.
+  rmm::cuda_stream_view const _stream;
 
-  stripe_size_limits max_stripe_size;
-  size_type row_index_stride;
-  CompressionKind compression_kind_;
-  size_t compression_blocksize_;
+  // Writer options.
+  stripe_size_limits const _max_stripe_size;
+  size_type const _row_index_stride;
+  CompressionKind const _compression_kind;
+  size_t const _compression_blocksize;
+  statistics_freq const _stats_freq;
+  single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
+                                               // indicate that we are guaranteeing a single table
+                                               // write. This enables some internal optimizations.
+  std::map<std::string, std::string> const _kv_meta;  // Optional user metadata.
+  std::unique_ptr<data_sink> const _out_sink;
 
-  bool enable_dictionary_     = true;
-  statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
+  // Debug parameter---currently not yet supported to be user-specified.
+  static bool constexpr _enable_dictionary = true;
 
-  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  cudf::io::orc::FileFooter ff;
-  cudf::io::orc::Metadata md;
-  // current write position for rowgroups/chunks
-  size_t current_chunk_offset;
-  // special parameter only used by detail::write() to indicate that we are guaranteeing
-  // a single table write.  this enables some internal optimizations.
-  bool const single_write_mode;
-  // optional user metadata
-  std::unique_ptr<table_input_metadata> table_meta;
-  // optional user metadata
-  std::map<std::string, std::string> kv_meta;
-  // to track if the output has been written to sink
-  bool closed = false;
-  // statistics data saved between calls to write before a close writes out the statistics
-  persisted_statistics persisted_stripe_statistics;
-
-  std::unique_ptr<data_sink> out_sink_;
+  // Internal states, filled during `write()` and written to sink during `write` and `close()`.
+  std::unique_ptr<table_input_metadata> _table_meta;
+  cudf::io::orc::FileFooter _ffooter;
+  cudf::io::orc::Metadata _orc_meta;
+  persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
+  bool _closed = false;  // To track if the output has been written to sink.
 };
 
 }  // namespace orc

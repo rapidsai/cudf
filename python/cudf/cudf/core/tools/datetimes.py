@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import re
@@ -55,7 +55,7 @@ def to_datetime(
     format=None,
     exact=True,
     unit="ns",
-    infer_datetime_format=False,
+    infer_datetime_format=True,
     origin="unix",
     cache=True,
 ):
@@ -90,7 +90,7 @@ def to_datetime(
         origin(unix epoch start).
         Example, with unit='ms' and origin='unix' (the default), this
         would calculate the number of milliseconds to the unix epoch start.
-    infer_datetime_format : bool, default False
+    infer_datetime_format : bool, default True
         If True and no `format` is given, attempt to infer the format of the
         datetime strings, and if it can be inferred, switch to a faster
         method of parsing them. In some cases this can increase the parsing
@@ -129,6 +129,12 @@ def to_datetime(
             f"errors parameter has to be either one of: "
             f"{['ignore', 'raise', 'coerce', 'warn']}, found: "
             f"{errors}"
+        )
+    if infer_datetime_format in {None, False}:
+        warnings.warn(
+            "`infer_datetime_format` is deprecated and will "
+            "be removed in a future version of cudf.",
+            FutureWarning,
         )
 
     if arg is None:

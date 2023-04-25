@@ -20,7 +20,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_LT_153
+from cudf.core._compat import PANDAS_LT_153, PANDAS_GE_200
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -286,6 +286,16 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in got.columns:
             got = got.drop(columns=["col_category"])
 
+    if PANDAS_GE_200 and columns is None:
+        # https://github.com/pandas-dev/pandas/issues/52412
+        assert expect["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
+        assert expect["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
+        expect["col_datetime64[ms]"] = expect["col_datetime64[ms]"].astype(
+            "datetime64[ms]"
+        )
+        expect["col_datetime64[us]"] = expect["col_datetime64[us]"].astype(
+            "datetime64[us]"
+        )
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -301,7 +311,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_column_type=not PANDAS_GE_200)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -653,6 +663,13 @@ def test_parquet_reader_microsecond_timestamps(datadir):
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
+
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        assert got["a"].dtype == cudf.dtype("datetime64[us]")
+        got = got.astype("datetime64[ns]")
 
     assert_eq(expect, got)
 
@@ -1432,7 +1449,16 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
     expect = pdf
     got = pd.read_parquet(gdf_fname)
-
+    if PANDAS_GE_200:
+        # https://github.com/pandas-dev/pandas/issues/52412
+        assert got["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
+        assert got["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
+        got["col_datetime64[ms]"] = got["col_datetime64[ms]"].astype(
+            "datetime64[ms]"
+        )
+        got["col_datetime64[us]"] = got["col_datetime64[us]"].astype(
+            "datetime64[us]"
+        )
     # verify INT96 timestamps were converted back to the same data.
     assert_eq(expect, got, check_categorical=False)
 
@@ -2191,7 +2217,12 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
 
-    assert_eq(expected, actual, check_index_type=True)
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=True,
+        check_column_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2489,6 +2520,16 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
 
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        gdf["col_datetime64[ms]"] = gdf["col_datetime64[ms]"].astype(
+            "datetime64[ns]"
+        )
+        gdf["col_datetime64[us]"] = gdf["col_datetime64[us]"].astype(
+            "datetime64[ns]"
+        )
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 

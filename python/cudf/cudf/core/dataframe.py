@@ -32,7 +32,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from packaging.version import Version
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
@@ -104,6 +103,8 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
+from cudf.core._compat import PANDAS_GE_200
+from cudf.api.extensions import no_default
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -705,7 +706,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                     self._data = new_df._data
                     self._index = new_df._index
-                    self._check_data_index_length_match()
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -714,7 +714,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     self._init_from_list_like(
                         data, index=index, columns=columns
                     )
-
+                self._check_data_index_length_match()
             else:
                 if not is_dict_like(data):
                     raise TypeError("data must be list or dict-like")
@@ -722,18 +722,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._init_from_dict_like(
                     data, index=index, columns=columns, nan_as_null=nan_as_null
                 )
+                self._check_data_index_length_match()
 
         if dtype:
             self._data = self.astype(dtype)._data
-
-    def _check_data_index_length_match(df: DataFrame) -> None:
-        # Validate that the number of rows in the data matches the index if the
-        # data is not empty. This is a helper for the constructor.
-        if df._data.nrows > 0 and df._data.nrows != len(df._index):
-            raise ValueError(
-                f"Shape of passed values is {df.shape}, indices imply "
-                f"({len(df._index)}, {df._num_columns})"
-            )
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
@@ -1176,13 +1168,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                # An explicit dtype is needed to avoid pandas warnings from
-                # empty sets of columns. This shouldn't be needed in pandas
-                # 2.0, we don't need to specify a dtype when we know we're not
-                # trying to match any columns so the default is fine.
                 dtype = None
-                if len(mask) == 0:
-                    assert Version(pd.__version__) < Version("2.0.0")
+                if len(mask) == 0 and not PANDAS_GE_200:
+                    # An explicit dtype is needed to avoid pandas
+                    # warnings from empty sets of columns. This
+                    # shouldn't be needed in pandas 2.0, we don't
+                    # need to specify a dtype when we know we're not
+                    # trying to match any columns so the default is fine.
                     dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
@@ -1952,6 +1944,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
         elif isinstance(other, Series):
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and (
+                    not self._data.to_pandas_index().equals(
+                        other.index.to_pandas()
+                    )
+                )
+            ):
+                raise ValueError(
+                    "Can only compare DataFrame & Series objects "
+                    "whose columns & index are same respectively, "
+                    "please reindex."
+                )
             rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
@@ -5738,7 +5744,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def _prepare_for_rowwise_op(self, method, skipna):
+    def _prepare_for_rowwise_op(self, method, skipna, numeric_only):
         """Prepare a DataFrame for CuPy-based row-wise operations."""
 
         if method not in _cupy_nan_methods_map and any(
@@ -5752,26 +5758,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             raise ValueError(msg)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
-
-        if not is_pure_dt:
+        if numeric_only:
             filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
 
-        if filtered._num_columns < self._num_columns:
-            # When we update our pandas compatibility target to 2.0, pandas
-            # will stop supporting numeric_only=None and users will have to
-            # specify True/False. At that time we should also top our implicit
-            # removal of non-numeric columns here.
-            assert Version(pd.__version__) < Version("2.0.0")
-            msg = (
-                "Row-wise operations currently only support int, float "
-                "and bool dtypes. Non numeric columns are ignored."
+        common_dtype = find_common_type(filtered.dtypes)
+        if (
+            not numeric_only
+            and is_string_dtype(common_dtype)
+            and any(not is_string_dtype(dt) for dt in filtered.dtypes)
+        ):
+            raise TypeError(
+                f"Cannot perform row-wise {method} across mixed-dtype columns,"
+                " try type-casting all the columns to same dtype."
             )
-            warnings.warn(msg)
 
         if not skipna and any(col.nullable for col in filtered._columns):
             mask = DataFrame(
@@ -5857,7 +5860,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(index=cudf.StringIndex([]))
+                return Series(index=self.index)
 
         axis = source._get_axis_from_axis_arg(axis)
 
@@ -6063,12 +6066,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Row-wise operations currently do not support `level`."
             )
 
-        numeric_only = kwargs.pop("numeric_only", None)
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "Row-wise operations currently do not "
-                "support `numeric_only=False`."
-            )
+        numeric_only = kwargs.pop("numeric_only", False)
 
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
@@ -6088,7 +6086,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
-            method, skipna
+            method, skipna, numeric_only
         )
         for col in prepared._data.names:
             if prepared._data[col].nullable:
@@ -6639,7 +6637,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
-    def pivot(self, index, columns, values=None):
+    def pivot(self, *, columns, index=no_default, values=no_default):
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
         )

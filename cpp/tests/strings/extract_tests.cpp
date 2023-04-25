@@ -29,8 +29,7 @@
 
 #include <vector>
 
-struct StringsExtractTests : public cudf::test::BaseFixture {
-};
+struct StringsExtractTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsExtractTests, ExtractTest)
 {

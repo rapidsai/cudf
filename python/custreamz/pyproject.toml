@@ -16,8 +16,9 @@ authors = [
     { name = "NVIDIA Corporation" },
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
+    "confluent-kafka>=1.9.0,<1.10.0a0",
     "cudf==23.6.*",
     "cudf_kafka==23.6.*",
     "streamz",
@@ -29,7 +30,6 @@ classifiers = [
     "Topic :: Apache Kafka",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]

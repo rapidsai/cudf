@@ -104,13 +104,20 @@ def is_string_dtype(obj):
         Whether or not the array or dtype is of the string dtype.
     """
     return (
-        pd.api.types.is_string_dtype(obj)
-        # Reject all cudf extension types.
-        and not is_categorical_dtype(obj)
-        and not is_decimal_dtype(obj)
-        and not is_list_dtype(obj)
-        and not is_struct_dtype(obj)
-        and not is_interval_dtype(obj)
+        (
+            isinstance(obj, (cudf.Index, cudf.Series))
+            and obj.dtype == cudf.dtype("O")
+        )
+        or (isinstance(obj, cudf.core.column.StringColumn))
+        or (
+            pd.api.types.is_string_dtype(obj)
+            # Reject all cudf extension types.
+            and not is_categorical_dtype(obj)
+            and not is_decimal_dtype(obj)
+            and not is_list_dtype(obj)
+            and not is_struct_dtype(obj)
+            and not is_interval_dtype(obj)
+        )
     )
 
 

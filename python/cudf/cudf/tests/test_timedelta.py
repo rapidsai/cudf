@@ -11,6 +11,7 @@ import pytest
 import cudf
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.core._compat import PANDAS_GE_200
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -528,7 +529,13 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
-        np.timedelta64("nat", "s"),
+        pytest.param(
+            np.timedelta64("nat", "s"),
+            marks=pytest.mark.xfail(
+                strict=False,
+                reason="https://github.com/pandas-dev/pandas/issues/52295",
+            ),
+        ),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -686,38 +693,41 @@ def test_timedelta_dt_components(data, dtype):
 
 @pytest.mark.parametrize(
     "data",
-    _TIMEDELTA_DATA,
+    _TIMEDELTA_DATA_NON_OVERFLOW,
+    # TODO-PANDAS-2.0: Replace above with `_TIMEDELTA_DATA`
+    # after the following issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52386
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    def local_assert(expected, actual):
+    def local_assert(expected, actual, **kwargs):
         if gsr.isnull().any():
-            assert_eq(expected, actual.astype("float"))
+            assert_eq(expected, actual.astype("float"), **kwargs)
         else:
-            assert_eq(expected, actual)
+            assert_eq(expected, actual, **kwargs)
 
     expected_days = psr.dt.days
     actual_days = gsr.dt.days
 
-    local_assert(expected_days, actual_days)
+    local_assert(expected_days, actual_days, check_dtype=False)
 
     expected_seconds = psr.dt.seconds
     actual_seconds = gsr.dt.seconds
 
-    local_assert(expected_seconds, actual_seconds)
+    local_assert(expected_seconds, actual_seconds, check_dtype=False)
 
     expected_microseconds = psr.dt.microseconds
     actual_microseconds = gsr.dt.microseconds
 
-    local_assert(expected_microseconds, actual_microseconds)
+    local_assert(expected_microseconds, actual_microseconds, check_dtype=False)
 
     expected_nanoseconds = psr.dt.nanoseconds
     actual_nanoseconds = gsr.dt.nanoseconds
 
-    local_assert(expected_nanoseconds, actual_nanoseconds)
+    local_assert(expected_nanoseconds, actual_nanoseconds, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1315,7 +1325,11 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     psr = sr.to_pandas()
 
     actual = sr.astype(timedelta_dtype)
-    expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+
+    if PANDAS_GE_200:
+        expected = psr.astype(timedelta_dtype)
+    else:
+        expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
 
     assert_eq(expected, actual)
 

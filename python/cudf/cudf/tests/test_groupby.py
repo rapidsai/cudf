@@ -18,7 +18,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
@@ -1971,11 +1971,16 @@ def test_groupby_apply_return_series_dataframe(func, args):
 )
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
+    if isinstance(pdf, pd.DataFrame):
+        kwargs = {"check_column_type": not PANDAS_GE_200}
+    else:
+        kwargs = {}
     assert_groupby_results_equal(
         pdf.groupby([]).max(),
         gdf.groupby([]).max(),
         check_dtype=False,
         check_index_type=False,  # Int64Index v/s Float64Index
+        **kwargs,
     )
 
 
@@ -1985,10 +1990,15 @@ def test_groupby_no_keys(pdf):
 )
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
+    if isinstance(pdf, pd.DataFrame):
+        kwargs = {"check_column_type": not PANDAS_GE_200}
+    else:
+        kwargs = {}
     assert_groupby_results_equal(
         pdf.groupby([], group_keys=False).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
         check_index_type=False,  # Int64Index v/s Float64Index
+        **kwargs,
     )
 
 
@@ -2499,7 +2509,7 @@ def test_groupby_various_by_fillna(by, data, args):
 
 
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
-@pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_groupby_fillna_method(nelem, method):
     t = rand_dataframe(
         dtypes_meta=[
@@ -2638,7 +2648,13 @@ def test_groupby_freq_week(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2665,7 +2681,13 @@ def test_groupby_freq_day(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2692,7 +2714,13 @@ def test_groupby_freq_min(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
@@ -2719,7 +2747,13 @@ def test_groupby_freq_s(label, closed):
     got = gdf.groupby(
         cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
     ).mean()
-    assert_eq(expect, got, check_like=True, check_dtype=False)
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=not PANDAS_GE_200,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2878,19 +2912,17 @@ def test_groupby_transform_maintain_index(by):
     ],
 )
 @pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill"])
 def test_groupby_pct_change(data, gkey, periods, fill_method):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    with expect_warning_if(fill_method in ("pad", "backfill")):
-        actual = gdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
-    with expect_warning_if(fill_method in ("pad", "backfill")):
-        expected = pdf.groupby(gkey).pct_change(
-            periods=periods, fill_method=fill_method
-        )
+    actual = gdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
+    expected = pdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
 
     assert_eq(expected, actual)
 

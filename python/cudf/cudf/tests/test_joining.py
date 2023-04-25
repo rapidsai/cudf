@@ -15,6 +15,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.core._compat import PANDAS_GE_200
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
 
@@ -784,6 +785,12 @@ def test_join_datetimes_index(dtype):
     gdf = gdf_lhs.join(gdf_rhs, sort=True)
 
     assert gdf["d"].dtype == cudf.dtype(dtype)
+
+    if PANDAS_GE_200:
+        # TODO: Remove typecast to `ns` after following
+        # issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/52449
+        gdf = gdf.astype("datetime64[ns]")
 
     assert_join_results_equal(pdf, gdf, how="inner")
 

@@ -441,6 +441,15 @@ class IndexedFrame(Frame):
             results[name] = getattr(result_col, op)()
         return self._from_data(results, self._index)
 
+    def _check_data_index_length_match(self: T) -> None:
+        # Validate that the number of rows in the data matches the index if the
+        # data is not empty. This is a helper for the constructor.
+        if self._data.nrows > 0 and self._data.nrows != len(self._index):
+            raise ValueError(
+                f"Length of values ({self._data.nrows}) does not "
+                f"match length of index ({len(self._index)})"
+            )
+
     def copy(self: T, deep: bool = True) -> T:
         """Make a copy of this object's indices and data.
 
@@ -1985,7 +1994,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    backfill = bfill
+    @_cudf_nvtx_annotate
+    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.bfill/Series.bfill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.backfill/Series.backfill is deprecated. Use "
+            "DataFrame.bfill/Series.bfill instead",
+            FutureWarning,
+        )
+        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_cudf_nvtx_annotate
     def ffill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2004,7 +2030,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    pad = ffill
+    @_cudf_nvtx_annotate
+    def pad(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.ffill/Series.ffill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.pad/Series.pad is deprecated. Use "
+            "DataFrame.ffill/Series.ffill instead",
+            FutureWarning,
+        )
+        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix):
         """
@@ -3330,14 +3373,6 @@ class IndexedFrame(Frame):
         fname = ufunc.__name__
 
         if ret is not None:
-            # pandas bitwise operations return bools if indexes are misaligned.
-            if "bitwise" in fname:
-                reflect = self is not inputs[0]
-                other = inputs[0] if reflect else inputs[1]
-                if isinstance(other, self.__class__) and not self.index.equals(
-                    other.index
-                ):
-                    ret = ret.astype(bool)
             return ret
 
         # Attempt to dispatch all other functions to cupy.

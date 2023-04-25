@@ -26,8 +26,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_sum_test : public cudf::test::BaseFixture {
-};
+struct groupby_sum_test : public cudf::test::BaseFixture {};
 
 using K = int32_t;
 using supported_types =
@@ -151,8 +150,7 @@ TYPED_TEST(groupby_sum_test, dictionary)
                   force_use_sort_impl::YES);
 }
 
-struct overflow_test : public cudf::test::BaseFixture {
-};
+struct overflow_test : public cudf::test::BaseFixture {};
 TEST_F(overflow_test, overflow_integer)
 {
   using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -173,8 +171,7 @@ TEST_F(overflow_test, overflow_integer)
 }
 
 template <typename T>
-struct GroupBySumFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupBySumFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupBySumFixedPointTest, cudf::test::FixedPointTypes);
 

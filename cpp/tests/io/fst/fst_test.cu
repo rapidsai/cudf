@@ -119,8 +119,7 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
 }  // namespace
 
 // Base test fixture for tests
-struct FstTest : public cudf::test::BaseFixture {
-};
+struct FstTest : public cudf::test::BaseFixture {};
 
 TEST_F(FstTest, GroundTruth)
 {

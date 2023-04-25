@@ -1721,7 +1721,7 @@ def test_datetime_dateoffset_binaryop(
     date_col, n_periods, frequency, dtype, op
 ):
     gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()  # converts to nanos
+    psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -3012,10 +3012,6 @@ def test_binops_decimal_scalar(args):
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
-@pytest_xfail(
-    reason="binop operations not supported for different bit-width "
-    "decimal types"
-)
 def test_binops_decimal_scalar_compare(args, reflected):
     """
     Tested compare operations:

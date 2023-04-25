@@ -33,8 +33,7 @@
 
 #include <vector>
 
-struct StringsSplitTest : public cudf::test::BaseFixture {
-};
+struct StringsSplitTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsSplitTest, Split)
 {
@@ -693,9 +692,14 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
   EXPECT_TRUE(results->num_columns() == 1);
   EXPECT_TRUE(results->num_rows() == 0);
 
+  auto target      = cudf::string_scalar(" ");
   auto list_result = cudf::strings::split_record(zero_size_strings_column);
   EXPECT_TRUE(list_result->size() == 0);
   list_result = cudf::strings::rsplit_record(zero_size_strings_column);
+  EXPECT_TRUE(list_result->size() == 0);
+  list_result = cudf::strings::split_record(zero_size_strings_column, target);
+  EXPECT_TRUE(list_result->size() == 0);
+  list_result = cudf::strings::rsplit_record(zero_size_strings_column, target);
   EXPECT_TRUE(list_result->size() == 0);
   list_result = cudf::strings::split_record_re(zero_size_strings_column, *prog);
   EXPECT_TRUE(list_result->size() == 0);
@@ -729,11 +733,16 @@ TEST_F(StringsSplitTest, AllNullsCase)
   EXPECT_TRUE(results->num_columns() == 1);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
 
+  auto target      = cudf::string_scalar(" ");
   auto list_result = cudf::strings::split_record(sv);
   using LCW        = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{}, LCW{}, LCW{}}, cudf::test::iterators::all_nulls());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
   list_result = cudf::strings::rsplit_record(sv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+  list_result = cudf::strings::split_record(sv, target);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+  list_result = cudf::strings::rsplit_record(sv, target);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
   list_result = cudf::strings::split_record_re(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);

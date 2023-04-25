@@ -238,7 +238,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - scikit-build>=0.13.1
+          - scikit-build>=0.13.1,<0.17.2
           - rmm==23.6.*
       - output_types: conda
         packages:
@@ -263,21 +263,34 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "11.2"
+              cuda: "11.8"
             packages:
-              - cudatoolkit=11.2
-          - matrix:
-              cuda: "11.4"
-            packages:
-              - cudatoolkit=11.4
+              - cudatoolkit=11.8
+              - libcurand-dev=10.3.0.86
+              - libcurand=10.3.0.86
           - matrix:
               cuda: "11.5"
             packages:
               - cudatoolkit=11.5
+                # Can't hard pin the version since 11.x is missing many
+                # packages for specific versions
+              - libcurand-dev>=10.2.6.48,<=10.2.7.107
+              - libcurand>=10.2.6.48,<=10.2.7.107
           - matrix:
-              cuda: "11.8"
+              cuda: "11.4"
             packages:
-              - cudatoolkit=11.8
+              - cudatoolkit=11.4
+              - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
+              - &libcurand114 libcurand>=10.2.5.43,<=10.2.5.120
+          - matrix:
+              cuda: "11.2"
+            packages:
+              - cudatoolkit=11.2
+                # The NVIDIA channel doesn't publish pkgs older than 11.4 for
+                # these libs, so 11.2 uses 11.4 packages (the oldest
+                # available).
+              - *libcurand_dev114
+              - *libcurand114
   develop:
     common:
       - output_types: [conda, requirements]
@@ -313,10 +326,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.8"
-            packages:
-              - python=3.8
-          - matrix:
               py: "3.9"
             packages:
               - python=3.9
@@ -326,7 +335,7 @@ dependencies:
               - python=3.10
           - matrix:
             packages:
-              - python>=3.8,<3.11
+              - python>=3.9,<3.11
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -382,28 +391,31 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask>=2023.1.1
-          - distributed>=2023.1.1
+          - dask==2023.3.2
+          - distributed==2023.3.2.1
+      - output_types: conda
+        packages:
+          - dask-core==2023.3.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:
           - &cudf cudf==23.6.*
           - *cupy_pip
   run_cudf_kafka:
     common:
-      - output_types: conda
-        packages:
-          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [requirements, pyproject]
         packages:
           - *cudf
-          - confluent-kafka>=1.9.0,<1.10.0a0
   run_custreamz:
     common:
+      - output_types: conda
+        packages:
+          - python-confluent-kafka>=1.9.0,<1.10.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
+          - confluent-kafka>=1.9.0,<1.10.0a0
           - *cudf
           - cudf_kafka==23.6.*
   test_cpp:

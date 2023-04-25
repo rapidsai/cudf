@@ -21,9 +21,10 @@ dependencies:
 - cupy>=9.5.0,<12.0.0a0
 - cxx-compiler
 - cython>=0.29,<0.30
+- dask-core==2023.3.2
 - dask-cuda==23.6.*
-- dask>=2023.1.1
-- distributed>=2023.1.1
+- dask==2023.3.2
+- distributed==2023.3.2.1
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.8.20
 - fastavro>=0.22.9
@@ -35,6 +36,8 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow==11.0.0.*
+- libcurand-dev=10.3.0.86
+- libcurand=10.3.0.86
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==23.6.*
 - mimesis>=4.1.0
@@ -66,11 +69,11 @@ dependencies:
 - pytest-xdist
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python-snappy>=0.6.0
-- python>=3.8,<3.11
+- python>=3.9,<3.11
 - pytorch<1.12.0
 - rmm==23.6.*
 - s3fs>=2022.3.0
-- scikit-build>=0.13.1
+- scikit-build>=0.13.1,<0.17.2
 - scipy
 - spdlog>=1.11.0,<1.12
 - sphinx

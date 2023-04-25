@@ -1945,7 +1945,7 @@ class Frame(BinaryOperand, Scannable):
         self,
         axis=0,
         skipna=True,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         """
@@ -1957,7 +1957,7 @@ class Frame(BinaryOperand, Scannable):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        numeric_only: bool, default None
+        numeric_only: bool, default False
             If True, includes only float, int, boolean columns.
             If False, will raise error in-case there are
             non-numeric columns.

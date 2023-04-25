@@ -79,6 +79,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.api.extensions import no_default
 
 
 def _format_percentile_names(percentiles):
@@ -345,7 +346,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     as null/NaN).
 
     Operations between Series (`+`, `-`, `/`, `*`, `**`) align
-    values based on their associated index values-– they need
+    values based on their associated index values, they need
     not be the same length. The result index will be the
     sorted union of the two indexes.
 
@@ -359,7 +360,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     index : array-like or Index (1d)
         Values must be hashable and have the same length
         as data. Non-unique index values are allowed. Will
-        default to RangeIndex (0, 1, 2, …, n) if not provided.
+        default to RangeIndex (0, 1, 2, ..., n) if not provided.
         If both a dict and index sequence are used, the index will
         override the keys found in the dict.
 
@@ -511,7 +512,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         elif isinstance(data, pd.Index):
             if name is None:
                 name = data.name
-            data = data.values
+            data = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         elif isinstance(data, BaseIndex):
             if name is None:
                 name = data.name
@@ -535,11 +536,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data.astype(dtype)
 
         if isinstance(data, dict):
-            index = data.keys()
-            data = column.as_column(
-                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
-            )
-
+            current_index = data.keys()
+            if index is not None:
+                series = Series(
+                    list(data.values()),
+                    nan_as_null=nan_as_null,
+                    dtype=dtype,
+                    index=current_index,
+                )
+                new_index = as_index(index)
+                if not series.index.equals(new_index):
+                    series = series.reindex(new_index)
+                data = series._column
+                index = series._index
+            else:
+                data = column.as_column(
+                    list(data.values()), nan_as_null=nan_as_null, dtype=dtype
+                )
+                index = current_index
         if data is None:
             if index is not None:
                 data = column.column_empty(
@@ -570,6 +584,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data,
                 nan_as_null=nan_as_null,
                 dtype=dtype,
+                length=len(index) if index is not None else None,
             )
             if copy and has_cai:
                 data = data.copy(deep=True)
@@ -584,6 +599,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
+        self._check_data_index_length_match()
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -981,7 +997,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 """,
         )
     )
-    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, name=no_default, inplace=False
+    ):
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
@@ -989,7 +1007,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
-            if name is None:
+            if name is no_default:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
             return cudf.core.dataframe.DataFrame._from_data(data, index)
