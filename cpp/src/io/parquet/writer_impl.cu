@@ -33,6 +33,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -510,7 +511,7 @@ struct leaf_schema_fn {
 
 inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            bool single_write_mode)
+                            single_write_mode write_mode)
 {
   if (col_meta.is_nullability_defined()) {
     CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
@@ -520,7 +521,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return not single_write_mode or col->nullable();
+  return write_mode == single_write_mode::NO or col->nullable();
 }
 
 /**
@@ -532,7 +533,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
 std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
-  bool single_write_mode,
+  single_write_mode write_mode,
   bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -546,7 +547,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
+      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -683,7 +684,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
-        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode),
+        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, write_mode),
                      "key column cannot be nullable. For chunked writing, explicitly set the "
                      "nullability to false in metadata");
         // process key
@@ -1464,13 +1465,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    Compression compression,
                                    dictionary_policy dict_policy,
                                    size_t max_dictionary_size,
-                                   bool single_write_mode,
+                                   single_write_mode write_mode,
                                    bool int96_timestamps,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
   auto vec         = table_to_linked_columns(input);
-  auto schema_tree = construct_schema_tree(vec, table_meta, single_write_mode, int96_timestamps);
+  auto schema_tree = construct_schema_tree(vec, table_meta, write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -1995,7 +1996,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -2010,7 +2011,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {
@@ -2021,7 +2022,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -2036,7 +2037,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {
@@ -2304,7 +2305,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 // Forward to implementation
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
@@ -2312,7 +2313,7 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
