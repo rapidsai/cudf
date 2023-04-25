@@ -98,7 +98,7 @@ foreach(target IN LISTS targets_using_dlpack)
   target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
 endforeach()
 
-find_package(Python 3.8 REQUIRED COMPONENTS Interpreter)
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"
