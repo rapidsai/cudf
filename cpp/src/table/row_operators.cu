@@ -622,7 +622,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
   std::vector<std::unique_ptr<column>>&& transformed_columns,
   host_span<order const> column_order,
   host_span<null_order const> null_precedence,
-  bool ranked_children,
+  bool has_ranked_children,
   rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(preprocessed_input);
@@ -645,7 +645,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(dremel_data),
                              std::move(d_dremel_device_view),
                              std::move(transformed_columns),
-                             ranked_children));
+                             has_ranked_children));
   } else {
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_table),
@@ -653,7 +653,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_tabl
                              std::move(d_null_precedence),
                              std::move(d_depths),
                              std::move(transformed_columns),
-                             ranked_children));
+                             has_ranked_children));
   }
 }
 
@@ -670,13 +670,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   [[maybe_unused]] auto [transformed_input, unused_0, transformed_columns, unused_1] =
     transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
 
-  auto const ranked_children = transformed_columns.size() > 0;
+  auto const has_ranked_children = !transformed_columns.empty();
   return create_preprocessed_table(transformed_input,
                                    std::move(verticalized_col_depths),
                                    std::move(transformed_columns),
                                    new_column_order,
                                    new_null_precedence,
-                                   ranked_children,
+                                   has_ranked_children,
                                    stream);
 }
 
@@ -706,22 +706,22 @@ preprocessed_table::create(table_view const& lhs,
 
   // This should be the same for both lhs and rhs but not all the time, such as when one table
   // has 0 rows while the other has >0 rows. So we check separately for each of them.
-  auto const ranked_children_lhs = transformed_columns_lhs.size() > 0;
-  auto const ranked_children_rhs = transformed_columns_rhs.size() > 0;
+  auto const has_ranked_children_lhs = !transformed_columns_lhs.empty();
+  auto const has_ranked_children_rhs = !transformed_columns_rhs.empty();
 
   return {create_preprocessed_table(transformed_lhs,
                                     std::move(verticalized_col_depths_lhs),
                                     std::move(transformed_columns_lhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    ranked_children_lhs,
+                                    has_ranked_children_lhs,
                                     stream),
           create_preprocessed_table(transformed_rhs_opt.value(),
                                     std::move(verticalized_col_depths_rhs),
                                     std::move(transformed_columns_rhs),
                                     new_column_order_lhs,
                                     new_null_precedence_lhs,
-                                    ranked_children_rhs,
+                                    has_ranked_children_rhs,
                                     stream)};
 }
 
@@ -733,7 +733,7 @@ preprocessed_table::preprocessed_table(
   std::vector<detail::dremel_data>&& dremel_data,
   rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
   std::vector<std::unique_ptr<column>>&& transformed_columns,
-  bool ranked_children)
+  bool has_ranked_children)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -741,7 +741,7 @@ preprocessed_table::preprocessed_table(
     _dremel_data(std::move(dremel_data)),
     _dremel_device_views(std::move(dremel_device_views)),
     _transformed_columns(std::move(transformed_columns)),
-    _ranked_children(ranked_children)
+    _has_ranked_children(has_ranked_children)
 {
 }
 
@@ -750,7 +750,7 @@ preprocessed_table::preprocessed_table(table_device_view_owner&& table,
                                        rmm::device_uvector<null_order>&& null_precedence,
                                        rmm::device_uvector<size_type>&& depths,
                                        std::vector<std::unique_ptr<column>>&& transformed_columns,
-                                       bool ranked_children)
+                                       bool has_ranked_children)
   : _t(std::move(table)),
     _column_order(std::move(column_order)),
     _null_precedence(std::move(null_precedence)),
@@ -758,7 +758,7 @@ preprocessed_table::preprocessed_table(table_device_view_owner&& table,
     _dremel_data{},
     _dremel_device_views{},
     _transformed_columns(std::move(transformed_columns)),
-    _ranked_children(ranked_children)
+    _has_ranked_children(has_ranked_children)
 {
 }
 

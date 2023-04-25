@@ -748,7 +748,7 @@ struct preprocessed_table {
    * @param null_precedence Optional, an array having the same length as the number of columns in
    *        the input tables that indicates how null values compare to all other. If it is empty,
    *        the order `null_order::BEFORE` will be used for all columns.
-   * @param ranked_children Flag indicating if the input table was preprocessed to transform
+   * @param has_ranked_children Flag indicating if the input table was preprocessed to transform
    *        any nested child column into an integer column using `cudf::rank`
    * @param stream The stream to launch kernels and h->d copies on while preprocessing
    * @return A shared pointer to a preprocessed table
@@ -759,7 +759,7 @@ struct preprocessed_table {
     std::vector<std::unique_ptr<column>>&& transformed_columns,
     host_span<order const> column_order,
     host_span<null_order const> null_precedence,
-    bool ranked_children,
+    bool has_ranked_children,
     rmm::cuda_stream_view stream);
 
   /**
@@ -785,7 +785,7 @@ struct preprocessed_table {
    *        long as the number of list columns).
    * @param transformed_columns Store the intermediate columns generated from transforming
    *        nested children columns into integers columns using `cudf::rank()`
-   * @param ranked_children Flag indicating if the input table was preprocessed to transform
+   * @param has_ranked_children Flag indicating if the input table was preprocessed to transform
    *        any lists-of-structs column having floating-point children using `cudf::rank`
    */
   preprocessed_table(table_device_view_owner&& table,
@@ -795,14 +795,14 @@ struct preprocessed_table {
                      std::vector<detail::dremel_data>&& dremel_data,
                      rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
                      std::vector<std::unique_ptr<column>>&& transformed_columns,
-                     bool ranked_children);
+                     bool has_ranked_children);
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<std::unique_ptr<column>>&& transformed_columns,
-                     bool ranked_children);
+                     bool has_ranked_children);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -874,7 +874,7 @@ struct preprocessed_table {
 
   // Flag to record if the input table was preprocessed to transform any nested children column(s)
   // into integer column(s) using `cudf::rank`.
-  bool const _ranked_children;
+  bool const _has_ranked_children;
 };
 
 /**
@@ -959,7 +959,7 @@ class self_comparator {
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_ranked_children,
+      CUDF_EXPECTS(!d_t->_has_ranked_children,
                    "The input table has nested type children and they were transformed using a "
                    "different type of physical element comparator.");
     }
@@ -984,7 +984,7 @@ class self_comparator {
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_ranked_children,
+      CUDF_EXPECTS(!d_t->_has_ranked_children,
                    "The input table has nested type children and they were transformed using a "
                    "different type of physical element comparator.");
     }
@@ -1140,7 +1140,7 @@ class two_table_comparator {
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_left_table->_ranked_children && !d_right_table->_ranked_children,
+      CUDF_EXPECTS(!d_left_table->_has_ranked_children && !d_right_table->_has_ranked_children,
                    "The input tables have nested type children and they were transformed using a "
                    "different type of physical element comparator.");
     }
@@ -1165,7 +1165,7 @@ class two_table_comparator {
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
     if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_left_table->_ranked_children && !d_right_table->_ranked_children,
+      CUDF_EXPECTS(!d_left_table->_has_ranked_children && !d_right_table->_has_ranked_children,
                    "The input tables have nested type children and they were transformed using a "
                    "different type of physical element comparator.");
     }
