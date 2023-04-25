@@ -79,5 +79,3 @@ struct nvbench_base_fixture {
 };
 
 }  // namespace cudf
-
-#define NVBENCH_ENVIRONMENT cudf::nvbench_base_fixture
