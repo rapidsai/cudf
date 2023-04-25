@@ -192,6 +192,7 @@
                         <configuration>
                             <excludes>
                                 <exclude>**/CudaFatalTest.java</exclude>
+                                <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
                             </excludes>
                         </configuration>
                         <executions>
@@ -202,14 +203,21 @@
                                 </goals>
                             </execution>
                             <execution>
+                                <id>non-empty-null-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
+                                    <test>*/ColumnViewNonEmptyNullsTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
                                 <id>fatal-cuda-test</id>
                                 <goals>
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <includes>
-                                        <include>**/CudaFatalTest.java</include>
-                                    </includes>
                                     <reuseForks>false</reuseForks>
                                     <test>*/CudaFatalTest.java</test>
                                 </configuration>
@@ -233,6 +241,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <excludes>
+                                <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
                                 <exclude>**/CuFileTest.java</exclude>
                                 <exclude>**/CudaFatalTest.java</exclude>
                             </excludes>
@@ -250,11 +259,18 @@
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <includes>
-                                        <include>**/CudaFatalTest.java</include>
-                                    </includes>
                                     <reuseForks>false</reuseForks>
                                     <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>non-empty-null-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
+                                    <test>*/ColumnViewNonEmptyNullsTest.java</test>
                                 </configuration>
                             </execution>
                         </executions>
