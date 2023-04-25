@@ -60,9 +60,9 @@ using mixed_multimap_type = cuco::static_multimap<hash_value_type,
 using semi_map_type = cuco::
   static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+using row_hash_legacy = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
-using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
+using row_equality_legacy = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace detail

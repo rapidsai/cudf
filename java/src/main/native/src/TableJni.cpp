@@ -3221,8 +3221,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jintArray j_orderby_column_indices,
     jbooleanArray j_is_orderby_ascending, jintArray j_aggregate_column_indices,
     jlongArray j_agg_instances, jintArray j_min_periods, jlongArray j_preceding,
-    jlongArray j_following, jbooleanArray j_unbounded_preceding,
-    jbooleanArray j_unbounded_following, jboolean ignore_null_keys) {
+    jlongArray j_following, jintArray j_preceding_extent, jintArray j_following_extent,
+    jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
@@ -3246,8 +3246,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
-    cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
-    cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
+    cudf::jni::native_jintArray preceding_extent{env, j_preceding_extent};
+    cudf::jni::native_jintArray following_extent{env, j_following_extent};
     cudf::jni::native_jpointerArray<cudf::scalar> preceding(env, j_preceding);
     cudf::jni::native_jpointerArray<cudf::scalar> following(env, j_following);
 
@@ -3266,24 +3266,32 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
       int agg_column_index = values[i];
       cudf::column_view const &order_by_column = input_table->column(orderbys[i]);
       cudf::data_type order_by_type = order_by_column.type();
-      cudf::data_type unbounded_type = order_by_type;
+      cudf::data_type duration_type = order_by_type;
 
-      if (unbounded_preceding[i] || unbounded_following[i]) {
+      // Range extents are defined as:
+      // a) 0 == CURRENT ROW
+      // b) 1 == BOUNDED
+      // c) 2 == UNBOUNDED
+      // Must set unbounded_type for only the BOUNDED case.
+      auto constexpr CURRENT_ROW = 0;
+      auto constexpr BOUNDED = 1;
+      auto constexpr UNBOUNDED = 2;
+      if (preceding_extent[i] != BOUNDED || following_extent[i] != BOUNDED) {
         switch (order_by_type.id()) {
           case cudf::type_id::TIMESTAMP_DAYS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
             break;
           case cudf::type_id::TIMESTAMP_SECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
             break;
           case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
             break;
           case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
             break;
           case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
             break;
           default: break;
         }
@@ -3293,15 +3301,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
       JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation",
                     nullptr);
 
+      auto const make_window_bounds = [&](auto const &range_extent, auto const *p_scalar) {
+        if (range_extent == CURRENT_ROW) {
+          return cudf::range_window_bounds::current_row(duration_type);
+        } else if (range_extent == UNBOUNDED) {
+          return cudf::range_window_bounds::unbounded(duration_type);
+        } else {
+          return cudf::range_window_bounds::get(*p_scalar);
+        }
+      };
+
       result_columns.emplace_back(cudf::grouped_range_rolling_window(
           groupby_keys, order_by_column,
           orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index),
-          unbounded_preceding[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-                                   cudf::range_window_bounds::get(*preceding[i]),
-          unbounded_following[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-                                   cudf::range_window_bounds::get(*following[i]),
-          min_periods[i], *agg));
+          make_window_bounds(preceding_extent[i], preceding[i]),
+          make_window_bounds(following_extent[i], following[i]), min_periods[i], *agg));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
