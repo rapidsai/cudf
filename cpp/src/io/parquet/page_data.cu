@@ -1770,6 +1770,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
                                            size_t num_rows,
                                            bool is_bounds_pg,
                                            bool has_repetition,
+                                           rle_stream* decoders,
                                            int t)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
@@ -1778,11 +1779,6 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
     typename block_reduce::TempStorage reduce_storage;
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
-
-  // the level stream decoders
-  __shared__ rle_run def_runs[run_buffer_size];
-  __shared__ rle_run rep_runs[run_buffer_size];
-  rle_stream decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // decode batches of level stream data using rle_stream objects and use the results to
   // calculate start and end value positions in the encoded string data.
@@ -2144,7 +2140,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // find start/end value indices
   auto const [start_value, end_value] =
-    page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, t);
+    page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
 #if 0
   if (t == 0)
     printf("%05d: start_val %d end_val %d is_bounds %d is_contained %d (%ld,%ld] (%ld,%ld]\n",
