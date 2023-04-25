@@ -153,7 +153,8 @@ struct table_flattener {
       validity_as_column.push_back(cudf::detail::is_valid(col, stream, mr));
       if (col.has_nulls()) {
         // copy bitmask is needed only if the column has null
-        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, mr));
+        validity_as_column.back()->set_null_mask(cudf::detail::copy_bitmask(col, stream, mr),
+                                                 col.null_count());
       }
       flat_columns.push_back(validity_as_column.back()->view());
       if (not column_order.empty()) { flat_column_order.push_back(col_order); }  // doesn't matter.
@@ -244,8 +245,8 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   auto const num_rows = input->size();
 
   if (!input->nullable()) {
-    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream, mr));
-    input->set_null_count(null_count);
+    input->set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, num_rows, stream, mr),
+                         null_count);
   } else {
     auto current_mask = input->mutable_view().null_mask();
     std::vector<bitmask_type const*> masks{reinterpret_cast<bitmask_type const*>(null_mask),

@@ -34,6 +34,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -67,11 +68,6 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 namespace {
-/**
- * @brief Helper for pinned host memory
- */
-template <typename T>
-using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
  * @brief Function that translates GDF compression to parquet compression
@@ -510,7 +506,7 @@ struct leaf_schema_fn {
 
 inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            bool single_write_mode)
+                            single_write_mode write_mode)
 {
   if (col_meta.is_nullability_defined()) {
     CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
@@ -520,7 +516,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
   // that all columns are nullable.
-  return not single_write_mode or col->nullable();
+  return write_mode == single_write_mode::NO or col->nullable();
 }
 
 /**
@@ -532,7 +528,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
 std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
-  bool single_write_mode,
+  single_write_mode write_mode,
   bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -546,7 +542,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
+      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -683,7 +679,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
-        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode),
+        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, write_mode),
                      "key column cannot be nullable. For chunked writing, explicitly set the "
                      "nullability to false in metadata");
         // process key
@@ -1319,7 +1315,7 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -1334,7 +1330,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {
@@ -1345,7 +1341,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
-                   SingleWriteMode mode,
+                   single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
     _compression(to_parquet_compression(options.get_compression())),
@@ -1360,7 +1356,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
-    _single_write_mode(mode == SingleWriteMode::YES),
+    _single_write_mode(mode),
     _out_sink(std::move(sinks))
 {
   if (options.get_metadata()) {
@@ -1835,7 +1831,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                        num_stats_bfr);
   }
 
-  pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
+  cudf::detail::pinned_host_vector<uint8_t> host_bfr(max_chunk_bfr_size);
 
   // Encode row groups in batches
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -1889,25 +1885,17 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             _stream.synchronize();
           }
         } else {
-          if (!host_bfr) {
-            host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t* ptr = nullptr;
-                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-                                                return ptr;
-                                              }(max_chunk_bfr_size),
-                                              cudaFreeHost};
-          }
           // copy the full data
-          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.data(),
                                         dev_bfr,
                                         ck.ck_stat_size + ck.compressed_size,
                                         cudaMemcpyDefault,
                                         _stream.value()));
           _stream.synchronize();
-          _out_sink[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
+          _out_sink[p]->host_write(host_bfr.data() + ck.ck_stat_size, ck.compressed_size);
           if (ck.ck_stat_size != 0) {
             column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.get(), ck.ck_stat_size);
+            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.data(), ck.ck_stat_size);
           }
         }
         row_group.total_byte_size += ck.compressed_size;
@@ -2054,7 +2042,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 // Forward to implementation
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
@@ -2062,7 +2050,7 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
 
 writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
-               SingleWriteMode mode,
+               single_write_mode mode,
                rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream))
 {
