@@ -91,7 +91,7 @@ class structs_column_view : public column_view {
    *
    * @param index The index of the child column to return
    * @param stream The stream on which to perform the operation. Uses the default CUDF
-   * stream if none is specified.
+   *        stream if none is specified.
    * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] column_view get_sliced_child(
