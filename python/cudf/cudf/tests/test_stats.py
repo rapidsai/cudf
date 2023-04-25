@@ -265,6 +265,8 @@ def test_kurtosis_series(data, null_flag, numeric_only):
     got = gs.kurt(numeric_only=numeric_only)
     expected = ps.kurt(numeric_only=numeric_only)
 
+    assert_eq(got, expected)
+
 
 @pytest.mark.parametrize(
     "data",
