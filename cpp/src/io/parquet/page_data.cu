@@ -1956,16 +1956,147 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   return {start_value, end_value};
 }
 
+__device__ size_t countDictEntries(uint8_t const* data,
+                                   uint8_t const* dict_base,
+                                   int dict_bits,
+                                   int dict_size,
+                                   int data_size,
+                                   int start_value,
+                                   int end_value,
+                                   int t)
+{
+  uint8_t const* ptr       = data;
+  uint8_t const* const end = data + data_size;
+  size_t str_len           = 0;  // total sum for runs
+  size_t l_str_len         = 0;  // partial sums across literal runs
+  int pos                  = 0;
+
+  int dict_run = 0;
+  int dict_val = 0;
+
+  while (pos < end_value && ptr <= end) {
+    if (dict_run <= 1) {
+      dict_run = (ptr < end) ? get_vlq32(ptr, end) : 0;
+      if (!(dict_run & 1)) {
+        // Repeated value
+        int bytecnt = (dict_bits + 7) >> 3;
+        if (ptr + bytecnt <= end) {
+          int32_t run_val = ptr[0];
+          if (bytecnt > 1) {
+            run_val |= ptr[1] << 8;
+            if (bytecnt > 2) {
+              run_val |= ptr[2] << 16;
+              if (bytecnt > 3) { run_val |= ptr[3] << 24; }
+            }
+          }
+          dict_val = run_val & ((1 << dict_bits) - 1);
+        }
+        ptr += bytecnt;
+      }
+    }
+
+    int batch_len;
+    if (dict_run & 1) {
+      // Literal batch: must output a multiple of 8, except for the last batch
+      int batch_len_div8;
+      batch_len      = max(min(128, (int)(dict_run >> 1) * 8), 1);
+      batch_len_div8 = (batch_len + 7) >> 3;
+      dict_run -= batch_len_div8 * 2;
+      ptr += batch_len_div8 * dict_bits;
+    } else {
+      batch_len = dict_run >> 1;
+      dict_run  = 0;
+    }
+
+    int is_literal = dict_run & 1;
+
+    // compute dictionary index.
+    if (is_literal) {
+      int dict_idx = 0;
+      if (t < batch_len) {
+        dict_idx         = dict_val;
+        int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
+        const uint8_t* p = ptr + (ofs >> 3);
+        ofs &= 7;
+        if (p < end) {
+          uint32_t c = 8 - ofs;
+          dict_idx   = (*p++) >> ofs;
+          if (c < dict_bits && p < end) {
+            dict_idx |= (*p++) << c;
+            c += 8;
+            if (c < dict_bits && p < end) {
+              dict_idx |= (*p++) << c;
+              c += 8;
+              if (c < dict_bits && p < end) { dict_idx |= (*p++) << c; }
+            }
+          }
+          dict_idx &= (1 << dict_bits) - 1;
+        }
+
+        if (pos + t < end_value) {
+          uint32_t const dict_pos = (dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
+          if (pos + t >= start_value && dict_pos < (uint32_t)dict_size) {
+            const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+            l_str_len += src->second;
+          }
+        }
+      }
+    } else {
+      int start_off = (pos < start_value && pos + batch_len > start_value) ? start_value - pos : 0;
+      batch_len     = min(batch_len, end_value - pos);
+      if (t == 0) {
+        uint32_t const dict_pos = (dict_bits > 0) ? dict_val * sizeof(string_index_pair) : 0;
+        if (pos + batch_len > start_value && dict_pos < (uint32_t)dict_size) {
+          const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+          str_len += (batch_len - start_off) * src->second;
+        }
+      }
+    }
+
+    pos += batch_len;
+    // if (t == 0) printf("pos %d str_len %ld\n", pos, str_len);
+  }
+
+  using block_reduce = cub::BlockReduce<size_t, preprocess_block_size>;
+  typename block_reduce::TempStorage reduce_storage;
+  str_len += block_reduce(reduce_storage).Sum(l_str_len);
+
+  return str_len;
+}
+
+__device__ size_t
+countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_value, int t)
+{
+  int pos          = 0;
+  size_t total_len = 0;
+
+  // This step is purely serial
+  if (!t) {
+    const uint8_t* cur = data;
+    int k              = 0;
+
+    while (pos < end_value && k < data_size) {
+      int len;
+      if (k + 4 <= data_size) {
+        len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
+        k += 4;
+        if (k + len > data_size) { len = 0; }
+      } else {
+        len = 0;
+      }
+
+      k += len;
+      if (pos >= start_value) { total_len += len; }
+      pos++;
+    }
+  }
+
+  return total_len;
+}
+
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
-  using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
-  using block_scan   = cub::BlockScan<int, preprocess_block_size>;
-  __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
-    typename block_scan::TempStorage scan_storage;
-  } temp_storage;
-
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s* const s = &state_g;
@@ -2048,7 +2179,8 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
       break;
     case Encoding::PLAIN:
       dict_size = static_cast<int32_t>(end - data);
-      str_bytes = countPlainEntries(data, dict_size, start_value, end_value, t);
+      str_bytes = is_bounds_pg ? countPlainEntries(data, dict_size, start_value, end_value, t)
+                               : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
       break;
   }
 
