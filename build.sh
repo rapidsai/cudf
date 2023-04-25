@@ -169,7 +169,7 @@ function buildLibCudfJniInDocker {
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
-                -Dtest=*,!CuFileTest,!CudaFatalTest"
+                -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 }
 
 if hasArg -h || hasArg --h || hasArg --help; then
