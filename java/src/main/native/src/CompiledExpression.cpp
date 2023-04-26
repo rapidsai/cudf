@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -56,12 +57,20 @@ public:
 
   /** Read a multi-byte value from the serialized AST data buffer */
   template <typename T> T read() {
-    check_for_eof(sizeof(T));
-    // use memcpy since data may be misaligned
-    T result;
-    memcpy(reinterpret_cast<jbyte *>(&result), data_ptr, sizeof(T));
-    data_ptr += sizeof(T);
-    return result;
+    if constexpr (std::is_same_v<T, std::string>) {
+      auto const size = read<cudf::size_type>();
+      check_for_eof(size);
+      auto const result = std::string(reinterpret_cast<char const *>(data_ptr), size);
+      data_ptr += size;
+      return result;
+    } else {
+      check_for_eof(sizeof(T));
+      // use memcpy since data may be misaligned
+      T result;
+      memcpy(reinterpret_cast<jbyte *>(&result), data_ptr, sizeof(T));
+      data_ptr += sizeof(T);
+      return result;
+    }
   }
 
   /** Decode a libcudf data type from the serialized AST data buffer */
@@ -254,9 +263,29 @@ struct make_literal {
                                      std::move(scalar_ptr));
   }
 
+  /** Construct an AST literal from a string value */
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>> * = nullptr>
+  cudf::ast::literal &operator()(cudf::data_type dtype, bool is_valid,
+                                 cudf::jni::ast::compiled_expr &compiled_expr,
+                                 jni_serialized_ast &jni_ast) {
+    std::unique_ptr<cudf::scalar> scalar_ptr = [&]() {
+      if (is_valid) {
+        std::string val = jni_ast.read<std::string>();
+        return std::make_unique<cudf::string_scalar>(val, is_valid);
+      } else {
+        return std::make_unique<cudf::string_scalar>(rmm::device_buffer{}, is_valid);
+      }
+    }();
+
+    auto &str_scalar = static_cast<cudf::string_scalar &>(*scalar_ptr);
+    return compiled_expr.add_literal(std::make_unique<cudf::ast::literal>(str_scalar),
+                                     std::move(scalar_ptr));
+  }
+
   /** Default functor implementation to catch type dispatch errors */
   template <typename T, std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_timestamp<T>() &&
-                                         !cudf::is_duration<T>()> * = nullptr>
+                                         !cudf::is_duration<T>() &&
+                                         !std::is_same_v<T, cudf::string_view>> * = nullptr>
   cudf::ast::literal &operator()(cudf::data_type dtype, bool is_valid,
                                  cudf::jni::ast::compiled_expr &compiled_expr,
                                  jni_serialized_ast &jni_ast) {
