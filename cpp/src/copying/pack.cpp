@@ -230,8 +230,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 metadata_builder::metadata_builder(size_type num_root_columns)
   : impl(std::make_unique<metadata_builder_impl>())
 {
-  impl->add_column_to_meta(
-    data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
+  impl->add_column_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
 
 metadata_builder::~metadata_builder() = default;
