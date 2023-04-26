@@ -21,7 +21,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
