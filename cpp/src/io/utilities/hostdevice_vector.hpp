@@ -19,7 +19,7 @@
 #include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -67,7 +67,7 @@ class hostdevice_vector {
     if (hostdevice_vector_uses_pageable_buffer()) {
       h_data_owner = thrust::host_vector<T>();
     } else {
-      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
+      h_data_owner = cudf::detail::pinned_host_vector<T>();
     }
 
     std::visit(
@@ -154,7 +154,7 @@ class hostdevice_vector {
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] operator hostdevice_span<T>()
   {
@@ -164,18 +164,20 @@ class hostdevice_vector {
   /**
    * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @param offset The offset of the first element in the subspan
+   * @param count The number of elements in the subspan
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
   {
-    CUDF_EXPECTS(count >= offset, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(count <= d_data.size(), "Slice range out of bounds.");
-    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count - offset};
+    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
+    CUDF_EXPECTS(count <= d_data.size() - offset,
+                 "The span with given offset and count is out of bounds.");
+    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
   }
 
  private:
-  std::variant<thrust::host_vector<T>, thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>
-    h_data_owner;
+  std::variant<thrust::host_vector<T>, cudf::detail::pinned_host_vector<T>> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
