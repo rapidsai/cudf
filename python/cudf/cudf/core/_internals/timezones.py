@@ -106,7 +106,7 @@ def _find_ambiguous_and_nonexistent(
 
     Ambiguous and/or nonexistent timestamps are only possible if any
     transitions occur in the time zone database for the given timezone.
-    If no transitions occur, the tuple `(None, None)` is returned.
+    If no transitions occur, the tuple `(False, False)` is returned.
     """
     tz_data_for_zone = get_tz_data(zone_name)
     transition_times = tz_data_for_zone["transition_times"]

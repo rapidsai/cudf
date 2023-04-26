@@ -2364,6 +2364,7 @@ class DatetimeIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
+        # TODO: no need to convert to nanos with Pandas 2.x
         if isinstance(self.dtype, pd.DatetimeTZDtype):
             nanos = self._values.astype(
                 pd.DatetimeTZDtype("ns", self.dtype.tz)
@@ -2501,7 +2502,7 @@ class DatetimeIndex(GenericIndex):
 
         Parameters
         ----------
-        tz: str
+        tz : str
             Timezone to convert timestamps to.
 
         Returns

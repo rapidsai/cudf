@@ -570,15 +570,6 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     @property
-    def values(self):
-        """
-        Return a CuPy representation of the DateTimeColumn.
-        """
-        raise NotImplementedError(
-            "DateTime Arrays are not yet implemented in cudf"
-        )
-
-    @property
     def _local_time(self):
         """Return the local time as naive timestamps."""
         from cudf.core._internals.timezones import utc_to_local
