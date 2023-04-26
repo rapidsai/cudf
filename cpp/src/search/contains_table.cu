@@ -18,9 +18,7 @@
 
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -156,11 +154,10 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
   }
 }
 
+}  // namespace
+
 /**
  * @brief Check if rows in the given `needles` table exist in the `haystack` table.
- *
- * This function is designed specifically to work with input tables having lists column(s) at
- * arbitrarily nested levels.
  *
  * @param haystack The table containing the search space
  * @param needles A table of rows whose existence to check in the search space
@@ -170,12 +167,12 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack,
-                                                      table_view const& needles,
-                                                      null_equality compare_nulls,
-                                                      nan_equality compare_nans,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<bool> contains(table_view const& haystack,
+                                   table_view const& needles,
+                                   null_equality compare_nulls,
+                                   nan_equality compare_nans,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   auto map = static_map(compute_hash_table_size(haystack.num_rows()),
                         cuco::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
@@ -187,17 +184,20 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
   auto const needles_has_nulls  = has_nested_nulls(needles);
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
+  auto const preprocessed_haystack =
+    cudf::experimental::row::equality::preprocessed_table::create(haystack, stream);
   // Insert row indices of the haystack table as map keys.
   {
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
       [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
 
-    auto const hasher = cudf::experimental::row::hash::row_hasher(haystack, stream);
+    auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_haystack);
     auto const d_hasher =
       strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
 
-    auto const comparator = cudf::experimental::row::equality::self_comparator(haystack, stream);
+    auto const comparator =
+      cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
@@ -255,17 +255,19 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
   // The output vector.
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
+  auto const preprocessed_needles =
+    cudf::experimental::row::equality::preprocessed_table::create(needles, stream);
   // Check existence for each row of the needles table in the haystack table.
   {
     auto const needles_it = cudf::detail::make_counting_transform_iterator(
       size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
 
-    auto const hasher = cudf::experimental::row::hash::row_hasher(needles, stream);
+    auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_needles);
     auto const d_hasher =
       strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
 
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
+    auto const comparator = cudf::experimental::row::equality::two_table_comparator(
+      preprocessed_haystack, preprocessed_needles);
 
     auto const check_contains = [&](auto const value_comp) {
       if (cudf::detail::has_nested_columns(haystack) or cudf::detail::has_nested_columns(needles)) {
@@ -293,146 +295,6 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
   }
 
   return contained;
-}
-
-/**
- * @brief Check if rows in the given `needles` table exist in the `haystack` table.
- *
- * This function is designed specifically to work with input tables having only columns of simple
- * types, or structs columns of simple types.
- *
- * @param haystack The table containing the search space
- * @param needles A table of rows whose existence to check in the search space
- * @param compare_nulls Control whether nulls should be compared as equal or not
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
- * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
- */
-rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& haystack,
-                                                         table_view const& needles,
-                                                         null_equality compare_nulls,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
-{
-  auto map = static_map(compute_hash_table_size(haystack.num_rows()),
-                        cuco::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
-                        cuco::empty_value{detail::JoinNoneValue},
-                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value());
-
-  auto const haystack_has_nulls = has_nested_nulls(haystack);
-  auto const needles_has_nulls  = has_nested_nulls(needles);
-  auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
-
-  // Flatten the input tables.
-  auto const flatten_nullability       = has_any_nulls
-                                           ? structs::detail::column_nullability::FORCE
-                                           : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const haystack_flattened_tables = structs::detail::flatten_nested_columns(
-    haystack, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
-  auto const needles_flattened_tables = structs::detail::flatten_nested_columns(
-    needles, {}, {}, flatten_nullability, stream, rmm::mr::get_current_device_resource());
-  auto const haystack_flattened = haystack_flattened_tables->flattened_columns();
-  auto const needles_flattened  = needles_flattened_tables->flattened_columns();
-  auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
-  auto const needles_tdv_ptr    = table_device_view::create(needles_flattened, stream);
-
-  // Insert row indices of the haystack table as map keys.
-  {
-    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
-
-    auto const d_hasher = strong_index_hasher_adapter{
-      row_hash_legacy{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
-    auto const d_eqcomp = strong_index_comparator_adapter{
-      row_equality_legacy{cudf::nullate::DYNAMIC{haystack_has_nulls},
-                          *haystack_tdv_ptr,
-                          *haystack_tdv_ptr,
-                          compare_nulls}};
-
-    // If the haystack table has nulls but they are compared unequal, don't insert them.
-    // Otherwise, it was known to cause performance issue:
-    // - https://github.com/rapidsai/cudf/pull/6943
-    // - https://github.com/rapidsai/cudf/pull/8277
-    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-
-      // Insert only rows that do not have any null at any level.
-      map.insert_if(haystack_it,
-                    haystack_it + haystack.num_rows(),
-                    thrust::counting_iterator<size_type>(0),  // stencil
-                    row_is_valid{row_bitmask_ptr},
-                    d_hasher,
-                    d_eqcomp,
-                    stream.value());
-
-    } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
-      map.insert(
-        haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
-    }
-  }
-
-  // The output vector.
-  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
-
-  // Check existence for each row of the needles table in the haystack table.
-  {
-    auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
-
-    auto const d_hasher = strong_index_hasher_adapter{
-      row_hash_legacy{cudf::nullate::DYNAMIC{has_any_nulls}, *needles_tdv_ptr}};
-
-    auto const d_eqcomp = strong_index_comparator_adapter{row_equality_legacy{
-      cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr, *needles_tdv_ptr, compare_nulls}};
-
-    map.contains(needles_it,
-                 needles_it + needles.num_rows(),
-                 contained.begin(),
-                 d_hasher,
-                 d_eqcomp,
-                 stream.value());
-  }
-
-  return contained;
-}
-
-}  // namespace
-
-rmm::device_uvector<bool> contains(table_view const& haystack,
-                                   table_view const& needles,
-                                   null_equality compare_nulls,
-                                   nan_equality compare_nans,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  // Checking for only one table is enough, because both tables will be checked to have the same
-  // shape later during row comparisons.
-  auto const has_lists = std::any_of(haystack.begin(), haystack.end(), [](auto const& col) {
-    return cudf::structs::detail::is_or_has_nested_lists(col);
-  });
-
-  if (has_lists || compare_nans == nan_equality::UNEQUAL) {
-    // We must call a separate code path that uses the new experimental row hasher and row
-    // comparator if:
-    //  - The input has lists column, or
-    //  - Floating-point NaNs are compared as unequal.
-    // Inputs with these conditions are supported only by this code path.
-    return contains_with_lists_or_nans(haystack, needles, compare_nulls, compare_nans, stream, mr);
-  }
-
-  // If the input tables don't have lists column and NaNs are compared equal, we rely on the classic
-  // code path that flattens the input tables for row comparisons. This way is known to have
-  // better performance.
-  return contains_without_lists_or_nans(haystack, needles, compare_nulls, stream, mr);
-
-  // Note: We have to keep separate code paths because unifying them will cause performance
-  // regression for the input having no nested lists.
-  //
-  // TODO: We should unify these code paths in the future when performance regression is no longer
-  // happening.
 }
 
 }  // namespace cudf::detail
