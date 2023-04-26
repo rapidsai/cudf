@@ -2045,9 +2045,9 @@ __device__ size_t countDictEntries(uint8_t const* data,
   uint8_t const* ptr       = data;
   uint8_t const* const end = data + data_size;
   int const bytecnt        = (dict_bits + 7) >> 3;
-  size_t str_len           = 0;  // total sum for runs
-  size_t l_str_len         = 0;  // partial sums across literal runs
-  int pos                  = 0;
+  size_t l_str_len         = 0;  // partial sums across threads
+  int pos                  = 0;  // current value index in the data stream
+  int t0                   = 0;  // thread 0 for this batch
 
   int dict_run = 0;
   int dict_val = 0;
@@ -2086,16 +2086,18 @@ __device__ size_t countDictEntries(uint8_t const* data,
     }
 
     int is_literal = dict_run & 1;
-    //if (t == 0 && blockIdx.x == 1) printf("batch_len %d is_lit %d\n", batch_len, is_literal);
+    // if (t == 0 && blockIdx.x == 1) printf("batch_len %d is_lit %d\n", batch_len, is_literal);
+
+    // calculate my thread id for this batch.  way to round-robin the work.
+    int mytid = t - t0;
+    if (mytid < 0) mytid += preprocess_block_size;
 
     // compute dictionary index.
     if (is_literal) {
       int dict_idx = 0;
-      // reverse threads so thread 0 can process a repeat run while upper threads do literals
-      int tt = preprocess_block_size - 1 - t;
-      if (tt < batch_len) {
+      if (mytid < batch_len) {
         dict_idx         = dict_val;
-        int32_t ofs      = (tt - ((batch_len + 7) & ~7)) * dict_bits;
+        int32_t ofs      = (mytid - ((batch_len + 7) & ~7)) * dict_bits;
         const uint8_t* p = ptr + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
@@ -2113,26 +2115,31 @@ __device__ size_t countDictEntries(uint8_t const* data,
           dict_idx &= (1 << dict_bits) - 1;
         }
 
-        if (pos + tt < end_value) {
+        if (pos + mytid < end_value) {
           uint32_t const dict_pos = (dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
-          if (pos + tt >= start_value && dict_pos < (uint32_t)dict_size) {
+          if (pos + mytid >= start_value && dict_pos < (uint32_t)dict_size) {
             const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
             l_str_len += src->second;
           }
         }
       }
+
+      t0 += batch_len;
     } else {
       int start_off = (pos < start_value && pos + batch_len > start_value) ? start_value - pos : 0;
       batch_len     = min(batch_len, end_value - pos);
-      if (t == 0) {
+      if (mytid == 0) {
         uint32_t const dict_pos = (dict_bits > 0) ? dict_val * sizeof(string_index_pair) : 0;
         if (pos + batch_len > start_value && dict_pos < (uint32_t)dict_size) {
           const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
-          str_len += (batch_len - start_off) * src->second;
+          l_str_len += (batch_len - start_off) * src->second;
         }
       }
+
+      t0 += 1;
     }
 
+    t0 = t0 % preprocess_block_size;
     pos += batch_len;
   }
   __syncthreads();
@@ -2141,7 +2148,7 @@ __device__ size_t countDictEntries(uint8_t const* data,
   __shared__ typename block_reduce::TempStorage reduce_storage;
   size_t sum_l = block_reduce(reduce_storage).Sum(l_str_len);
 
-  return str_len + sum_l;
+  return sum_l;
 }
 
 __device__ size_t
@@ -2637,6 +2644,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
         int me               = t - out_thread0;
         if (me < 32) {
           for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
+            dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
+            if (!has_repetition) { dst_pos -= s->first_row; }
+
             auto [ptr, len] = src_pos + i < target_pos && dst_pos >= 0
                                 ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values + i)
                                 : cuda::std::pair<char const*, size_t>{nullptr, 0};
@@ -2645,9 +2655,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
             size_type offset;
             cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
             offset += last_offset;
-
-            dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
-            if (!has_repetition) { dst_pos -= s->first_row; }
 
             if (use_char_ll) {
               // TODO: might want separate kernel for string page decoding so we don't waste all
