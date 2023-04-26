@@ -277,7 +277,7 @@ __device__ T subtract_safe(T const& value, T const& delta)
 template <typename ElementT, typename ElementIter>
 __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
                                              size_type idx,
-                                             ElementT delta)
+                                             [[maybe_unused]] ElementT delta)
 {
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
@@ -293,7 +293,7 @@ __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
 template <typename ElementT, typename ElementIter>
 __device__ ElementT compute_highest_in_window(ElementIter orderby_iter,
                                               size_type idx,
-                                              ElementT delta)
+                                              [[maybe_unused]] ElementT delta)
 {
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
