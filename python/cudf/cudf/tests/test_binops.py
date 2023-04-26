@@ -2554,7 +2554,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(1),
             ["101", "201"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2563,7 +2563,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["101", "201"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2572,16 +2572,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["101.5", "201.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
-            False,
-        ),
-        (
-            operator.add,
-            ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("1.5")),
-            ["101.5", "201.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2590,7 +2581,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(1),
             ["101", "201"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2599,7 +2590,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["101", "201"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2608,16 +2599,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["101.5", "201.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
-            True,
-        ),
-        (
-            operator.add,
-            ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("1.5")),
-            ["101.5", "201.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=1, precision=7),
             True,
         ),
         (
@@ -2626,7 +2608,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["100", "200"],
-            cudf.Decimal32Dtype(scale=-2, precision=5),
+            cudf.Decimal64Dtype(scale=-2, precision=5),
             False,
         ),
         (
@@ -2635,7 +2617,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["200", "400"],
-            cudf.Decimal32Dtype(scale=-2, precision=5),
+            cudf.Decimal64Dtype(scale=-2, precision=5),
             False,
         ),
         (
@@ -2644,16 +2626,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["150", "300"],
-            cudf.Decimal32Dtype(scale=-1, precision=6),
-            False,
-        ),
-        (
-            operator.mul,
-            ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("1.5")),
-            ["150", "300"],
-            cudf.Decimal32Dtype(scale=-1, precision=6),
+            cudf.Decimal64Dtype(scale=-1, precision=6),
             False,
         ),
         (
@@ -2662,7 +2635,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["100", "200"],
-            cudf.Decimal32Dtype(scale=-2, precision=5),
+            cudf.Decimal64Dtype(scale=-2, precision=5),
             True,
         ),
         (
@@ -2671,7 +2644,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["200", "400"],
-            cudf.Decimal32Dtype(scale=-2, precision=5),
+            cudf.Decimal64Dtype(scale=-2, precision=5),
             True,
         ),
         (
@@ -2680,16 +2653,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["150", "300"],
-            cudf.Decimal32Dtype(scale=-1, precision=6),
-            True,
-        ),
-        (
-            operator.mul,
-            ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("1.5")),
-            ["150", "300"],
-            cudf.Decimal32Dtype(scale=-1, precision=6),
+            cudf.Decimal64Dtype(scale=-1, precision=6),
             True,
         ),
         (
@@ -2707,7 +2671,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=5),
             decimal.Decimal(2),
             ["50", "100"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=9),
             False,
         ),
         (
@@ -2716,16 +2680,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=4),
             decimal.Decimal("1.5"),
             ["23.4", "36.6"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
-            False,
-        ),
-        (
-            operator.truediv,
-            ["22.2", "93.6"],
-            cudf.Decimal64Dtype(scale=1, precision=3),
-            cudf.Scalar(decimal.Decimal("1.5")),
-            ["14", "62"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=9),
             False,
         ),
         (
@@ -2734,7 +2689,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=5),
             1,
             ["0", "0"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=9),
             True,
         ),
         (
@@ -2752,16 +2707,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=3),
             decimal.Decimal("8.55"),
             ["7", "1"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
-            True,
-        ),
-        (
-            operator.truediv,
-            ["1.1", "42.8"],
-            cudf.Decimal64Dtype(scale=1, precision=3),
-            cudf.Scalar(decimal.Decimal("90.84")),
-            ["82.5", "2.1"],
-            cudf.Decimal32Dtype(scale=6, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=9),
             True,
         ),
         (
@@ -2770,7 +2716,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["98", "198"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2779,7 +2725,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("2.5"),
             ["97.5", "197.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2788,16 +2734,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             4,
             ["96", "196"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
-            False,
-        ),
-        (
-            operator.sub,
-            ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("2.5")),
-            ["97.5", "197.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2806,7 +2743,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["-98", "-198"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2815,7 +2752,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             4,
             ["-96", "-196"],
-            cudf.Decimal32Dtype(scale=0, precision=6),
+            cudf.Decimal64Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2824,23 +2761,19 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("2.5"),
             ["-97.5", "-197.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=1, precision=7),
             True,
         ),
         (
             operator.sub,
             ["100", "200"],
             cudf.Decimal64Dtype(scale=-2, precision=3),
-            cudf.Scalar(decimal.Decimal("2.5")),
+            decimal.Decimal("2.5"),
             ["-97.5", "-197.5"],
-            cudf.Decimal32Dtype(scale=1, precision=7),
+            cudf.Decimal64Dtype(scale=1, precision=7),
             True,
         ),
     ],
-)
-@pytest_xfail(
-    reason="binop operations not supported for different "
-    "bit-width decimal types"
 )
 def test_binops_decimal_scalar(args):
     op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
