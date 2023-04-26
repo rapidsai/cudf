@@ -157,7 +157,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            return cudf.Scalar(Decimal(other), dtype=self.dtype)
+            other = Decimal(other)
+            metadata = other.as_tuple()
+            precision = max(len(metadata.digits), metadata.exponent)
+            scale = -metadata.exponent
+            return cudf.Scalar(
+                other, dtype=self.dtype.__class__(precision, scale)
+            )
         return NotImplemented
 
     def _decimal_quantile(

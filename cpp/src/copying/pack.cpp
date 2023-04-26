@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/copy.hpp>
+#include <cudf/contiguous_split.hpp>
+#include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -150,10 +151,10 @@ packed_columns pack(cudf::table_view const& input,
 }
 
 template <typename ColumnIter>
-packed_columns::metadata pack_metadata(ColumnIter begin,
-                                       ColumnIter end,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size)
+std::vector<uint8_t> pack_metadata(ColumnIter begin,
+                                   ColumnIter end,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size)
 {
   std::vector<serialized_column> metadata;
 
@@ -173,7 +174,7 @@ packed_columns::metadata pack_metadata(ColumnIter begin,
             metadata_begin + (metadata.size() * sizeof(serialized_column)),
             std::back_inserter(metadata_bytes));
 
-  return packed_columns::metadata{std::move(metadata_bytes)};
+  return metadata_bytes;
 }
 
 /**
@@ -221,13 +222,13 @@ packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resour
 /**
  * @copydoc cudf::pack_metadata
  */
-packed_columns::metadata pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size)
+std::vector<uint8_t> pack_metadata(table_view const& table,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()
-           ? packed_columns::metadata{}
+           ? std::vector<uint8_t>{}
            : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 
@@ -237,9 +238,9 @@ packed_columns::metadata pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return input.metadata_->size() == 0
+  return input.metadata->size() == 0
            ? table_view{}
-           : detail::unpack(input.metadata_->data(),
+           : detail::unpack(input.metadata->data(),
                             reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 
