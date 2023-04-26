@@ -766,7 +766,7 @@ class DecimalDtype(_BaseDtype):
     @classmethod
     def _from_decimal(cls, decimal):
         """
-        Create a cudf.Decimal32Dtype from a decimal.Decimal object
+        Create a cudf.DecimalDtype from a decimal.Decimal object
         """
         metadata = decimal.as_tuple()
         precision = max(len(metadata.digits), -metadata.exponent)

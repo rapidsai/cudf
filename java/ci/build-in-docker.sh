@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
  -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS\
  -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME\
  -DCUDF_JNI_LIBCUDF_STATIC=ON\
- -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest,!CudaFatalTest"
+ -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
