@@ -562,8 +562,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column, host_span<column_name_info const> children_names) const
   {
     auto const child_it = cudf::detail::make_counting_transform_iterator(
-      0, [structs_view = structs_column_view{column}](auto const child_idx) {
-        return structs_view.get_sliced_child(child_idx);
+      0, [&stream = stream_, structs_view = structs_column_view{column}](auto const child_idx) {
+        return structs_view.get_sliced_child(child_idx, stream);
       });
     auto col_string = operator()(
       child_it, child_it + column.num_children(), children_names, row_end_wrap.value(stream_));
