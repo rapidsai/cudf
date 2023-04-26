@@ -27,7 +27,11 @@ def _get_all_zones():
 # NOTE: ALL_TIME_ZONES is a very large list; we likely do NOT want to
 # use it for more than a handful of tests
 ALL_TIME_ZONES = _get_all_zones()
-ALL_TIME_ZONES.remove("Factory")  # Pandas/pytz seems not to recognize this one
+
+if "Factory" in ALL_TIME_ZONES:
+    ALL_TIME_ZONES.remove(
+        "Factory"
+    )  # Pandas/pytz seems not to recognize this one
 
 
 @pytest.fixture(params=["ns", "us", "ms", "s"])
