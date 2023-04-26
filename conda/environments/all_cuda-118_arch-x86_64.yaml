@@ -31,8 +31,8 @@ dependencies:
 - fmt>=9.1.0,<10
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
-- gmock==1.10.0.*
-- gtest==1.10.0.*
+- gmock>=1.13.0.*
+- gtest>=1.13.0.*
 - hypothesis
 - ipython
 - libarrow==11.0.0.*
