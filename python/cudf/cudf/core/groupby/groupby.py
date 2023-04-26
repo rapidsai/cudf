@@ -1164,7 +1164,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
         # Nulls are not yet supported
-        # TODO: don't check this twice under `engine='auto'`
         if self.grouping._obj._has_nulls:
             raise ValueError("Nulls not yet supported with groupby JIT engine")
 
