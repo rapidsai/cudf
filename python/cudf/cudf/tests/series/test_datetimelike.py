@@ -1,7 +1,6 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 import os
-import zoneinfo
 
 import pandas as pd
 import pytest
@@ -17,7 +16,7 @@ def _get_all_zones():
         for f in files:
             zone_name = ("/".join([root, f])).lstrip("/usr/share/zoneinfo")
             try:
-                _ = zoneinfo.ZoneInfo(zone_name)
+                _ = pd.DatetimeTZDtype("ns", zone_name)
             except Exception:
                 continue
             zones.append(zone_name)
@@ -27,11 +26,6 @@ def _get_all_zones():
 # NOTE: ALL_TIME_ZONES is a very large list; we likely do NOT want to
 # use it for more than a handful of tests
 ALL_TIME_ZONES = _get_all_zones()
-
-if "Factory" in ALL_TIME_ZONES:
-    ALL_TIME_ZONES.remove(
-        "Factory"
-    )  # Pandas/pytz seems not to recognize this one
 
 
 @pytest.fixture(params=["ns", "us", "ms", "s"])
