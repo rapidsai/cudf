@@ -285,7 +285,6 @@ Time-specific operations
    DatetimeIndex.floor
    DatetimeIndex.tz_localize
 
-
 Conversion
 ~~~~~~~~~~
 .. autosummary::

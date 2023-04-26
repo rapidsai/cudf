@@ -101,7 +101,7 @@ def _find_ambiguous_and_nonexistent(
     Recognize ambiguous and nonexistent timestamps for the given timezone.
 
     Returns a tuple of columns, both of "bool" dtype and of the same
-    size as `data`, that respectivelt indicate ambiguous and
+    size as `data`, that respectively indicate ambiguous and
     nonexistent timestamps in `data` with the value `True`.
 
     Ambiguous and/or nonexistent timestamps are only possible if any
