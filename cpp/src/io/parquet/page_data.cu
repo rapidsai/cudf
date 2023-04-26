@@ -2191,6 +2191,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
+  // reset str_bytes to 0 in case it's already been calculated
+  if (t == 0) { pp->str_bytes = 0; }
+
   // only count if it's a string column
   auto const col         = &chunks[pp->chunk_idx];
   uint32_t dtype         = col->data_type & 7;
