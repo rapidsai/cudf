@@ -62,6 +62,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       }
     }
   }
+  // for (size_t i=0; i < col_sizes.size(); i++)
+  //  printf("col %ld size %ld\n", i, col_sizes[i]);
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
@@ -201,6 +203,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
                         sizeof(size_type),
                         cudaMemcpyDefault,
                         _stream.value());
+        // printf("col %ld sz %d colsize %d\n", idx, out_buf.size, sz);
       }
     }
   }
