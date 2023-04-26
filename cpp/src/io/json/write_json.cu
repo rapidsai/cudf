@@ -410,11 +410,10 @@ struct column_to_strings_fn {
     : options_(options),
       stream_(stream),
       mr_(mr),
-      struct_narep(options.get_na_rep(), true, stream),
+      narep(options.get_na_rep(), true, stream),
       struct_value_separator(",", true, stream),
       struct_row_begin_wrap("{", true, stream),
       struct_row_end_wrap("}", true, stream),
-      list_narep("null", true, stream),  // should this not be the same as struct_narep?
       list_value_separator(",", true, stream),
       list_row_begin_wrap("[", true, stream),
       list_row_end_wrap("]", true, stream)
@@ -557,7 +556,7 @@ struct column_to_strings_fn {
                                 list_row_begin_wrap.value(stream_),
                                 list_row_end_wrap.value(stream_),
                                 list_value_separator.value(stream_),
-                                list_narep.value(stream_),
+                                narep.value(stream_),
                                 stream_,
                                 mr_);
   }
@@ -631,7 +630,7 @@ struct column_to_strings_fn {
                              struct_row_begin_wrap.value(stream_),
                              row_end_wrap_value,
                              struct_value_separator.value(stream_),
-                             struct_narep,
+                             narep,
                              options_.is_enabled_include_nulls(),
                              stream_,
                              rmm::mr::get_current_device_resource());
@@ -641,16 +640,15 @@ struct column_to_strings_fn {
   json_writer_options const& options_;
   rmm::cuda_stream_view stream_;
   rmm::mr::device_memory_resource* mr_;
+  string_scalar const narep;  // "null"
   // struct convert constants
   string_scalar const struct_value_separator;  // ","
   string_scalar const struct_row_begin_wrap;   // "{"
   string_scalar const struct_row_end_wrap;     // "}"
-  string_scalar const struct_narep;            // "null"
   // list converter constants
   string_scalar const list_value_separator;  // ","
   string_scalar const list_row_begin_wrap;   // "["
   string_scalar const list_row_end_wrap;     // "]"
-  string_scalar const list_narep;            // "null"
 };
 
 }  // namespace
