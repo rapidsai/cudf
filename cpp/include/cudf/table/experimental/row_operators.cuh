@@ -1084,10 +1084,9 @@ class two_table_comparator {
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
    *
-   * If the input tables have nested types such as lists-of-structs,
-   * which will be transformed into lists-of-integers during preprocessing,
-   * the preprocessed_table(s) must have been generated together using the factory function
-   * `preprocessed_table::create(table_view const&, table_view const&)`.
+   * The preprocessed_table(s) should have been pre-generated together using the factory function
+   * `preprocessed_table::create(table_view const&, table_view const&)`. Otherwise, the comparison
+   * results between two tables may be incorrect.
    *
    * @param left A table preprocessed for lexicographic comparison
    * @param right A table preprocessed for lexicographic comparison
