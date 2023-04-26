@@ -160,7 +160,7 @@ struct dispatch_to_cudf_column {
                                                      stream,
                                                      mr);
 
-      col->set_null_mask(std::move(out_mask));
+      col->set_null_mask(std::move(out_mask), array.null_count());
     }
 
     return col;
@@ -220,7 +220,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
     return rmm::device_buffer{};
   }();
 
-  col->set_null_mask(std::move(null_mask));
+  col->set_null_mask(std::move(null_mask), array.null_count());
   return col;
 }
 
@@ -254,7 +254,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
                            stream,
                            mr);
 
-    out_col->set_null_mask(std::move(out_mask));
+    out_col->set_null_mask(std::move(out_mask), array.null_count());
   }
 
   return out_col;

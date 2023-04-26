@@ -14,26 +14,24 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/exec_policy.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 
 #include <numeric>
 #include <stdexcept>
@@ -527,16 +525,9 @@ TEST_F(OverflowTest, Presliced)
     constexpr cudf::size_type num_rows         = total_chars_size / string_size;
 
     // try and concatenate 4 string columns of with ~1/2 billion chars in each
-    auto offsets =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<cudf::offset_type>(),
-                 offsets->mutable_view().end<cudf::offset_type>(),
-                 string_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<cudf::offset_type>(),
-                           offsets->view().end<cudf::offset_type>(),
-                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto offsets = cudf::sequence(num_rows + 1,
+                                  cudf::numeric_scalar<cudf::size_type>(0),
+                                  cudf::numeric_scalar<cudf::size_type>(string_size));
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, total_chars_size);
     auto col = cudf::make_strings_column(
@@ -609,16 +600,10 @@ TEST_F(OverflowTest, Presliced)
       cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{});
 
     // try and concatenate 4 struct columns of with ~1/2 billion elements in each
-    auto offsets =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<cudf::offset_type>(),
-                 offsets->mutable_view().end<cudf::offset_type>(),
-                 list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<cudf::offset_type>(),
-                           offsets->view().end<cudf::offset_type>(),
-                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto offsets = cudf::sequence(num_rows + 1,
+                                  cudf::numeric_scalar<cudf::size_type>(0),
+                                  cudf::numeric_scalar<cudf::size_type>(list_size));
+
     auto col = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(struct_col), 0, rmm::device_buffer{});
 
@@ -705,16 +690,9 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr cudf::size_type num_rows    = 1024;
     constexpr cudf::size_type string_size = inner_size / num_rows;
 
-    auto offsets =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<cudf::offset_type>(),
-                 offsets->mutable_view().end<cudf::offset_type>(),
-                 string_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<cudf::offset_type>(),
-                           offsets->view().end<cudf::offset_type>(),
-                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto offsets = cudf::sequence(num_rows + 1,
+                                  cudf::numeric_scalar<cudf::size_type>(0),
+                                  cudf::numeric_scalar<cudf::size_type>(string_size));
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
     auto col = cudf::make_strings_column(
@@ -735,16 +713,9 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr cudf::size_type num_rows  = 1024;
     constexpr cudf::size_type list_size = inner_size / num_rows;
 
-    auto offsets =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<cudf::offset_type>(),
-                 offsets->mutable_view().end<cudf::offset_type>(),
-                 list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<cudf::offset_type>(),
-                           offsets->view().end<cudf::offset_type>(),
-                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto offsets = cudf::sequence(num_rows + 1,
+                                  cudf::numeric_scalar<cudf::size_type>(0),
+                                  cudf::numeric_scalar<cudf::size_type>(list_size));
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
     auto col = cudf::make_lists_column(
@@ -765,16 +736,9 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr cudf::size_type num_rows  = 1024;
     constexpr cudf::size_type list_size = inner_size / num_rows;
 
-    auto offsets =
-      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<cudf::offset_type>(),
-                 offsets->mutable_view().end<cudf::offset_type>(),
-                 list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<cudf::offset_type>(),
-                           offsets->view().end<cudf::offset_type>(),
-                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto offsets = cudf::sequence(num_rows + 1,
+                                  cudf::numeric_scalar<cudf::size_type>(0),
+                                  cudf::numeric_scalar<cudf::size_type>(list_size));
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
     auto list_col = cudf::make_lists_column(
@@ -1086,7 +1050,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{LCW{}, {4, 5, 6, 7}};
 
@@ -1096,7 +1060,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{{LCW{}}}, b{{LCW{}}}, c{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}}, b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{LCW{}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
@@ -1107,7 +1071,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
   {
     cudf::test::lists_column_wrapper<int> a{1, 2};
-    cudf::test::lists_column_wrapper<int> b{{LCW{}}}, c{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{{1, 2}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
