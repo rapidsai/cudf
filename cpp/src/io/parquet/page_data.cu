@@ -2632,8 +2632,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
         int me               = t - out_thread0;
         if (me < 32) {
           for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
-            auto [ptr, len] = src_pos + i < target_pos
-                                ? gpuGetStringData(s, sb, src_pos + i)
+            auto [ptr, len] = src_pos + i < target_pos && dst_pos >= 0
+                                ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values + i)
                                 : cuda::std::pair<char const*, size_t>{nullptr, 0};
 
             __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
