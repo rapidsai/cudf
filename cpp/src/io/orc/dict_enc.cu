@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,10 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s* s,
                                           Storage& temp_storage)
 {
   if (t == 0) { s->nnz = 0; }
+  if (s->chunk.num_rows <= 0) {
+    // A sync is needed for s->nnz if there are no times through the loop
+    __syncthreads();
+  }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
     const uint32_t* valid_map = s->chunk.leaf_column->null_mask();
     auto column_offset        = s->chunk.leaf_column->offset();
