@@ -53,7 +53,8 @@ namespace {
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 
 // TODO: move into utility header like string.cuh
-__device__ inline size_type bytes_to_character_position(string_view d_str, size_type pos)
+__device__ inline thrust::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
+                                                                                 size_type pos)
 {
   size_type bytes    = 0;
   auto ptr           = d_str.data();
@@ -64,7 +65,7 @@ __device__ inline size_type bytes_to_character_position(string_view d_str, size_
     bytes += width;
     ++ptr;
   }
-  return bytes;
+  return {bytes, pos};
 }
 
 /**
@@ -122,57 +123,58 @@ struct empty_target_fn {
 
 /**
  * @brief String per warp function for find/rfind
- *
- * TODO: this needs to be a global kernel function instead of a functor
- *       since it uses shared memory and relies on warp functions
  */
 template <bool forward = true>
-struct finder_warp_parallel_fn {
-  column_device_view const d_strings;
-  string_view const d_target;
-  size_type const start;
-  size_type const stop;
-  size_type* d_results;
+__global__ void finder_warp_parallel_fn(column_device_view const d_strings,
+                                        string_view const d_target,
+                                        size_type const start,
+                                        size_type const stop,
+                                        size_type* d_results)
+{
+  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
 
-  __device__ size_type operator()(size_t idx)
-  {
-    using warp_reduce = cub::WarpReduce<size_type>;
-    __shared__ typename warp_reduce::TempStorage temp_storage;
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-    auto const str_idx  = idx / cudf::detail::warp_size;
-    auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
 
-    if (d_strings.is_null(str_idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(str_idx);
+  if (d_strings.is_null(str_idx)) { return; }
+  if (lane_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
+  __syncwarp();
 
-    auto const beg = bytes_to_character_position(d_str, start);
-    auto const end = [&] {
-      if (stop < 0) { return d_str.size_bytes(); }
-      if (stop <= start) { return beg; }
-      // we count from beg instead of recounting from the beginning of the string
-      return beg + bytes_to_character_position(
-                     string_view(d_str.data() + beg, d_str.size_bytes() - beg), stop - start);
-    }();
+  auto const d_str = d_strings.element<string_view>(str_idx);
 
-    // auto const tgt_length = d_target.length();
-    size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
-    for (auto itr = beg + lane_idx; itr + d_target.size_bytes() <= end;
-         itr += cudf::detail::warp_size) {
-      if (d_target.compare(d_str.data() + itr, d_target.size_bytes()) == 0) {
-        position = itr;
-        if (forward) break;
-      }
-    }
+  auto const [begin, left_over] = bytes_to_character_position(d_str, start);
+  auto const start_char_pos     = start - left_over;
 
-    auto const result = forward ? warp_reduce(temp_storage).Reduce(position, cub::Min())
-                                : warp_reduce(temp_storage).Reduce(position, cub::Max());
-    if (lane_idx == 0) {
-      d_results[str_idx] = result < std::numeric_limits<size_type>::max() && result >= 0
-                             ? characters_in_string(d_str.data(), result)
-                             : -1;
+  auto const end = [d_str, start, stop, begin = begin] {
+    if (stop < 0) { return d_str.size_bytes(); }
+    if (stop <= start) { return begin; }
+    // we count from `begin` instead of recounting from the beginning of the string
+    return begin + thrust::get<0>(bytes_to_character_position(
+                     string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
+  }();
+
+  size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
+  for (auto itr = begin + lane_idx; itr + d_target.size_bytes() <= end;
+       itr += cudf::detail::warp_size) {
+    if (d_target.compare(d_str.data() + itr, d_target.size_bytes()) == 0) {
+      position = itr;
+      if (forward) break;
     }
   }
-};
+
+  forward ? atomicMin(d_results + str_idx, position) : atomicMax(d_results + str_idx, position);
+  __syncwarp();
+
+  if (lane_idx == 0) {
+    auto const result = d_results[str_idx];
+    d_results[str_idx] =
+      ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
+        ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
+        : -1;
+  }
+}
 
 template <bool forward = true>
 std::unique_ptr<column> find_fn(strings_column_view const& input,
@@ -208,14 +210,14 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
                       thrust::counting_iterator<size_type>(input.size()),
                       d_results,
                       empty_target_fn<forward>{*d_strings, start, stop});
-  } else if (((input.chars_size() / (input.size() - input.null_count())) >
-              AVG_CHAR_BYTES_THRESHOLD)) {
+  } else if ((input.chars_size() / (input.size() - input.null_count())) >
+             AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      input.size() * cudf::detail::warp_size,
-      finder_warp_parallel_fn<forward>{*d_strings, d_target, start, stop, d_results});
+    constexpr int block_size = 256;
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    finder_warp_parallel_fn<forward>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        *d_strings, d_target, start, stop, d_results);
   } else {
     // string-per-thread function
     thrust::transform(rmm::exec_policy(stream),
