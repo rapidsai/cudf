@@ -169,9 +169,9 @@ enum class decompose_lists_column : bool { YES, NO };
  *  i
  *
  * Note that the `decompose_lists` flag should be specified as follow:
- *  - `true` when preprocessing a table for equality comparison.
- *  - `false` when preprocessing a table for lexicographic comparison, since we need to keep all
- *    lists columns intact to input into the next preprocessing step.
+ *  - `decompose_lists_column::YES` when preprocessing a table for equality comparison.
+ *  - `decompose_lists_column::NO` when preprocessing a table for lexicographic comparison,
+ *    since we need to keep all lists columns intact to input into the next preprocessing step.
  *
  * @param table The table whose struct columns to decompose.
  * @param decompose_lists Whether to decompose lists columns
