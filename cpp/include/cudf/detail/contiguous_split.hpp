@@ -89,7 +89,7 @@ class metadata_builder {
    *                    or -1 for an empty column
    * @param null_mask_offset null mask offset from the column's base ptr,
    *                    or -1 for a column that isn't nullable
-   * @param num_children number of chilren columns
+   * @param num_children number of children columns
    */
   void add_column_to_meta(data_type col_type,
                           size_type col_size,
