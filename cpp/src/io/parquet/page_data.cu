@@ -2086,13 +2086,16 @@ __device__ size_t countDictEntries(uint8_t const* data,
     }
 
     int is_literal = dict_run & 1;
+    //if (t == 0 && blockIdx.x == 1) printf("batch_len %d is_lit %d\n", batch_len, is_literal);
 
     // compute dictionary index.
     if (is_literal) {
       int dict_idx = 0;
-      if (t < batch_len) {
+      // reverse threads so thread 0 can process a repeat run while upper threads do literals
+      int tt = preprocess_block_size - 1 - t;
+      if (tt < batch_len) {
         dict_idx         = dict_val;
-        int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
+        int32_t ofs      = (tt - ((batch_len + 7) & ~7)) * dict_bits;
         const uint8_t* p = ptr + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
@@ -2110,9 +2113,9 @@ __device__ size_t countDictEntries(uint8_t const* data,
           dict_idx &= (1 << dict_bits) - 1;
         }
 
-        if (pos + t < end_value) {
+        if (pos + tt < end_value) {
           uint32_t const dict_pos = (dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
-          if (pos + t >= start_value && dict_pos < (uint32_t)dict_size) {
+          if (pos + tt >= start_value && dict_pos < (uint32_t)dict_size) {
             const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
             l_str_len += src->second;
           }
