@@ -114,6 +114,54 @@ void BM_parquet_read_io_compression(
   parquet_read_common(write_opts, source_sink, state);
 }
 
+template <data_type DataType, cudf::io::io_type IOType>
+void BM_parquet_read_chunks(
+  nvbench::state& state,
+  nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
+{
+  auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
+  cudf::size_type const cardinality = state.get_int64("cardinality");
+  cudf::size_type const run_length  = state.get_int64("run_length");
+  cudf::size_type const byte_limit  = state.get_int64("byte_limit");
+  auto const compression            = cudf::io::compression_type::SNAPPY;
+
+  auto const tbl =
+    create_random_table(cycle_dtypes(d_type, num_cols),
+                        table_size_bytes{data_size},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+  auto const view = tbl->view();
+
+  cuio_source_sink_pair source_sink(IOType);
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+      .compression(compression);
+
+  cudf::io::write_parquet(write_opts);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
+  auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
+
+  auto mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               try_drop_l3_cache();
+
+               timer.start();
+               do {
+                 auto chunk = reader.read_chunk();
+               } while (reader.has_next());
+               timer.stop();
+             });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+}
+
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
                                             data_type::DECIMAL,
@@ -145,3 +193,13 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_io_compression, NVBENCH_TYPE_AXES(io_list, c
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
+
+NVBENCH_BENCH_TYPES(BM_parquet_read_chunks,
+                    NVBENCH_TYPE_AXES(d_type_list,
+                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+  .set_name("parquet_read_chunks")
+  .set_type_axes_names({"data_type", "io"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("byte_limit", {0, 500'000});
