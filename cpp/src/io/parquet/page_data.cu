@@ -1910,7 +1910,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
     auto const end_row        = begin_row + page_rows;
 
     // short circuit for no nulls
-    if (max_def == 0 && !has_repetition) { return {begin_row, page_rows}; }
+    if (max_def == 0 && !has_repetition) { return {begin_row, end_row}; }
 
     int row_count           = 0;
     int leaf_count          = 0;
@@ -2222,22 +2222,24 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   // find start/end value indices
   auto const [start_value, end_value] =
     page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
-  
+
   // need to save num_nulls calculated in page_bounds in this page
   // FIXME: num_nulls is only correct for !is_bounds_pg...need to fix this
-  if (t==0) { pp->num_nulls = s->page.num_nulls; }
+  if (t == 0) { pp->num_nulls = s->page.num_nulls; }
 #if 0
-  if (t == 0 && col->src_col_index == 0)
-    printf("%05d: start_val %d end_val %d is_bounds %d is_contained %d (%ld,%ld] (%ld,%ld]\n",
-           blockIdx.x,
-           start_value,
-           end_value,
-           is_bounds_pg,
-           is_page_contained(s, min_row, num_rows),
-           min_row,
-           min_row + num_rows,
-           col->start_row + pp->chunk_row,
-           col->start_row + pp->chunk_row + pp->num_rows);
+  if (t == 0)
+    printf(
+      "%05d: col %d start_val %d end_val %d is_bounds %d is_contained %d (%ld,%ld] (%ld,%ld]\n",
+      blockIdx.x,
+      col->src_col_index,
+      start_value,
+      end_value,
+      is_bounds_pg,
+      is_page_contained(s, min_row, num_rows),
+      min_row,
+      min_row + num_rows,
+      col->start_row + pp->chunk_row,
+      col->start_row + pp->chunk_row + pp->num_rows);
 #endif
 
   // now process string info in the range [start_value, end_value)
@@ -2679,6 +2681,15 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                 auto str_ptr =
                   nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
                 memcpy(str_ptr, ptr, len);
+#if 0
+                printf("%05d,%03d: src %d dst %d len %ld offset %d\n",
+                       blockIdx.x,
+                       t,
+                       src_pos + i,
+                       dst_pos,
+                       len,
+                       offset);
+#endif
               }
               __syncwarp();
             }
