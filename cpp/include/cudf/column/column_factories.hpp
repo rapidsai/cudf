@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -441,10 +441,10 @@ std::unique_ptr<column> make_strings_column(
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<char const> strings,
   cudf::device_span<size_type const> offsets,
-  cudf::device_span<bitmask_type const> null_mask = {},
-  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
-  rmm::cuda_stream_view stream                    = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
+  cudf::device_span<bitmask_type const> null_mask,
+  size_type null_count,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
@@ -487,8 +487,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask = {},
-                                            size_type null_count = cudf::UNKNOWN_NULL_COUNT);
+                                            rmm::device_buffer&& null_mask,
+                                            size_type null_count);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null
