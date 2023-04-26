@@ -91,6 +91,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column_factories.hpp
         - test -f $PREFIX/include/cudf/column/column_view.hpp
         - test -f $PREFIX/include/cudf/concatenate.hpp
+        - test -f $PREFIX/include/cudf/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
         - test -f $PREFIX/include/cudf/timezone.hpp
@@ -99,6 +100,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/detail/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
         - test -f $PREFIX/include/cudf/detail/fill.hpp
@@ -139,7 +141,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/logger.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/pinned_allocator.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/pinned_host_vector.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
         - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
