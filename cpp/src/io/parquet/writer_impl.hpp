@@ -119,7 +119,7 @@ class writer::impl {
   /**
    * @brief Write the intermediate Parquet data into the data sink.
    *
-   * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
+   * The intermediate data is generated from processing (compressing/encoding) a cuDF input table
    * by `convert_table_to_parquet_data` called in the `write()` function.
    *
    * @param updated_agg_meta The updated aggregate data after processing the input
