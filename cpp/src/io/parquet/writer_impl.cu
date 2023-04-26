@@ -1597,7 +1597,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
-    //    verify the user isn't passing mismatched tables
+    // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(agg_meta->schema_matches(this_table_schema),
                  "Mismatch in schema between multiple calls to write_chunk");
 
