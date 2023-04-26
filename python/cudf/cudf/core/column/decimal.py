@@ -364,7 +364,9 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
         elif op in {"__mul__", "__div__"}:
             integral = precision - scale
             if integral < 32:
-                scale = min(scale, cudf.Decimal128Dtype.MAX_PRECISION - integral)
+                scale = min(
+                    scale, cudf.Decimal128Dtype.MAX_PRECISION - integral
+                )
             # potential for overflow error in this case
             elif scale < 6 and integral > 32:
                 pass
