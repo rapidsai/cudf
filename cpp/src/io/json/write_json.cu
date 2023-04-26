@@ -140,8 +140,10 @@ struct struct_scatter_strings_fn {
   column_device_view const col_names;
   size_type const strviews_per_column;
   size_type const num_strviews_per_row;
-  string_view const row_suffix;  // } or }\n for json-lines
-  string_view const narep;       // null entry replacement
+  string_view const row_prefix;       // "{"
+  string_view const row_suffix;       // "}" or "}\n" for json-lines
+  string_view const value_separator;  // ","
+  string_view const narep;            // null entry replacement
   bool const include_nulls;
   string_view* d_strviews;
 
@@ -152,9 +154,6 @@ struct struct_scatter_strings_fn {
    */
   __device__ void operator()(size_type idx)
   {
-    string_view const row_prefix{"{", 1};
-    string_view const value_separator{",", 1};
-
     auto const row        = idx / tbl.num_columns();
     auto const col        = idx % tbl.num_columns();
     auto const d_str_null = tbl.column(col).is_null(row);
@@ -190,7 +189,9 @@ struct struct_scatter_strings_fn {
  *
  * @param strings_columns Table of strings columns
  * @param column_names Column of names for each column in the table
+ * @param row_prefix Prepend this string to each row
  * @param row_suffix  Append this string to each row
+ * @param value_separator Separator between values
  * @param narep Null-String replacement
  * @param include_nulls Include null string entries in the output
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -199,7 +200,9 @@ struct struct_scatter_strings_fn {
  */
 std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           column_view const& column_names,
+                                          string_view const row_prefix,
                                           string_view const row_suffix,
+                                          string_view const value_separator,
                                           string_scalar const& narep,
                                           bool include_nulls,
                                           rmm::cuda_stream_view stream,
@@ -233,7 +236,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                        *d_column_names,
                                        strviews_per_column,
                                        num_strviews_per_row,
+                                       row_prefix,
                                        row_suffix,
+                                       value_separator,
                                        narep.value(stream),
                                        include_nulls,
                                        d_strviews.begin()};
@@ -405,8 +410,14 @@ struct column_to_strings_fn {
     : options_(options),
       stream_(stream),
       mr_(mr),
-      narep(options.get_na_rep(), true, stream),
-      row_end_wrap_default("}", true, stream)
+      struct_narep(options.get_na_rep(), true, stream),
+      struct_value_separator(",", true, stream),
+      struct_row_begin_wrap("{", true, stream),
+      struct_row_end_wrap("}", true, stream),
+      list_narep("null", true, stream),  // should this not be the same as struct_narep?
+      list_value_separator(",", true, stream),
+      list_row_begin_wrap("[", true, stream),
+      list_row_end_wrap("]", true, stream)
   {
   }
 
@@ -542,15 +553,11 @@ struct column_to_strings_fn {
       column.null_count(),
       cudf::detail::copy_bitmask(column, stream_, rmm::mr::get_current_device_resource()),
       stream_);
-    auto l_pre      = string_scalar{"[", true, stream_};
-    auto l_post     = string_scalar{"]", true, stream_};
-    auto sep        = string_scalar{",", true, stream_};
-    auto elem_narep = string_scalar{"null", true, stream_};
     return join_list_of_strings(lists_column_view(*list_child_string),
-                                l_pre.value(stream_),
-                                l_post.value(stream_),
-                                sep.value(stream_),
-                                elem_narep.value(stream_),
+                                list_row_begin_wrap.value(stream_),
+                                list_row_end_wrap.value(stream_),
+                                list_value_separator.value(stream_),
+                                list_narep.value(stream_),
                                 stream_,
                                 mr_);
   }
@@ -567,7 +574,7 @@ struct column_to_strings_fn {
     auto col_string = operator()(child_it,
                                  child_it + column.num_children(),
                                  children_names,
-                                 row_end_wrap_default.value(stream_));
+                                 struct_row_end_wrap.value(stream_));
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
                               column.null_count());
     return col_string;
@@ -621,8 +628,10 @@ struct column_to_strings_fn {
     //
     return struct_to_strings(str_table_view,
                              column_names_view,
+                             struct_row_begin_wrap.value(stream_),
                              row_end_wrap_value,
-                             narep,
+                             struct_value_separator.value(stream_),
+                             struct_narep,
                              options_.is_enabled_include_nulls(),
                              stream_,
                              rmm::mr::get_current_device_resource());
@@ -632,8 +641,16 @@ struct column_to_strings_fn {
   json_writer_options const& options_;
   rmm::cuda_stream_view stream_;
   rmm::mr::device_memory_resource* mr_;
-  string_scalar const row_end_wrap_default;
-  string_scalar const narep;
+  // struct convert constants
+  string_scalar const struct_value_separator;  // ","
+  string_scalar const struct_row_begin_wrap;   // "{"
+  string_scalar const struct_row_end_wrap;     // "}"
+  string_scalar const struct_narep;            // "null"
+  // list converter constants
+  string_scalar const list_value_separator;  // ","
+  string_scalar const list_row_begin_wrap;   // "["
+  string_scalar const list_row_end_wrap;     // "]"
+  string_scalar const list_narep;            // "null"
 };
 
 }  // namespace
