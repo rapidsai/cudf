@@ -12,6 +12,8 @@
 # the License.
 # =============================================================================
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+  set(rapids-cmake-repo bdice/rapids-cmake)
+  set(rapids-cmake-branch cccl-update-2.1.0)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-23.06/RAPIDS.cmake
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
