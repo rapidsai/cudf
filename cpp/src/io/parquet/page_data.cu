@@ -21,8 +21,10 @@
 
 #include <cuda/std/tuple>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -108,6 +110,70 @@ struct page_state_buffers_s {
   uint32_t dict_idx[non_zero_buffer_size];  // Dictionary index, boolean, or string offset values
   uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
 };
+
+// stole this from cudf/strings/detail/gather.cuh. modified to run on a single string on one warp.
+// copies from src to dst in 16B chunks per thread.
+__device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
+{
+  using cudf::detail::warp_size;
+  using cudf::strings::detail::load_uint4;
+
+  constexpr size_t out_datatype_size = sizeof(uint4);
+  constexpr size_t in_datatype_size  = sizeof(uint);
+
+  auto const alignment_offset = reinterpret_cast<std::uintptr_t>(dst) % out_datatype_size;
+  uint4* out_chars_aligned    = reinterpret_cast<uint4*>(dst - alignment_offset);
+  auto const in_start         = src;
+
+  // Both `out_start_aligned` and `out_end_aligned` are indices into `dst`.
+  // `out_start_aligned` is the first 16B aligned memory location after `dst + 4`.
+  // `out_end_aligned` is the last 16B aligned memory location before `len - 4`. Characters
+  // between `[out_start_aligned, out_end_aligned)` will be copied using uint4.
+  // `dst + 4` and `len - 4` are used instead of `dst` and `len` to avoid
+  // `load_uint4` reading beyond string boundaries.
+  // use signed int since out_end_aligned can be negative.
+  int64_t out_start_aligned = (in_datatype_size + alignment_offset + out_datatype_size - 1) /
+                                out_datatype_size * out_datatype_size -
+                              alignment_offset;
+  int64_t out_end_aligned =
+    (len - in_datatype_size + alignment_offset) / out_datatype_size * out_datatype_size -
+    alignment_offset;
+
+  for (int64_t ichar = out_start_aligned + lane_id * out_datatype_size; ichar < out_end_aligned;
+       ichar += warp_size * out_datatype_size) {
+    *(out_chars_aligned + (ichar + alignment_offset) / out_datatype_size) =
+      load_uint4((const char*)in_start + ichar);
+  }
+
+  // Tail logic: copy characters of the current string outside
+  // `[out_start_aligned, out_end_aligned)`.
+  if (out_end_aligned <= out_start_aligned) {
+    // In this case, `[out_start_aligned, out_end_aligned)` is an empty set, and we copy the
+    // entire string.
+    for (int64_t ichar = lane_id; ichar < len; ichar += warp_size) {
+      dst[ichar] = in_start[ichar];
+    }
+  } else {
+    // Copy characters in range `[0, out_start_aligned)`.
+    if (lane_id < out_start_aligned) { dst[lane_id] = in_start[lane_id]; }
+    // Copy characters in range `[out_end_aligned, len)`.
+    int64_t ichar = out_end_aligned + lane_id;
+    if (ichar < len) { dst[ichar] = in_start[ichar]; }
+  }
+}
+
+// data parallel strcpy
+__device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
+{
+  using cudf::detail::warp_size;
+  if (len > 64) {
+    wideStrcpy(dst, src, len, lane_id);
+  } else {
+    for (int i = lane_id; i < len; i += warp_size) {
+      dst[i] = src[i];
+    }
+  }
+}
 
 /**
  * @brief Returns whether or not a page spans either the beginning or the end of the
@@ -1186,18 +1252,29 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
             output_offset = nesting_info->page_start_value;
           }
 
-          nesting_info->data_out = static_cast<uint8_t*>(s->col.column_data_base[idx]);
+          if (s->col.column_data_base != nullptr) {
+            nesting_info->data_out   = static_cast<uint8_t*>(s->col.column_data_base[idx]);
+            nesting_info->string_out = static_cast<uint8_t*>(s->col.column_string_base[idx]);
 
-          if (nesting_info->data_out != nullptr) {
-            // anything below max depth with a valid data pointer must be a list, so the
-            // element size is the size of the offset type.
-            uint32_t len = idx < max_depth - 1 ? sizeof(cudf::size_type) : s->dtype_len;
-            nesting_info->data_out += (output_offset * len);
-          }
-          nesting_info->valid_map = s->col.valid_map_base[idx];
-          if (nesting_info->valid_map != nullptr) {
-            nesting_info->valid_map += output_offset >> 5;
-            nesting_info->valid_map_offset = (int32_t)(output_offset & 0x1f);
+            nesting_info->data_out = static_cast<uint8_t*>(s->col.column_data_base[idx]);
+
+            if (nesting_info->data_out != nullptr) {
+              // anything below max depth with a valid data pointer must be a list, so the
+              // element size is the size of the offset type.
+              uint32_t len = idx < max_depth - 1 ? sizeof(cudf::size_type) : s->dtype_len;
+              // if this is a string column, then dtype_len is a lie. data will be offsets rather
+              // than (ptr,len) tuples.
+              if (data_type == BYTE_ARRAY && s->dtype_len != 4) { len = sizeof(cudf::size_type); }
+              nesting_info->data_out += (output_offset * len);
+            }
+            if (nesting_info->string_out != nullptr) {
+              nesting_info->string_out += s->page.str_offset;
+            }
+            nesting_info->valid_map = s->col.valid_map_base[idx];
+            if (nesting_info->valid_map != nullptr) {
+              nesting_info->valid_map += output_offset >> 5;
+              nesting_info->valid_map_offset = (int32_t)(output_offset & 0x1f);
+            }
           }
         }
       }
@@ -1786,7 +1863,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
 
   // can skip all this if we know there are no nulls
-  if (max_def == 0) { return {0, s->page.num_input_values}; }
+  if (max_def == 0 && !is_bounds_pg) { return {0, s->num_input_values}; }
 
   int start_value = 0;
   int end_value   = s->page.num_input_values;
@@ -1817,6 +1894,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   int processed = 0;
 
   // if this is a bounds page, we need to do extra work to find the start and/or end value index
+  // TODO calculate num_nulls
   if (is_bounds_pg) {
     __shared__ int skipped_leaf_values;
     __shared__ int end_val_idx;
@@ -1830,6 +1908,9 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
                                   ? max_page_rows
                                   : max_row - (page_start_row + begin_row);
     auto const end_row        = begin_row + page_rows;
+
+    // short circuit for no nulls
+    if (max_def == 0 && !has_repetition) { return {begin_row, page_rows}; }
 
     int row_count           = 0;
     int leaf_count          = 0;
@@ -1963,6 +2044,7 @@ __device__ size_t countDictEntries(uint8_t const* data,
 {
   uint8_t const* ptr       = data;
   uint8_t const* const end = data + data_size;
+  int const bytecnt        = (dict_bits + 7) >> 3;
   size_t str_len           = 0;  // total sum for runs
   size_t l_str_len         = 0;  // partial sums across literal runs
   int pos                  = 0;
@@ -1975,7 +2057,6 @@ __device__ size_t countDictEntries(uint8_t const* data,
       dict_run = (ptr < end) ? get_vlq32(ptr, end) : 0;
       if (!(dict_run & 1)) {
         // Repeated value
-        int bytecnt = (dict_bits + 7) >> 3;
         if (ptr + bytecnt <= end) {
           int32_t run_val = ptr[0];
           if (bytecnt > 1) {
@@ -1995,7 +2076,7 @@ __device__ size_t countDictEntries(uint8_t const* data,
     if (dict_run & 1) {
       // Literal batch: must output a multiple of 8, except for the last batch
       int batch_len_div8;
-      batch_len      = max(min(128, (int)(dict_run >> 1) * 8), 1);
+      batch_len      = max(min(preprocess_block_size, (int)(dict_run >> 1) * 8), 1);
       batch_len_div8 = (batch_len + 7) >> 3;
       dict_run -= batch_len_div8 * 2;
       ptr += batch_len_div8 * dict_bits;
@@ -2050,14 +2131,14 @@ __device__ size_t countDictEntries(uint8_t const* data,
     }
 
     pos += batch_len;
-    // if (t == 0) printf("pos %d str_len %ld\n", pos, str_len);
   }
+  __syncthreads();
 
   using block_reduce = cub::BlockReduce<size_t, preprocess_block_size>;
-  typename block_reduce::TempStorage reduce_storage;
-  str_len += block_reduce(reduce_storage).Sum(l_str_len);
+  __shared__ typename block_reduce::TempStorage reduce_storage;
+  size_t sum_l = block_reduce(reduce_storage).Sum(l_str_len);
 
-  return str_len;
+  return str_len + sum_l;
 }
 
 __device__ size_t
@@ -2141,8 +2222,12 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   // find start/end value indices
   auto const [start_value, end_value] =
     page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
+  
+  // need to save num_nulls calculated in page_bounds in this page
+  // FIXME: num_nulls is only correct for !is_bounds_pg...need to fix this
+  if (t==0) { pp->num_nulls = s->page.num_nulls; }
 #if 0
-  if (t == 0)
+  if (t == 0 && col->src_col_index == 0)
     printf("%05d: start_val %d end_val %d is_bounds %d is_contained %d (%ld,%ld] (%ld,%ld]\n",
            blockIdx.x,
            start_value,
@@ -2191,7 +2276,11 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
       break;
   }
 
-  if (t == 0) { pp->str_bytes = str_bytes; }
+  if (t == 0) {
+    // TODO check for overflow
+    pp->str_bytes = str_bytes;
+    // printf("%05d: string size %ld %d\n", blockIdx.x, str_bytes, col->src_col_index);
+  }
 }
 
 /**
@@ -2425,6 +2514,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s state_buffers;
+  __shared__ __align__(4) size_type last_offset;
 
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
@@ -2449,6 +2539,14 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // offsets is global...but the output is local, so account for that below
+  if (t == 0) { last_offset = s->page.str_offset; }
+
+  // choose a character parallel string copy when the average string is longer than a warp
+  auto const use_char_ll = (s->page.str_bytes / s->page.num_input_values) > cudf::detail::warp_size;
+
+  __syncthreads();
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
@@ -2528,6 +2626,69 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
+      // need to do this before we branch on src_pos/dst_pos so we don't deadlock
+      if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
+        int leaf_level_index = s->col.max_nesting_depth - 1;
+        int me               = t - out_thread0;
+        if (me < 32) {
+          for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
+            auto [ptr, len] = src_pos + i < target_pos
+                                ? gpuGetStringData(s, sb, src_pos + i)
+                                : cuda::std::pair<char const*, size_t>{nullptr, 0};
+
+            __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
+            size_type offset;
+            cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
+            offset += last_offset;
+
+            dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
+            if (!has_repetition) { dst_pos -= s->first_row; }
+
+            if (use_char_ll) {
+              // TODO: might want separate kernel for string page decoding so we don't waste all
+              // this shared memory on non-string columns.
+              __shared__ __align__(8) uint8_t const* pointers[32];
+              __shared__ __align__(4) size_type offsets[32];
+              __shared__ __align__(4) int dsts[32];
+              __shared__ __align__(4) int lengths[32];
+
+              offsets[me]  = offset;
+              pointers[me] = reinterpret_cast<uint8_t const*>(ptr);
+              dsts[me]     = dst_pos;
+              lengths[me]  = len;
+              __syncwarp();
+
+              for (int ss = 0; ss < 32 && ss + i + s->src_pos < target_pos; ss++) {
+                if (dsts[me] >= 0) {
+                  auto offptr =
+                    reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
+                    dsts[ss];
+                  *offptr      = offsets[ss];
+                  auto str_ptr = nesting_info_base[leaf_level_index].string_out + offsets[ss] -
+                                 s->page.str_offset;
+                  ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
+                }
+              }
+
+            } else {
+              if (src_pos + i < target_pos && dst_pos >= 0) {
+                auto offptr =
+                  reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
+                  dst_pos;
+                *offptr = offset;
+                auto str_ptr =
+                  nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
+                memcpy(str_ptr, ptr, len);
+              }
+              __syncwarp();
+            }
+
+            if (me == 31) { last_offset = offset + len; }
+            __syncwarp();
+          }
+        }
+      }
+
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
       // (values before first_row) in the flat hierarchy case.
       if (src_pos < target_pos && dst_pos >= 0) {
@@ -2555,7 +2716,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
             }
           } else {
-            gpuOutputString(s, sb, val_src_pos, dst);
+            // test for string hashes
+            if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
           }
         } else if (dtype == BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
@@ -2596,6 +2758,35 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
     }
     __syncthreads();
+  }
+
+  // if there are nulls and this is a string column, clean up the offsets array.
+  // but if there's a list parent, then no need.
+  if (s->page.num_input_values != s->nz_count) {
+    int dtype = s->col.data_type & 7;
+    if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
+      int leaf_level_index = s->col.max_nesting_depth - 1;
+      auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
+
+      if (nesting_info_base[leaf_level_index].null_count > 0) {
+        // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
+        if (s->nz_count == 0) {
+          for (int i = t; i < s->page.num_input_values; i += decode_block_size) {
+            offptr[i] = s->page.str_offset;
+          }
+        }
+        // just some nulls, do this serially for now
+        else if (t == 0) {
+          if (offptr[s->num_input_values - 1] == 0) {
+            offptr[s->num_input_values - 1] = s->page.str_offset + s->page.str_bytes;
+          }
+          for (int i = s->num_input_values - 2; i > 0; i--) {
+            if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
+          }
+          offptr[0] = s->page.str_offset;
+        }
+      }
+    }
   }
 }
 
