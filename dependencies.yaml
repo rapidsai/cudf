@@ -212,8 +212,8 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
-          - &gtest gtest==1.10.0.*
-          - &gmock gmock==1.10.0.*
+          - &gtest gtest>=1.13.0.*
+          - &gmock gmock>=1.13.0.*
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - libarrow==11.0.0.*
