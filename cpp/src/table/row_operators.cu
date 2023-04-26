@@ -88,6 +88,12 @@ table_view remove_struct_child_offsets(table_view table)
 }
 
 /**
+ * @brief The enum to specify whether the `decompose_structs` function will process lists columns
+ * (at any nested level) or will output them unchanged.
+ */
+enum class decompose_lists_column : bool { YES, NO };
+
+/**
  * @brief Decompose all struct columns in a table
  *
  * If a structs column is a tree with N leaves, then this function decomposes the tree into
@@ -175,7 +181,7 @@ table_view remove_struct_child_offsets(table_view table)
  *         orders and null precedences and depths of the linearized branches
  */
 auto decompose_structs(table_view table,
-                       bool decompose_lists,
+                       decompose_lists_column decompose_lists,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {})
 {
@@ -196,7 +202,7 @@ auto decompose_structs(table_view table,
                               std::vector<detail::linked_column_view const*>* branch,
                               int depth) {
           branch->push_back(c);
-          if (decompose_lists && c->type().id() == type_id::LIST) {
+          if (decompose_lists == decompose_lists_column::YES && c->type().id() == type_id::LIST) {
             recursive_child(
               c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
           } else if (c->type().id() == type_id::STRUCT) {
@@ -664,7 +670,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   rmm::cuda_stream_view stream)
 {
   auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
-    decompose_structs(input, false /*no decompose lists*/, column_order, null_precedence);
+    decompose_structs(input, decompose_lists_column::NO, column_order, null_precedence);
 
   // Unused variables are generated for rhs table which is not available here.
   [[maybe_unused]] auto [transformed_input, unused_0, transformed_columns, unused_1] =
@@ -693,12 +699,12 @@ preprocessed_table::create(table_view const& lhs,
         new_column_order_lhs,
         new_null_precedence_lhs,
         verticalized_col_depths_lhs] =
-    decompose_structs(lhs, false /*no decompose lists*/, column_order, null_precedence);
+    decompose_structs(lhs, decompose_lists_column::NO, column_order, null_precedence);
 
   // Unused variables are new column order and null order for rhs, which are the same as for lhs
   // so we don't need them.
   [[maybe_unused]] auto [decomposed_rhs, unused0, unused1, verticalized_col_depths_rhs] =
-    decompose_structs(rhs, false /*no decompose lists*/, column_order, null_precedence);
+    decompose_structs(rhs, decompose_lists_column::NO, column_order, null_precedence);
 
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
   auto [transformed_lhs, transformed_rhs_opt, transformed_columns_lhs, transformed_columns_rhs] =
@@ -785,7 +791,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
     structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
   auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
   auto verticalized_t =
-    std::get<0>(decompose_structs(struct_offset_removed_table, true /*decompose lists*/));
+    std::get<0>(decompose_structs(struct_offset_removed_table, decompose_lists_column::YES));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
