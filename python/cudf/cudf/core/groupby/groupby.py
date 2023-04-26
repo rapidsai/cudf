@@ -44,6 +44,15 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
+def _is_row_of(chunk, obj):
+    return (
+        isinstance(chunk, cudf.Series)
+        and isinstance(obj, cudf.DataFrame)
+        and len(chunk.index) == len(obj._column_names)
+        and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
+    )
+
+
 groupby_doc_template = textwrap.dedent(
     """Group using a mapper or by a Series of columns.
 
@@ -1186,19 +1195,44 @@ class GroupBy(Serializable, Reducible, Scannable):
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
         chunk_results = [function(chk, *args) for chk in chunks]
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
+        )
+
+    def _post_process_chunk_results(
+        self, chunk_results, group_names, group_keys, grouped_values
+    ):
         if not len(chunk_results):
             return self.obj.head(0)
-
         if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series._from_data(
                 {None: chunk_results}, index=group_names
             )
             result.index.names = self.grouping.names
+            return result
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
-            result = cudf.concat(chunk_results, axis=1).T
-            result.index.names = self.grouping.names
+            # When the UDF is like df.sum(), the result for each
+            # group is a row-like "Series" where the index labels
+            # are the same as the original calling DataFrame
+            if _is_row_of(chunk_results[0], self.obj):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
+            # When the UDF is like df.x + df.y, the result for each
+            # group is the same length as the original group
+            elif len(self.obj) == sum(len(chk) for chk in chunk_results):
+                result = cudf.concat(chunk_results)
+                index_data = group_keys._data.copy(deep=True)
+                index_data[None] = grouped_values.index._column
+                result.index = cudf.MultiIndex._from_data(index_data)
+            else:
+                raise TypeError(
+                    "Error handling Groupby apply output with input of "
+                    f"type {type(self.obj)} and output of "
+                    f"type {type(chunk_results[0])}"
+                )
         else:
             result = cudf.concat(chunk_results)
             if self._group_keys:
