@@ -357,6 +357,21 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     else:
         raise NotImplementedError()
 
+    # potentially reduce scale and precision
+    if precision > cudf.Decimal128Dtype.MAX_PRECISION:
+        if op in {"__add__", "__sub__"}:
+            scale = cudf.Decimal128Dtype.MAX_PRECISION - max(p1 - s1, p2 - s2)
+        elif op in {"__mul__", "__div__"}:
+            integral = precision - scale
+            if integral < 32:
+                scale = min(scale, 38 - integral)
+            # potential for overflow error in this case
+            elif scale < 6 and integral > 32:
+                pass
+            elif scale > 6 and integral > 32:
+                scale = 6
+        precision = cudf.Decimal128Dtype.MAX_PRECISION
+
     try:
         if isinstance(lhs_dtype, type(rhs_dtype)):
             # SCENARIO 1: If `lhs_dtype` & `rhs_dtype` are same, then try to
@@ -392,16 +407,6 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # Call to _validate fails, which means we need
                 # to try the next dtype
                 continue
-
-    # Instead of raising an overflow error, we create a `Decimal128Dtype`
-    # with max possible scale & precision, see example of this demonstration
-    # here: https://learn.microsoft.com/en-us/sql/t-sql/data-types/
-    # precision-scale-and-length-transact-sql?view=sql-server-ver16#examples
-    scale = min(
-        scale, cudf.Decimal128Dtype.MAX_PRECISION - (precision - scale)
-    )
-    precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
-    return cudf.Decimal128Dtype(precision=precision, scale=scale)
 
 
 def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
