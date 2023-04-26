@@ -19,7 +19,7 @@
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -65,10 +65,7 @@ struct bgzip_nvcomp_transform_functor {
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
-  using pinned_host_vector = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>;
-
-  template <typename T>
-  static void copy_to_device(const pinned_host_vector<T>& host,
+  static void copy_to_device(cudf::detail::pinned_host_vector<T> const& host,
                              rmm::device_uvector<T>& device,
                              rmm::cuda_stream_view stream)
   {
@@ -84,9 +81,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       1 << 16;  // 64k offset allocation, resized on demand
 
     cudaEvent_t event;
-    pinned_host_vector<char> h_compressed_blocks;
-    pinned_host_vector<std::size_t> h_compressed_offsets;
-    pinned_host_vector<std::size_t> h_decompressed_offsets;
+    cudf::detail::pinned_host_vector<char> h_compressed_blocks;
+    cudf::detail::pinned_host_vector<std::size_t> h_compressed_offsets;
+    cudf::detail::pinned_host_vector<std::size_t> h_decompressed_offsets;
     rmm::device_uvector<char> d_compressed_blocks;
     rmm::device_uvector<char> d_decompressed_blocks;
     rmm::device_uvector<std::size_t> d_compressed_offsets;
