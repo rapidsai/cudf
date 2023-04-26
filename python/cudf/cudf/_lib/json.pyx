@@ -156,7 +156,7 @@ def write_json(
     bool include_nulls=True,
     bool lines=False,
     bool index=False,
-    int rows_per_chunk=1024*256,  # 256K rows
+    int rows_per_chunk=1024*64,  # 64K rows
 ):
     """
     Cython function to call into libcudf API, see `write_json`.
