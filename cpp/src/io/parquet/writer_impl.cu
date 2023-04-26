@@ -929,7 +929,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
 /**
  * @brief Gather row group fragments
  *
- * This calculates fragments to be used in determining row group boundariesa.
+ * This calculates fragments to be used in determining row group boundaries.
  *
  * @param frag Destination row group fragments
  * @param col_desc column description array
