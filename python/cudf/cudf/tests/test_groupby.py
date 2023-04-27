@@ -571,6 +571,36 @@ def test_groupby_apply_caching():
     assert precompiled.currsize == 3
 
 
+@pytest.mark.parametrize("func", [lambda group: group.x + group.y])
+def test_groupby_apply_return_col_from_df(func):
+    # tests a UDF that consists of purely colwise
+    # ops, such as `lambda group: group.x + group.y`
+    # which returns a column
+    df = cudf.datasets.randomdata()
+    pdf = df.to_pandas()
+
+    def func(df):
+        return df.x + df.y
+
+    expect = pdf.groupby("id").apply(func)
+    got = df.groupby("id").apply(func)
+
+    assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("func", [lambda group: group.sum()])
+def test_groupby_apply_return_df(func):
+    # tests a UDF that reduces over a dataframe
+    # and produces a series with the original column names
+    # as its index, such as lambda group: group.sum() + group.min()
+    df = cudf.DataFrame({"a": [1, 1, 2, 2], "b": [1, 2, 3, 4]})
+    pdf = df.to_pandas()
+
+    expect = pdf.groupby("a").apply(func)
+    got = df.groupby("a").apply(func)
+    assert_groupby_results_equal(expect, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",

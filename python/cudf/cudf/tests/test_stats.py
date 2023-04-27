@@ -233,44 +233,39 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
-        cudf.Series(np.zeros(100)),
-        cudf.Series(np.repeat(np.nan, 100)),
-        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
-            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
-        ),
-        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        {"data": np.random.normal(-100, 100, 1000)},
+        {"data": np.random.randint(-50, 50, 1000)},
+        {"data": (np.zeros(100))},
+        {"data": np.repeat(np.nan, 100)},
+        {"data": np.array([1.123, 2.343, np.nan, 0.0])},
+        {
+            "data": [5, 10, 53, None, np.nan, None, 12, 43, -423],
+            "nan_as_null": False,
+        },
+        {"data": [1.1032, 2.32, 43.4, 13, -312.0], "index": [0, 4, 3, 19, 6]},
+        {"data": []},
+        {"data": [-3]},
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis_series(data, null_flag):
-    pdata = data.to_pandas()
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_kurtosis_series(data, null_flag, numeric_only):
+    gs = cudf.Series(**data)
+    ps = gs.to_pandas()
 
-    if null_flag and len(data) > 2:
-        data.iloc[[0, 2]] = None
-        pdata.iloc[[0, 2]] = None
+    if null_flag and len(gs) > 2:
+        gs.iloc[[0, 2]] = None
+        ps.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
-    np.testing.assert_array_almost_equal(got, expected)
+    got = gs.kurtosis(numeric_only=numeric_only)
+    expected = ps.kurtosis(numeric_only=numeric_only)
 
-    got = data.kurt()
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
-    np.testing.assert_array_almost_equal(got, expected)
+    assert_eq(got, expected)
 
-    got = data.kurt(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt(numeric_only=False)
-    np.testing.assert_array_almost_equal(got, expected)
+    got = gs.kurt(numeric_only=numeric_only)
+    expected = ps.kurt(numeric_only=numeric_only)
 
-    with pytest.raises(NotImplementedError):
-        data.kurt(numeric_only=True)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(

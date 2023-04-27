@@ -13,7 +13,7 @@ import cudf
 import warnings
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_EQ_200
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -1906,8 +1906,22 @@ def test_error_values():
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_ceil(data, time_type, resolution):
-
+def test_ceil(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -1937,7 +1951,22 @@ def test_ceil(data, time_type, resolution):
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_floor(data, time_type, resolution):
+def test_floor(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
 
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -1968,7 +1997,22 @@ def test_floor(data, time_type, resolution):
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_round(data, time_type, resolution):
+def test_round(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
 
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
