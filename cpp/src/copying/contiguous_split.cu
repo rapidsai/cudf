@@ -16,7 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
+#include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -431,6 +432,7 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
                                                           InputIter end,
                                                           src_buf_info* head,
                                                           src_buf_info* current,
+                                                          rmm::cuda_stream_view stream,
                                                           int offset_stack_pos    = 0,
                                                           int parent_offset_index = -1,
                                                           int offset_depth        = 0);
@@ -449,7 +451,8 @@ struct buf_info_functor {
                                                  src_buf_info* current,
                                                  int offset_stack_pos,
                                                  int parent_offset_index,
-                                                 int offset_depth)
+                                                 int offset_depth,
+                                                 rmm::cuda_stream_view stream)
   {
     if (col.nullable()) {
       std::tie(current, offset_stack_pos) =
@@ -491,7 +494,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   src_buf_info* current,
   int offset_stack_pos,
   int parent_offset_index,
-  int offset_depth)
+  int offset_depth,
+  rmm::cuda_stream_view stream)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
@@ -548,7 +552,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
   src_buf_info* current,
   int offset_stack_pos,
   int parent_offset_index,
-  int offset_depth)
+  int offset_depth,
+  rmm::cuda_stream_view stream)
 {
   lists_column_view lcv(col);
 
@@ -587,6 +592,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
                                col.child_end(),
                                head,
                                current,
+                               stream,
                                offset_stack_pos,
                                parent_offset_index,
                                offset_depth);
@@ -598,7 +604,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   src_buf_info* current,
   int offset_stack_pos,
   int parent_offset_index,
-  int offset_depth)
+  int offset_depth,
+  rmm::cuda_stream_view stream)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
@@ -616,14 +623,16 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   cudf::structs_column_view scv(col);
   std::vector<column_view> sliced_children;
   sliced_children.reserve(scv.num_children());
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(scv.num_children()),
-                 std::back_inserter(sliced_children),
-                 [&scv](size_type child_index) { return scv.get_sliced_child(child_index); });
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(scv.num_children()),
+    std::back_inserter(sliced_children),
+    [&scv, &stream](size_type child_index) { return scv.get_sliced_child(child_index, stream); });
   return setup_source_buf_info(sliced_children.begin(),
                                sliced_children.end(),
                                head,
                                current,
+                               stream,
                                offset_stack_pos,
                                parent_offset_index,
                                offset_depth);
@@ -634,6 +643,7 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
                                                           InputIter end,
                                                           src_buf_info* head,
                                                           src_buf_info* current,
+                                                          rmm::cuda_stream_view stream,
                                                           int offset_stack_pos,
                                                           int parent_offset_index,
                                                           int offset_depth)
@@ -645,7 +655,8 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
                                                                 current,
                                                                 offset_stack_pos,
                                                                 parent_offset_index,
-                                                                offset_depth);
+                                                                offset_depth,
+                                                                stream);
   });
   return {current, offset_stack_pos};
 }
@@ -1000,7 +1011,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                    [&empty_inputs](int partition_index) {
                      return packed_table{
                        empty_inputs,
-                       packed_columns{std::make_unique<packed_columns::metadata>(pack_metadata(
+                       packed_columns{std::make_unique<std::vector<uint8_t>>(pack_metadata(
                                         empty_inputs, static_cast<uint8_t const*>(nullptr), 0)),
                                       std::make_unique<rmm::device_buffer>()}};
                    });
@@ -1044,7 +1055,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   std::copy(splits.begin(), splits.end(), std::next(h_indices));
 
   // setup source buf info
-  setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
+  setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info, stream);
 
   // HtoD indices and source buf info to device
   CUDF_CUDA_TRY(cudaMemcpyAsync(
@@ -1250,7 +1261,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     result.push_back(packed_table{
       t,
       packed_columns{
-        std::make_unique<packed_columns::metadata>(cudf::pack_metadata(
+        std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
           t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
         std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
 

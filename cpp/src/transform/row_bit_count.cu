@@ -246,7 +246,7 @@ struct flatten_functor {
 
     structs_column_view scv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [&scv](auto i) { return scv.get_sliced_child(i); });
+      0, [&scv, &stream](auto i) { return scv.get_sliced_child(i, stream); });
     flatten_hierarchy(iter,
                       iter + scv.num_children(),
                       out,

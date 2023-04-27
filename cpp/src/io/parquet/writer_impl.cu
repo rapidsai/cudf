@@ -97,7 +97,7 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
     auto const scol = structs_column_view(column);
     size_t ret      = 0;
     for (int i = 0; i < scol.num_children(); i++) {
-      ret += column_size(scol.get_sliced_child(i), stream);
+      ret += column_size(scol.get_sliced_child(i, stream), stream);
     }
     return ret;
   } else if (column.type().id() == type_id::LIST) {

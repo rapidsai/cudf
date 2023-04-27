@@ -174,25 +174,6 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::contiguous_split
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
-std::vector<packed_table> contiguous_split(cudf::table_view const& input,
-                                           std::vector<size_type> const& splits,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
-
-/**
- * @copydoc cudf::pack
- *
- * @param stream Optional CUDA stream on which to execute kernels
- **/
-packed_columns pack(cudf::table_view const& input,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr);
-
-/**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
  * rmm::mr::device_memory_resource*)
  *

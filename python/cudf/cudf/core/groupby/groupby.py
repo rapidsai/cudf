@@ -44,6 +44,15 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
+def _is_row_of(chunk, obj):
+    return (
+        isinstance(chunk, cudf.Series)
+        and isinstance(obj, cudf.DataFrame)
+        and len(chunk.index) == len(obj._column_names)
+        and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
+    )
+
+
 groupby_doc_template = textwrap.dedent(
     """Group using a mapper or by a Series of columns.
 
@@ -326,6 +335,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
+    @_cudf_nvtx_annotate
     def get_group(self, name, obj=None):
         """
         Construct DataFrame from group with provided name.
@@ -363,6 +373,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return obj.loc[self.groups[name]]
 
+    @_cudf_nvtx_annotate
     def size(self):
         """
         Return the size of each group.
@@ -377,6 +388,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             .agg("size")
         )
 
+    @_cudf_nvtx_annotate
     def cumcount(self):
         """
         Return the cumulative count of keys in each group.
@@ -392,6 +404,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             .agg("cumcount")
         )
 
+    @_cudf_nvtx_annotate
     def rank(
         self,
         method="average",
@@ -781,6 +794,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=False, preserve_order=preserve_order
         )
 
+    @_cudf_nvtx_annotate
     def nth(self, n):
         """
         Return the nth row from each group.
@@ -790,6 +804,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result[sizes > n]
 
+    @_cudf_nvtx_annotate
     def ngroup(self, ascending=True):
         """
         Number each group from 0 to the number of groups - 1.
@@ -1086,6 +1101,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ]
         return column_names, columns, normalized_aggs
 
+    @_cudf_nvtx_annotate
     def pipe(self, func, *args, **kwargs):
         """
         Apply a function `func` with arguments to this GroupBy
@@ -1140,6 +1156,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
+    @_cudf_nvtx_annotate
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
@@ -1161,6 +1178,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         result[None] = result.pop(0)
         return result
 
+    @_cudf_nvtx_annotate
     def _iterative_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
@@ -1177,19 +1195,44 @@ class GroupBy(Serializable, Reducible, Scannable):
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
         chunk_results = [function(chk, *args) for chk in chunks]
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
+        )
+
+    def _post_process_chunk_results(
+        self, chunk_results, group_names, group_keys, grouped_values
+    ):
         if not len(chunk_results):
             return self.obj.head(0)
-
         if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series._from_data(
                 {None: chunk_results}, index=group_names
             )
             result.index.names = self.grouping.names
+            return result
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
-            result = cudf.concat(chunk_results, axis=1).T
-            result.index.names = self.grouping.names
+            # When the UDF is like df.sum(), the result for each
+            # group is a row-like "Series" where the index labels
+            # are the same as the original calling DataFrame
+            if _is_row_of(chunk_results[0], self.obj):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
+            # When the UDF is like df.x + df.y, the result for each
+            # group is the same length as the original group
+            elif len(self.obj) == sum(len(chk) for chk in chunk_results):
+                result = cudf.concat(chunk_results)
+                index_data = group_keys._data.copy(deep=True)
+                index_data[None] = grouped_values.index._column
+                result.index = cudf.MultiIndex._from_data(index_data)
+            else:
+                raise TypeError(
+                    "Error handling Groupby apply output with input of "
+                    f"type {type(self.obj)} and output of "
+                    f"type {type(chunk_results[0])}"
+                )
         else:
             result = cudf.concat(chunk_results)
             if self._group_keys:
@@ -1198,6 +1241,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index = cudf.MultiIndex._from_data(index_data)
         return result
 
+    @_cudf_nvtx_annotate
     def apply(self, function, *args, engine="cudf"):
         """Apply a python transformation function over the grouped chunk.
 
@@ -1319,6 +1363,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.sort_index()
         return result
 
+    @_cudf_nvtx_annotate
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.
 
@@ -1457,6 +1502,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    @_cudf_nvtx_annotate
     def _broadcast(self, values):
         """
         Broadcast the results of an aggregation to the group
@@ -1480,6 +1526,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             values.index = self.obj.index
         return values
 
+    @_cudf_nvtx_annotate
     def transform(self, function):
         """Apply an aggregation, then broadcast the result to the group size.
 
@@ -1534,6 +1581,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    @_cudf_nvtx_annotate
     def count(self, dropna=True):
         """Compute the number of values in each column.
 
@@ -1548,6 +1596,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
+    @_cudf_nvtx_annotate
     def describe(self, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
@@ -1619,6 +1668,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return res
 
+    @_cudf_nvtx_annotate
     def corr(self, method="pearson", min_periods=1):
         """
         Compute pairwise correlation of columns, excluding NA/null values.
@@ -1680,6 +1730,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             lambda x: x.corr(method, min_periods), "Correlation"
         )
 
+    @_cudf_nvtx_annotate
     def cov(self, min_periods=0, ddof=1):
         """
         Compute the pairwise covariance among the columns of a DataFrame,
@@ -1854,6 +1905,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return res
 
+    @_cudf_nvtx_annotate
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -1869,6 +1921,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
+    @_cudf_nvtx_annotate
     def std(self, ddof=1):
         """Compute the column-wise std of the values in each group.
 
@@ -1884,6 +1937,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
+    @_cudf_nvtx_annotate
     def quantile(self, q=0.5, interpolation="linear"):
         """Compute the column-wise quantiles of the values in each group.
 
@@ -1901,14 +1955,17 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
+    @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
         return self.agg("collect")
 
+    @_cudf_nvtx_annotate
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
 
+    @_cudf_nvtx_annotate
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
 
@@ -1972,6 +2029,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self._scan_fill("bfill", limit)
 
+    @_cudf_nvtx_annotate
     def fillna(
         self,
         value=None,
@@ -2032,6 +2090,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             value=value, inplace=inplace, axis=axis, limit=limit
         )
 
+    @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
         Shift each group by ``periods`` positions.
@@ -2087,6 +2146,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
+    @_cudf_nvtx_annotate
     def pct_change(
         self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
     ):
