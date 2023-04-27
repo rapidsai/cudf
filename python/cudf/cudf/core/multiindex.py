@@ -1006,16 +1006,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 obj.columns = colnames
 
         source_data = cudf.DataFrame._concat(source_data)
-        names = [None] * source_data._num_columns
-        objs = set(
-            map(lambda x: x.names, filter(lambda o: o.names is not None, objs))
-        )
-        if len(objs) == 1:
-            # Only set names if all `objs` have same `names`,
-            # else ignore.
-            for o in objs:
-                for i, name in enumerate(o):
-                    names[i] = names[i] or name
+        try:
+            # Only set names if all objs have the same names
+            (names,) = {o.names for o in objs} - {None}
+        except ValueError:
+            names = [None] * source_data._num_columns
         return cudf.MultiIndex.from_frame(source_data, names=names)
 
     @classmethod
