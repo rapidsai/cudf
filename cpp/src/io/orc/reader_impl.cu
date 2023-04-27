@@ -102,22 +102,19 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
   return type_id::EMPTY;
 }
 
-constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
-  const orc::StreamKind kind, uint32_t skip_count, bool non_child)
+std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_set_mask(const orc::StreamKind kind,
+                                                                      uint32_t skip_count,
+                                                                      bool non_child)
 {
   switch (kind) {
-    case orc::DATA:
-      skip_count += 1;
-      skip_count |= (skip_count & 0xff) << 8;
-      return std::pair(gpu::CI_DATA, skip_count);
+    case orc::DATA: skip_count |= 1 << gpu::CI_DATA; return std::pair(gpu::CI_DATA, skip_count);
     case orc::LENGTH:
     case orc::SECONDARY:
-      skip_count += 1;
-      skip_count |= (skip_count & 0xff) << 16;
+      skip_count |= 1 << gpu::CI_DATA2;
       return std::pair(gpu::CI_DATA2, skip_count);
     case orc::DICTIONARY_DATA: return std::pair(gpu::CI_DICTIONARY, skip_count);
     case orc::PRESENT:
-      skip_count += (non_child ? 1 : 0);
+      skip_count |= 1 << gpu::CI_PRESENT;
       return std::pair(gpu::CI_PRESENT, skip_count);
     case orc::ROW_INDEX: return std::pair(gpu::CI_INDEX, skip_count);
     default:
@@ -216,7 +213,7 @@ size_t gather_stream_info(const size_t stripe_index,
         // NOTE: skip_count field is temporarily used to track index ordering
         auto& chunk = chunks[stripe_index][col];
         const auto idx =
-          get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
+          get_index_type_and_set_mask(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
         if (idx.first < gpu::CI_NUM_STREAMS) {
           chunk.strm_id[idx.first]  = stream_info.size();
           chunk.strm_len[idx.first] = stream.length;

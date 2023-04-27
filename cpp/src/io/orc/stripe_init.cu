@@ -226,6 +226,20 @@ enum row_entry_state_e {
   STORE_INDEX2,
 };
 
+static uint32_t __device__ index_order_from_index_types(uint32_t index_types_bitmap)
+{
+  constexpr uint32_t full_order[] = {CI_PRESENT, CI_DATA, CI_DATA2};
+
+  uint32_t partial_order = 0;
+  for (auto i = 2; i >= 0; --i) {
+    auto const index_type = full_order[i];
+    if (index_types_bitmap & (1 << index_type)) {
+      partial_order = (partial_order << 2) | index_type;
+    }
+  }
+  return partial_order;
+}
+
 /**
  * @brief Decode a single row group index entry
  *
@@ -239,11 +253,14 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
                                                       uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
+  auto const stream_order                = index_order_from_index_types(s->chunk.skip_count);
 
   const uint8_t* cur      = start;
   row_entry_state_e state = NOT_FOUND;
-  uint32_t length = 0, strm_idx_id = s->chunk.skip_count >> 8, idx_id = 1, ci_id = CI_PRESENT,
-           pos_end = 0;
+  uint32_t length         = 0;
+  uint32_t idx_id         = 0;
+  uint32_t pos_end        = 0;
+  uint32_t ci_id          = CI_PRESENT;
   while (cur < end) {
     uint32_t v = 0;
     for (uint32_t l = 0; l <= 28; l += 7) {
@@ -283,9 +300,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
         }
         break;
       case STORE_INDEX0:
-        ci_id = (idx_id == (strm_idx_id & 0xff))          ? CI_DATA
-                : (idx_id == ((strm_idx_id >> 8) & 0xff)) ? CI_DATA2
-                                                          : CI_PRESENT;
+        ci_id = (stream_order >> (idx_id * 2)) & 3;
         idx_id++;
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;
