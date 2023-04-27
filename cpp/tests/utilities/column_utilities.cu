@@ -355,8 +355,8 @@ struct column_property_comparator {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.get_sliced_child(i, cudf::get_default_stream());
+      column_view rhs_child = r_scv.get_sliced_child(i, cudf::get_default_stream());
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_property_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -746,8 +746,8 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.get_sliced_child(i, cudf::get_default_stream());
+      column_view rhs_child = r_scv.get_sliced_child(i, cudf::get_default_stream());
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -1205,7 +1205,7 @@ struct column_view_printer {
       iter + view.num_children(),
       std::ostream_iterator<std::string>(out_stream, "\n"),
       [&](size_type index) {
-        auto child = view.get_sliced_child(index);
+        auto child = view.get_sliced_child(index, cudf::get_default_stream());
 
         // non-nested types don't typically display their null masks, so do it here for convenience.
         return (!is_nested(child.type()) && child.nullable()

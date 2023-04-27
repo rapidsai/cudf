@@ -42,7 +42,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   // get ordered children
-  auto ordered_children = extract_ordered_struct_children(columns);
+  auto ordered_children = extract_ordered_struct_children(columns, stream);
 
   // concatenate them
   std::vector<std::unique_ptr<column>> children;
