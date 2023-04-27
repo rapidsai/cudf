@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,6 +217,7 @@ std::vector<column_type_histogram> detect_column_types(
  * @param[in] dtypes List of dtype corresponding to each column
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
+ * @param[out] valid_counts Device memory output of the number of valid fields in each column
  * @param[in] stream CUDA stream to use, default 0
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -226,6 +227,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::data_type const> dtypes,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
+                            device_span<size_type> valid_counts,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu
