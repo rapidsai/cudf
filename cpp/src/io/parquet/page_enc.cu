@@ -1315,43 +1315,55 @@ __global__ void __launch_bounds__(128, 8)
   }
 }
 
-// blockDim(32, 1, 1)
-__global__ void __launch_bounds__(32) gpuDecideCompression(device_span<EncColumnChunk> chunks)
-{
-  __shared__ __align__(8) EncColumnChunk ck_g;
-  __shared__ __align__(4) unsigned int compression_error;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[2];
+constexpr int decide_compression_warps_in_block = 4;
+constexpr int decide_compression_block_size =
+  decide_compression_warps_in_block * cudf::detail::warp_size;
 
-  auto const t = threadIdx.x;
-  if (t == 0) {
-    ck_g              = chunks[blockIdx.x];
-    compression_error = 0;
+// blockDim(decide_compression_block_size, 1, 1)
+__global__ void __launch_bounds__(decide_compression_block_size)
+  gpuDecideCompression(device_span<EncColumnChunk> chunks)
+{
+  __shared__ __align__(8) EncColumnChunk ck_g[decide_compression_warps_in_block];
+  __shared__ __align__(4) unsigned int compression_error[decide_compression_warps_in_block];
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[decide_compression_warps_in_block][2];
+
+  auto const lane_id  = threadIdx.x % cudf::detail::warp_size;
+  auto const warp_id  = threadIdx.x / cudf::detail::warp_size;
+  auto const chunk_id = blockIdx.x * decide_compression_warps_in_block + warp_id;
+
+  if (chunk_id >= chunks.size()) { return; }
+
+  if (lane_id == 0) {
+    ck_g[warp_id]              = chunks[chunk_id];
+    compression_error[warp_id] = 0;
   }
   __syncwarp();
 
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
-  auto const num_pages            = ck_g.num_pages;
-  for (auto page = t; page < num_pages; page += warpSize) {
-    auto& curr_page           = ck_g.pages[page];
+  auto const num_pages            = ck_g[warp_id].num_pages;
+  for (auto page = lane_id; page < num_pages; page += warpSize) {
+    auto& curr_page           = ck_g[warp_id].pages[page];
     auto const page_data_size = curr_page.max_data_size;
     uncompressed_data_size += page_data_size;
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
       compressed_data_size += comp_res->bytes_written;
-      if (comp_res->status != compression_status::SUCCESS) { atomicOr(&compression_error, 1); }
+      if (comp_res->status != compression_status::SUCCESS) {
+        atomicOr(&compression_error[warp_id], 1);
+      }
     }
   }
-  uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
-  compressed_data_size   = warp_reduce(temp_storage[1]).Sum(compressed_data_size);
+  uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
+  compressed_data_size   = warp_reduce(temp_storage[warp_id][1]).Sum(compressed_data_size);
   __syncwarp();
 
-  if (t == 0) {
-    auto const write_compressed = compressed_data_size != 0 and compression_error == 0 and
+  if (lane_id == 0) {
+    auto const write_compressed = compressed_data_size != 0 and compression_error[warp_id] == 0 and
                                   compressed_data_size < uncompressed_data_size;
-    chunks[blockIdx.x].is_compressed = write_compressed;
-    chunks[blockIdx.x].bfr_size      = uncompressed_data_size;
-    chunks[blockIdx.x].compressed_size =
+    chunks[chunk_id].is_compressed = write_compressed;
+    chunks[chunk_id].bfr_size      = uncompressed_data_size;
+    chunks[chunk_id].compressed_size =
       write_compressed ? compressed_data_size : uncompressed_data_size;
   }
 }
@@ -2155,7 +2167,9 @@ void EncodePages(device_span<gpu::EncPage> pages,
 
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<chunks.size(), 32, 0, stream.value()>>>(chunks);
+  auto const num_blocks =
+    util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
+  gpuDecideCompression<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(chunks);
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
