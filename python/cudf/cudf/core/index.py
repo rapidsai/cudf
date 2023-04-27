@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import pickle
 import warnings
 from functools import cached_property
@@ -576,45 +575,45 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def get_indexer(self, target, method=None, limit=None, tolerance=None):
-        # Given an actual integer,
-        idx = (target - self._start) / self._step
-        idx_int_upper_bound = (self._stop - self._start) // self._step
+    def get_indexer(self, target, method=None, tolerance=None):
         if method is None:
-            if tolerance is not None:
-                raise ValueError(
-                    "tolerance argument only valid if using pad, "
-                    "backfill or nearest lookups"
-                )
+            if self.step > 0:
+                start, stop, step = self.start, self.stop, self.step
+            else:
+                # Reversed
+                reverse = self._range[::-1]
+                start, stop, step = reverse.start, reverse.stop, reverse.step
 
-            if idx > idx_int_upper_bound or idx < 0:
-                raise KeyError(target)
+            target_array = cupy.asarray(target)
+            locs = target_array - start
+            valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+            locs[~valid] = -1
+            locs[valid] = locs[valid] / step
 
-            idx_int = (target - self._start) // self._step
-            if idx_int != idx:
-                raise KeyError(target)
-            return idx_int
-
-        if (method == "ffill" and idx < 0) or (
-            method == "bfill" and idx > idx_int_upper_bound
-        ):
-            raise KeyError(target)
-
-        round_method = {
-            "ffill": math.floor,
-            "bfill": math.ceil,
-            "nearest": round,
-        }[method]
-        if tolerance is not None and (abs(idx) * self._step > tolerance):
-            raise KeyError(target)
-        return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+            if step != self.step:
+                # Reversed
+                locs[valid] = len(self) - 1 - locs[valid]
+            return locs
+        else:
+            return self._as_int_index().get_indexer(
+                target=target, method=method, tolerance=tolerance
+            )
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
         # Given an actual integer,
-        if is_scalar(key):
-            key = [key]
-        return self.get_indexer(key)
+        if not is_scalar(key):
+            raise TypeError("Should be a sequence")
+        # Given an actual integer,
+        idx = (key - self._start) / self._step
+        idx_int_upper_bound = (self._stop - self._start) // self._step
+        if idx > idx_int_upper_bound or idx < 0:
+            raise KeyError(key)
+
+        idx_int = (key - self._start) // self._step
+        if idx_int != idx:
+            raise KeyError(key)
+        return idx_int
 
     @_cudf_nvtx_annotate
     def _union(self, other, sort=None):
@@ -1168,10 +1167,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """
         if is_scalar(target):
             raise TypeError("Should be a sequence")
-        if tolerance is not None:
-            raise NotImplementedError(
-                "Parameter tolerance is not supported yet."
-            )
+        # if tolerance is not None:
+        #     raise NotImplementedError(
+        #         "Parameter tolerance is not supported yet."
+        #     )
         if method not in {
             None,
             "ffill",
@@ -1185,6 +1184,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 f" or nearest. Got {method}"
             )
 
+        if not self.is_unique:
+            raise ValueError("Cannot get index for a non-unique Index.")
+
         is_sorted = (
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
@@ -1195,54 +1197,45 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        target_as_table = cudf.core.frame.Frame({"None": as_column(target)})
-        lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
-            self, target_as_table, is_sorted
+        needle_table = cudf.DataFrame(
+            {"None": as_column(target), "order": arange(0, len(target))}
         )
-
-        if lower_bound == upper_bound:
-            # target not found, apply method
-            if method in ("pad", "ffill"):
-                if lower_bound == 0:
-                    raise KeyError(target)
-                return lower_bound - 1
-            elif method in ("backfill", "bfill"):
-                if lower_bound == self._data.nrows:
-                    raise KeyError(target)
-                return lower_bound
-            elif method == "nearest":
-                if lower_bound == self._data.nrows:
-                    return lower_bound - 1
-                elif lower_bound == 0:
-                    return 0
-                lower_val = self._column.element_indexing(lower_bound - 1)
-                upper_val = self._column.element_indexing(lower_bound)
-                return (
-                    lower_bound - 1
-                    if abs(lower_val - target) < abs(upper_val - target)
-                    else lower_bound
-                )
-            else:
-                raise KeyError(target)
-
-        if lower_bound + 1 == upper_bound:
-            # Search result is unique, return int.
-            return (
-                lower_bound
-                if is_sorted
-                else sort_inds.element_indexing(lower_bound)
+        haystack_table = cudf.DataFrame(
+            {"None": self._column, "order": arange(0, len(self))}
+        )
+        merged_table = haystack_table.merge(
+            needle_table, on="None", how="outer"
+        )
+        result_series = (
+            merged_table.sort_values(by="order_y")
+            .head(len(target))["order_x"]
+            .reset_index(drop=True)
+        )
+        if method is None:
+            result_series = result_series.fillna(-1)
+        else:
+            nonexact = result_series.isnull()
+            result_series[nonexact] = self.searchsorted(
+                needle_table["None"][nonexact],
+                side="left" if method in {"pad", "ffill"} else "right",
             )
-
-        if is_sorted:
-            # In monotonic index, lex search result is continuous. A slice for
-            # the range is returned.
-            return slice(lower_bound, upper_bound)
-
-        # Not sorted and not unique. Return a boolean mask
-        mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).values
-        mask[true_inds] = True
-        return mask
+            if method in {"pad", "ffill"}:
+                # searchsorted returns "indices into a sorted array such that,
+                # if the corresponding elements in v were inserted before the
+                # indices, the order of a would be preserved".
+                # Thus, we need to subtract 1 to find values to the left.
+                result_series[nonexact] -= 1
+                # This also mapped not found values (values of 0 from
+                # np.searchsorted) to -1, which conveniently is also our
+                # sentinel for missing values
+            else:
+                # Mark indices to the right of the largest value as not found
+                result_series[result_series == len(self)] = -1
+            if tolerance is not None:
+                distance = self[result_series] - needle_table["None"]
+                # return cupy.where(distance <= tolerance, result_series, -1)
+                return result_series.where(distance <= tolerance, -1).to_cupy()
+        return result_series.to_cupy()
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1275,8 +1268,40 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         2
         """
         if is_scalar(key):
-            key = [key]
-        return self.get_indexer(target=key)
+            target = [key]
+        else:
+            target = key
+
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+
+        target_as_table = cudf.core.frame.Frame({"None": as_column(target)})
+        lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
+            self, target_as_table, is_sorted
+        )
+
+        if lower_bound == upper_bound:
+            raise KeyError(target)
+
+        if lower_bound + 1 == upper_bound:
+            # Search result is unique, return int.
+            return (
+                lower_bound
+                if is_sorted
+                else sort_inds.element_indexing(lower_bound)
+            )
+
+        if is_sorted:
+            # In monotonic index, lex search result is continuous. A slice for
+            # the range is returned.
+            return slice(lower_bound, upper_bound)
+
+        # Not sorted and not unique. Return a boolean mask
+        mask = cupy.full(self._data.nrows, False)
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
+        return mask
 
     @_cudf_nvtx_annotate
     def __repr__(self):

@@ -1702,60 +1702,45 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise NotImplementedError(
                 "Parameter tolerance is not supported yet."
             )
-        if method is not None:
-            raise NotImplementedError(
-                "only the default get_loc method is currently supported for"
-                " MultiIndex"
-            )
-
-        is_sorted = (
-            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        target = cudf.MultiIndex.from_tuples(target)
+        needle_table = target.to_frame(index=False)
+        col_names = list(range(0, self.nlevels))
+        needle_table["order"] = needle_table.index
+        haystack_table = self.copy(deep=True).to_frame(index=False)
+        haystack_table["order"] = haystack_table.index
+        merged_table = haystack_table.merge(
+            needle_table, on=col_names, how="outer"
         )
-        is_unique = self.is_unique
-        target = (target,) if not isinstance(target, tuple) else target
-
-        # Handle partial target search. If length of `target` is less than `nlevels`,
-        # Only search levels up to `len(target)` level.
-        target_as_table = cudf.core.frame.Frame(
-            {i: column.as_column(k, length=1) for i, k in enumerate(target)}
+        result_series = (
+            merged_table.sort_values(by="order_y")
+            .head(len(target))["order_x"]
+            .reset_index(drop=True)
         )
-        partial_index = self.__class__._from_data(
-            data=self._data.select_by_index(
-                slice(target_as_table._num_columns)
+        if method is None:
+            result_series = result_series.fillna(-1)
+        else:
+            nonexact = result_series.isnull()
+            result_series[nonexact] = self.searchsorted(
+                needle_table[col_names][nonexact],
+                side="left" if method in {"pad", "ffill"} else "right",
             )
-        )
-        (
-            lower_bound,
-            upper_bound,
-            sort_inds,
-        ) = _lexsorted_equal_range(partial_index, target_as_table, is_sorted)
-
-        if lower_bound == upper_bound:
-            raise KeyError(target)
-
-        if is_unique and lower_bound + 1 == upper_bound:
-            # Indices are unique (Pandas constraint), search result is unique,
-            # return int.
-            return (
-                lower_bound
-                if is_sorted
-                else sort_inds.element_indexing(lower_bound)
-            )
-
-        if is_sorted:
-            # In monotonic index, lex search result is continuous. A slice for
-            # the range is returned.
-            return slice(lower_bound, upper_bound)
-
-        true_inds = sort_inds.slice(lower_bound, upper_bound).values
-        true_inds = _maybe_indices_to_slice(true_inds)
-        if isinstance(true_inds, slice):
-            return true_inds
-
-        # Not sorted and not unique. Return a boolean mask
-        mask = cp.full(self._data.nrows, False)
-        mask[true_inds] = True
-        return mask
+            if method in {"pad", "ffill"}:
+                # searchsorted returns "indices into a sorted array such that,
+                # if the corresponding elements in v were inserted before the
+                # indices, the order of a would be preserved".
+                # Thus, we need to subtract 1 to find values to the left.
+                result_series[nonexact] -= 1
+                # This also mapped not found values (values of 0 from
+                # np.searchsorted) to -1, which conveniently is also our
+                # sentinel for missing values
+            else:
+                # Mark indices to the right of the largest value as not found
+                result_series[result_series == len(self)] = -1
+            if tolerance is not None:
+                distance = self[result_series] - needle_table["None"]
+                # return cupy.where(distance <= tolerance, result_series, -1)
+                return result_series.where(distance <= tolerance, -1).to_cupy()
+        return result_series.to_cupy()
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1814,7 +1799,52 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 >>> cudf.from_pandas(x).get_loc(1)
                 slice(1, 5, 1)
         """
-        return self.get_indexer(target=key)
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+        is_unique = self.is_unique
+        key = (key,) if not isinstance(key, tuple) else key
+
+        # Handle partial key search. If length of `key` is less than `nlevels`,
+        # Only search levels up to `len(key)` level.
+        key_as_table = cudf.core.frame.Frame(
+            {i: column.as_column(k, length=1) for i, k in enumerate(key)}
+        )
+        partial_index = self.__class__._from_data(
+            data=self._data.select_by_index(slice(key_as_table._num_columns))
+        )
+        (
+            lower_bound,
+            upper_bound,
+            sort_inds,
+        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
+
+        if lower_bound == upper_bound:
+            raise KeyError(key)
+
+        if is_unique and lower_bound + 1 == upper_bound:
+            # Indices are unique (Pandas constraint), search result is unique,
+            # return int.
+            return (
+                lower_bound
+                if is_sorted
+                else sort_inds.element_indexing(lower_bound)
+            )
+
+        if is_sorted:
+            # In monotonic index, lex search result is continuous. A slice for
+            # the range is returned.
+            return slice(lower_bound, upper_bound)
+
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        true_inds = _maybe_indices_to_slice(true_inds)
+        if isinstance(true_inds, slice):
+            return true_inds
+
+        # Not sorted and not unique. Return a boolean mask
+        mask = cp.full(self._data.nrows, False)
+        mask[true_inds] = True
+        return mask
 
     def _get_reconciled_name_object(self, other) -> MultiIndex:
         """
