@@ -233,8 +233,6 @@ metadata_builder::metadata_builder(size_type num_root_columns)
   impl->add_column_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
 
-metadata_builder::~metadata_builder() = default;
-
 void metadata_builder::add_column_to_meta(data_type col_type,
                                           size_type col_size,
                                           size_type col_null_count,
