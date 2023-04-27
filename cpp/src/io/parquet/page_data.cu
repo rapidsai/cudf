@@ -1896,7 +1896,9 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   // if this is a bounds page, we need to do extra work to find the start and/or end value index
   // TODO calculate num_nulls
   if (is_bounds_pg) {
+    __shared__ int skipped_values;
     __shared__ int skipped_leaf_values;
+    __shared__ int last_input_value;
     __shared__ int end_val_idx;
 
     // need these for skip_rows case
@@ -1964,6 +1966,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
           if (global_count > 0) {
             // this is the thread that represents the first row.
             if (local_count == 1) {
+              skipped_values = idx_t;
               skipped_leaf_values =
                 leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
             }
@@ -1986,6 +1989,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
           if (global_count > 0) {
             // this is the thread that represents the end row.
             if (local_count == 1) {
+              last_input_value = idx_t;
               end_val_idx = leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
             }
             end_value_set = true;
@@ -2001,6 +2005,16 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
 
       if (skipped_values_set) { start_value = skipped_leaf_values; }
       if (end_value_set) { end_value = end_val_idx; }
+    }
+
+    if (t == 0) {
+      int const v0 = skipped_values_set ? skipped_values : 0;
+      int const vn = end_value_set ? last_input_value : s->num_input_values;
+      int const total_values = vn - v0;
+      int const total_leaf_values = end_value - start_value;
+      int const num_nulls = total_values - total_leaf_values;
+      pp->num_nulls = num_nulls;
+      // printf("%05d: input vals in page %d nz %d nc %d\n", blockIdx.x, total_values, total_leaf_values, num_nulls);
     }
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
@@ -2786,25 +2800,27 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
   // if there are nulls and this is a string column, clean up the offsets array.
   // but if there's a list parent, then no need.
-  if (s->page.num_input_values != s->nz_count) {
+  if (s->page.num_nulls != 0) {
     int dtype = s->col.data_type & 7;
     if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
-      int leaf_level_index = s->col.max_nesting_depth - 1;
+      int const value_count = s->nz_count + s->page.num_nulls;
+      int const leaf_level_index = s->col.max_nesting_depth - 1;
+
       auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
 
       if (nesting_info_base[leaf_level_index].null_count > 0) {
         // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
         if (s->nz_count == 0) {
-          for (int i = t; i < s->page.num_input_values; i += decode_block_size) {
+          for (int i = t; i < value_count; i += decode_block_size) {
             offptr[i] = s->page.str_offset;
           }
         }
         // just some nulls, do this serially for now
         else if (t == 0) {
-          if (offptr[s->num_input_values - 1] == 0) {
-            offptr[s->num_input_values - 1] = s->page.str_offset + s->page.str_bytes;
+          if (offptr[value_count - 1] == 0) {
+            offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
           }
-          for (int i = s->num_input_values - 2; i > 0; i--) {
+          for (int i = value_count - 2; i > 0; i--) {
             if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
           }
           offptr[0] = s->page.str_offset;
