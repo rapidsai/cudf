@@ -71,6 +71,8 @@ def dtype(arbitrary):
             return np.dtype("object")
         elif isinstance(pd_dtype, pd.IntervalDtype):
             return cudf.IntervalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+            return pd_dtype
         else:
             raise TypeError(
                 f"Cannot interpret {arbitrary} as a valid cuDF dtype"
