@@ -310,9 +310,10 @@ _register_option(
     False,
     textwrap.dedent(
         """
-        If set to `False`, disables copy-on-write.
-        If set to `True`, enables copy-on-write.
-        Read more at: :ref:`copy-on-write-user-doc`
+        If set to `False`, retains `cudf` specific behavior.
+        If set to `True`, enables pandas compatibility mode,
+        which will try to match pandas API behaviors in case of
+        any inconsistency.
         \tValid values are True or False. Default is False.
     """
     ),
