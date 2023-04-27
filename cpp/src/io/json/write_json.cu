@@ -740,15 +740,15 @@ void write_json(data_sink* out_sink,
     }
   }();
   auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
-  string_scalar d_line_terminator_with_row_end{"}" + line_terminator, true, stream};
-  string_scalar d_line_terminator{line_terminator, true, stream};
+  string_scalar const d_line_terminator_with_row_end{"}" + line_terminator, true, stream};
+  string_scalar const d_line_terminator{line_terminator, true, stream};
 
   // write header: required for non-record oriented output
   // header varies depending on orient.
   // write_chunked_begin(out_sink, table, user_column_names, options, stream, mr);
   // TODO This should go into the write_chunked_begin function
   std::string const list_braces{"[]"};
-  string_scalar d_list_braces{list_braces, true, stream};
+  string_scalar const d_list_braces{list_braces, true, stream};
   if (!options.is_enabled_lines()) {
     if (out_sink->is_device_write_preferred(1)) {
       out_sink->device_write(d_list_braces.data(), 1, stream);
