@@ -1975,7 +1975,7 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
         }
 
         // test if row_count will exceed end_row in this batch
-        if (!end_value_set && row_count + block_row_count > end_row) {
+        if (!end_value_set && row_count + block_row_count >= end_row) {
           // if this thread exceeds row bounds
           int const row_index    = (thread_row_count + row_count) - 1;
           int exceeds_row_bounds = row_index >= end_row;
@@ -2002,19 +2002,31 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
         start_val += preprocess_block_size;
       }
       __syncthreads();
-
-      if (skipped_values_set) { start_value = skipped_leaf_values; }
-      if (end_value_set) { end_value = end_val_idx; }
     }
 
+    start_value = skipped_values_set ? skipped_leaf_values : 0;
+    end_value   = end_value_set ? end_val_idx : leaf_count;
+
     if (t == 0) {
-      int const v0 = skipped_values_set ? skipped_values : 0;
-      int const vn = end_value_set ? last_input_value : s->num_input_values;
-      int const total_values = vn - v0;
+      int const v0                = skipped_values_set ? skipped_values : 0;
+      int const vn                = end_value_set ? last_input_value : s->num_input_values;
+      int const total_values      = vn - v0;
       int const total_leaf_values = end_value - start_value;
-      int const num_nulls = total_values - total_leaf_values;
-      pp->num_nulls = num_nulls;
-      // printf("%05d: input vals in page %d nz %d nc %d\n", blockIdx.x, total_values, total_leaf_values, num_nulls);
+      int const num_nulls         = total_values - total_leaf_values;
+      pp->num_nulls               = num_nulls;
+      pp->num_valids              = total_leaf_values;
+#if 0
+      printf("%05d: input vals in page %d,%d lc %d v0 %d vn %d %d nz %d nc %d\n",
+             blockIdx.x,
+             skipped_values_set,
+             end_value_set,
+             leaf_count,
+             v0,
+             vn,
+             total_values,
+             total_leaf_values,
+             num_nulls);
+#endif
     }
   }
   // already filtered out unwanted pages, so need to count all non-null values in this page
@@ -2038,7 +2050,10 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
 
     int const null_count = block_reduce(temp_storage.reduce_storage).Sum(num_nulls);
 
-    if (t == 0) { pp->num_nulls = null_count; }
+    if (t == 0) {
+      pp->num_nulls  = null_count;
+      pp->num_valids = pp->num_input_values - null_count;
+    }
     __syncthreads();
 
     end_value -= pp->num_nulls;
@@ -2252,7 +2267,10 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // need to save num_nulls calculated in page_bounds in this page
   // FIXME: num_nulls is only correct for !is_bounds_pg...need to fix this
-  if (t == 0) { pp->num_nulls = s->page.num_nulls; }
+  if (t == 0) {
+    pp->num_nulls  = s->page.num_nulls;
+    pp->num_valids = s->page.num_valids;
+  }
 #if 0
   if (t == 0)
     printf(
@@ -2688,7 +2706,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               __syncwarp();
 
               for (int ss = 0; ss < 32 && ss + i + s->src_pos < target_pos; ss++) {
-                if (dsts[me] >= 0) {
+                if (dsts[ss] >= 0) {
                   auto offptr =
                     reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
                     dsts[ss];
@@ -2696,6 +2714,18 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                   auto str_ptr = nesting_info_base[leaf_level_index].string_out + offsets[ss] -
                                  s->page.str_offset;
                   ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
+#if 0
+                  if (is_bounds_page(s, min_row, num_rows)) {
+                    if (me == 0)
+                      printf("%05d,%03d: src %d dst %d len %d offset %d\n",
+                             blockIdx.x,
+                             me,
+                             src_pos + i + ss,
+                             dsts[ss],
+                             lengths[ss],
+                             offsets[ss]);
+                  }
+#endif
                 }
               }
 
@@ -2709,13 +2739,15 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                   nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
                 memcpy(str_ptr, ptr, len);
 #if 0
-                printf("%05d,%03d: src %d dst %d len %ld offset %d\n",
-                       blockIdx.x,
-                       t,
-                       src_pos + i,
-                       dst_pos,
-                       len,
-                       offset);
+                if (is_bounds_page(s, min_row, num_rows)) {
+                  printf("%05d,%03d: src %d dst %d len %ld offset %d\n",
+                         blockIdx.x,
+                         t,
+                         src_pos + i,
+                         dst_pos,
+                         len,
+                         offset);
+                }
 #endif
               }
               __syncwarp();
@@ -2800,10 +2832,26 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
   // if there are nulls and this is a string column, clean up the offsets array.
   // but if there's a list parent, then no need.
+#if 0
+  if ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4) {
+    int const leaf_level_index = s->col.max_nesting_depth - 1;
+    if (t == 0 && is_bounds_page(s, min_row, num_rows)) {
+      printf("%05d: nz %d nulls %d valids %d iv %d nival %d nivalid %d\n",
+             blockIdx.x,
+             s->nz_count,
+             s->page.num_nulls,
+             s->page.num_valids,
+             s->num_input_values,
+             nesting_info_base[leaf_level_index].value_count,
+             nesting_info_base[leaf_level_index].valid_count);
+    }
+  }
+#endif
+
   if (s->page.num_nulls != 0) {
     int dtype = s->col.data_type & 7;
     if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
-      int const value_count = s->nz_count + s->page.num_nulls;
+      int const value_count      = s->page.num_valids + s->page.num_nulls;
       int const leaf_level_index = s->col.max_nesting_depth - 1;
 
       auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
@@ -2826,6 +2874,16 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
           offptr[0] = s->page.str_offset;
         }
       }
+      __syncthreads();
+#if 0
+      if (t == 0)
+        printf("%05d: offptr %p/%p %d %d\n",
+               blockIdx.x,
+               offptr,
+               offptr + value_count,
+               offptr[value_count - 2],
+               offptr[value_count - 1]);
+#endif
     }
   }
 }

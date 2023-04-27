@@ -166,7 +166,9 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;       // starting row of this page relative to the start of the chunk
   int32_t num_rows;        // number of rows in this page
-  int32_t num_nulls;       // number of null values (V2 header)
+  // the next two are calculated in gpuComputePageStringSizes
+  int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
+  int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX
@@ -189,7 +191,7 @@ struct PageInfo {
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
-  int64_t str_offset;  // offset into string data for this page
+  int32_t str_offset;  // offset into string data for this page
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
