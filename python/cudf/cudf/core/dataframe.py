@@ -58,6 +58,7 @@ from cudf.api.types import (
 )
 from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
+from cudf.api.extensions import no_default
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -4076,7 +4077,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
         observed=False,

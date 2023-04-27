@@ -19,6 +19,7 @@ from pandas.core.dtypes.common import is_float
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.extensions import no_default
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
     ColumnLike,
@@ -3302,7 +3303,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
         observed=False,

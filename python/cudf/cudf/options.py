@@ -304,3 +304,17 @@ _register_option(
     ),
     _integer_validator,
 )
+
+_register_option(
+    "mode.pandas_compatible",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, disables copy-on-write.
+        If set to `True`, enables copy-on-write.
+        Read more at: :ref:`copy-on-write-user-doc`
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)

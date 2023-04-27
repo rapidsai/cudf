@@ -48,6 +48,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
+from cudf.api.extensions import no_default
 from cudf.core._base_index import BaseIndex
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, full
@@ -3915,12 +3916,18 @@ class IndexedFrame(Frame):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
+        if sort is no_default:
+            if cudf.get_option("mode.pandas_compatible"):
+                sort = True
+            else:
+                sort = False
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
