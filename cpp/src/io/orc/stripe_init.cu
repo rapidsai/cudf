@@ -226,11 +226,19 @@ enum row_entry_state_e {
   STORE_INDEX2,
 };
 
+/**
+ * @brief Calculates the order of index streams based on the index types present in the column.
+ *
+ * @param index_types_bitmap The bitmap of index types showing which index streams are present
+ *
+ * @return The order of index streams as a uint32_t, using two bits per stream
+ */
 static uint32_t __device__ index_order_from_index_types(uint32_t index_types_bitmap)
 {
   constexpr uint32_t full_order[] = {CI_PRESENT, CI_DATA, CI_DATA2};
 
   uint32_t partial_order = 0;
+  // Iterate backwards and prepend the index types present in the column
   for (auto i = 2; i >= 0; --i) {
     auto const index_type = full_order[i];
     if (index_types_bitmap & (1 << index_type)) {
@@ -300,8 +308,9 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
         }
         break;
       case STORE_INDEX0:
-        ci_id = (stream_order >> (idx_id * 2)) & 3;
-        idx_id++;
+        // Start of a new entry; determine the stream index types
+        // Stream index types are stored using two bits per stream
+        ci_id = (stream_order >> (idx_id++ * 2)) & 3;
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;
           if (cur >= start + pos_end) return length;
