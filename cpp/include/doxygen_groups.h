@@ -66,6 +66,7 @@
  *     @}
  *     @defgroup copy_split Splitting
  *     @{
+ *        @file cudf/contiguous_split.hpp
  *        @file cudf/copying.hpp
  *     @}
  *     @defgroup copy_shift Shifting
