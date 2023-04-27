@@ -12,6 +12,8 @@
 # the License.
 # =============================================================================
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+  set(rapids-cmake-repo robertmaynard)
+  set(rapids-cmake-branch bug/install_cccl_cmake_modules_in_namespace)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-23.06/RAPIDS.cmake
        ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
