@@ -1541,15 +1541,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        # Reassign precision for decimal cols & type schema for struct cols
-        if isinstance(
-            col,
-            (
-                cudf.core.column.DecimalBaseColumn,
-                cudf.core.column.StructColumn,
-                cudf.core.column.ListColumn,
-            ),
-        ):
+        if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
