@@ -452,7 +452,7 @@ struct buf_info_functor {
                                                  int offset_stack_pos,
                                                  int parent_offset_index,
                                                  int offset_depth,
-                                                 rmm::cuda_stream_view stream)
+                                                 rmm::cuda_stream_view)
   {
     if (col.nullable()) {
       std::tie(current, offset_stack_pos) =
@@ -495,7 +495,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int offset_stack_pos,
   int parent_offset_index,
   int offset_depth,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
