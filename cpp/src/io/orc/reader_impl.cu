@@ -102,24 +102,18 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
   return type_id::EMPTY;
 }
 
-std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_set_mask(const orc::StreamKind kind,
-                                                                      uint32_t skip_count,
-                                                                      bool non_child)
+gpu::StreamIndexType get_stream_index_type(orc::StreamKind kind)
 {
   switch (kind) {
-    case orc::DATA: skip_count |= 1 << gpu::CI_DATA; return std::pair(gpu::CI_DATA, skip_count);
+    case orc::DATA: return gpu::CI_DATA;
     case orc::LENGTH:
-    case orc::SECONDARY:
-      skip_count |= 1 << gpu::CI_DATA2;
-      return std::pair(gpu::CI_DATA2, skip_count);
-    case orc::DICTIONARY_DATA: return std::pair(gpu::CI_DICTIONARY, skip_count);
-    case orc::PRESENT:
-      skip_count |= 1 << gpu::CI_PRESENT;
-      return std::pair(gpu::CI_PRESENT, skip_count);
-    case orc::ROW_INDEX: return std::pair(gpu::CI_INDEX, skip_count);
+    case orc::SECONDARY: return gpu::CI_DATA2;
+    case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
+    case orc::PRESENT: return gpu::CI_PRESENT;
+    case orc::ROW_INDEX: return gpu::CI_INDEX;
     default:
       // Skip this stream as it's not strictly required
-      return std::pair(gpu::CI_NUM_STREAMS, 0);
+      return gpu::CI_NUM_STREAMS;
   }
 }
 
@@ -210,16 +204,15 @@ size_t gather_stream_info(const size_t stripe_index,
     }
     if (col != -1) {
       if (src_offset >= stripeinfo->indexLength || use_index) {
-        // NOTE: skip_count field is temporarily used to track index ordering
-        auto& chunk = chunks[stripe_index][col];
-        const auto idx =
-          get_index_type_and_set_mask(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
-        if (idx.first < gpu::CI_NUM_STREAMS) {
-          chunk.strm_id[idx.first]  = stream_info.size();
-          chunk.strm_len[idx.first] = stream.length;
-          chunk.skip_count          = idx.second;
+        auto& chunk           = chunks[stripe_index][col];
+        auto const index_type = get_stream_index_type(stream.kind);
+        if (index_type < gpu::CI_NUM_STREAMS) {
+          chunk.strm_id[index_type]  = stream_info.size();
+          chunk.strm_len[index_type] = stream.length;
+          // NOTE: skip_count field is temporarily used to track the presence of index streams
+          chunk.skip_count |= 1 << index_type;
 
-          if (idx.first == gpu::CI_DICTIONARY) {
+          if (index_type == gpu::CI_DICTIONARY) {
             chunk.dictionary_start = *num_dictionary_entries;
             chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
             *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
