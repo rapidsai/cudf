@@ -49,7 +49,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4;
   });
 
-  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
+  std::vector<size_type> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(pages, chunks, skip_rows, num_rows, _stream);
 
@@ -61,14 +61,14 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         uint32_t dtype         = col.data_type & 7;
         uint32_t dtype_len_out = col.data_type >> 3;
         if (dtype == BYTE_ARRAY && dtype_len_out != 4) {
-          size_t const offset          = col_sizes[col.src_col_index];
+          size_type const offset       = col_sizes[col.src_col_index];
           page.str_offset              = offset;
           col_sizes[col.src_col_index] = offset + page.str_bytes;
         }
       }
     }
     // for (size_t i=0; i < col_sizes.size(); i++)
-    //  printf("col %ld size %ld\n", i, col_sizes[i]);
+    //  printf("col %ld size %d\n", i, col_sizes[i]);
   }
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
@@ -205,7 +205,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
-        size_type sz = col_sizes[idx];
+        size_type const sz = col_sizes[idx];
         cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
                         &sz,
                         sizeof(size_type),
@@ -378,7 +378,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     // Return user metadata
     out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
     out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                              out_metadata.per_file_user_data[0].end()};
+                                       out_metadata.per_file_user_data[0].end()};
 
     // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
