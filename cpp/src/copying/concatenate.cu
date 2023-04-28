@@ -420,7 +420,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                    std::back_inserter(nth_children),
                    [child_index, stream](column_view const& col) {
                      structs_column_view scv(col);
-                     return scv.get_sliced_child(child_index);
+                     return scv.get_sliced_child(child_index, stream);
                    });
 
     bounds_and_type_check(nth_children, stream);
