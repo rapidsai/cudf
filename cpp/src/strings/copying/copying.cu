@@ -72,8 +72,6 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(
     strings.null_mask(), offsets_offset, offsets_offset + strings_count, stream, mr);
-  auto null_count = cudf::detail::null_count(
-    strings.null_mask(), offsets_offset, offsets_offset + strings_count, stream);
 
   auto null_count = cudf::detail::null_count(
     static_cast<bitmask_type const*>(null_mask.data()), 0, strings_count, stream);
