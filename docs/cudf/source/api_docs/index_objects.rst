@@ -283,6 +283,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.tz_localize
 
 Conversion
 ~~~~~~~~~~
