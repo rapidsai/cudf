@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -26,8 +26,7 @@
 #include <cudf/transform.hpp>
 
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
-};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Op, class Data>
 void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)

@@ -30,8 +30,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_correlation_test : public cudf::test::BaseFixture {
-};
+struct groupby_correlation_test : public cudf::test::BaseFixture {};
 
 using supported_types =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
@@ -219,8 +218,7 @@ TYPED_TEST(groupby_correlation_test, min_periods)
   test_single_agg(keys, vals, expect_keys, expect_vals3, std::move(agg3), force_use_sort_impl::YES);
 }
 
-struct groupby_dictionary_correlation_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_correlation_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_correlation_test, basic)
 {

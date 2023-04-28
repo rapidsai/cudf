@@ -36,8 +36,7 @@
 using namespace cudf::test::iterators;
 
 template <typename T>
-struct FixedWidthGetValueTest : public cudf::test::BaseFixture {
-};
+struct FixedWidthGetValueTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedWidthGetValueTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -82,8 +81,7 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
   EXPECT_THROW(cudf::get_element(col, 4), cudf::logic_error);
 }
 
-struct StringGetValueTest : public cudf::test::BaseFixture {
-};
+struct StringGetValueTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringGetValueTest, BasicGet)
 {
@@ -127,8 +125,7 @@ TEST_F(StringGetValueTest, GetNull)
 }
 
 template <typename T>
-struct DictionaryGetValueTest : public cudf::test::BaseFixture {
-};
+struct DictionaryGetValueTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(DictionaryGetValueTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -797,11 +794,9 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_data, typed_s->view());
 }
 
-struct StructGetValueTest : public cudf::test::BaseFixture {
-};
+struct StructGetValueTest : public cudf::test::BaseFixture {};
 template <typename T>
-struct StructGetValueTestTyped : public cudf::test::BaseFixture {
-};
+struct StructGetValueTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(StructGetValueTestTyped, cudf::test::FixedWidthTypes);
 

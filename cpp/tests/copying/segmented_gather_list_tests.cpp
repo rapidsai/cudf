@@ -29,8 +29,7 @@
 #include <stdexcept>
 
 template <typename T>
-class SegmentedGatherTest : public cudf::test::BaseFixture {
-};
+class SegmentedGatherTest : public cudf::test::BaseFixture {};
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::DurationTypes,
@@ -212,12 +211,12 @@ TYPED_TEST(SegmentedGatherTest, GatherNested)
   // List<List<List<T>>>, with out-of-bounds gather indices.
   {
     auto const list       = LCW<T>{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
-                             {{{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
-                             {{LCW<T>{0}}},
-                             {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
-                              {{0, 1, 3}, {5}},
-                              {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
-                             {{{10, 20}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}};
+                                   {{{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
+                                   {{LCW<T>{0}}},
+                                   {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
+                                    {{0, 1, 3}, {5}},
+                                    {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
+                                   {{{10, 20}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}};
     auto const gather_map = LCW<int>{{1}, LCW<int>{}, {0}, {1}, {0, -1, 3, -4}};
     auto const results    = cudf::lists::segmented_gather(
       cudf::lists_column_view{list}, cudf::lists_column_view{gather_map}, NULLIFY);
@@ -517,8 +516,8 @@ TEST_F(SegmentedGatherTestString, StringGather)
     auto const list       = LCW<T>{{"a", "b", "c", "d"}, {"1", "22", "333", "4"}, {"x", "y", "z"}};
     auto const gather_map = LCW<int8_t>{{0, 1, 3, 4}, {1, -5, 3, 2}, LCW<int8_t>{}};
     auto const expected   = LCW<T>{{{"a", "b", "d", "c"}, cudf::test::iterators::null_at(3)},
-                                 {{"22", "1", "4", "333"}, cudf::test::iterators::null_at(1)},
-                                 LCW<T>{}};
+                                   {{"22", "1", "4", "333"}, cudf::test::iterators::null_at(1)},
+                                   LCW<T>{}};
     auto result           = cudf::lists::segmented_gather(
       cudf::lists_column_view{list}, cudf::lists_column_view{gather_map}, NULLIFY);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());

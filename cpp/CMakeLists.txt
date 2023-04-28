@@ -514,6 +514,7 @@ add_library(
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
+  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
@@ -580,6 +581,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
   src/text/replace.cu
@@ -605,6 +607,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp

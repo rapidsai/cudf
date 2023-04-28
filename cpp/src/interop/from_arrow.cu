@@ -160,7 +160,7 @@ struct dispatch_to_cudf_column {
                                                      stream,
                                                      mr);
 
-      col->set_null_mask(std::move(out_mask));
+      col->set_null_mask(std::move(out_mask), array.null_count());
     }
 
     return col;
@@ -220,7 +220,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
     return rmm::device_buffer{};
   }();
 
-  col->set_null_mask(std::move(null_mask));
+  col->set_null_mask(std::move(null_mask), array.null_count());
   return col;
 }
 
@@ -254,7 +254,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
                            stream,
                            mr);
 
-    out_col->set_null_mask(std::move(out_mask));
+    out_col->set_null_mask(std::move(out_mask), array.null_count());
   }
 
   return out_col;
@@ -292,7 +292,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }
@@ -391,7 +392,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
            : std::make_unique<column>(
                cudf::detail::slice(out_col->view(),
                                    static_cast<size_type>(array.offset()),
-                                   static_cast<size_type>(array.offset() + array.length())),
+                                   static_cast<size_type>(array.offset() + array.length()),
+                                   stream),
                stream,
                mr);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ using IntsCol = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 /*-----------------------------------------------------------------------------------------------*/
 template <typename T>
-class NumericSequencesTypedTest : public cudf::test::BaseFixture {
-};
+class NumericSequencesTypedTest : public cudf::test::BaseFixture {};
 using NumericTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(NumericSequencesTypedTest, NumericTypes);
@@ -136,8 +135,7 @@ TYPED_TEST(NumericSequencesTypedTest, SlicedInputTestNoNulls)
 /*-----------------------------------------------------------------------------------------------*/
 // Data generated using https://www.epochconverter.com/
 template <typename T>
-class DurationSequencesTypedTest : public cudf::test::BaseFixture {
-};
+class DurationSequencesTypedTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(DurationSequencesTypedTest, cudf::test::DurationTypes);
 
 // Start time is 1638477473L - Thursday, December 2, 2021 8:37:53 PM.
@@ -174,8 +172,7 @@ TYPED_TEST(DurationSequencesTypedTest, SequencesNoNull)
 }
 
 /*-----------------------------------------------------------------------------------------------*/
-class NumericSequencesTest : public cudf::test::BaseFixture {
-};
+class NumericSequencesTest : public cudf::test::BaseFixture {};
 
 TEST_F(NumericSequencesTest, EmptyInput)
 {
