@@ -2187,8 +2187,8 @@ void writer::impl::write_parquet_data_to_sink(
       auto const rnext   = r + batch_list[b];
       auto curr_page_idx = chunks[r][0].first_page;
       for (; r < rnext; r++) {
-        int p                 = rg_to_part[r];
-        int global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        int const p                 = rg_to_part[r];
+        int const global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
         for (std::size_t i = 0; i < num_columns; i++) {
           gpu::EncColumnChunk const& ck = chunks[r][i];
