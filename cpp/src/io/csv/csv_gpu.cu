@@ -302,6 +302,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
  * @param[in] dtypes The data type of the column
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
+ * @param[out] valid_counts The number of valid fields in each column
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
@@ -310,7 +311,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<uint64_t const> row_offsets,
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
-                      device_span<cudf::bitmask_type* const> valids)
+                      device_span<cudf::bitmask_type* const> valids,
+                      device_span<size_type> valid_counts)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -318,8 +320,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   long const rec_id      = threadIdx.x + (blockDim.x * blockIdx.x);
   long const rec_id_next = rec_id + 1;
 
-  // we can have more threads than data, make sure we are not past the end of
-  // the data
+  // we can have more threads than data, make sure we are not past the end of the data
   if (rec_id_next >= row_offsets.size()) return;
 
   auto field_start   = raw_csv + row_offsets[rec_id];
@@ -370,6 +371,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                                     column_flags[col] & column_parse::as_hexadecimal)) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
+            atomicAdd(&valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -803,14 +805,15 @@ std::vector<column_type_histogram> detect_column_types(
   return detail::make_std_vector_sync(d_stats, stream);
 }
 
-void __host__ decode_row_column_data(cudf::io::parse_options_view const& options,
-                                     device_span<char const> data,
-                                     device_span<column_parse::flags const> column_flags,
-                                     device_span<uint64_t const> row_offsets,
-                                     device_span<cudf::data_type const> dtypes,
-                                     device_span<void* const> columns,
-                                     device_span<cudf::bitmask_type* const> valids,
-                                     rmm::cuda_stream_view stream)
+void decode_row_column_data(cudf::io::parse_options_view const& options,
+                            device_span<char const> data,
+                            device_span<column_parse::flags const> column_flags,
+                            device_span<uint64_t const> row_offsets,
+                            device_span<cudf::data_type const> dtypes,
+                            device_span<void* const> columns,
+                            device_span<cudf::bitmask_type* const> valids,
+                            device_span<size_type> valid_counts,
+                            rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
   auto const block_size = csvparse_block_dim;
@@ -818,7 +821,7 @@ void __host__ decode_row_column_data(cudf::io::parse_options_view const& options
   auto const grid_size  = (num_rows + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_flags, row_offsets, dtypes, columns, valids);
+    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
 }
 
 uint32_t __host__ gather_row_offsets(const parse_options_view& options,

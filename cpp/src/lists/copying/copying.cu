@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -81,10 +82,13 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   // Compute the null mask of the result:
   auto null_mask = cudf::detail::copy_bitmask(lists.null_mask(), start, end, stream, mr);
 
+  auto null_count = cudf::detail::null_count(
+    static_cast<bitmask_type const*>(null_mask.data()), 0, end - start, stream);
+
   return make_lists_column(lists_count,
                            std::move(offsets),
                            std::move(child),
-                           cudf::UNKNOWN_NULL_COUNT,
+                           null_count,
                            std::move(null_mask),
                            stream,
                            mr);
