@@ -1986,8 +1986,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                     std::move(uncomp_bfr),
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
-                    std::move(bounce_buffer),
-                    single_streams_table.num_columns()};
+                    std::move(bounce_buffer)};
 }
 
 }  // namespace
@@ -2079,8 +2078,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
-                         bounce_buffer,
-                         num_columns] = [&] {
+                         bounce_buffer] = [&] {
     try {
       return convert_table_to_parquet_data(*_table_meta,
                                            input,
