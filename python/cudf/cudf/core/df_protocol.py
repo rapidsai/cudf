@@ -160,7 +160,6 @@ class _CuDFColumn:
         self._nan_as_null = nan_as_null
         self._allow_copy = allow_copy
 
-    @property
     def size(self) -> int:
         """
         Size of the column, in elements.

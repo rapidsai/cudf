@@ -92,7 +92,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
 
 
 def assert_column_equal(col: _CuDFColumn, cudfcol):
-    assert col.size == cudfcol.size
+    assert col.size() == cudfcol.size
     assert col.offset == 0
     assert col.null_count == cudfcol.null_count
     assert col.num_chunks() == 1
