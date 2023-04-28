@@ -1,10 +1,10 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import collections
+import contextlib
 import datetime
 import itertools
 import operator
-import contextlib
 import string
 import textwrap
 from decimal import Decimal

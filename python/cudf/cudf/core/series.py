@@ -19,7 +19,6 @@ from pandas.core.dtypes.common import is_float
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.api.extensions import no_default
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
     ColumnLike,
@@ -27,6 +26,7 @@ from cudf._typing import (
     NotImplementedType,
     ScalarLike,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,

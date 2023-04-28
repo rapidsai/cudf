@@ -37,6 +37,7 @@ from cudf._typing import (
     Dtype,
     NotImplementedType,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -48,7 +49,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.api.extensions import no_default
 from cudf.core._base_index import BaseIndex
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, full
