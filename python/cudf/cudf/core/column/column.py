@@ -1554,6 +1554,17 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
+    elif is_datetime64tz_dtype(dtype):
+        if data is None:
+            raise TypeError("Must specify data buffer")
+        return cudf.core.column.datetime.DatetimeTZColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     elif dtype.type is np.timedelta64:
         if data is None:
             raise TypeError("Must specify data buffer")
@@ -2093,9 +2104,7 @@ def as_column(
                 data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
-            data = cudf.core.column.datetime.DatetimeColumn(
-                data=buffer, mask=mask, dtype=arbitrary.dtype
-            )
+            data = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
         elif arb_dtype.kind == "m":
 
             time_unit = get_time_unit(arbitrary)
@@ -2243,8 +2252,8 @@ def as_column(
                         raise TypeError
                     if is_datetime64tz_dtype(dtype):
                         raise NotImplementedError(
-                            "cuDF does not yet support "
-                            "timezone-aware datetimes"
+                            "Use `tz_localize()` to construct "
+                            "timezone aware data."
                         )
                     if is_list_dtype(dtype):
                         data = pa.array(arbitrary)
