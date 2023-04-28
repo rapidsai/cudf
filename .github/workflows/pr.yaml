@@ -96,7 +96,7 @@ jobs:
   #    container_image: "rapidsai/ci:latest"
   #    run_script: "ci/build_docs.sh"
   wheel-build-cudf:
-    needs: checks
+    #needs: checks
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@manylinux_v2
     with:
