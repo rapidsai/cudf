@@ -126,7 +126,7 @@ void build_column_metadata(metadata_builder& mb,
   int64_t const null_mask_offset = null_mask_ptr ? null_mask_ptr - base_ptr : -1;
 
   // add metadata
-  mb.add_column_to_meta(
+  mb.add_column_info_to_meta(
     col.type(), col.size(), col.null_count(), data_offset, null_mask_offset, col.num_children());
 
   std::for_each(
@@ -169,18 +169,18 @@ class metadata_builder_impl {
  public:
   metadata_builder_impl() = default;
 
-  void add_column_to_meta(data_type col_type,
-                          size_type col_size,
-                          size_type col_null_count,
-                          int64_t data_offset,
-                          int64_t null_mask_offset,
-                          size_type num_children)
+  void add_column_info_to_meta(data_type const col_type,
+                               size_type const col_size,
+                               size_type const col_null_count,
+                               int64_t const data_offset,
+                               int64_t const null_mask_offset,
+                               size_type const num_children)
   {
     metadata.emplace_back(
       col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
   }
 
-  std::vector<uint8_t> build()
+  std::vector<uint8_t> build() const
   {
     // convert to anonymous bytes
     std::vector<uint8_t> metadata_bytes;
@@ -230,21 +230,23 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 metadata_builder::metadata_builder(size_type num_root_columns)
   : impl(std::make_unique<metadata_builder_impl>())
 {
-  impl->add_column_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
+  // first metadata entry is a stub indicating how many total (top level) columns
+  // there are
+  impl->add_column_info_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
 
-void metadata_builder::add_column_to_meta(data_type col_type,
-                                          size_type col_size,
-                                          size_type col_null_count,
-                                          int64_t data_offset,
-                                          int64_t null_mask_offset,
-                                          size_type num_children)
+void metadata_builder::add_column_info_to_meta(data_type const col_type,
+                                               size_type const col_size,
+                                               size_type const col_null_count,
+                                               int64_t const data_offset,
+                                               int64_t const null_mask_offset,
+                                               size_type const num_children)
 {
-  impl->add_column_to_meta(
+  impl->add_column_info_to_meta(
     col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
 }
 
-std::vector<uint8_t> metadata_builder::build() { return impl->build(); }
+std::vector<uint8_t> metadata_builder::build() const { return impl->build(); }
 
 }  // namespace detail
 
