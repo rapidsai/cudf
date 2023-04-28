@@ -79,7 +79,7 @@ struct temporary_nullable_data {
  * @return New column with concatenated results.
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
-  host_span<column_view const> struct_cols);
+  host_span<column_view const> struct_cols, rmm::cuda_stream_view stream);
 
 /**
  * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
