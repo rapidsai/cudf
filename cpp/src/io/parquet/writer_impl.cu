@@ -1501,7 +1501,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
   // will start producing fragments larger than the desired page size, so calculate fragment sizes
   // for each leaf column.  Skip if the fragment size is not the default.
-  size_type const max_page_fragment_size =
+  size_type max_page_fragment_size =
     max_page_fragment_size_opt.value_or(default_max_page_fragment_size);
 
   std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
@@ -2140,9 +2140,9 @@ void writer::impl::write_parquet_data_to_sink(
     std::vector<std::future<void>> write_tasks;
 
     for (; r < rnext; r++) {
-      int const p           = rg_to_part[r];
-      int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
-      auto& row_group = _agg_meta->file(p).row_groups[global_r];
+      int const p        = rg_to_part[r];
+      int const global_r = global_rowgroup_base[p] + r - first_rg_in_part[p];
+      auto& row_group    = _agg_meta->file(p).row_groups[global_r];
 
       for (std::size_t i = 0; i < num_columns; i++) {
         auto const& ck     = chunks[r][i];
@@ -2187,8 +2187,8 @@ void writer::impl::write_parquet_data_to_sink(
       auto const rnext   = r + batch_list[b];
       auto curr_page_idx = chunks[r][0].first_page;
       for (; r < rnext; r++) {
-        int const p                 = rg_to_part[r];
-        int const global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        int const p           = rg_to_part[r];
+        int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
         for (std::size_t i = 0; i < num_columns; i++) {
           gpu::EncColumnChunk const& ck = chunks[r][i];
