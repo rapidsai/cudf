@@ -44,26 +44,32 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // will be calculated as we're writing the data.  once done, we'll have for each string column
   // a char array with the contiguous string data, and a size_type array of offsets.  use these
   // as child columns and create string column.  no need to call create_strings_column now.
+  auto const has_strings = std::any_of(pages.begin(), pages.end(), [&chunks](auto const& page) {
+    auto const& chunk = chunks[page.chunk_idx];
+    return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4;
+  });
 
-  gpu::ComputePageStringSizes(pages, chunks, skip_rows, num_rows, _stream);
-
-  // TODO do the following on device with thrust/kernel to avoid the pages round trip
-  pages.device_to_host(_stream, true);
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
-  for (auto& page : pages) {
-    if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0) {
-      auto const& col        = chunks[page.chunk_idx];
-      uint32_t dtype         = col.data_type & 7;
-      uint32_t dtype_len_out = col.data_type >> 3;
-      if (dtype == BYTE_ARRAY && dtype_len_out != 4) {
-        size_t const offset          = col_sizes[col.src_col_index];
-        page.str_offset              = offset;
-        col_sizes[col.src_col_index] = offset + page.str_bytes;
+  if (has_strings) {
+    gpu::ComputePageStringSizes(pages, chunks, skip_rows, num_rows, _stream);
+
+    // TODO do the following on device with thrust/kernel to avoid the pages round trip
+    pages.device_to_host(_stream, true);
+    for (auto& page : pages) {
+      if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0) {
+        auto const& col        = chunks[page.chunk_idx];
+        uint32_t dtype         = col.data_type & 7;
+        uint32_t dtype_len_out = col.data_type >> 3;
+        if (dtype == BYTE_ARRAY && dtype_len_out != 4) {
+          size_t const offset          = col_sizes[col.src_col_index];
+          page.str_offset              = offset;
+          col_sizes[col.src_col_index] = offset + page.str_bytes;
+        }
       }
     }
+    // for (size_t i=0; i < col_sizes.size(); i++)
+    //  printf("col %ld size %ld\n", i, col_sizes[i]);
   }
-  // for (size_t i=0; i < col_sizes.size(); i++)
-  //  printf("col %ld size %ld\n", i, col_sizes[i]);
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
@@ -154,7 +160,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     page_count += chunks[c].max_num_pages;
   }
 
-  pages.host_to_device(_stream);  // FIXME: get rid of this eventually
+  if (has_strings) {
+    pages.host_to_device(_stream);  // FIXME: get rid of this eventually
+  }
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
@@ -370,7 +378,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     // Return user metadata
     out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
     out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                                       out_metadata.per_file_user_data[0].end()};
+                              out_metadata.per_file_user_data[0].end()};
 
     // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
