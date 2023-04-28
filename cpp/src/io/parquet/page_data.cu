@@ -2587,13 +2587,14 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
+  int const dtype          = s->col.data_type & 7;
+  bool const is_string_col = dtype == BYTE_ARRAY && s->dtype_len != 4;
+
   // offsets is global...but the output is local, so account for that below
-  if (t == 0) { last_offset = s->page.str_offset; }
-
-  // choose a character parallel string copy when the average string is longer than a warp
-  auto const use_char_ll = (s->page.str_bytes / s->page.num_input_values) > cudf::detail::warp_size;
-
-  __syncthreads();
+  if (is_string_col) {
+    if (t == 0) { last_offset = s->page.str_offset; }
+    __syncthreads();
+  }
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
@@ -2654,7 +2655,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      int dtype = s->col.data_type & 7;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -2674,9 +2674,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       if (!has_repetition) { dst_pos -= s->first_row; }
 
       // need to do this before we branch on src_pos/dst_pos so we don't deadlock
-      if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
-        int leaf_level_index = s->col.max_nesting_depth - 1;
-        int me               = t - out_thread0;
+      if (is_string_col) {
+        // choose a character parallel string copy when the average string is longer than a warp
+        auto const use_char_ll = s->page.num_valids > 0 &&
+                                 (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
+        int const leaf_level_index = s->col.max_nesting_depth - 1;
+        int const me               = t - out_thread0;
+
         if (me < 32) {
           for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
             dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
@@ -2757,71 +2761,72 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
             __syncwarp();
           }
         }
-      }
+      } else {
+        // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
+        // (values before first_row) in the flat hierarchy case.
+        if (src_pos < target_pos && dst_pos >= 0) {
+          // src_pos represents the logical row position we want to read from. But in the case of
+          // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
+          // position has to take into account the # of values we have to skip in the page to get to
+          // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+          uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
-      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
-      // (values before first_row) in the flat hierarchy case.
-      if (src_pos < target_pos && dst_pos >= 0) {
-        // src_pos represents the logical row position we want to read from. But in the case of
-        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
-        // position has to take into account the # of values we have to skip in the page to get to
-        // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-        uint32_t val_src_pos = src_pos + skipped_leaf_values;
+          // nesting level that is storing actual leaf values
+          int leaf_level_index = s->col.max_nesting_depth - 1;
 
-        // nesting level that is storing actual leaf values
-        int leaf_level_index = s->col.max_nesting_depth - 1;
-
-        uint32_t dtype_len = s->dtype_len;
-        void* dst =
-          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        if (dtype == BYTE_ARRAY) {
-          if (s->col.converted_type == DECIMAL) {
-            auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
-            auto const decimal_precision = s->col.decimal_precision;
-            if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-              gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
-            } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-              gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
-            } else {
-              gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
-            }
-          } else {
-            // test for string hashes
-            if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
-          }
-        } else if (dtype == BOOLEAN) {
-          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
-        } else if (s->col.converted_type == DECIMAL) {
-          switch (dtype) {
-            case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
-            case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
-            default:
-              if (s->dtype_len_in <= sizeof(int32_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
-              } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+          uint32_t dtype_len = s->dtype_len;
+          void* dst =
+            nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+          if (dtype == BYTE_ARRAY) {
+            if (s->col.converted_type == DECIMAL) {
+              auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
+              auto const decimal_precision = s->col.decimal_precision;
+              if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+                gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
+              } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+                gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
               } else {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<__int128_t*>(dst));
+                gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
               }
-              break;
-          }
-        } else if (dtype == INT96) {
-          gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
-        } else if (dtype_len == 8) {
-          if (s->dtype_len_in == 4) {
-            // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-            // TIME_MILLIS is the only duration type stored as int32:
-            // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+            } else {
+              // test for string hashes
+              if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
+            }
+          } else if (dtype == BOOLEAN) {
+            gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
+          } else if (s->col.converted_type == DECIMAL) {
+            switch (dtype) {
+              case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
+              case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
+              default:
+                if (s->dtype_len_in <= sizeof(int32_t)) {
+                  gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
+                } else if (s->dtype_len_in <= sizeof(int64_t)) {
+                  gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+                } else {
+                  gpuOutputFixedLenByteArrayAsInt(
+                    s, sb, val_src_pos, static_cast<__int128_t*>(dst));
+                }
+                break;
+            }
+          } else if (dtype == INT96) {
+            gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+          } else if (dtype_len == 8) {
+            if (s->dtype_len_in == 4) {
+              // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+              // TIME_MILLIS is the only duration type stored as int32:
+              // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+              gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+            } else if (s->ts_scale) {
+              gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+            } else {
+              gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
+            }
+          } else if (dtype_len == 4) {
             gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
-          } else if (s->ts_scale) {
-            gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
           } else {
-            gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
+            gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
           }
-        } else if (dtype_len == 4) {
-          gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
-        } else {
-          gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
         }
       }
 
