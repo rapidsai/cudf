@@ -117,7 +117,22 @@ void cufile_shim::modify_cufile_json() const
 
 void cufile_shim::load_cufile_lib()
 {
-  cf_lib = dlopen("libcufile.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+  for (auto&& name : {"libcufile.so.0",
+                      // Prior to CUDA 11.7.1, although ABI
+                      // compatibility was maintained, some (at least
+                      // Debian) packages do not have the .0 symlink,
+                      // instead request the exact version.
+                      "libcufile.so.1.3.0" /* 11.7.0 */,
+                      "libcufile.so.1.2.1" /* 11.6.2, 11.6.1 */,
+                      "libcufile.so.1.2.0" /* 11.6.0 */,
+                      "libcufile.so.1.1.1" /* 11.5.1 */,
+                      "libcufile.so.1.1.0" /* 11.5.0 */,
+                      "libcufile.so.1.0.2" /* 11.4.4, 11.4.3, 11.4.2 */,
+                      "libcufile.so.1.0.1" /* 11.4.1 */,
+                      "libcufile.so.1.0.0" /* 11.4.0 */}) {
+    cf_lib = dlopen(name, RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+    if (cf_lib != nullptr) break;
+  }
   CUDF_EXPECTS(cf_lib != nullptr, "Failed to load cuFile library");
   driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
   CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
