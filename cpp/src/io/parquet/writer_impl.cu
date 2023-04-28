@@ -1501,7 +1501,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
   // will start producing fragments larger than the desired page size, so calculate fragment sizes
   // for each leaf column.  Skip if the fragment size is not the default.
-  size_type max_page_fragment_size =
+  size_type const max_page_fragment_size =
     max_page_fragment_size_opt.value_or(default_max_page_fragment_size);
 
   std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
