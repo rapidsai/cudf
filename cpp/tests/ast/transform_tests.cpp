@@ -110,6 +110,22 @@ TEST_F(TransformTest, BasicAddition)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, BasicAdditionEmptyTable)
+{
+  auto c_0   = column_wrapper<int32_t>{};
+  auto c_1   = column_wrapper<int32_t>{};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<int32_t>{};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicAdditionCast)
 {
   auto c_0   = column_wrapper<int64_t>{3, 20, 1, 50};
