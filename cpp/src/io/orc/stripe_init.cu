@@ -231,19 +231,17 @@ enum row_entry_state_e {
  *
  * @param index_types_bitmap The bitmap of index types showing which index streams are present
  *
- * @return The order of index streams as a uint32_t, using two bits per stream
+ * @return The order of index streams
  */
-static uint32_t __device__ index_order_from_index_types(uint32_t index_types_bitmap)
+static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
 {
-  constexpr uint32_t full_order[] = {CI_PRESENT, CI_DATA, CI_DATA2};
+  constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
 
-  uint32_t partial_order = 0;
-  // Iterate backwards and prepend the index types present in the column
-  for (auto i = 2; i >= 0; --i) {
-    auto const index_type = full_order[i];
-    if (index_types_bitmap & (1 << index_type)) {
-      partial_order = (partial_order << 2) | index_type;
-    }
+  std::array<uint32_t, full_order.size()> partial_order;
+  auto curr_idx = 0;
+  for (auto index_type : full_order) {
+    // If the index type is present, add it to the partial order
+    if (index_types_bitmap & (1 << index_type)) { partial_order[curr_idx++] = index_type; }
   }
   return partial_order;
 }
@@ -268,7 +266,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
   uint32_t length         = 0;
   uint32_t idx_id         = 0;
   uint32_t pos_end        = 0;
-  uint32_t ci_id          = CI_PRESENT;
+  uint32_t ci_id          = CI_NUM_STREAMS;
   while (cur < end) {
     uint32_t v = 0;
     for (uint32_t l = 0; l <= 28; l += 7) {
@@ -309,8 +307,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
         break;
       case STORE_INDEX0:
         // Start of a new entry; determine the stream index types
-        // Stream index types are stored using two bits per stream
-        ci_id = (stream_order >> (idx_id++ * 2)) & 3;
+        ci_id = stream_order[idx_id++];
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;
           if (cur >= start + pos_end) return length;
