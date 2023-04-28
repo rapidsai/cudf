@@ -227,7 +227,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
   return table_view{get_columns(num_columns)};
 }
 
-metadata_builder::metadata_builder(size_type num_root_columns)
+metadata_builder::metadata_builder(size_type const num_root_columns)
   : impl(std::make_unique<metadata_builder_impl>())
 {
   // first metadata entry is a stub indicating how many total (top level) columns
