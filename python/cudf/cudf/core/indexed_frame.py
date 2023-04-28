@@ -3923,10 +3923,7 @@ class IndexedFrame(Frame):
         dropna=True,
     ):
         if sort is no_default:
-            if cudf.get_option("mode.pandas_compatible"):
-                sort = True
-            else:
-                sort = False
+            sort = cudf.get_option("mode.pandas_compatible")
 
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
