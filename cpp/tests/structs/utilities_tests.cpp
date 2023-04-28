@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf_test/default_stream.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -120,12 +121,12 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
 
   auto expected_nums_col_1  = cudf::column(nums_col);
   auto expected_structs_col = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
-  auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
-  auto expected_strings_col =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
-  auto expected = cudf::table_view{
-    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+  auto expected_nums_col_2  = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                            .get_sliced_child(0, cudf::get_default_stream()));
+  auto expected_strings_col = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                             .get_sliced_child(1, cudf::get_default_stream()));
+  auto expected             = cudf::table_view{
+                {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
   auto flattened_table =
     cudf::structs::detail::flatten_nested_columns(table,
@@ -153,12 +154,12 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   auto expected_nums_col_1  = cudf::column(nums_col);
   auto expected_structs_col = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 0, 1, 1, 1, 1}, cudf::test::iterators::null_at(2)};
-  auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
-  auto expected_strings_col =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
-  auto expected = cudf::table_view{
-    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+  auto expected_nums_col_2  = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                            .get_sliced_child(0, cudf::get_default_stream()));
+  auto expected_strings_col = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                             .get_sliced_child(1, cudf::get_default_stream()));
+  auto expected             = cudf::table_view{
+                {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
   auto flattened_table =
     cudf::structs::detail::flatten_nested_columns(table,
@@ -191,12 +192,17 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
   auto expected_nums_col_1    = cudf::column(nums_col);
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
-  auto expected_nums_col_3    = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -235,13 +241,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
   auto expected_nums_col_1    = cudf::column(nums_col);
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 0, 1, 1, 1, 1}, cudf::test::iterators::null_at(2)};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -281,13 +292,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -327,13 +343,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 =
     cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 0, 1, 0, 1, 1}, {1, 1, 0, 1, 0, 1, 1}};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
