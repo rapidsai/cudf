@@ -1543,15 +1543,33 @@ class BaseIndex(Serializable):
 
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
-        return self._from_columns_like_self(
-            drop_duplicates(
-                list(self._columns),
-                keys=range(len(self._data)),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
-        )
+        if cudf.get_option("mode.pandas_compatible"):
+            result = cudf.DataFrame._from_columns(
+                columns=drop_duplicates(
+                    list(
+                        self._columns
+                        + (cudf.core.column.arange(0, len(self)),)
+                    ),
+                    keys=range(len(self._data)),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                ),
+                column_names=self._column_names + ("__original_order__",),
+            )
+            result = result.sort_values(by=["__original_order__"])
+            return self._from_columns_like_self(
+                list(result._columns[:-1]), self._column_names
+            )
+        else:
+            return self._from_columns_like_self(
+                drop_duplicates(
+                    list(self._columns),
+                    keys=range(len(self._data)),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                ),
+                self._column_names,
+            )
 
     def duplicated(self, keep="first"):
         """

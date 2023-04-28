@@ -1802,18 +1802,33 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        return self._from_columns_like_self(
-            libcudf.stream_compaction.drop_duplicates(
-                list(self._columns)
-                if ignore_index
-                else list(self._index._columns + self._columns),
-                keys=keys,
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
-            self._index.names if not ignore_index else None,
-        )
+
+        if cudf.get_option("mode.pandas_compatible"):
+            # Preserving the order of rows in pandas compatibility mode.
+            if isinstance(self, cudf.Series):
+                obj = cudf.DataFrame._from_data(
+                    {self.name: self._column}, index=self._index
+                )
+            else:
+                obj = self.copy(deep=False)
+            obj._data["__original_order__"] = cudf.core.column.arange(
+                0, len(obj)
+            )
+            result = _drop_duplicates(
+                obj, ignore_index, keys, keep, nulls_are_equal
+            )
+            result = result.sort_values(
+                by=["__original_order__"], ignore_index=ignore_index
+            )
+            del result["__original_order__"]
+            if isinstance(self, cudf.Series):
+                return result[self.name]
+        else:
+            result = _drop_duplicates(
+                self, ignore_index, keys, keep, nulls_are_equal
+            )
+
+        return result
 
     @_cudf_nvtx_annotate
     def duplicated(self, subset=None, keep="first"):
@@ -5163,3 +5178,18 @@ def _drop_rows_by_labels(
             res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
             res.name = obj.name
             return res
+
+
+def _drop_duplicates(obj, ignore_index, keys, keep, nulls_are_equal):
+    return obj._from_columns_like_self(
+        libcudf.stream_compaction.drop_duplicates(
+            list(obj._columns)
+            if ignore_index
+            else list(obj._index._columns + obj._columns),
+            keys=keys,
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+        ),
+        obj._column_names,
+        obj._index.names if not ignore_index else None,
+    )

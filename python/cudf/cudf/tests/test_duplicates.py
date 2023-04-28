@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import contextlib
 import itertools
 import random
 
@@ -9,6 +10,7 @@ import pytest
 
 import cudf
 from cudf import concat
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing._utils import (
     _create_pandas_series,
     assert_eq,
@@ -328,6 +330,70 @@ def test_dataframe_drop_duplicates_numeric_method(num_columns):
         gdf.drop_duplicates(cols, keep="last"),
         pdf.drop_duplicates(cols, keep="last"),
     )
+
+
+# TODO: Make use of set_option context manager
+# once https://github.com/rapidsai/cudf/issues/12736
+# is resolved.
+@contextlib.contextmanager
+def with_pandas_compat(on):
+    original_compat_setting = cudf.get_option("mode.pandas_compatible")
+    cudf.set_option("mode.pandas_compatible", on)
+    yield
+    cudf.set_option("mode.pandas_compatible", original_compat_setting)
+
+
+@with_pandas_compat(on=True)
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_dataframe_drop_duplicates_pandas_compat(ignore_index):
+    pdf = pd.DataFrame(
+        [(1, 2, "a"), (2, 3, "b"), (3, 4, "c"), (2, 3, "d"), (3, 5, "c")],
+        columns=["n1", "n2", "s1"],
+        index=["A", "B", "C", "D", "E"],
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(
+        gdf.drop_duplicates(ignore_index=ignore_index),
+        pdf.drop_duplicates(ignore_index=ignore_index),
+    )
+
+    for col in pdf.columns:
+        assert_eq(
+            gdf.drop_duplicates(col, ignore_index=ignore_index)[col],
+            pdf.drop_duplicates(col, ignore_index=ignore_index)[col],
+        )
+        if PANDAS_GE_200:
+            assert_eq(
+                gdf[col].drop_duplicates(ignore_index=ignore_index),
+                pdf[col].drop_duplicates(ignore_index=ignore_index),
+            )
+        else:
+            assert_eq(
+                gdf[col].drop_duplicates(ignore_index=ignore_index),
+                pdf[col].drop_duplicates().reset_index(drop=True)
+                if ignore_index
+                else pdf[col].drop_duplicates(),
+            )
+
+    assert_eq(
+        gdf.drop_duplicates("s1", keep="last")["s1"],
+        pdf.drop_duplicates("s1", keep="last")["s1"],
+    )
+
+
+@with_pandas_compat(on=True)
+def test_index_drop_duplicates():
+    pi = pd.Index([100, 10, 100, 10, -100, -100, 20, 10, 30, 20])
+    gi = cudf.from_pandas(pi)
+
+    assert_eq(pi.drop_duplicates(), gi.drop_duplicates())
+
+    pi = pd.MultiIndex.from_tuples(
+        [(1, 1), (2, 1), (1, 1), (2, 2), (2, 1), (0, 1), (2, 2)]
+    )
+    gi = cudf.from_pandas(pi)
+
+    assert_eq(pi.drop_duplicates(), gi.drop_duplicates())
 
 
 def test_dataframe_drop_duplicates_method():
