@@ -21,6 +21,8 @@
 
 #include <nvcomp/snappy.h>
 
+#include <mutex>
+
 #define NVCOMP_DEFLATE_HEADER <nvcomp/deflate.h>
 #if __has_include(NVCOMP_DEFLATE_HEADER)
 #include NVCOMP_DEFLATE_HEADER
@@ -506,6 +508,9 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
                                                    feature_status_parameters params)
 {
   static feature_status_memo_map comp_status_reason;
+  static std::mutex memo_map_mutex;
+
+  std::unique_lock memo_map_lock{memo_map_mutex};
   if (auto mem_res_it = comp_status_reason.find(feature_status_inputs{compression, params});
       mem_res_it != comp_status_reason.end()) {
     return mem_res_it->second;
@@ -515,6 +520,8 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   // in all subsequent calls with the same compression type
   auto const reason                         = is_compression_disabled_impl(compression, params);
   comp_status_reason[{compression, params}] = reason;
+  memo_map_lock.unlock();
+
   if (reason.has_value()) {
     CUDF_LOG_INFO("nvCOMP is disabled for {} compression; reason: {}",
                   compression_type_name(compression),
@@ -584,6 +591,9 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
                                                      feature_status_parameters params)
 {
   static feature_status_memo_map decomp_status_reason;
+  static std::mutex memo_map_mutex;
+
+  std::unique_lock memo_map_lock{memo_map_mutex};
   if (auto mem_res_it = decomp_status_reason.find(feature_status_inputs{compression, params});
       mem_res_it != decomp_status_reason.end()) {
     return mem_res_it->second;
@@ -593,6 +603,8 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
   // in all subsequent calls with the same compression type
   auto const reason                           = is_decompression_disabled_impl(compression, params);
   decomp_status_reason[{compression, params}] = reason;
+  memo_map_lock.unlock();
+
   if (reason.has_value()) {
     CUDF_LOG_INFO("nvCOMP is disabled for {} decompression; reason: {}",
                   compression_type_name(compression),
