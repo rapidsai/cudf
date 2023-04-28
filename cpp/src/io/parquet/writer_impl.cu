@@ -1861,7 +1861,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   if (compression == parquet::Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
 
   // Initialize data pointers in batch
-  uint32_t num_stats_bfr =
+  uint32_t const num_stats_bfr =
     (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
