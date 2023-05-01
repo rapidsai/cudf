@@ -82,9 +82,16 @@ using `.from_arrow()` or `.from_pandas()`.
 
 ## Result ordering
 
-By default, `join` (or `merge`) and `groupby` operations in cuDF
-do *not* guarantee output ordering.
-Compare the results obtained from Pandas and cuDF below:
+In Pandas, `join` and `groupby` operations provide certain guarantees
+about the order of rows in the result returned.  In Pandas `join`, the
+order of join keys are either preserved or sorted lexicographically by
+default.  `groupby` sorts the group keys, and preserves the order of
+rows within each group. In some cases, disabling this option in Pandas
+can yield better performance.
+
+By contrast, cuDF's default behavior is to return rows in a
+non-deterministic order to maximize performance.  Compare the results
+obtained from Pandas and cuDF below:
 
 ```{code} python
  >>> import cupy as cp
@@ -107,10 +114,11 @@ Compare the results obtained from Pandas and cuDF below:
  10  640.00
 ```
 
-To match Pandas behavior, you must explicitly pass `sort=True`:
+If you require that results be returned in a predictable order, you
+must pass the `sort=True` option explicitly:
 
 ```{code} python
->>> df.to_pandas().groupby("a", sort=True).mean().head()
+>>> df.groupby("a", sort=True).mean().head()
          b
 a
 2   643.75
