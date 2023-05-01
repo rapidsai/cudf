@@ -8,6 +8,7 @@
 import copy
 import random
 import string
+import uuid
 from multiprocessing import Pool
 
 import mimesis
@@ -457,8 +458,7 @@ def rand_dataframe(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
                     generator=lambda cardinality=cardinality: [
-                        mimesis.random.random.randstr(unique=True, length=2000)
-                        for _ in range(cardinality)
+                        _unique_string() for _ in range(cardinality)
                     ],
                     is_sorted=False,
                     dtype="category",
@@ -851,3 +851,7 @@ def create_nested_struct_type(max_types_at_each_level, nesting_level):
 
 def _generate_string(str_seq: str, length: int = 10) -> str:
     return "".join(random.choices(str_seq, k=length))
+
+
+def _unique_string() -> str:
+    return str(uuid.uuid4()).replace("-", "")
