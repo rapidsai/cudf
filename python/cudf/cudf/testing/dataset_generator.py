@@ -850,5 +850,4 @@ def create_nested_struct_type(max_types_at_each_level, nesting_level):
 
 
 def _generate_string(str_seq: str, length: int = 10) -> str:
-    indexes = np.random.randint(0, len(str_seq) - 1, length)
-    return "".join(str_seq[i] for i in indexes)
+    return "".join(random.choices(str_seq, k=length))
