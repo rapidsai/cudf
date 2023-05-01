@@ -44,7 +44,6 @@ namespace io {
 namespace detail {
 namespace parquet {
 // Forward internal classes
-struct parquet_column_view;
 struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
@@ -118,102 +117,30 @@ class writer::impl {
 
  private:
   /**
-   * @brief Gather row group fragments
+   * @brief Write the intermediate Parquet data into the data sink.
    *
-   * This calculates fragments to be used in determining row group boundariesa.
+   * The intermediate data is generated from processing (compressing/encoding) a cuDF input table
+   * by `convert_table_to_parquet_data` called in the `write()` function.
    *
-   * @param frag Destination row group fragments
-   * @param col_desc column description array
-   * @param[in] partitions Information about partitioning of table
-   * @param[in] part_frag_offset A Partition's offset into fragment array
-   * @param fragment_size Number of rows per fragment
+   * @param updated_agg_meta The updated aggregate data after processing the input
+   * @param pages Encoded pages
+   * @param chunks Column chunks
+   * @param global_rowgroup_base Numbers of rowgroups in each file/partition
+   * @param first_rg_in_part The first rowgroup in each partition
+   * @param batch_list The batches of rowgroups to encode
+   * @param rg_to_part A map from rowgroup to partition
+   * @param[out] bounce_buffer Temporary host output buffer
    */
-  void init_row_group_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
-                                device_span<gpu::parquet_column_device_view const> col_desc,
-                                host_span<partition_info const> partitions,
-                                device_span<int const> part_frag_offset,
-                                uint32_t fragment_size);
+  void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
+                                  device_span<gpu::EncPage const> pages,
+                                  host_2dspan<gpu::EncColumnChunk const> chunks,
+                                  host_span<size_t const> global_rowgroup_base,
+                                  host_span<int const> first_rg_in_part,
+                                  host_span<size_type const> batch_list,
+                                  host_span<int const> rg_to_part,
+                                  host_span<uint8_t> bounce_buffer);
 
-  /**
-   * @brief Recalculate page fragments
-   *
-   * This calculates fragments to be used to determine page boundaries within
-   * column chunks.
-   *
-   * @param frag Destination page fragments
-   * @param frag_sizes Array of fragment sizes for each column
-   */
-  void calculate_page_fragments(device_span<gpu::PageFragment> frag,
-                                host_span<size_type const> frag_sizes);
-
-  /**
-   * @brief Gather per-fragment statistics
-   *
-   * @param frag_stats output statistics
-   * @param frags Input page fragments
-   */
-  void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
-                                  device_span<gpu::PageFragment const> frags);
-
-  /**
-   * @brief Initialize encoder pages
-   *
-   * @param chunks column chunk array
-   * @param col_desc column description array
-   * @param pages encoder pages array
-   * @param page_stats page statistics array
-   * @param frag_stats fragment statistics array
-   * @param max_page_comp_data_size max compressed
-   * @param num_columns Total number of columns
-   * @param num_pages Total number of pages
-   * @param num_stats_bfr Number of statistics buffers
-   */
-  void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                          device_span<gpu::parquet_column_device_view const> col_desc,
-                          device_span<gpu::EncPage> pages,
-                          hostdevice_vector<size_type>& comp_page_sizes,
-                          statistics_chunk* page_stats,
-                          statistics_chunk* frag_stats,
-                          uint32_t num_columns,
-                          uint32_t num_pages,
-                          uint32_t num_stats_bfr);
-  /**
-   * @brief Encode a batch of pages
-   *
-   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
-   *
-   * @param chunks column chunk array
-   * @param pages encoder pages array
-   * @param max_page_uncomp_data_size maximum uncompressed size of any page's data
-   * @param pages_in_batch number of pages in this batch
-   * @param first_page_in_batch first page in batch
-   * @param rowgroups_in_batch number of rowgroups in this batch
-   * @param first_rowgroup first rowgroup in batch
-   * @param page_stats optional page-level statistics (nullptr if none)
-   * @param chunk_stats optional chunk-level statistics (nullptr if none)
-   * @param column_stats optional page-level statistics for column index (nullptr if none)
-   */
-  void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                    device_span<gpu::EncPage> pages,
-                    size_t max_page_uncomp_data_size,
-                    uint32_t pages_in_batch,
-                    uint32_t first_page_in_batch,
-                    uint32_t rowgroups_in_batch,
-                    uint32_t first_rowgroup,
-                    const statistics_chunk* page_stats,
-                    const statistics_chunk* chunk_stats,
-                    const statistics_chunk* column_stats);
-
-  /**
-   * @brief Function to calculate the memory needed to encode the column index of the given
-   * column chunk
-   *
-   * @param chunk pointer to column chunk
-   */
-  size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
-
- private:
-  // Cuda stream to be used.
+  // Cuda stream to be used
   rmm::cuda_stream_view _stream;
 
   // Writer options.
