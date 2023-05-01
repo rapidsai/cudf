@@ -52,22 +52,6 @@ namespace {
  */
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 
-// TODO: move into utility header like string.cuh
-__device__ inline thrust::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
-                                                                                 size_type pos)
-{
-  size_type bytes    = 0;
-  auto ptr           = d_str.data();
-  auto const end_ptr = ptr + d_str.size_bytes();
-  while ((pos > 0) && (ptr < end_ptr)) {
-    auto const width = strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(*ptr));
-    if (width) { --pos; }
-    bytes += width;
-    ++ptr;
-  }
-  return {bytes, pos};
-}
-
 /**
  * @brief Find function handles a string per thread
  */
@@ -151,7 +135,7 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
     if (stop < 0) { return d_str.size_bytes(); }
     if (stop <= start) { return begin; }
     // we count from `begin` instead of recounting from the beginning of the string
-    return begin + thrust::get<0>(bytes_to_character_position(
+    return begin + std::get<0>(bytes_to_character_position(
                      string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
   }();
 
