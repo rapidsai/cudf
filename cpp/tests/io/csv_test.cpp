@@ -169,7 +169,8 @@ void check_float_column(cudf::column_view const& col_lhs,
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
                                                 (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col_lhs.null_count() == 0, "All elements should be valid");
+  CUDF_EXPECTS(col_lhs.null_count() == 0 and col_rhs.null_count() == 0,
+               "All elements should be valid");
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
 }
@@ -2462,6 +2463,21 @@ TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
     const auto result_table = result.tbl->view();
     ASSERT_EQ(result_table.num_columns(), 3);
   }
+}
+
+TEST_F(CsvReaderTest, NullCount)
+{
+  std::string buffer = "0,,\n1,1.,\n2,,\n3,,\n4,4.,\n5,5.,\n6,6.,\n7,7.,\n";
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1);
+  const auto result      = cudf::io::read_csv(in_opts);
+  const auto result_view = result.tbl->view();
+
+  EXPECT_EQ(result_view.num_rows(), 8);
+  EXPECT_EQ(result_view.column(0).null_count(), 0);
+  EXPECT_EQ(result_view.column(1).null_count(), 3);
+  EXPECT_EQ(result_view.column(2).null_count(), 8);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

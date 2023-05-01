@@ -295,6 +295,7 @@ Datetime methods
    round
    floor
    ceil
+   tz_localize
 
 
 Timedelta properties
