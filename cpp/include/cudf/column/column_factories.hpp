@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ std::unique_ptr<column> make_numeric_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -158,7 +158,7 @@ std::unique_ptr<column> make_fixed_point_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
