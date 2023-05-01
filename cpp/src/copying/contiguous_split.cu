@@ -1523,9 +1523,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
         size_of_batches_per_iteration.push_back(iter_size_bytes);
         accum_size_per_iteration.push_back(accum_size);
 
-        if (next_iteration_it == h_offsets.end()) {
-          break;
-        }
+        if (next_iteration_it == h_offsets.end()) { break; }
 
         current_offset_it += batches_in_iter;
       }
