@@ -52,7 +52,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
     this.offHeap = null;
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (AssertionError ae) {
+      // offHeap state is null, so there is nothing to clean in offHeap
+      // delete ColumnView to avoid memory leak
+      deleteColumnView(viewHandle);
+      throw ae;
+    }
   }
 
 
@@ -68,7 +75,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     rows = ColumnView.getNativeRowCount(viewHandle);
     nullCount = ColumnView.getNativeNullCount(viewHandle);
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (AssertionError ae) {
+      // This constructor is only called from ColumnVector so calling close will call
+      // close in ColumnVector which will close out the offHeapState
+      close();
+      throw ae;
+    }
   }
 
   /**
