@@ -2567,10 +2567,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-  int const dtype           = s->col.data_type & 7;
 
   // string cols handled elsewhere
-  if (dtype == BYTE_ARRAY && s->dtype_len != 4) { return; }
+  if ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4) { return; }
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
@@ -2634,6 +2633,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
+      int const dtype = s->col.data_type & 7;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -2742,10 +2742,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  int const dtype          = s->col.data_type & 7;
-  bool const is_string_col = dtype == BYTE_ARRAY && s->dtype_len != 4;
-
-  if (!is_string_col) { return; }
+  if ((s->col.data_type & 7) != BYTE_ARRAY || s->dtype_len == 4) { return; }
 
   // offsets is global...but the output is local, so account for that below
   if (t == 0) { last_offset = s->page.str_offset; }
