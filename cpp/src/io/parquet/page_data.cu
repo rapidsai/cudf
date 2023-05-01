@@ -52,8 +52,12 @@ namespace {
 constexpr int preprocess_block_size = num_rle_stream_decode_threads;  // 512
 constexpr int decode_block_size     = 128;
 constexpr int non_zero_buffer_size  = decode_block_size * 2;
-constexpr int rolling_lvl_index(int index, int size) { return index % size; }
 constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
+template <int lvl_buf_size>
+constexpr int rolling_lvl_index(int index)
+{
+  return index % lvl_buf_size;
+}
 
 struct page_state_s {
   const uint8_t* data_start;
@@ -86,9 +90,6 @@ struct page_state_s {
   int32_t input_value_count;                  // how many values of the input we've processed
   int32_t input_row_count;                    // how many rows of the input we've processed
   int32_t input_leaf_count;                   // how many leaf values of the input we've processed
-  uint32_t* rep;                              // circular buffer of repetition level values
-  uint32_t* def;                              // circular buffer of definition level values
-  int level_decode_buf_size;                  // size of rep/ref
   const uint8_t* lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
   const uint8_t* abs_lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
   const uint8_t* abs_lvl_end[NUM_LEVEL_TYPES];    // [def,rep]
@@ -1036,8 +1037,6 @@ static __device__ void gpuOutputGeneric(
  * @param[in] min_row Crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
- * @param[in] level_decode_buf Buffer space to use for repetition and definition levels
- * @param[in] level_decode_buf_size Size of the level decode buffers
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * Currently only used by gpuComputePageSizes step)
  */
@@ -1047,8 +1046,6 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           size_t min_row,
                                           size_t num_rows,
                                           bool is_decode_step,
-                                          uint32_t* level_decode_buf[level_type::NUM_LEVEL_TYPES],
-                                          int level_decode_buf_size,
                                           rle_stream* decoders = nullptr)
 {
   int t = threadIdx.x;
@@ -1088,12 +1085,6 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
   }
   if (!t) {
     s->nesting_info = can_use_decode_cache ? s->nesting_decode_cache : s->page.nesting_decode;
-  }
-
-  if (!t) {
-    s->rep                   = level_decode_buf[level_type::REPETITION];
-    s->def                   = level_decode_buf[level_type::DEFINITION];
-    s->level_decode_buf_size = level_decode_buf_size;
   }
 
   __syncthreads();
@@ -1449,25 +1440,33 @@ static __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
  * @param[out] d The definition level up to which added values are not-null. if t is out of bounds,
  * d will be -1
  * @param[in] s Local page information
+ * @param[in] rep Repetition level buffer
+ * @param[in] def Definition level buffer
  * @param[in] input_value_count The current count of input level values we have processed
  * @param[in] target_input_value_count The desired # of input level values we want to process
  * @param[in] t Thread index
  */
+template <int lvl_buf_size>
 inline __device__ void get_nesting_bounds(int& start_depth,
                                           int& end_depth,
                                           int& d,
                                           page_state_s* s,
+                                          uint32_t const* const rep,
+                                          uint32_t const* const def,
                                           int input_value_count,
                                           int32_t target_input_value_count,
                                           int t)
 {
+  start_depth = -1;
+  end_depth   = -1;
+  d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int index = rolling_lvl_index(input_value_count + t, s->level_decode_buf_size);
-    d         = s->def[index];
+    int index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    d         = def[index];
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
-      int r       = s->rep[index];
+      int r       = rep[index];
       start_depth = s->nesting_info[r].start_depth;
       end_depth   = s->nesting_info[d].end_depth;
     }
@@ -1477,10 +1476,6 @@ inline __device__ void get_nesting_bounds(int& start_depth,
       start_depth = 0;
       end_depth   = s->col.max_nesting_depth - 1;
     }
-  } else {
-    start_depth = -1;
-    end_depth   = -1;
-    d           = -1;
   }
 }
 
@@ -1491,11 +1486,16 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] s Local page information
  * @param[out] sb Page state buffer output
+ * @param[in] rep Repetition level buffer
+ * @param[in] def Definition level buffer
  * @param[in] t Thread index
  */
+template <int lvl_buf_size>
 static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
                                                              page_state_s* s,
                                                              page_state_buffers_s* sb,
+                                                             uint32_t const* const rep,
+                                                             uint32_t const* const def,
                                                              int t)
 {
   // max nesting depth of the column
@@ -1513,8 +1513,8 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     // determine the nesting bounds for this thread (the range of nesting depths we
     // will generate new value indices and validity bits for)
     int start_depth, end_depth, d;
-    get_nesting_bounds(
-      start_depth, end_depth, d, s, input_value_count, target_input_value_count, t);
+    get_nesting_bounds<non_zero_buffer_size>(
+      start_depth, end_depth, d, s, rep, def, input_value_count, target_input_value_count, t);
 
     // 4 interesting things to track:
     // thread_value_count : # of output values from the view of this thread
@@ -1665,11 +1665,16 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
  * @param[in] s The local page state
  * @param[out] sb Page state buffer output
  * @param[in] target_leaf_count Target count of non-null leaf values to generate indices for
+ * @param[in] rep Repetition level buffer
+ * @param[in] def Definition level buffer
  * @param[in] t Thread index
  */
+template <int lvl_buf_size>
 __device__ void gpuDecodeLevels(page_state_s* s,
                                 page_state_buffers_s* sb,
                                 int32_t target_leaf_count,
+                                uint32_t* const rep,
+                                uint32_t* const def,
                                 int t)
 {
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
@@ -1678,8 +1683,8 @@ __device__ void gpuDecodeLevels(page_state_s* s,
   int cur_leaf_count       = target_leaf_count;
   while (!s->error && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
-    if (has_repetition) { gpuDecodeStream(s->rep, s, cur_leaf_count, t, level_type::REPETITION); }
-    gpuDecodeStream(s->def, s, cur_leaf_count, t, level_type::DEFINITION);
+    if (has_repetition) { gpuDecodeStream(rep, s, cur_leaf_count, t, level_type::REPETITION); }
+    gpuDecodeStream(def, s, cur_leaf_count, t, level_type::DEFINITION);
     __syncwarp();
 
     // because the rep and def streams are encoded separately, we cannot request an exact
@@ -1690,7 +1695,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
                                            : s->lvl_count[level_type::DEFINITION];
 
     // process what we got back
-    gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, sb, t);
+    gpuUpdateValidityOffsetsAndRowIndices<lvl_buf_size>(actual_leaf_count, s, sb, rep, def, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     __syncwarp();
   }
@@ -1733,11 +1738,16 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
  *
  * @param s The local page info
  * @param target_value_count The target value count to process up to
+ * @param rep Repetition level buffer
+ * @param def Definition level buffer
  * @param t Thread index
  * @param bounds_set A boolean indicating whether or not min/max row bounds have been set
  */
+template <int lvl_buf_size>
 static __device__ void gpuUpdatePageSizes(page_state_s* s,
                                           int target_value_count,
+                                          uint32_t const* const rep,
+                                          uint32_t const* const def,
                                           int t,
                                           bool bounds_set)
 {
@@ -1768,7 +1778,8 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
 
     // start/end depth
     int start_depth, end_depth, d;
-    get_nesting_bounds(start_depth, end_depth, d, s, value_count, value_count + batch_size, t);
+    get_nesting_bounds<lvl_buf_size>(
+      start_depth, end_depth, d, s, rep, def, value_count, value_count + batch_size, t);
 
     // is this thread within row bounds? in the non skip_rows/num_rows case this will always
     // be true.
@@ -2345,6 +2356,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @param compute_string_sizes Whether or not we should be computing string sizes
  * (PageInfo::str_bytes) as part of the pass
  */
+template <int lvl_buf_size>
 __global__ void __launch_bounds__(preprocess_block_size)
   gpuComputePageSizes(PageInfo* pages,
                       device_span<ColumnChunkDesc const> chunks,
@@ -2369,34 +2381,24 @@ __global__ void __launch_bounds__(preprocess_block_size)
   rle_stream decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          false,
-                          pp->lvl_decode_buf,
-                          LEVEL_DECODE_BUF_SIZE,
-                          decoders)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
-  int const max_batch_size = s->level_decode_buf_size;
-  uint32_t* def_decode     = s->def;
-  uint32_t* rep_decode     = s->rep;
+  int const max_batch_size = lvl_buf_size;
+  uint32_t* rep            = pp->lvl_decode_buf[level_type::REPETITION];
+  uint32_t* def            = pp->lvl_decode_buf[level_type::DEFINITION];
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
                                         max_batch_size,
-                                        def_decode,
+                                        def,
                                         s->page.num_input_values);
   if (has_repetition) {
     decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           max_batch_size,
-                                          rep_decode,
+                                          rep,
                                           s->page.num_input_values);
   }
   __syncthreads();
@@ -2486,7 +2488,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
     __syncthreads();
 
     // update page sizes
-    gpuUpdatePageSizes(s, processed, t, !is_base_pass);
+    gpuUpdatePageSizes<lvl_buf_size>(s, processed, rep, def, t, !is_base_pass);
     __syncthreads();
   }
 
@@ -2556,6 +2558,7 @@ struct null_count_back_copier {
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
  */
+template <int lvl_buf_size>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -2570,20 +2573,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  __shared__ uint32_t def_buf[non_zero_buffer_size];
-  __shared__ uint32_t rep_buf[non_zero_buffer_size];
-  uint32_t* level_decode_buf[level_type::NUM_LEVEL_TYPES] = {def_buf, rep_buf};
-
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          true,
-                          level_decode_buf,
-                          non_zero_buffer_size)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -2620,6 +2610,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
+  __shared__ uint32_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
+  __shared__ uint32_t def[non_zero_buffer_size];  // circular buffer of definition level values
+
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -2639,7 +2632,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, sb, target_pos, t);
+      gpuDecodeLevels<lvl_buf_size>(s, sb, target_pos, rep, def, t);
     } else if (t < out_thread0) {
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
@@ -2926,7 +2919,7 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
   // This computes the size for the entire page, not taking row bounds into account.
   // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
-  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
+  gpuComputePageSizes<LEVEL_DECODE_BUF_SIZE><<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
 }
 
@@ -2944,8 +2937,8 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows);
+  gpuDecodePageData<non_zero_buffer_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
 }
 
 }  // namespace gpu
