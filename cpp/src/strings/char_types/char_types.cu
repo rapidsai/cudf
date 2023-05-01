@@ -37,53 +37,71 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-//
-std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+namespace {
+
+struct char_types_fn {
+  column_device_view const d_column;
+  character_flags_table_type const* d_flags;
+  string_character_types const types;
+  string_character_types const verify_types;
+
+  __device__ bool operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) return false;
+    auto const d_str = d_column.element<string_view>(idx);
+    auto const end   = d_str.data() + d_str.size_bytes();
+
+    bool type_matched     = !d_str.empty();  // require at least one character;
+    size_type check_count = 0;               // count checked characters
+    for (auto itr = d_str.data(); type_matched && (itr < end); ++itr) {
+      uint8_t const chr = static_cast<uint8_t>(*itr);
+      if (is_utf8_continuation_char(chr)) { continue; }
+      auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
+      if (u8 > std::numeric_limits<char>::max()) { to_char_utf8(itr, u8); }
+
+      // lookup flags in table by code-point
+      auto const code_point = utf8_to_codepoint(u8);
+      auto const flag       = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
+
+      if ((verify_types & flag) ||                   // should flag be verified;
+          (flag == 0 && verify_types == ALL_TYPES))  // special edge case
+      {
+        type_matched = (types & flag) > 0;
+        ++check_count;
+      }
+    }
+
+    return type_matched && (check_count > 0);
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                                string_character_types types,
                                                string_character_types verify_types,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count  = strings.size();
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
+  auto d_strings = column_device_view::create(input.parent(), stream);
 
   // create output column
-  auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
-  auto results_view = results->mutable_view();
-  auto d_results    = results_view.data<bool>();
   // get the static character types table
   auto d_flags = detail::get_character_flags_table();
+
   // set the output values by checking the character types for each string
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_results,
-                    [d_column, d_flags, types, verify_types, d_results] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return false;
-                      auto d_str            = d_column.element<string_view>(idx);
-                      bool check            = !d_str.empty();  // require at least one character
-                      size_type check_count = 0;
-                      for (auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr) {
-                        auto code_point = detail::utf8_to_codepoint(*itr);
-                        // lookup flags in table by code-point
-                        auto flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
-                        if ((verify_types & flag) ||                   // should flag be verified
-                            (flag == 0 && verify_types == ALL_TYPES))  // special edge case
-                        {
-                          check = (types & flag) > 0;
-                          ++check_count;
-                        }
-                      }
-                      return check && (check_count > 0);
-                    });
-  //
-  results->set_null_count(strings.null_count());
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    char_types_fn{*d_strings, d_flags, types, verify_types});
+
+  results->set_null_count(input.null_count());
   return results;
 }
 
