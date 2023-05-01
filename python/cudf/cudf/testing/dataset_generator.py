@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -502,7 +502,7 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda cardinality=cardinality: [
-                            mimesis.random.random.generate_string(
+                            _generate_string(
                                 string.printable,
                                 np.random.randint(
                                     low=0,
@@ -684,7 +684,7 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
         values = float_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind in ("U", "O"):
         values = [
-            mimesis.random.random.generate_string(
+            _generate_string(
                 string.printable,
                 100,
             )
@@ -847,3 +847,8 @@ def create_nested_struct_type(max_types_at_each_level, nesting_level):
         else:
             type_dict[str(name)] = cudf.dtype(type_)
     return cudf.StructDtype(type_dict)
+
+
+def _generate_string(str_seq: str, length: int = 10) -> str:
+    indexes = np.random.randint(0, len(str_seq) - 1, length)
+    return "".join(str_seq[i] for i in indexes)
