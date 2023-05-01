@@ -98,13 +98,13 @@ column_view deserialize_column(serialized_column serial_column,
  * @brief Build and add metadata for a column and all of it's children, recursively
  *
  *
- * @param metadata Output vector of serialized_column metadata
+ * @param mb metadata_builder instance
  * @param col Column to build metadata for
  * @param base_ptr Base pointer for the entire contiguous buffer from which all columns
  * were serialized into
  * @param data_size Size of the incoming buffer
  */
-void build_column_metadata(std::vector<serialized_column>& metadata,
+void build_column_metadata(metadata_builder& mb,
                            column_view const& col,
                            uint8_t const* base_ptr,
                            size_t data_size)
@@ -126,12 +126,12 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
   int64_t const null_mask_offset = null_mask_ptr ? null_mask_ptr - base_ptr : -1;
 
   // add metadata
-  metadata.emplace_back(
+  mb.add_column_info_to_meta(
     col.type(), col.size(), col.null_count(), data_offset, null_mask_offset, col.num_children());
 
   std::for_each(
-    col.child_begin(), col.child_end(), [&metadata, &base_ptr, &data_size](column_view const& col) {
-      build_column_metadata(metadata, col, base_ptr, data_size);
+    col.child_begin(), col.child_end(), [&mb, &base_ptr, &data_size](column_view const& col) {
+      build_column_metadata(mb, col, base_ptr, data_size);
     });
 }
 
@@ -156,26 +156,45 @@ std::vector<uint8_t> pack_metadata(ColumnIter begin,
                                    uint8_t const* contiguous_buffer,
                                    size_t buffer_size)
 {
-  std::vector<serialized_column> metadata;
+  auto mb = metadata_builder(std::distance(begin, end));
 
-  // first metadata entry is a stub indicating how many total (top level) columns
-  // there are
-  metadata.emplace_back(
-    data_type{type_id::EMPTY}, static_cast<size_type>(std::distance(begin, end)), 0, -1, -1, 0);
-
-  std::for_each(begin, end, [&metadata, &contiguous_buffer, &buffer_size](column_view const& col) {
-    build_column_metadata(metadata, col, contiguous_buffer, buffer_size);
+  std::for_each(begin, end, [&mb, &contiguous_buffer, &buffer_size](column_view const& col) {
+    build_column_metadata(mb, col, contiguous_buffer, buffer_size);
   });
 
-  // convert to anonymous bytes
-  std::vector<uint8_t> metadata_bytes;
-  auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
-  std::copy(metadata_begin,
-            metadata_begin + (metadata.size() * sizeof(serialized_column)),
-            std::back_inserter(metadata_bytes));
-
-  return metadata_bytes;
+  return mb.build();
 }
+
+class metadata_builder_impl {
+ public:
+  metadata_builder_impl() = default;
+
+  void add_column_info_to_meta(data_type const col_type,
+                               size_type const col_size,
+                               size_type const col_null_count,
+                               int64_t const data_offset,
+                               int64_t const null_mask_offset,
+                               size_type const num_children)
+  {
+    metadata.emplace_back(
+      col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
+  }
+
+  std::vector<uint8_t> build() const
+  {
+    // convert to anonymous bytes
+    std::vector<uint8_t> metadata_bytes;
+    auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
+    std::copy(metadata_begin,
+              metadata_begin + (metadata.size() * sizeof(detail::serialized_column)),
+              std::back_inserter(metadata_bytes));
+
+    return metadata_bytes;
+  }
+
+ private:
+  std::vector<detail::serialized_column> metadata;
+};
 
 /**
  * @copydoc cudf::detail::unpack
@@ -207,6 +226,27 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 
   return table_view{get_columns(num_columns)};
 }
+
+metadata_builder::metadata_builder(size_type const num_root_columns)
+  : impl(std::make_unique<metadata_builder_impl>())
+{
+  // first metadata entry is a stub indicating how many total (top level) columns
+  // there are
+  impl->add_column_info_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
+}
+
+void metadata_builder::add_column_info_to_meta(data_type const col_type,
+                                               size_type const col_size,
+                                               size_type const col_null_count,
+                                               int64_t const data_offset,
+                                               int64_t const null_mask_offset,
+                                               size_type const num_children)
+{
+  impl->add_column_info_to_meta(
+    col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
+}
+
+std::vector<uint8_t> metadata_builder::build() const { return impl->build(); }
 
 }  // namespace detail
 
