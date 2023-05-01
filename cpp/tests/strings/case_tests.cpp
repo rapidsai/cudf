@@ -43,7 +43,6 @@ TEST_F(StringsCaseTest, ToLower)
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::to_lower(strings_view);
-  // cudf::test::print(results->view());
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
