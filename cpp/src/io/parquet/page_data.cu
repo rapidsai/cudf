@@ -2556,6 +2556,180 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s state_buffers;
+
+  page_state_s* const s          = &state_g;
+  page_state_buffers_s* const sb = &state_buffers;
+  int page_idx                   = blockIdx.x;
+  int t                          = threadIdx.x;
+  int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
+
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  int const dtype           = s->col.data_type & 7;
+
+  // string cols handled elsewhere
+  if (dtype == BYTE_ARRAY && s->dtype_len != 4) { return; }
+
+  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
+                                               is_page_contained(s, min_row, num_rows)))) {
+    return;
+  }
+
+  if (s->dict_base) {
+    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
+  } else {
+    out_thread0 =
+      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
+  }
+
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  __shared__ uint32_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
+  __shared__ uint32_t def[non_zero_buffer_size];  // circular buffer of definition level values
+
+  // skipped_leaf_values will always be 0 for flat hierarchies.
+  uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
+  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+    int target_pos;
+    int src_pos = s->src_pos;
+
+    if (t < out_thread0) {
+      target_pos = min(src_pos + 2 * (decode_block_size - out_thread0),
+                       s->nz_count + (decode_block_size - out_thread0));
+    } else {
+      target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
+      if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
+    }
+    __syncthreads();
+    if (t < 32) {
+      // decode repetition and definition levels.
+      // - update validity vectors
+      // - updates offsets (for nested columns)
+      // - produces non-NULL value indices in s->nz_idx for subsequent decoding
+      gpuDecodeLevels<lvl_buf_size>(s, sb, target_pos, rep, def, t);
+    } else if (t < out_thread0) {
+      // skipped_leaf_values will always be 0 for flat hierarchies.
+      uint32_t src_target_pos = target_pos + skipped_leaf_values;
+
+      // WARP1: Decode dictionary indices, booleans or string positions
+      if (s->dict_base) {
+        src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
+      } else if ((s->col.data_type & 7) == BOOLEAN) {
+        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
+      } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
+      }
+      if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
+    } else {
+      // WARP1..WARP3: Decode values
+      src_pos += t - out_thread0;
+
+      // the position in the output column/buffer
+      int dst_pos = sb->nz_idx[rolling_index(src_pos)];
+
+      // for the flat hierarchy case we will be reading from the beginning of the value stream,
+      // regardless of the value of first_row. so adjust our destination offset accordingly.
+      // example:
+      // - user has passed skip_rows = 2, so our first_row to output is 2
+      // - the row values we get from nz_idx will be
+      //   0, 1, 2, 3, 4 ....
+      // - by shifting these values by first_row, the sequence becomes
+      //   -1, -2, 0, 1, 2 ...
+      // - so we will end up ignoring the first two input rows, and input rows 2..n will
+      //   get written to the output starting at position 0.
+      //
+      if (!has_repetition) { dst_pos -= s->first_row; }
+
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
+      // (values before first_row) in the flat hierarchy case.
+      if (src_pos < target_pos && dst_pos >= 0) {
+        // src_pos represents the logical row position we want to read from. But in the case of
+        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
+        // position has to take into account the # of values we have to skip in the page to get to
+        // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+        uint32_t val_src_pos = src_pos + skipped_leaf_values;
+
+        // nesting level that is storing actual leaf values
+        int leaf_level_index = s->col.max_nesting_depth - 1;
+
+        uint32_t dtype_len = s->dtype_len;
+        void* dst =
+          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        if (dtype == BYTE_ARRAY) {
+          if (s->col.converted_type == DECIMAL) {
+            auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
+            auto const decimal_precision = s->col.decimal_precision;
+            if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
+            } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
+            } else {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
+            }
+          } else {
+            // test for string hashes
+            if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
+          }
+        } else if (dtype == BOOLEAN) {
+          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
+        } else if (s->col.converted_type == DECIMAL) {
+          switch (dtype) {
+            case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
+            case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
+            default:
+              if (s->dtype_len_in <= sizeof(int32_t)) {
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
+              } else if (s->dtype_len_in <= sizeof(int64_t)) {
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+              } else {
+                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<__int128_t*>(dst));
+              }
+              break;
+          }
+        } else if (dtype == INT96) {
+          gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+        } else if (dtype_len == 8) {
+          if (s->dtype_len_in == 4) {
+            // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+            // TIME_MILLIS is the only duration type stored as int32:
+            // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+            gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+          } else if (s->ts_scale) {
+            gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+          } else {
+            gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
+          }
+        } else if (dtype_len == 4) {
+          gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+        } else {
+          gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
+        }
+      }
+
+      if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
+    }
+    __syncthreads();
+  }
+}
+
+template <int lvl_buf_size>
+__global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(4) size_type last_offset;
 
   page_state_s* const s          = &state_g;
@@ -2572,11 +2746,11 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int const dtype          = s->col.data_type & 7;
   bool const is_string_col = dtype == BYTE_ARRAY && s->dtype_len != 4;
 
+  if (!is_string_col) { return; }
+
   // offsets is global...but the output is local, so account for that below
-  if (is_string_col) {
-    if (t == 0) { last_offset = s->page.str_offset; }
-    __syncthreads();
-  }
+  if (t == 0) { last_offset = s->page.str_offset; }
+  __syncthreads();
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
@@ -2659,50 +2833,49 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       if (!has_repetition) { dst_pos -= s->first_row; }
 
       // need to do this before we branch on src_pos/dst_pos so we don't deadlock
-      if (is_string_col) {
-        // choose a character parallel string copy when the average string is longer than a warp
-        auto const use_char_ll = s->page.num_valids > 0 &&
-                                 (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
-        int const leaf_level_index = s->col.max_nesting_depth - 1;
-        int const me               = t - out_thread0;
+      // choose a character parallel string copy when the average string is longer than a warp
+      auto const use_char_ll = s->page.num_valids > 0 &&
+                               (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
+      int const leaf_level_index = s->col.max_nesting_depth - 1;
+      int const me               = t - out_thread0;
 
-        if (me < 32) {
-          for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
-            dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
-            if (!has_repetition) { dst_pos -= s->first_row; }
+      if (me < 32) {
+        for (int i = 0; i < decode_block_size - out_thread0; i += 32) {
+          dst_pos = sb->nz_idx[rolling_index(src_pos + i)];
+          if (!has_repetition) { dst_pos -= s->first_row; }
 
-            auto [ptr, len] = src_pos + i < target_pos && dst_pos >= 0
-                                ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values + i)
-                                : cuda::std::pair<char const*, size_t>{nullptr, 0};
+          auto [ptr, len] = src_pos + i < target_pos && dst_pos >= 0
+                              ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values + i)
+                              : cuda::std::pair<char const*, size_t>{nullptr, 0};
 
-            __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
-            size_type offset;
-            cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
-            offset += last_offset;
+          __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
+          size_type offset;
+          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
+          offset += last_offset;
 
-            if (use_char_ll) {
-              // TODO: might want separate kernel for string page decoding so we don't waste all
-              // this shared memory on non-string columns.
-              __shared__ __align__(8) uint8_t const* pointers[32];
-              __shared__ __align__(4) size_type offsets[32];
-              __shared__ __align__(4) int dsts[32];
-              __shared__ __align__(4) int lengths[32];
+          if (use_char_ll) {
+            // TODO: might want separate kernel for string page decoding so we don't waste all
+            // this shared memory on non-string columns.
+            __shared__ __align__(8) uint8_t const* pointers[32];
+            __shared__ __align__(4) size_type offsets[32];
+            __shared__ __align__(4) int dsts[32];
+            __shared__ __align__(4) int lengths[32];
 
-              offsets[me]  = offset;
-              pointers[me] = reinterpret_cast<uint8_t const*>(ptr);
-              dsts[me]     = dst_pos;
-              lengths[me]  = len;
-              __syncwarp();
+            offsets[me]  = offset;
+            pointers[me] = reinterpret_cast<uint8_t const*>(ptr);
+            dsts[me]     = dst_pos;
+            lengths[me]  = len;
+            __syncwarp();
 
-              for (int ss = 0; ss < 32 && ss + i + s->src_pos < target_pos; ss++) {
-                if (dsts[ss] >= 0) {
-                  auto offptr =
-                    reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
-                    dsts[ss];
-                  *offptr      = offsets[ss];
-                  auto str_ptr = nesting_info_base[leaf_level_index].string_out + offsets[ss] -
-                                 s->page.str_offset;
-                  ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
+            for (int ss = 0; ss < 32 && ss + i + s->src_pos < target_pos; ss++) {
+              if (dsts[ss] >= 0) {
+                auto offptr =
+                  reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
+                  dsts[ss];
+                *offptr = offsets[ss];
+                auto str_ptr =
+                  nesting_info_base[leaf_level_index].string_out + offsets[ss] - s->page.str_offset;
+                ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
 #if 0
                   if (is_bounds_page(s, min_row, num_rows)) {
                     if (me == 0)
@@ -2715,18 +2888,17 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                              offsets[ss]);
                   }
 #endif
-                }
               }
+            }
 
-            } else {
-              if (src_pos + i < target_pos && dst_pos >= 0) {
-                auto offptr =
-                  reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
-                  dst_pos;
-                *offptr = offset;
-                auto str_ptr =
-                  nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
-                memcpy(str_ptr, ptr, len);
+          } else {
+            if (src_pos + i < target_pos && dst_pos >= 0) {
+              auto offptr =
+                reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
+              *offptr = offset;
+              auto str_ptr =
+                nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
+              memcpy(str_ptr, ptr, len);
 #if 0
                 if (is_bounds_page(s, min_row, num_rows)) {
                   printf("%05d,%03d: src %d dst %d len %ld offset %d\n",
@@ -2738,80 +2910,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                          offset);
                 }
 #endif
-              }
-              __syncwarp();
             }
-
-            if (me == 31) { last_offset = offset + len; }
             __syncwarp();
           }
-        }
-      } else {
-        // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
-        // (values before first_row) in the flat hierarchy case.
-        if (src_pos < target_pos && dst_pos >= 0) {
-          // src_pos represents the logical row position we want to read from. But in the case of
-          // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
-          // position has to take into account the # of values we have to skip in the page to get to
-          // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-          uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
-          // nesting level that is storing actual leaf values
-          int leaf_level_index = s->col.max_nesting_depth - 1;
-
-          uint32_t dtype_len = s->dtype_len;
-          void* dst =
-            nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-          if (dtype == BYTE_ARRAY) {
-            if (s->col.converted_type == DECIMAL) {
-              auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
-              auto const decimal_precision = s->col.decimal_precision;
-              if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-                gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
-              } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-                gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
-              } else {
-                gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
-              }
-            } else {
-              // test for string hashes
-              if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
-            }
-          } else if (dtype == BOOLEAN) {
-            gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
-          } else if (s->col.converted_type == DECIMAL) {
-            switch (dtype) {
-              case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
-              case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
-              default:
-                if (s->dtype_len_in <= sizeof(int32_t)) {
-                  gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
-                } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                  gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
-                } else {
-                  gpuOutputFixedLenByteArrayAsInt(
-                    s, sb, val_src_pos, static_cast<__int128_t*>(dst));
-                }
-                break;
-            }
-          } else if (dtype == INT96) {
-            gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
-          } else if (dtype_len == 8) {
-            if (s->dtype_len_in == 4) {
-              // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-              // TIME_MILLIS is the only duration type stored as int32:
-              // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-              gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
-            } else if (s->ts_scale) {
-              gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
-            } else {
-              gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
-            }
-          } else if (dtype_len == 4) {
-            gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
-          } else {
-            gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
-          }
+          if (me == 31) { last_offset = offset + len; }
+          __syncwarp();
         }
       }
 
@@ -2839,32 +2943,30 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 #endif
 
   if (s->page.num_nulls != 0) {
-    int dtype = s->col.data_type & 7;
-    if (dtype == BYTE_ARRAY && s->dtype_len != 4) {
-      int const value_count      = s->page.num_valids + s->page.num_nulls;
-      int const leaf_level_index = s->col.max_nesting_depth - 1;
+    int const value_count      = s->page.num_valids + s->page.num_nulls;
+    int const leaf_level_index = s->col.max_nesting_depth - 1;
 
-      auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
+    auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
 
-      if (nesting_info_base[leaf_level_index].null_count > 0) {
-        // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
-        if (s->nz_count == 0) {
-          for (int i = t; i < value_count; i += decode_block_size) {
-            offptr[i] = s->page.str_offset;
-          }
-        }
-        // just some nulls, do this serially for now
-        else if (t == 0) {
-          if (offptr[value_count - 1] == 0) {
-            offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
-          }
-          for (int i = value_count - 2; i > 0; i--) {
-            if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
-          }
-          offptr[0] = s->page.str_offset;
+    if (nesting_info_base[leaf_level_index].null_count > 0) {
+      // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
+      if (s->nz_count == 0) {
+        for (int i = t; i < value_count; i += decode_block_size) {
+          offptr[i] = s->page.str_offset;
         }
       }
-      __syncthreads();
+      // just some nulls, do this serially for now
+      else if (t == 0) {
+        if (offptr[value_count - 1] == 0) {
+          offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
+        }
+        for (int i = value_count - 2; i > 0; i--) {
+          if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
+        }
+        offptr[0] = s->page.str_offset;
+      }
+    }
+    __syncthreads();
 #if 0
       if (t == 0)
         printf("%05d: offptr %p/%p %d %d\n",
@@ -2874,7 +2976,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
                offptr[value_count - 2],
                offptr[value_count - 1]);
 #endif
-    }
   }
 }
 
@@ -2930,6 +3031,24 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<non_zero_buffer_size>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+}
+
+/**
+ * @copydoc cudf::io::parquet::gpu::DecodePageData
+ */
+void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
+                                   hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                   size_t num_rows,
+                                   size_t min_row,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
+
+  dim3 dim_block(decode_block_size, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  gpuDecodeStringPageData<non_zero_buffer_size>
     <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
 }
 

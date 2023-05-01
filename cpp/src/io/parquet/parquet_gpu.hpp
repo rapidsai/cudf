@@ -164,8 +164,8 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;       // starting row of this page relative to the start of the chunk
-  int32_t num_rows;        // number of rows in this page
+  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
+  int32_t num_rows;   // number of rows in this page
   // the next two are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -504,6 +504,12 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     size_t num_rows,
                     size_t min_row,
                     rmm::cuda_stream_view stream);
+
+void DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
+                          hostdevice_vector<ColumnChunkDesc> const& chunks,
+                          size_t num_rows,
+                          size_t min_row,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments
