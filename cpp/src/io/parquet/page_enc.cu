@@ -1343,7 +1343,7 @@ __global__ void __launch_bounds__(decide_compression_block_size)
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
   auto const num_pages            = ck_g[warp_id].num_pages;
-  for (auto page = lane_id; page < num_pages; page += warpSize) {
+  for (auto page = lane_id; page < num_pages; page += cudf::detail::warp_size) {
     auto& curr_page           = ck_g[warp_id].pages[page];
     auto const page_data_size = curr_page.max_data_size;
     uncompressed_data_size += page_data_size;
