@@ -2679,8 +2679,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
             }
           } else {
-            // test for string hashes
-            if (dtype_len == 4) { gpuOutputString(s, sb, val_src_pos, dst); }
+            gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
