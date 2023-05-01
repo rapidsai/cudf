@@ -1853,6 +1853,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   }
 }
 
+template <int lvl_buf_size>
 __device__ std::pair<int, int> page_bounds(page_state_s* const s,
                                            size_t min_row,
                                            size_t num_rows,
@@ -1882,9 +1883,9 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   auto const col  = &s->col;
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
-  int const max_batch_size = s->level_decode_buf_size;
-  uint32_t* def_decode     = s->def;
-  uint32_t* rep_decode     = s->rep;
+  int const max_batch_size = lvl_buf_size;
+  uint32_t* def_decode     = pp->lvl_decode_buf[level_type::DEFINITION];
+  uint32_t* rep_decode     = pp->lvl_decode_buf[level_type::REPETITION];
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
@@ -1945,17 +1946,17 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
       // do something with the level data
       while (start_val < processed) {
         int idx_t = start_val + t;
-        int idx   = rolling_lvl_index(idx_t, s->level_decode_buf_size);
+        int idx   = rolling_lvl_index<lvl_buf_size>(idx_t);
 
         // get absolute thread row index
-        int is_new_row = idx_t < processed && (!has_repetition || s->rep[idx] == 0);
+        int is_new_row = idx_t < processed && (!has_repetition || rep_decode[idx] == 0);
         int thread_row_count, block_row_count;
         block_scan(temp_storage.scan_storage)
           .InclusiveSum(is_new_row, thread_row_count, block_row_count);
         __syncthreads();
 
         // get absolute thread leaf index
-        int const is_new_leaf = idx_t < processed && (s->def[idx] >= max_def);
+        int const is_new_leaf = idx_t < processed && (def_decode[idx] >= max_def);
         int thread_leaf_count, block_leaf_count;
         block_scan(temp_storage.scan_storage)
           .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
@@ -2051,8 +2052,8 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
       while (start_val < processed) {
         int idx_t = start_val + t;
         if (idx_t < processed) {
-          int idx = rolling_lvl_index(idx_t, s->level_decode_buf_size);
-          if (s->def[idx] < max_def) { num_nulls++; }
+          int idx = rolling_lvl_index<lvl_buf_size>(idx_t);
+          if (def_decode[idx] < max_def) { num_nulls++; }
         }
         start_val += preprocess_block_size;
       }
@@ -2221,6 +2222,7 @@ countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_v
   return total_len;
 }
 
+template <int lvl_buf_size>
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -2249,17 +2251,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   rle_stream decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          false,
-                          pp->lvl_decode_buf,
-                          LEVEL_DECODE_BUF_SIZE,
-                          decoders)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
 
   if (!t) {
     s->page.num_nulls = 0;
@@ -2274,7 +2266,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // find start/end value indices
   auto const [start_value, end_value] =
-    page_bounds(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
+    page_bounds<lvl_buf_size>(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
 
   // need to save num_nulls calculated in page_bounds in this page
   // FIXME: num_nulls is only correct for !is_bounds_pg...need to fix this
@@ -2896,8 +2888,8 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
 {
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
-  gpuComputePageStringSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows);
+  gpuComputePageStringSizes<LEVEL_DECODE_BUF_SIZE>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
 }
 
 /**
