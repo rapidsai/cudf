@@ -15,6 +15,7 @@ from cudf.core.udf.templates import (
     unmasked_input_initializer_template,
 )
 from cudf.core.udf.utils import (
+    Row,
     _all_dtypes_from_frame,
     _construct_signature,
     _get_extensionty_size,
@@ -23,7 +24,6 @@ from cudf.core.udf.utils import (
     _mask_get,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
-    Row
 )
 
 

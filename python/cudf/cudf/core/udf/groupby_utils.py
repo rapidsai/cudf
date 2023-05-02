@@ -18,6 +18,7 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    Row,
     _generate_cache_key,
     _get_extensionty_size,
     _get_kernel,
@@ -25,7 +26,6 @@ from cudf.core.udf.utils import (
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
     precompiled,
-    Row
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
 
