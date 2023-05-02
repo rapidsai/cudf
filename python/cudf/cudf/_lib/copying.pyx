@@ -23,6 +23,7 @@ from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
 
+cimport cudf._lib.cpp.contiguous_split as cpp_contiguous_split
 cimport cudf._lib.cpp.copying as cpp_copying
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
@@ -712,7 +713,7 @@ cdef class _CPackedColumns:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
-        p.c_obj = move(cpp_copying.pack(input_table_view))
+        p.c_obj = move(cpp_contiguous_split.pack(input_table_view))
 
         return p
 
@@ -740,10 +741,10 @@ cdef class _CPackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        if self.c_obj.metadata_.get()[0].data() != NULL:
+        if self.c_obj.metadata.get()[0].data() != NULL:
             header["metadata"] = list(
-                <uint8_t[:self.c_obj.metadata_.get()[0].size()]>
-                self.c_obj.metadata_.get()[0].data()
+                <uint8_t[:self.c_obj.metadata.get()[0].size()]>
+                self.c_obj.metadata.get()[0].data()
             )
 
         column_dtypes = {}
@@ -769,9 +770,9 @@ cdef class _CPackedColumns:
             size=gpu_data.nbytes
         )
 
-        cdef cpp_copying.packed_columns data
-        data.metadata_ = move(
-            make_unique[cpp_copying.metadata](
+        cdef cpp_contiguous_split.packed_columns data
+        data.metadata = move(
+            make_unique[vector[uint8_t]](
                 move(<vector[uint8_t]>header.get("metadata", []))
             )
         )
@@ -793,7 +794,7 @@ cdef class _CPackedColumns:
 
     def unpack(self):
         output_table = cudf.DataFrame._from_data(*data_from_table_view(
-            cpp_copying.unpack(self.c_obj),
+            cpp_contiguous_split.unpack(self.c_obj),
             self,
             self.column_names,
             self.index_names

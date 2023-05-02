@@ -9757,9 +9757,19 @@ def test_empty_numeric_only(data):
     assert_eq(expected, actual)
 
 
-@pytest.fixture
-def df_eval():
-    N = 10
+@pytest.fixture(params=[0, 10], ids=["empty", "10"])
+def df_eval(request):
+    N = request.param
+    if N == 0:
+        value = np.zeros(0, dtype="int")
+        return cudf.DataFrame(
+            {
+                "a": value,
+                "b": value,
+                "c": value,
+                "d": value,
+            }
+        )
     int_max = 10
     rng = cupy.random.default_rng(0)
     return cudf.DataFrame(
