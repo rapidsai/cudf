@@ -283,15 +283,9 @@ template <typename T = uint8_t>
     chunk = next_chunk;
   }
 
-  auto uncompressed_buffer = [&]() {
-    return uncompressed_read_size > 0 ? rmm::device_buffer(uncompressed_read_size, stream)
-                                      : rmm::device_buffer(0, stream);
-  }();
+  auto uncompressed_buffer = rmm::device_buffer(uncompressed_read_size, stream);
 
-  auto compressed_buffer = [&]() {
-    return compressed_read_size > 0 ? rmm::device_buffer(compressed_read_size, stream)
-                                    : rmm::device_buffer(0, stream);
-  }();
+  auto compressed_buffer = rmm::device_buffer(compressed_read_size, stream);
 
   auto compressed_buffer_data   = static_cast<uint8_t*>(compressed_buffer.data());
   auto uncompressed_buffer_data = static_cast<uint8_t*>(uncompressed_buffer.data());
