@@ -1807,7 +1807,9 @@ class structs_column_wrapper : public detail::column_wrapper {
     std::transform(child_column_wrappers.begin(),
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
-                   [&](auto column_wrapper) { return column_wrapper.get().release(); });
+                   [&](auto const& column_wrapper) {
+                     return std::make_unique<cudf::column>(column_wrapper.get());
+                   });
     init(std::move(child_columns), validity);
   }
 
@@ -1841,7 +1843,9 @@ class structs_column_wrapper : public detail::column_wrapper {
     std::transform(child_column_wrappers.begin(),
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
-                   [&](auto column_wrapper) { return column_wrapper.get().release(); });
+                   [&](auto const& column_wrapper) {
+                     return std::make_unique<cudf::column>(column_wrapper.get());
+                   });
     init(std::move(child_columns), validity_iter);
   }
 
