@@ -235,6 +235,21 @@ template <typename T = uint8_t>
 {
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
+  size_t compressed_read_size   = 0;
+  size_t uncompressed_read_size = 0;
+
+  struct read_info {
+    size_t io_size;
+    size_t io_offset;
+    bool compressed;
+    bool device_read;
+    size_t begin_chunk;
+    size_t end_chunk;
+  };
+
+  std::vector<read_info> reads;
+
+  // build allocation sizes and make as few allocations as possible
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     const size_t io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
@@ -254,25 +269,67 @@ template <typename T = uint8_t>
       next_chunk++;
     }
     if (io_size != 0) {
-      auto& source = sources[chunk_source_map[chunk]];
-      if (source->is_device_read_preferred(io_size)) {
-        auto buffer        = rmm::device_buffer(io_size, stream);
-        auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
-        read_tasks.emplace_back(std::move(fut_read_size));
-        page_data[chunk] = datasource::buffer::create(std::move(buffer));
-      } else {
-        auto const buffer = source->host_read(io_offset, io_size);
-        page_data[chunk] =
-          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
+      auto& source              = sources[chunk_source_map[chunk]];
+      auto const is_device_read = source->is_device_read_preferred(io_size);
+      reads.push_back({io_size, io_offset, is_compressed, is_device_read, chunk, next_chunk});
+      if (is_device_read) {
+        if (is_compressed) {
+          compressed_read_size += io_size;
+        } else {
+          uncompressed_read_size += io_size;
+        }
       }
-      auto d_compdata = page_data[chunk]->data();
-      do {
-        chunks[chunk].compressed_data = d_compdata;
-        d_compdata += chunks[chunk].compressed_size;
-      } while (++chunk != next_chunk);
-    } else {
-      chunk = next_chunk;
+    }
+    chunk = next_chunk;
+  }
+
+  auto uncompressed_buffer = [&]() {
+    return uncompressed_read_size > 0 ? rmm::device_buffer(uncompressed_read_size, stream)
+                                      : rmm::device_buffer(0, stream);
+  }();
+
+  auto compressed_buffer = [&]() {
+    return compressed_read_size > 0 ? rmm::device_buffer(compressed_read_size, stream) : rmm::device_buffer(0, stream);
+  }();
+
+  auto compressed_buffer_data   = static_cast<uint8_t*>(compressed_buffer.data());
+  auto uncompressed_buffer_data = static_cast<uint8_t*>(uncompressed_buffer.data());
+  if (compressed_read_size > 0) {
+    page_data.emplace_back(datasource::buffer::create(std::move(compressed_buffer)));
+  }
+  if (uncompressed_read_size > 0) {
+    page_data.emplace_back(datasource::buffer::create(std::move(uncompressed_buffer)));
+  }
+
+  size_t compressed_done   = 0;
+  size_t uncompressed_done = 0;
+
+  // queue reads
+  for (auto const& r : reads) {
+    auto d_compdata = [&]() -> const uint8_t* {
+      auto& source = sources[chunk_source_map[r.begin_chunk]];
+      if (r.device_read) {
+        auto const ptr     = r.compressed ? compressed_buffer_data : uncompressed_buffer_data;
+        auto fut_read_size = source->device_read_async(r.io_offset, r.io_size, ptr, stream);
+        read_tasks.emplace_back(std::move(fut_read_size));
+        if (r.compressed) {
+          compressed_buffer_data += r.io_size;
+          compressed_done += r.io_size;
+        } else {
+          uncompressed_buffer_data += r.io_size;
+          uncompressed_done += r.io_size;
+        }
+        return ptr;
+      } else {
+        auto const buffer = source->host_read(r.io_offset, r.io_size);
+        page_data.emplace_back(
+          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream)));
+        return page_data.back()->data();
+      }
+    }();
+    for (auto chunk = r.begin_chunk; chunk < r.end_chunk; ++chunk) {
+      chunks[chunk].compressed_data = d_compdata;
+      d_compdata += chunks[chunk].compressed_size;
     }
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
