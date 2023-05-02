@@ -461,8 +461,8 @@ struct column_gatherer_impl<struct_view> {
     std::transform(thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(column.num_children()),
                    std::back_inserter(sliced_children),
-                   [structs_view = structs_column_view{column}](auto const idx) {
-                     return structs_view.get_sliced_child(idx);
+                   [&stream, structs_view = structs_column_view{column}](auto const idx) {
+                     return structs_view.get_sliced_child(idx, stream);
                    });
 
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
