@@ -693,7 +693,7 @@ struct dispatch_map_type {
 
     // Unfortunately need to materialize the scatter map because
     // `detail::scatter` requires multiple passes through the iterator
-    rmm::device_uvector<MapType> scatter_map(partition_map.size(), stream);
+    rmm::device_uvector<size_type> scatter_map(partition_map.size(), stream);
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
