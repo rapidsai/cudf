@@ -544,7 +544,7 @@ struct operator_functor<ast_operator::IS_NULL, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) -> bool
   {
-    return true;
+    return false;
   }
 };
 
@@ -852,9 +852,9 @@ struct operator_functor<ast_operator::IS_NULL, true> {
   static constexpr auto arity = NonNullOperator::arity;
 
   template <typename LHS>
-  __device__ inline auto operator()(LHS const lhs) -> decltype(lhs.has_value())
+  __device__ inline auto operator()(LHS const lhs) -> decltype(!lhs.has_value())
   {
-    return lhs.has_value();
+    return !lhs.has_value();
   }
 };
 
