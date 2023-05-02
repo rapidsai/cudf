@@ -289,7 +289,8 @@ template <typename T = uint8_t>
   }();
 
   auto compressed_buffer = [&]() {
-    return compressed_read_size > 0 ? rmm::device_buffer(compressed_read_size, stream) : rmm::device_buffer(0, stream);
+    return compressed_read_size > 0 ? rmm::device_buffer(compressed_read_size, stream)
+                                    : rmm::device_buffer(0, stream);
   }();
 
   auto compressed_buffer_data   = static_cast<uint8_t*>(compressed_buffer.data());
@@ -301,9 +302,6 @@ template <typename T = uint8_t>
     page_data.emplace_back(datasource::buffer::create(std::move(uncompressed_buffer)));
   }
 
-  size_t compressed_done   = 0;
-  size_t uncompressed_done = 0;
-
   // queue reads
   for (auto const& r : reads) {
     auto d_compdata = [&]() -> const uint8_t* {
@@ -314,10 +312,8 @@ template <typename T = uint8_t>
         read_tasks.emplace_back(std::move(fut_read_size));
         if (r.compressed) {
           compressed_buffer_data += r.io_size;
-          compressed_done += r.io_size;
         } else {
           uncompressed_buffer_data += r.io_size;
-          uncompressed_done += r.io_size;
         }
         return ptr;
       } else {
