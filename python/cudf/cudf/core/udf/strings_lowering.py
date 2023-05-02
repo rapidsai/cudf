@@ -126,10 +126,7 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     sv = cgutils.create_struct_proxy(string_view)(context, builder)
 
     # set the empty strview data pointer to point to the literal value
-    s = context.insert_const_string(builder.module, fromty.literal_value)
-    sv.data = context.insert_addrspace_conv(
-        builder, s, nvvm.ADDRSPACE_CONSTANT
-    )
+    sv.data = context.insert_string_const_addrspace(builder, fromty.literal_value)
     sv.length = context.get_constant(size_type, len(fromty.literal_value))
     sv.bytes = context.get_constant(
         size_type, len(fromty.literal_value.encode("UTF-8"))

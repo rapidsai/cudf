@@ -4,7 +4,6 @@ import math
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Record
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType
@@ -24,20 +23,18 @@ from cudf.core.udf.utils import (
     _mask_get,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
+    Row
 )
 
 
 def _get_frame_row_type(dtype):
     """
-    Get the numba `Record` type corresponding to a frame.
-    Models each column and its mask as a MaskedType and
-    models the row as a dictionary like data structure
-    containing these MaskedTypes.
-    Large parts of this function are copied with comments
-    from the Numba internals and slightly modified to
-    account for validity bools to be present in the final
-    struct.
-    See numba.np.numpy_support.from_struct_dtype for details.
+    Get the Numba type of a row in a frame. Models each column and its mask as
+    a MaskedType and models the row as a dictionary like data structure
+    containing these MaskedTypes. Large parts of this function are copied with
+    comments from the Numba internals and slightly modified to account for
+    validity bools to be present in the final struct. See
+    numba.np.numpy_support.from_struct_dtype for details.
     """
 
     # Create the numpy structured type corresponding to the numpy dtype.
@@ -89,7 +86,7 @@ def _get_frame_row_type(dtype):
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
-    return Record(fields, offset, _is_aligned_struct)
+    return Row(fields, offset, _is_aligned_struct)
 
 
 def _row_kernel_string_from_template(frame, row_type, args):
