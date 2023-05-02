@@ -373,9 +373,6 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 scale = min(
                     scale, cudf.Decimal128Dtype.MAX_PRECISION - integral
                 )
-            # potential for overflow error in this case
-            elif scale < 6 and integral > 32:
-                pass
             elif scale > 6 and integral > 32:
                 scale = 6
         precision = cudf.Decimal128Dtype.MAX_PRECISION
@@ -406,7 +403,6 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
-        cudf.Decimal128Dtype,
     ):
         if decimal_type.MAX_PRECISION >= max_precision:
             try:
@@ -415,6 +411,10 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # Call to _validate fails, which means we need
                 # to try the next dtype
                 continue
+
+    # no dtypes remain; if call to _validate fails, we raise as we have
+    # encountered an overflow case
+    return cudf.Decimal128Dtype(precision=precision, scale=scale)
 
 
 def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
