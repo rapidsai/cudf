@@ -10,6 +10,7 @@ from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
@@ -20,10 +21,16 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.api.types import (
+    is_datetime64_dtype,
+    is_datetime64tz_dtype,
+    is_scalar,
+    is_timedelta64_dtype,
+)
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _fillna_natwise
 
 _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
@@ -516,6 +523,63 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
+
+    def _with_type_metadata(self, dtype):
+        if is_datetime64tz_dtype(dtype):
+            return DatetimeTZColumn(
+                data=self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+        return self
+
+
+class DatetimeTZColumn(DatetimeColumn):
+    def __init__(
+        self,
+        data: Buffer,
+        dtype: pd.DatetimeTZDtype,
+        mask: Buffer = None,
+        size: int = None,
+        offset: int = 0,
+        null_count: int = None,
+    ):
+        super().__init__(
+            data=data,
+            dtype=_get_base_dtype(dtype),
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
+        self._dtype = dtype
+
+    def to_pandas(
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
+    ) -> "cudf.Series":
+        return self._local_time.to_pandas().dt.tz_localize(
+            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+        )
+
+    def to_arrow(self):
+        return pa.compute.assume_timezone(
+            self._local_time.to_arrow(), str(self.dtype.tz)
+        )
+
+    @property
+    def _local_time(self):
+        """Return the local time as naive timestamps."""
+        from cudf.core._internals.timezones import utc_to_local
+
+        return utc_to_local(self, str(self.dtype.tz))
+
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        return self._local_time.as_string_column(dtype, format, **kwargs)
 
 
 def infer_format(element: str, **kwargs) -> str:

@@ -1125,7 +1125,12 @@ class Frame(BinaryOperand, Scannable):
                 result[name] = result[name].as_string_column(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
-                (pa.StructType, pa.ListType, pa.Decimal128Type),
+                (
+                    pa.StructType,
+                    pa.ListType,
+                    pa.Decimal128Type,
+                    pa.TimestampType,
+                ),
             ):
                 # In case of struct column, libcudf is not aware of names of
                 # struct fields, hence renaming the struct fields is
@@ -1137,6 +1142,9 @@ class Frame(BinaryOperand, Scannable):
 
                 # In case of list column, there is a possibility of nested
                 # list columns to have struct or decimal columns inside them.
+
+                # Datetimes ("timestamps") may need timezone metadata
+                # attached to them, as libcudf is timezone-unaware
 
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
