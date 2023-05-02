@@ -2836,7 +2836,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       // need to do this before we branch on src_pos/dst_pos so we don't deadlock
       // choose a character parallel string copy when the average string is longer than a warp
       auto const use_char_ll = s->page.num_valids > 0 &&
-                               (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
+                               (s->page.str_bytes / s->page.num_valids) >= cudf::detail::warp_size;
       int const leaf_level_index = s->col.max_nesting_depth - 1;
       int const me               = t - out_thread0;
 
