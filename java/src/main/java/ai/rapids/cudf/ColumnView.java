@@ -43,8 +43,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final ColumnVector.OffHeapState offHeap;
 
   /**
-   * Constructs a Column View given a native view address
+   * Constructs a Column View given a native view address. This asserts that if the ColumnView is
+   * of nested-type it doesn't contain non-empty nulls
    * @param address the view handle
+   * @throws AssertionError if the address points to a nested-type view with non-empty nulls
    */
   ColumnView(long address) {
     this.viewHandle = address;
@@ -67,8 +69,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Intended to be called from ColumnVector when it is being constructed. Because state creates a
    * cudf::column_view instance and will close it in all cases, we don't want to have to double
-   * close it.
+   * close it. This asserts that if the offHeapState is of nested-type it doesn't contain non-empty nulls
    * @param state the state this view is based off of.
+   * @throws AssertionError if offHeapState points to a nested-type view with non-empty nulls
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
