@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import ast
 import functools
@@ -56,6 +56,7 @@ python_cudf_function_map = {
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/enhancingperf.html#expression-evaluation-via-eval  # noqa: E501
     # that we don't support yet:
     # expm1, log1p, arctan2 and log10.
+    "isnull": ASTOperator.IS_NULL,
     "sin": ASTOperator.SIN,
     "cos": ASTOperator.COS,
     "tan": ASTOperator.TAN,
