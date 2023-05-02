@@ -57,7 +57,8 @@ struct char_types_fn {
       uint8_t const chr = static_cast<uint8_t>(*itr);
       if (is_utf8_continuation_char(chr)) { continue; }
       auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
-      if (u8 > std::numeric_limits<char>::max()) { to_char_utf8(itr, u8); }
+      // using max(int8) here since max(char)=255 on ARM systems
+      if (u8 > std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
 
       // lookup flags in table by code-point
       auto const code_point = utf8_to_codepoint(u8);
