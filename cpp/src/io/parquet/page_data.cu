@@ -1875,7 +1875,11 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
 
   // can skip all this if we know there are no nulls
-  if (max_def == 0 && !is_bounds_pg) { return {0, s->num_input_values}; }
+  if (max_def == 0 && !is_bounds_pg) {
+    s->page.num_valids = s->num_input_values;
+    s->page.num_nulls = 0;
+    return {0, s->num_input_values};
+  }
 
   int start_value = 0;
   int end_value   = s->page.num_input_values;
@@ -1976,8 +1980,9 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
 
           // we found it
           if (global_count > 0) {
-            // this is the thread that represents the first row.
-            if (local_count == 1) {
+            // this is the thread that represents the first row. need to test in_row_bounds for
+            // the case where we only want one row and local_count == 1 for many threads.
+            if (local_count == 1 && in_row_bounds) {
               skipped_values = idx_t;
               skipped_leaf_values =
                 leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
