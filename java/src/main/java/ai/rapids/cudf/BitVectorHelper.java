@@ -71,7 +71,7 @@ final class BitVectorHelper {
   /**
    * This method returns the length in bytes needed to represent X number of rows
    * e.g. getValidityLengthInBytes(5) => 1 byte
-   * getLengthInBytes(7) => 1 byte
+   * getValidityLengthInBytes(7) => 1 byte
    * getValidityLengthInBytes(14) => 2 bytes
    */
   static long getValidityLengthInBytes(long rows) {

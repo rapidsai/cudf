@@ -6676,4 +6676,34 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedCv, actualCv);
     }
   }
+
+  @Test
+  void testColumnViewWithNonEmptyNullsIsCleared() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> list2 = Arrays.asList(7, 8, 9);
+    List<Integer> list3 = null;
+    try (ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
+         BaseDeviceMemoryBuffer baseValidityBuffer = input.getDeviceBufferFor(BufferType.VALIDITY);
+         BaseDeviceMemoryBuffer baseOffsetBuffer = input.getDeviceBufferFor(BufferType.OFFSET);
+         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(3))) {
+
+      newValidity.copyFromDeviceBuffer(baseValidityBuffer);
+      BitVectorHelper.setNullAt(newValidity, 1);
+      DeviceMemoryBuffer validityBuffer = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(3));
+      validityBuffer.copyFromHostBuffer(newValidity);
+      DeviceMemoryBuffer offsetBuffer = DeviceMemoryBuffer.allocate(baseOffsetBuffer.getLength());
+      offsetBuffer.copyFromMemoryBuffer(0, baseOffsetBuffer, 0,
+          baseOffsetBuffer.length, Cuda.DEFAULT_STREAM);
+
+      ColumnVector.OffHeapState offHeapState = ColumnVector.makeOffHeap(input.type, input.rows, Optional.of(2L),
+          null, validityBuffer, offsetBuffer,
+          null, Arrays.stream(input.getChildColumnViews()).mapToLong((c) -> c.viewHandle).toArray());
+      try {
+        new ColumnView(offHeapState);
+      } catch (AssertionError ae) {
+        assert offHeapState.isClean();
+      }
+    }
+  }
 }

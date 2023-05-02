@@ -58,6 +58,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       // offHeap state is null, so there is nothing to clean in offHeap
       // delete ColumnView to avoid memory leak
       deleteColumnView(viewHandle);
+      viewHandle = 0;
       throw ae;
     }
   }
@@ -78,9 +79,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     try {
       AssertEmptyNulls.assertNullsAreEmpty(this);
     } catch (AssertionError ae) {
-      // This constructor is only called from ColumnVector so calling close will call
-      // close in ColumnVector which will close out the offHeapState
-      close();
+      // cleanup offHeap
+      offHeap.clean(false);
+      viewHandle = 0;
       throw ae;
     }
   }
