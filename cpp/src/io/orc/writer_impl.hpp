@@ -291,7 +291,7 @@ class writer::impl {
    * @brief Write the intermediate ORC data into the data sink.
    *
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
-   * by `process_for_write` called in the `write()` function.
+   * by `convert_table_to_orc_data` called in the `write()` function.
    *
    * @param[in] enc_data ORC per-chunk streams of encoded data
    * @param[in] segmentation Description of how the ORC file is segmented into stripes and rowgroups
