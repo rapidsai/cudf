@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,8 +214,9 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
 
   // First, verify that if the structs column has only nulls, all output rows are ranked 1.
   {
-    struct_col->set_null_mask(
-      create_null_mask(12, cudf::mask_state::ALL_NULL));  // Null mask not pushed down to members.
+    // Null mask not pushed down to members.
+    struct_col->set_null_mask(create_null_mask(struct_col->size(), cudf::mask_state::ALL_NULL),
+                              struct_col->size());
     auto const expected_null_result = rank_result_col{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     auto const expected_percent_rank_null_result =
       percent_result_col{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -231,8 +232,9 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
   // the ranks are still correct.
   {
     auto const null_iter = cudf::test::iterators::nulls_at({1, 2});
-    struct_col->set_null_mask(
-      cudf::test::detail::make_null_mask(null_iter, null_iter + struct_col->size()));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(null_iter, null_iter + struct_col->size());
+    struct_col->set_null_mask(std::move(null_mask), null_count);
     auto const expected_dense   = rank_result_col{1, 2, 2, 3, 4, 5, 6, 6, 7, 8, 8, 9};
     auto const expected_rank    = rank_result_col{1, 2, 2, 4, 5, 6, 7, 7, 9, 10, 10, 12};
     auto const expected_percent = percent_result_col{0.0,
@@ -256,8 +258,7 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
   }
 }
 
-struct RankScanTest : public cudf::test::BaseFixture {
-};
+struct RankScanTest : public cudf::test::BaseFixture {};
 
 TEST(RankScanTest, BoolRank)
 {

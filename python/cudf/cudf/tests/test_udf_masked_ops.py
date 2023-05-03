@@ -775,6 +775,19 @@ def test_masked_udf_caching():
 
     assert precompiled.currsize == 1
 
+    # validate that changing the type of a scalar arg
+    # results in a miss
+    precompiled.clear()
+
+    def f(x, c):
+        return x + c
+
+    data.apply(f, args=(1,))
+    assert precompiled.currsize == 1
+
+    data.apply(f, args=(1.5,))
+    assert precompiled.currsize == 2
+
 
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]

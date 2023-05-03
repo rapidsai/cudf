@@ -7574,11 +7574,13 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
         pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan]),
     ],
 )
-def test_dataframe_bfill(df):
+@pytest.mark.parametrize("alias", ["bfill", "backfill"])
+def test_dataframe_bfill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = df.bfill()
-    expected = gdf.bfill()
+    actual = getattr(df, alias)()
+    with expect_warning_if(alias == "backfill"):
+        expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
 
 
@@ -7589,11 +7591,13 @@ def test_dataframe_bfill(df):
         pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan]),
     ],
 )
-def test_dataframe_ffill(df):
+@pytest.mark.parametrize("alias", ["ffill", "pad"])
+def test_dataframe_ffill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    actual = df.ffill()
-    expected = gdf.ffill()
+    actual = getattr(df, alias)()
+    with expect_warning_if(alias == "pad"):
+        expected = getattr(gdf, alias)()
     assert_eq(expected, actual)
 
 
@@ -9753,9 +9757,19 @@ def test_empty_numeric_only(data):
     assert_eq(expected, actual)
 
 
-@pytest.fixture
-def df_eval():
-    N = 10
+@pytest.fixture(params=[0, 10], ids=["empty", "10"])
+def df_eval(request):
+    N = request.param
+    if N == 0:
+        value = np.zeros(0, dtype="int")
+        return cudf.DataFrame(
+            {
+                "a": value,
+                "b": value,
+                "c": value,
+                "d": value,
+            }
+        )
     int_max = 10
     rng = cupy.random.default_rng(0)
     return cudf.DataFrame(

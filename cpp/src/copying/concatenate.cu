@@ -61,8 +61,8 @@ constexpr bool use_fused_kernel_heuristic(bool const has_nulls, size_t const num
 auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_view stream)
 {
   // Create device views for each input view
-  using CDViewPtr = decltype(
-    column_device_view::create(std::declval<column_view>(), std::declval<rmm::cuda_stream_view>()));
+  using CDViewPtr         = decltype(column_device_view::create(std::declval<column_view>(),
+                                                        std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(views.begin(), views.end(), device_view_owners.begin(), [stream](auto const& col) {
     return column_device_view::create(col, stream);
@@ -420,7 +420,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                    std::back_inserter(nth_children),
                    [child_index, stream](column_view const& col) {
                      structs_column_view scv(col);
-                     return scv.get_sliced_child(child_index);
+                     return scv.get_sliced_child(child_index, stream);
                    });
 
     bounds_and_type_check(nth_children, stream);

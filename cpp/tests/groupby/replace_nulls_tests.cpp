@@ -31,8 +31,7 @@ using namespace cudf::test::iterators;
 using K = int32_t;
 
 template <typename T>
-struct GroupbyReplaceNullsFixedWidthTest : public cudf::test::BaseFixture {
-};
+struct GroupbyReplaceNullsFixedWidthTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupbyReplaceNullsFixedWidthTest, cudf::test::FixedWidthTypes);
 
@@ -110,8 +109,7 @@ TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, FollowingFillTrailingNulls)
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, cudf::replace_policy::FOLLOWING);
 }
 
-struct GroupbyReplaceNullsStringsTest : public cudf::test::BaseFixture {
-};
+struct GroupbyReplaceNullsStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(GroupbyReplaceNullsStringsTest, PrecedingFill)
 {
@@ -174,8 +172,7 @@ TEST_F(GroupbyReplaceNullsStringsTest, FollowingFillTrailingNull)
 }
 
 template <typename T>
-struct GroupbyReplaceNullsListsTest : public cudf::test::BaseFixture {
-};
+struct GroupbyReplaceNullsListsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupbyReplaceNullsListsTest, cudf::test::FixedWidthTypes);
 

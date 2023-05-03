@@ -53,10 +53,8 @@ namespace cudf {
  *
  */
 struct nullate {
-  struct YES : std::bool_constant<true> {
-  };
-  struct NO : std::bool_constant<false> {
-  };
+  struct YES : std::bool_constant<true> {};
+  struct NO : std::bool_constant<false> {};
   /**
    * @brief `nullate::DYNAMIC` defers the determination of nullability to run time rather than
    * compile time. The calling code is responsible for specifying whether or not nulls are
@@ -318,16 +316,14 @@ class alignas(16) column_device_view_base {
   }
 
   template <typename C, typename T, typename = void>
-  struct has_element_accessor_impl : std::false_type {
-  };
+  struct has_element_accessor_impl : std::false_type {};
 
   template <typename C, typename T>
   struct has_element_accessor_impl<
     C,
     T,
     void_t<decltype(std::declval<C>().template element<T>(std::declval<size_type>()))>>
-    : std::true_type {
-  };
+    : std::true_type {};
 };
 // @cond
 // Forward declaration
@@ -1397,7 +1393,7 @@ struct pair_accessor {
  */
 template <typename T, bool has_nulls = false>
 struct pair_rep_accessor {
-  column_device_view const col;  ///< column view of column in device
+  column_device_view const col;               ///< column view of column in device
 
   using rep_type = device_storage_type_t<T>;  ///< representation type
 

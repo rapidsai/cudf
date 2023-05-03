@@ -169,7 +169,7 @@ reduce_to_column_tree(tree_meta_t& tree,
     });
 
   // 4. unique_copy parent_node_ids, ranges
-  rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
+  rmm::device_uvector<TreeDepthT> column_levels(0, stream);                 // not required
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   rmm::device_uvector<SymbolOffsetT> col_range_begin(num_columns, stream);  // Field names
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
@@ -349,7 +349,8 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   auto d_column_names     = experimental::detail::parse_data(string_views.begin(),
                                                          num_strings,
                                                          data_type{type_id::STRING},
-                                                         rmm::device_buffer{0, stream},
+                                                         rmm::device_buffer{},
+                                                         0,
                                                          options_view,
                                                          stream,
                                                          rmm::mr::get_current_device_resource());
@@ -790,12 +791,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         target_type = cudf::io::detail::infer_data_type(
           options.json_view(), d_input, string_ranges_it, col_size, stream);
       }
-      validity_size_check(json_col);
+
+      auto [result_bitmask, null_count] = make_validity(json_col);
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  json_col.validity.release(),
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   options.view(),
                                                   stream,
                                                   mr);
