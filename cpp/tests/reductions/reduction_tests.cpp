@@ -1771,8 +1771,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 2, 3, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
@@ -1792,8 +1792,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{10, 20, 20, 30, 30, 40}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
@@ -1813,8 +1813,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 3, 4, 5}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
@@ -1837,8 +1837,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
     auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
