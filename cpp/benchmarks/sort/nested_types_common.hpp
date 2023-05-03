@@ -44,7 +44,8 @@ inline std::unique_ptr<cudf::table> create_lists_data(nvbench::state& state,
   table_profile.set_null_probability(null_frequency);
   return create_random_table(std::vector<cudf::type_id>(num_columns, cudf::type_id::LIST),
                              table_size_bytes{size_bytes},
-                             table_profile);
+                             table_profile,
+                             0);
 }
 
 inline std::unique_ptr<cudf::table> create_structs_data(nvbench::state& state,

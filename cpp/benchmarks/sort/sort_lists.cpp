@@ -26,7 +26,7 @@ constexpr cudf::size_type max_val = 100;
 
 void sort_multiple_lists(nvbench::state& state)
 {
-  auto const num_columns = static_cast<cudf::size_type>(state.get_int64("num_columns"));
+  auto const num_columns = 1;  // static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const input_table = create_lists_data(state, num_columns, min_val, max_val);
   auto const stream      = cudf::get_default_stream();
 
@@ -39,7 +39,7 @@ void sort_multiple_lists(nvbench::state& state)
 
 void sort_lists_of_structs(nvbench::state& state)
 {
-  auto const num_columns = static_cast<cudf::size_type>(state.get_int64("num_columns"));
+  auto const num_columns = 1;  // static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const lists_table = create_lists_data(state, num_columns, min_val, max_val);
 
   // After having a table of (multiple) lists columns, convert those lists columns into lists of
@@ -84,7 +84,7 @@ void sort_lists_of_structs(nvbench::state& state)
 
 void nvbench_sort_lists(nvbench::state& state)
 {
-  const auto has_lists_of_structs = state.get_int64("lists_of_structs") > 0;
+  const auto has_lists_of_structs = false;  // state.get_int64("lists_of_structs") > 0;
   if (has_lists_of_structs) {
     sort_lists_of_structs(state);
   } else {
@@ -94,8 +94,8 @@ void nvbench_sort_lists(nvbench::state& state)
 
 NVBENCH_BENCH(nvbench_sort_lists)
   .set_name("sort_list")
-  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
-  .add_int64_axis("depth", {1, 4})
-  .add_int64_axis("num_columns", {1})
-  .add_int64_axis("lists_of_structs", {0, 1})
-  .add_float64_axis("null_frequency", {0, 0.2});
+  .add_int64_power_of_two_axis("size_bytes", {14, 18, 22, 25})
+  .add_int64_axis("depth", {1, 2, 3})
+  //  .add_int64_axis("num_columns", {1})
+  //  .add_int64_axis("lists_of_structs", {0})
+  .add_float64_axis("null_frequency", {0, 0.5});
