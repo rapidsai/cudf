@@ -26,7 +26,6 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.hpp>
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>

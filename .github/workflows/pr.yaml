@@ -98,7 +98,7 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.06
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@manylinux_v2
     with:
       build_type: pull-request
       package-name: cudf
@@ -107,7 +107,7 @@ jobs:
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.06
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@manylinux_v2
     with:
       build_type: pull-request
       package-name: cudf
@@ -118,7 +118,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.06
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@manylinux_v2
     with:
       build_type: pull-request
       package-name: dask_cudf
@@ -127,7 +127,7 @@ jobs:
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.06
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@manylinux_v2
     with:
       build_type: pull-request
       package-name: dask_cudf

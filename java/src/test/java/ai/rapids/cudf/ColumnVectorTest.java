@@ -32,7 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -6676,4 +6676,29 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedCv, actualCv);
     }
   }
+
+  @Test
+  public void testEventHandlerIsCalledForEachClose() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+    }
+    assertEquals(1, onClosedWasCalled.get());
+  }
+
+  @Test
+  public void testEventHandlerIsNotCalledIfNotSet() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      assertNull(cv.getEventHandler());
+    }
+    assertEquals(0, onClosedWasCalled.get());
+
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler(null);
+    }
+    assertEquals(0, onClosedWasCalled.get());
+  }
+
 }
