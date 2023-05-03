@@ -76,12 +76,13 @@ struct finder_fn {
 };
 
 /**
- * @brief Special logic for empty target for find/rfind
+ * @brief Special logic handles an empty target for find/rfind
  *
- * forward = true:
- *   return start iff (start <= length)
- * forward = false:
- *   return stop iff (0 <= stop <= length)
+ * where length = number of characters in the input string
+ * if forward = true:
+ *   return start iff (start <= length), otherwise return -1
+ * if forward = false:
+ *   return stop iff (0 <= stop <= length), otherwise return length
  */
 template <bool forward = true>
 struct empty_target_fn {
@@ -123,13 +124,15 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
   auto const lane_idx = idx % cudf::detail::warp_size;
 
   if (d_strings.is_null(str_idx)) { return; }
+
+  // initialize the output for the atomicMin/Max
   if (lane_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
   __syncwarp();
 
   auto const d_str = d_strings.element<string_view>(str_idx);
 
   auto const [begin, left_over] = bytes_to_character_position(d_str, start);
-  auto const start_char_pos     = start - left_over;
+  auto const start_char_pos     = start - left_over;  // keep track of character position
 
   auto const end = [d_str, start, stop, begin = begin] {
     if (stop < 0) { return d_str.size_bytes(); }
@@ -139,6 +142,7 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
                      string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
   }();
 
+  // each thread compares the target with the thread's individual starting byte
   size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
   for (auto itr = begin + lane_idx; itr + d_target.size_bytes() <= end;
        itr += cudf::detail::warp_size) {
@@ -148,10 +152,14 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
     }
   }
 
+  // find stores the minimum position while rfind stores the maximum position
+  // note that this was slightly faster than using cub::WarpReduce
   forward ? atomicMin(d_results + str_idx, position) : atomicMax(d_results + str_idx, position);
   __syncwarp();
 
   if (lane_idx == 0) {
+    // the final result needs to be fixed up convert max() to -1
+    // and a byte position to a character position
     auto const result = d_results[str_idx];
     d_results[str_idx] =
       ((result < std::numeric_limits<size_type>::max()) && (result >= begin))

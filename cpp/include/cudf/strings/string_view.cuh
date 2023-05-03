@@ -67,8 +67,8 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
  * @brief Count the bytes to a specified character position
  *
  * Returns the number of bytes and any left over position value.
- * If the character position would read past the end of the input string
- * the returned position value > 0.
+ * The returned position is > 0 if the given position would read past
+ * the end of the input string.
  *
  * @param d_str Input string to count bytes within
  * @param pos Character position to count to
