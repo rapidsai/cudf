@@ -753,7 +753,7 @@ struct preprocessed_table {
    * @param stream The stream to launch kernels and h->d copies on while preprocessing
    * @return A shared pointer to a preprocessed table
    */
-  static std::shared_ptr<preprocessed_table> create_preprocessed_table(
+  static std::shared_ptr<preprocessed_table> create(
     table_view const& preprocessed_input,
     std::vector<int>&& verticalized_col_depths,
     std::vector<std::unique_ptr<column>>&& transformed_columns,
@@ -858,6 +858,16 @@ struct preprocessed_table {
     }
   }
 
+  template <typename PhysicalElementComparator>
+  void check_physical_element_comparator()
+  {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(!_has_ranked_children,
+                   "The input table has nested type children and they were transformed using a "
+                   "different type of physical element comparator.");
+    }
+  }
+
  private:
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
@@ -958,11 +968,7 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_has_ranked_children,
-                   "The input table has nested type children and they were transformed using a "
-                   "different type of physical element comparator.");
-    }
+    d_t->check_physical_element_comparator<PhysicalElementComparator>();
 
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
@@ -983,11 +989,7 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_t->_has_ranked_children,
-                   "The input table has nested type children and they were transformed using a "
-                   "different type of physical element comparator.");
-    }
+    d_t->check_physical_element_comparator<PhysicalElementComparator>();
 
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
@@ -1138,11 +1140,8 @@ class two_table_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_left_table->_has_ranked_children && !d_right_table->_has_ranked_children,
-                   "The input tables have nested type children and they were transformed using a "
-                   "different type of physical element comparator.");
-    }
+    d_left_table->check_physical_element_comparator<PhysicalElementComparator>();
+    d_right_table->check_physical_element_comparator<PhysicalElementComparator>();
 
     return less_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
@@ -1163,11 +1162,8 @@ class two_table_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
-    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
-      CUDF_EXPECTS(!d_left_table->_has_ranked_children && !d_right_table->_has_ranked_children,
-                   "The input tables have nested type children and they were transformed using a "
-                   "different type of physical element comparator.");
-    }
+    d_left_table->check_physical_element_comparator<PhysicalElementComparator>();
+    d_right_table->check_physical_element_comparator<PhysicalElementComparator>();
 
     return less_equivalent_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{

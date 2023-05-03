@@ -622,7 +622,7 @@ transform_lists_of_structs(table_view const& lhs,
 
 }  // namespace
 
-std::shared_ptr<preprocessed_table> preprocessed_table::create_preprocessed_table(
+std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& preprocessed_input,
   std::vector<int>&& verticalized_col_depths,
   std::vector<std::unique_ptr<column>>&& transformed_columns,
@@ -677,13 +677,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     transform_lists_of_structs(decomposed_input, std::nullopt, new_null_precedence, stream);
 
   auto const has_ranked_children = !transformed_columns.empty();
-  return create_preprocessed_table(transformed_input,
-                                   std::move(verticalized_col_depths),
-                                   std::move(transformed_columns),
-                                   new_column_order,
-                                   new_null_precedence,
-                                   has_ranked_children,
-                                   stream);
+  return create(transformed_input,
+                std::move(verticalized_col_depths),
+                std::move(transformed_columns),
+                new_column_order,
+                new_null_precedence,
+                has_ranked_children,
+                stream);
 }
 
 std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>>
@@ -715,20 +715,20 @@ preprocessed_table::create(table_view const& lhs,
   auto const has_ranked_children_lhs = !transformed_columns_lhs.empty();
   auto const has_ranked_children_rhs = !transformed_columns_rhs.empty();
 
-  return {create_preprocessed_table(transformed_lhs,
-                                    std::move(verticalized_col_depths_lhs),
-                                    std::move(transformed_columns_lhs),
-                                    new_column_order_lhs,
-                                    new_null_precedence_lhs,
-                                    has_ranked_children_lhs,
-                                    stream),
-          create_preprocessed_table(transformed_rhs_opt.value(),
-                                    std::move(verticalized_col_depths_rhs),
-                                    std::move(transformed_columns_rhs),
-                                    new_column_order_lhs,
-                                    new_null_precedence_lhs,
-                                    has_ranked_children_rhs,
-                                    stream)};
+  return {create(transformed_lhs,
+                 std::move(verticalized_col_depths_lhs),
+                 std::move(transformed_columns_lhs),
+                 new_column_order_lhs,
+                 new_null_precedence_lhs,
+                 has_ranked_children_lhs,
+                 stream),
+          create(transformed_rhs_opt.value(),
+                 std::move(verticalized_col_depths_rhs),
+                 std::move(transformed_columns_rhs),
+                 new_column_order_lhs,
+                 new_null_precedence_lhs,
+                 has_ranked_children_rhs,
+                 stream)};
 }
 
 preprocessed_table::preprocessed_table(
