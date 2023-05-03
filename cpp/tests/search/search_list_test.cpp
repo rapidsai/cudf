@@ -551,3 +551,120 @@ TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, *result_lower_bound, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, *result_upper_bound, verbosity);
 }
+
+TEST_F(ListBinarySearch, CrazyListTest)
+{
+  // Data type: List<List<Struct<Struct<List<Struct<int, int>>>>>>
+
+  // Haystack must be pre-sorted.
+  auto const haystack = [] {
+    auto lists_of_structs_of_ints = [] {
+      auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
+      // clang-format off
+      auto data1 = int32s_col{1, 2,
+        3,
+        3,
+        3,
+        4, 5,
+        4, 5, 4,
+        4, 5, 4,
+        4, 5, 4,
+        4, 6
+      };
+      auto data2 = int32s_col{1, 2,
+        3,
+        3,
+        3,
+        4, 5,
+        4, 5, 4,
+        4, 5, 4,
+        4, 5, 4,
+        5, 1
+      };
+      // clang-format on
+      auto child = structs_col{{data1, data2}};
+      return cudf::make_lists_column(9, offsets.release(), child.release(), 0, {});
+    }();
+
+    auto struct_nested0 = [&] {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.emplace_back(std::move(lists_of_structs_of_ints));
+      return cudf::make_structs_column(9, std::move(child_columns), 0, {});
+    }();
+
+    auto struct_nested1 = [&] {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.emplace_back(std::move(struct_nested0));
+      return cudf::make_structs_column(9, std::move(child_columns), 0, {});
+    }();
+
+    auto list_nested0 = [&] {
+      auto offsets = int32s_col{0, 3, 3, 4, 6, 9};
+      return cudf::make_lists_column(5, offsets.release(), std::move(struct_nested1), 0, {});
+    }();
+
+    auto offsets = int32s_col{0, 0, 2, 4, 5, 5};
+    return cudf::make_lists_column(5, offsets.release(), std::move(list_nested0), 0, {});
+  }();
+
+  auto const needles = [] {
+    auto lists_of_structs_of_ints = [] {
+      auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
+      // clang-format off
+      auto data1 = int32s_col{1, 2,
+        3,
+        4,
+        5,
+        4, 5,
+        5, 5, 4,
+        4, 5, 4,
+        4, 4,
+        4, 6
+      };
+      auto data2 = int32s_col{1, 2,
+        3,
+        4,
+        5,
+        4, 5,
+        5, 5, 4,
+        4, 5, 4,
+        4, 4,
+        5, 1
+      };
+      // clang-format on
+      auto child = structs_col{{data1, data2}};
+      return cudf::make_lists_column(9, offsets.release(), child.release(), 0, {});
+    }();
+
+    auto struct_nested0 = [&] {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.emplace_back(std::move(lists_of_structs_of_ints));
+      return cudf::make_structs_column(9, std::move(child_columns), 0, {});
+    }();
+
+    auto struct_nested1 = [&] {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.emplace_back(std::move(struct_nested0));
+      return cudf::make_structs_column(9, std::move(child_columns), 0, {});
+    }();
+
+    auto list_nested0 = [&] {
+      auto offsets = int32s_col{0, 3, 3, 4, 6, 9};
+      return cudf::make_lists_column(5, offsets.release(), std::move(struct_nested1), 0, {});
+    }();
+
+    auto offsets = int32s_col{0, 2, 2, 4, 4, 5};
+    return cudf::make_lists_column(5, offsets.release(), std::move(list_nested0), 0, {});
+  }();
+
+  // In this search, the two table have many equal structs.
+  // This help to verify the internal implementation of two-table lex comparator in which the
+  // structs column of two input tables are concatenated, ranked, then split.
+  auto const [result_lower_bound, result_upper_bound] = search_bounds(
+    cudf::table_view{{*haystack}}, cudf::table_view{{*needles}}, {cudf::order::ASCENDING});
+
+  auto const expected_lower_bound = int32s_col{2, 0, 5, 0, 5};
+  auto const expected_upper_bound = int32s_col{2, 1, 5, 1, 5};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, *result_lower_bound, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, *result_upper_bound, verbosity);
+}
