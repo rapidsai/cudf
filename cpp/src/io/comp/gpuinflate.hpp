@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -135,6 +136,13 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
               device_span<compression_result> results,
               rmm::cuda_stream_view stream);
+
+inline writer_compression_statistics collect_compression_statistics(
+  device_span<device_span<uint8_t const> const> inputs,
+  device_span<compression_result const> results)
+{
+  return writer_compression_statistics{3, 3, 2, 2};
+}
 
 }  // namespace io
 }  // namespace cudf

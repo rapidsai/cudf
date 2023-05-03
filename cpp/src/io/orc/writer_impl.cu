@@ -2282,7 +2282,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{stream},
-                      writer_compression_statistics{},
+                      std::optional<writer_compression_statistics>{},
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dict),
@@ -2327,34 +2327,30 @@ auto convert_table_to_orc_data(table_view const& input,
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
   hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
-  writer_compression_statistics compression_stats;
+  std::optional<writer_compression_statistics> compression_stats;
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),
                comp_results.d_end(),
                compression_result{0, compression_status::FAILURE});
   if (compression_kind != NONE) {
     strm_descs.host_to_device(stream);
-    gpu::CompressOrcDataStreams(compressed_data.data(),
-                                num_compressed_blocks,
-                                compression_kind,
-                                compression_blocksize,
-                                max_compressed_block_size,
-                                compressed_block_align,
-                                strm_descs,
-                                enc_data.streams,
-                                comp_results,
-                                stream);
+    compression_stats = gpu::CompressOrcDataStreams(compressed_data.data(),
+                                                    num_compressed_blocks,
+                                                    compression_kind,
+                                                    compression_blocksize,
+                                                    max_compressed_block_size,
+                                                    compressed_block_align,
+                                                    collect_compression_stats,
+                                                    strm_descs,
+                                                    enc_data.streams,
+                                                    comp_results,
+                                                    stream);
 
     // deallocate encoded data as it is not needed anymore
     enc_data.data.clear();
 
     strm_descs.device_to_host(stream);
     comp_results.device_to_host(stream, true);
-
-    // TODO populate compression statistics
-    if (collect_compression_stats) {
-      compression_stats = writer_compression_statistics{1, 2, 3, 4};
-    }
   }
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
@@ -2488,15 +2484,18 @@ void writer::impl::write(table_view const& input)
   update_statistics(orc_table.num_rows(), intermediate_stats, compression_stats);
 }
 
-void writer::impl::update_statistics(size_type num_rows,
-                                     intermediate_statistics& intermediate_stats,  // why not const?
-                                     writer_compression_statistics const& compression_stats)
+void writer::impl::update_statistics(
+  size_type num_rows,
+  intermediate_statistics& intermediate_stats,  // why not const?
+  std::optional<writer_compression_statistics> const& compression_stats)
 {
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
     _persisted_stripe_statistics.persist(num_rows, _single_write_mode, intermediate_stats, _stream);
   }
 
-  if (_compression_statistics != nullptr) { *_compression_statistics += compression_stats; }
+  if (compression_stats.has_value() and _compression_statistics != nullptr) {
+    *_compression_statistics += compression_stats.value();
+  }
 }
 
 void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,

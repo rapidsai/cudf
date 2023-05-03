@@ -1291,16 +1291,18 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
 }
 
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream)
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  uint8_t* compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
@@ -1356,6 +1358,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
+
+  if (collect_statistics) {
+    return cudf::io::collect_compression_statistics(comp_in, comp_res);
+  } else {
+    return std::nullopt;
+  }
 }
 
 }  // namespace gpu

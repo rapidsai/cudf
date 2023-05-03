@@ -332,7 +332,7 @@ class writer::impl {
    */
   void update_statistics(size_type num_rows,
                          intermediate_statistics& single_table_stats,
-                         writer_compression_statistics const& compression_stats);
+                         std::optional<writer_compression_statistics> const& compression_stats);
 
  private:
   // CUDA stream.
