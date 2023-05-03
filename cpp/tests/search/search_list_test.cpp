@@ -34,9 +34,8 @@ using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
-constexpr int32_t null{0};       // Mark for null child elements at the current level
-constexpr int32_t XXX{0};        // Mark for null elements at all levels
-constexpr int32_t dont_care{0};  // Mark for elements that will be sliced off
+constexpr int32_t null{0};  // Mark for null child elements at the current level
+constexpr int32_t XXX{0};   // Mark for null elements at all levels
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
@@ -94,9 +93,8 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedColumnInput)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  auto const haystack_original =
-    lists_col{{dont_care, dont_care}, {dont_care}, {1, 2}, {1}, {}, {1, 3}, {dont_care, dont_care}};
-  auto const haystack = cudf::slice(haystack_original, {2, 6})[0];
+  auto const haystack_original = lists_col{{0, 0}, {0}, {1, 2}, {1}, {}, {1, 3}, {0, 0}};
+  auto const haystack          = cudf::slice(haystack_original, {2, 6})[0];
 
   auto const needle1 = [] {
     auto child = tdata_col{1, 2};
@@ -107,7 +105,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedColumnInput)
     return cudf::list_scalar(child);
   }();
   auto const needle3 = [] {
-    auto child = tdata_col{dont_care, dont_care};
+    auto child = tdata_col{0, 0};
     return cudf::list_scalar(child);
   }();
 
@@ -187,8 +185,8 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  auto const haystack_original = lists_col{{{dont_care, dont_care},
-                                            {dont_care} /*NULL*/,
+  auto const haystack_original = lists_col{{{0, 0},
+                                            {0} /*NULL*/,
                                             lists_col{{1, null}, null_at(1)},
                                             {1},
                                             {} /*NULL*/,
@@ -196,7 +194,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
                                             {4},
                                             {} /*NULL*/,
                                             {1, 1},
-                                            {dont_care}},
+                                            {0}},
                                            nulls_at({1, 4, 7})};
   auto const haystack          = cudf::slice(haystack_original, {2, 9})[0];
 
@@ -209,7 +207,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
     return cudf::list_scalar(child);
   }();
   auto const needle3 = [] {
-    auto child = tdata_col{dont_care, dont_care};
+    auto child = tdata_col{0, 0};
     return cudf::list_scalar(child);
   }();
 
@@ -250,13 +248,12 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputNoNulls)
 {
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  auto const haystack_original = lists_col{
-    {dont_care, dont_care}, {dont_care}, {0, 1}, {2}, {3, 4, 5}, {2, 3, 4}, {}, {0, 2, 0}};
+  auto const haystack_original =
+    lists_col{{0, 0}, {0}, {0, 1}, {2}, {3, 4, 5}, {2, 3, 4}, {}, {0, 2, 0}};
   auto const haystack = cudf::slice(haystack_original, {2, 8})[0];
 
-  auto const needles_original =
-    lists_col{{dont_care}, {0, 1}, {0, 0}, {3, 5, 4}, {}, {dont_care, dont_care}, {} /*dont_care*/};
-  auto const needles = cudf::slice(needles_original, {1, 5})[0];
+  auto const needles_original = lists_col{{0}, {0, 1}, {0, 0}, {3, 5, 4}, {}, {0, 0}, {} /*0*/};
+  auto const needles          = cudf::slice(needles_original, {1, 5})[0];
 
   auto const expected = bools_col{1, 0, 0, 1};
   auto const result   = cudf::contains(haystack, needles);
@@ -267,8 +264,8 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputHavingNulls)
 {
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  auto const haystack_original = lists_col{{{dont_care, dont_care},
-                                            {dont_care} /*NULL*/,
+  auto const haystack_original = lists_col{{{0, 0},
+                                            {0} /*NULL*/,
                                             lists_col{{1, null}, null_at(1)},
                                             {1},
                                             {} /*NULL*/,
@@ -276,12 +273,12 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputHavingNulls)
                                             {4},
                                             {} /*NULL*/,
                                             {1, 1},
-                                            {dont_care}},
+                                            {0}},
                                            nulls_at({1, 4, 7})};
   auto const haystack          = cudf::slice(haystack_original, {2, 9})[0];
 
-  auto const needles_original = lists_col{{{dont_care, dont_care},
-                                           {dont_care} /*NULL*/,
+  auto const needles_original = lists_col{{{0, 0},
+                                           {0} /*NULL*/,
                                            lists_col{{1, null}, null_at(1)},
                                            {1},
                                            {} /*NULL*/,
@@ -289,7 +286,7 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputHavingNulls)
                                            {4},
                                            {} /*NULL*/,
                                            {},
-                                           {dont_care}},
+                                           {0}},
                                           nulls_at({1, 4, 7})};
   auto const needles          = cudf::slice(needles_original, {2, 9})[0];
 
@@ -374,13 +371,14 @@ TEST_F(ListBinarySearch, ListWithNulls)
       lcw{{null, 4.22671e+32}, null_at(0)},
     };
 
-    auto const expect  = int32s_col{0};
-    auto const results = search_bounds(cudf::table_view{{haystack}},
-                                       cudf::table_view{{needles}},
-                                       {cudf::order::ASCENDING},
-                                       {cudf::null_order::BEFORE});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, results.first->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, results.second->view());
+    auto const expected = int32s_col{0};
+    auto const [result_lower_bound, result_upper_bound] =
+      search_bounds(cudf::table_view{{haystack}},
+                    cudf::table_view{{needles}},
+                    {cudf::order::ASCENDING},
+                    {cudf::null_order::BEFORE});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result_lower_bound, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result_upper_bound, verbosity);
   }
 
   {
@@ -411,11 +409,11 @@ TEST_F(ListBinarySearch, ListWithNulls)
     std::vector<cudf::null_order> null_order_flags{cudf::null_order::BEFORE,
                                                    cudf::null_order::BEFORE};
 
-    auto const expected = int32s_col{3};
-    auto const results  = search_bounds(
+    auto const expected                                 = int32s_col{3};
+    auto const [result_lower_bound, result_upper_bound] = search_bounds(
       cudf::table_view{{input}}, cudf::table_view{{values}}, column_order, null_order_flags);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.first->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results.second->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result_lower_bound, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result_upper_bound, verbosity);
   }
 }
 
@@ -476,12 +474,12 @@ TEST_F(ListBinarySearch, ListsOfStructs)
     return cudf::make_lists_column(8, offsets.release(), child.release(), 0, {});
   }();
 
-  auto const results = search_bounds(
+  auto const [result_lower_bound, result_upper_bound] = search_bounds(
     cudf::table_view{{*haystack}}, cudf::table_view{{*needles}}, {cudf::order::ASCENDING});
   auto const expected_lower_bound = int32s_col{1, 1, 4, 0, 0, 0, 1, 1};
   auto const expected_upper_bound = int32s_col{1, 4, 4, 0, 0, 0, 4, 4};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, *result_lower_bound, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, *result_upper_bound, verbosity);
 }
 
 TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
@@ -546,10 +544,10 @@ TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
   // In this search, the two table have many equal structs.
   // This help to verify the internal implementation of two-table lex comparator in which the
   // structs column of two input tables are concatenated, ranked, then split.
-  auto const results = search_bounds(
+  auto const [result_lower_bound, result_upper_bound] = search_bounds(
     cudf::table_view{{*haystack}}, cudf::table_view{{*needles}}, {cudf::order::ASCENDING});
   auto const expected_lower_bound = int32s_col{0, 1, 4, 9, 4, 9, 5, 4, 8};
   auto const expected_upper_bound = int32s_col{1, 4, 4, 9, 5, 9, 8, 4, 9};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, *result_lower_bound, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, *result_upper_bound, verbosity);
 }

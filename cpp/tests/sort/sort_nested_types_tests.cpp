@@ -307,13 +307,10 @@ TEST_F(NestedListTest, SimpleListsOfStructsNoNulls)
 
 TEST_F(NestedListTest, SlicedListsOfStructsNoNulls)
 {
-  auto constexpr dont_care{0};
   auto const input_original = [] {
     auto const get_structs = [] {
-      auto child0 =
-        int32s_col{dont_care, dont_care, 3, 2, 3, 3, 4, 2, 4, 4, 1, 0, 3, 0, 2, 5, 4, dont_care};
-      auto child1 =
-        int32s_col{dont_care, dont_care, 0, 4, 3, 2, 1, 1, 5, 1, 5, 5, 4, 2, 4, 1, 3, dont_care};
+      auto child0 = int32s_col{0, 0, 3, 2, 3, 3, 4, 2, 4, 4, 1, 0, 3, 0, 2, 5, 4, 0};
+      auto child1 = int32s_col{0, 0, 0, 4, 3, 2, 1, 1, 5, 1, 5, 5, 4, 2, 4, 1, 3, 0};
       return structs_col{{child0, child1}};
     };
     return cudf::make_lists_column(11,

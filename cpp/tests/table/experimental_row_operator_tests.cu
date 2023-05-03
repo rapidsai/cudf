@@ -265,10 +265,10 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
   using data_col   = cudf::test::fixed_width_column_wrapper<TypeParam>;
   using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-  auto const col1 = data_col{5, 2, 7, 1, 3};
-  auto const col2 = data_col{};  // empty
-  auto const lhs  = cudf::table_view{{col1}};
-  auto const rhs  = cudf::table_view{{col2}};
+  auto const col1      = data_col{5, 2, 7, 1, 3};
+  auto const col2      = data_col{};  // empty
+  auto const lhs       = cudf::table_view{{col1}};
+  auto const empty_rhs = cudf::table_view{{col2}};
 
   auto const stream    = cudf::get_default_stream();
   auto const test_sort = [stream](auto const& preprocessed,
@@ -281,7 +281,7 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
   };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
-                                        auto const& preprocessed_rhs) {
+                                        auto const& preprocessed_empty_rhs) {
     auto const expected_lhs = int32s_col{3, 1, 4, 0, 2};
     test_sort(preprocessed_lhs,
               lhs,
@@ -292,31 +292,31 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
               cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
               expected_lhs);
 
-    auto const expected_rhs = int32s_col{};
-    test_sort(preprocessed_rhs,
-              rhs,
+    auto const expected_empty_rhs = int32s_col{};
+    test_sort(preprocessed_empty_rhs,
+              empty_rhs,
               cudf::experimental::row::lexicographic::physical_element_comparator{},
-              expected_rhs);
-    test_sort(preprocessed_rhs,
-              rhs,
+              expected_empty_rhs);
+    test_sort(preprocessed_empty_rhs,
+              empty_rhs,
               cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-              expected_rhs);
+              expected_empty_rhs);
   };
 
   // Generate preprocessed data for both lhs and lhs at the same time.
   // Switching order of lhs and rhs tables then sorting them using their preprocessed data should
   // produce exactly the same result.
   {
-    auto const [preprocessed_lhs, preprocessed_rhs /*empty*/] =
+    auto const [preprocessed_lhs, preprocessed_empty_rhs] =
       cudf::experimental::row::lexicographic::preprocessed_table::create(
-        lhs, rhs /*empty*/, std::vector{cudf::order::ASCENDING}, {}, stream);
-    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+        lhs, empty_rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
   {
-    auto const [preprocessed_rhs /*empty*/, preprocessed_lhs] =
+    auto const [preprocessed_empty_rhs, preprocessed_lhs] =
       cudf::experimental::row::lexicographic::preprocessed_table::create(
-        rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
-    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+        empty_rhs, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
 }
 
@@ -347,7 +347,7 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
 
   auto const column_order = std::vector{cudf::order::ASCENDING};
   auto const lhs          = cudf::table_view{{*col1}};
-  auto const rhs          = cudf::table_view{{*col2}};
+  auto const empty_rhs    = cudf::table_view{{*col2}};
 
   auto const stream    = cudf::get_default_stream();
   auto const test_sort = [stream](auto const& preprocessed,
@@ -360,28 +360,28 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
   };
 
   auto const test_sort_two_tables = [&](auto const& preprocessed_lhs,
-                                        auto const& preprocessed_rhs) {
+                                        auto const& preprocessed_empty_rhs) {
     auto const expected_lhs = int32s_col{1, 0};
     test_sort(preprocessed_lhs,
               lhs,
               cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
               expected_lhs);
 
-    auto const expected_rhs = int32s_col{};
-    test_sort(preprocessed_rhs,
-              rhs,
+    auto const expected_empty_rhs = int32s_col{};
+    test_sort(preprocessed_empty_rhs,
+              empty_rhs,
               cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-              expected_rhs);
+              expected_empty_rhs);
 
     EXPECT_THROW(test_sort(preprocessed_lhs,
                            lhs,
                            cudf::experimental::row::lexicographic::physical_element_comparator{},
                            expected_lhs),
                  cudf::logic_error);
-    EXPECT_THROW(test_sort(preprocessed_rhs,
-                           rhs,
+    EXPECT_THROW(test_sort(preprocessed_empty_rhs,
+                           empty_rhs,
                            cudf::experimental::row::lexicographic::physical_element_comparator{},
-                           expected_rhs),
+                           expected_empty_rhs),
                  cudf::logic_error);
   };
 
@@ -389,16 +389,16 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
   // Switching order of lhs and rhs tables then sorting them using their preprocessed data should
   // produce exactly the same result.
   {
-    auto const [preprocessed_lhs, preprocessed_rhs /*empty*/] =
+    auto const [preprocessed_lhs, preprocessed_empty_rhs] =
       cudf::experimental::row::lexicographic::preprocessed_table::create(
-        lhs, rhs /*empty*/, std::vector{cudf::order::ASCENDING}, {}, stream);
-    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+        lhs, empty_rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
   {
-    auto const [preprocessed_rhs /*empty*/, preprocessed_lhs] =
+    auto const [preprocessed_empty_rhs, preprocessed_lhs] =
       cudf::experimental::row::lexicographic::preprocessed_table::create(
-        rhs /*empty*/, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
-    test_sort_two_tables(preprocessed_lhs, preprocessed_rhs /*empty*/);
+        empty_rhs, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
+    test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
 }
 
