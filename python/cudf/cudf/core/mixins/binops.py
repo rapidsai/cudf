@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from .mixin_factory import _create_delegating_mixin
+from .mixin_factory import Operation, _create_delegating_mixin
 
 BinaryOperand = _create_delegating_mixin(
     "BinaryOperand",
@@ -59,7 +59,17 @@ def _binaryop(self, other, op: str):
     Must be overridden by subclasses, the default implementation raises a
     NotImplementedError.
     """
-    raise NotImplementedError
+    if op == "__eq__":
+        raise TypeError(
+            "'==' not supported between instances of "
+            f"'{type(self).__name__}' and '{type(other).__name__}'"
+        )
+    if op == "__ne__":
+        raise TypeError(
+            "'!=' not supported between instances of "
+            f"'{type(self).__name__}' and '{type(other).__name__}'"
+        )
+    raise NotImplementedError()
 
 
 def _check_reflected_op(op):
@@ -70,3 +80,11 @@ def _check_reflected_op(op):
 
 BinaryOperand._binaryop = _binaryop
 BinaryOperand._check_reflected_op = staticmethod(_check_reflected_op)
+
+# It is necessary to override the default object.__eq__ so that objects don't
+# automatically support equality binops using the wrong operator implementation
+# (falling back to ``object``). We must override the object.__eq__ with an
+# Operation rather than a plain function/method, so that the BinaryOperand
+# mixin overrides it for classes that define their own __eq__ in _binaryop.
+BinaryOperand.__eq__ = Operation("__eq__", {}, BinaryOperand._binaryop)
+BinaryOperand.__ne__ = Operation("__ne__", {}, BinaryOperand._binaryop)

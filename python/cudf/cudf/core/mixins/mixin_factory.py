@@ -27,9 +27,8 @@ class Operation:
     ----------
     name : str
         The name of the operation.
-    docstring_format_args : str
-        The attribute of the owning class from which to pull format parameters
-        for this operation's docstring.
+    docstring_format_args : dict
+        The dict of format parameters for this operation's docstring.
     base_operation : str
         The underlying operation function to be invoked when operation `name`
         is called on the owning class.
