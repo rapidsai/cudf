@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "parquet_gpu.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
 
@@ -59,7 +61,7 @@ inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
 struct rle_batch {
   uint8_t const* run_start;  // start of the run we are part of
   int run_offset;            // value offset of this batch from the start of the run
-  uint32_t* output;
+  level_t* output;
   int level_run;
   int size;
 
@@ -127,7 +129,7 @@ struct rle_run {
   int level_run;  // level_run header value
   int remaining;
 
-  __device__ __inline__ rle_batch next_batch(uint32_t* const output, int max_size)
+  __device__ __inline__ rle_batch next_batch(level_t* const output, int max_size)
   {
     int batch_len        = min(max_size, remaining);
     int const run_offset = size - remaining;
@@ -147,7 +149,7 @@ struct rle_stream {
   int total_values;
   int cur_values;
 
-  uint32_t* output;
+  level_t* output;
 
   rle_run* runs;
   int run_index;
@@ -164,7 +166,7 @@ struct rle_stream {
                        uint8_t const* _start,
                        uint8_t const* _end,
                        int _max_output_values,
-                       uint32_t* _output,
+                       level_t* _output,
                        int _total_values)
   {
     level_bits = _level_bits;

@@ -46,8 +46,8 @@ constexpr int MAX_DICT_BITS = 24;
 constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 
 // level decode buffer size.
-// at size 4096, each page requires 32kb of memory
-constexpr int LEVEL_DECODE_BUF_SIZE = 4096;
+typedef uint16_t level_t;
+constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -199,7 +199,7 @@ struct PageInfo {
   PageNestingDecodeInfo* nesting_decode;
 
   // level decode buffers
-  uint32_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+  level_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
 };
 
 /**
