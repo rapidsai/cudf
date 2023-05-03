@@ -386,7 +386,7 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(UnaryOperator.IS_NULL, input, Arrays.asList(false, false, true, false, false)));
   }
 
-    @ParameterizedTest
+  @ParameterizedTest
   @MethodSource("createUnaryLogicalOperationParams")
   void testUnaryLogicalOperationTransform(UnaryOperator op, Long[] input,
                                           List<Boolean> expectedValues) {
