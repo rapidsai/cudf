@@ -6706,7 +6706,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     }
   }
-  
+
   @Test
   public void testEventHandlerIsCalledForEachClose() {
     final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
