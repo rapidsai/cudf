@@ -150,7 +150,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     ngroups = len(offsets) - 1
 
     cache_key = _generate_cache_key(
-        grouped_values, function, suffix="__GROUPBY_APPLY_UDF"
+        grouped_values, function, args, suffix="__GROUPBY_APPLY_UDF"
     )
 
     if cache_key not in precompiled:

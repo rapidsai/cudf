@@ -31,6 +31,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=custreamz-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=custreamz-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   host:

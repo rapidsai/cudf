@@ -19,6 +19,7 @@
 #include <arrow/api.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>

@@ -35,7 +35,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/strings/replace.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -580,8 +580,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     if (column_flags[col] & column_parse::enabled) {
       auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, mr);
 
-      out_buffer.name         = column_names[col];
-      out_buffer.null_count() = UNKNOWN_NULL_COUNT;
+      out_buffer.name = column_names[col];
       out_buffers.emplace_back(std::move(out_buffer));
       active_col++;
     }
@@ -595,6 +594,9 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     h_valid[i] = out_buffers[i].null_mask();
   }
 
+  auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_active_columns, stream, rmm::mr::get_current_device_resource());
+
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
@@ -603,7 +605,13 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     make_device_uvector_async(column_types, stream, rmm::mr::get_current_device_resource()),
     make_device_uvector_async(h_data, stream, rmm::mr::get_current_device_resource()),
     make_device_uvector_async(h_valid, stream, rmm::mr::get_current_device_resource()),
+    d_valid_counts,
     stream);
+
+  auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
+  for (int i = 0; i < num_active_columns; ++i) {
+    out_buffers[i].null_count() = num_records - h_valid_counts[i];
+  }
 
   return out_buffers;
 }
@@ -859,7 +867,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         const std::string dblquotechar(2, parse_opts.quotechar);
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(
-          cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
+          cudf::strings::detail::replace(col->view(), dblquotechar, quotechar, -1, stream, mr));
       } else {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
