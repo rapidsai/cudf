@@ -365,7 +365,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
  * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
  */
 __device__ void gpuDecodeStream(
-  uint32_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
+  level_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
 {
   const uint8_t* cur_def    = s->lvl_start[lvl];
   const uint8_t* end        = s->lvl_end;
@@ -516,8 +516,8 @@ inline __device__ void get_nesting_bounds(int& start_depth,
                                           int& end_depth,
                                           int& d,
                                           page_state_s* s,
-                                          uint32_t const* const rep,
-                                          uint32_t const* const def,
+                                          level_t const* const rep,
+                                          level_t const* const def,
                                           int input_value_count,
                                           int32_t target_input_value_count,
                                           int t)
@@ -526,8 +526,8 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
-    d         = def[index];
+    level_t index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    d             = def[index];
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
@@ -559,8 +559,8 @@ template <int lvl_buf_size>
 __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
                                                       page_state_s* s,
                                                       page_state_buffers_s* sb,
-                                                      uint32_t const* const rep,
-                                                      uint32_t const* const def,
+                                                      level_t const* const rep,
+                                                      level_t const* const def,
                                                       int t)
 {
   // max nesting depth of the column
@@ -738,8 +738,8 @@ template <int lvl_buf_size>
 __device__ void gpuDecodeLevels(page_state_s* s,
                                 page_state_buffers_s* sb,
                                 int32_t target_leaf_count,
-                                uint32_t* const rep,
-                                uint32_t* const def,
+                                level_t* const rep,
+                                level_t* const def,
                                 int t)
 {
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;

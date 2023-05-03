@@ -125,8 +125,8 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
-  uint32_t* def_decode     = pp->lvl_decode_buf[level_type::DEFINITION];
-  uint32_t* rep_decode     = pp->lvl_decode_buf[level_type::REPETITION];
+  level_t* def_decode      = pp->lvl_decode_buf[level_type::DEFINITION];
+  level_t* rep_decode      = pp->lvl_decode_buf[level_type::REPETITION];
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
@@ -624,8 +624,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
-  __shared__ uint32_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
-  __shared__ uint32_t def[non_zero_buffer_size];  // circular buffer of definition level values
+  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
+  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
