@@ -31,7 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -39,6 +38,13 @@ namespace strings {
 namespace detail {
 namespace {
 
+/**
+ * @brief Returns true for each string where all characters match the given types.
+ *
+ * Only the characters that match to `verify_types` are checked.
+ * Returns false if no characters are checked or one character does not match `types`.
+ * Returns true if at least one character is checked and all checked characters match `types`.
+ */
 struct char_types_fn {
   column_device_view const d_column;
   character_flags_table_type const* d_flags;
