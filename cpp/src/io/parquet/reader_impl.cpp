@@ -17,6 +17,7 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <rmm/cuda_stream_pool.hpp>
 
 #include <numeric>
 
@@ -168,8 +169,17 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device(_stream);
   chunk_nested_str_data.host_to_device(_stream);
 
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
-  if (has_strings) { gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, _stream); }
+  {
+    rmm::cuda_stream_pool pool(2);
+    auto s1 = pool.get_stream();
+    auto s2 = pool.get_stream();
+    if (has_strings) {
+      gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, s1);
+    }
+    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, s2);
+    s2.synchronize();
+    s1.synchronize();
+  }
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
