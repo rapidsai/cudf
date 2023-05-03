@@ -572,9 +572,6 @@ std::vector<schema_tree_node> construct_schema_tree(
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
                      "Binary column's corresponding metadata should have zero or two children!");
         if (col_meta.num_children() > 0) {
-          auto const data_col_type =
-            col->children[lists_column_view::child_column_index]->type().id();
-
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
                        "Binary column must not be nested!");
         }
@@ -746,7 +743,6 @@ struct parquet_column_view {
                       std::vector<schema_tree_node> const& schema_tree,
                       rmm::cuda_stream_view stream);
 
-  [[nodiscard]] column_view leaf_column_view() const;
   [[nodiscard]] gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
 
   [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
@@ -883,29 +879,8 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   }
 }
 
-column_view parquet_column_view::leaf_column_view() const
+gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream_view) const
 {
-  if (!schema_node.output_as_byte_array) {
-    auto col = cudf_col;
-    while (cudf::is_nested(col.type())) {
-      if (col.type().id() == type_id::LIST) {
-        col = col.child(lists_column_view::child_column_index);
-      } else if (col.type().id() == type_id::STRUCT) {
-        col = col.child(0);  // Stored cudf_col has only one child if struct
-      }
-    }
-    return col;
-  } else {
-    // TODO: investigate why the leaf node is computed twice instead of using the schema leaf node
-    // for everything
-    return *schema_node.leaf_column;
-  }
-}
-
-gpu::parquet_column_device_view parquet_column_view::get_device_view(
-  rmm::cuda_stream_view stream) const
-{
-  column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
@@ -1273,7 +1248,6 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  *
  * @param chunks column chunk array
  * @param pages encoder pages array
- * @param max_page_uncomp_data_size maximum uncompressed size of any page's data
  * @param pages_in_batch number of pages in this batch
  * @param first_page_in_batch first page in batch
  * @param rowgroups_in_batch number of rowgroups in this batch
@@ -1287,7 +1261,6 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  */
 void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                   device_span<gpu::EncPage> pages,
-                  size_t max_page_uncomp_data_size,
                   uint32_t pages_in_batch,
                   uint32_t first_page_in_batch,
                   uint32_t rowgroups_in_batch,
@@ -1405,10 +1378,8 @@ size_t column_index_buffer_size(gpu::EncColumnChunk* ck, int32_t column_index_tr
  * @brief Fill the table metadata with default column names.
  *
  * @param table_meta The table metadata to fill
- * @param input The input CUDF table
  */
-void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta,
-                     table_view const& input)
+void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
 {
   // Fill unnamed columns' names in table_meta
   std::function<void(column_in_metadata&, std::string)> add_default_name =
@@ -1709,7 +1680,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   row_group_fragments.host_to_device(stream);
-  auto dict_info_owner = build_chunk_dictionaries(
+  [[maybe_unused]] auto dict_info_owner = build_chunk_dictionaries(
     chunks, col_desc, row_group_fragments, compression, dict_policy, max_dictionary_size, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
@@ -1793,15 +1764,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // Build chunk dictionaries and count pages. Sends chunks to device.
   hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
     chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression, stream);
-
-  // Get the maximum page size across all chunks
-  size_type max_page_uncomp_data_size =
-    std::accumulate(chunks.host_view().flat_view().begin(),
-                    chunks.host_view().flat_view().end(),
-                    0,
-                    [](uint32_t max_page_size, gpu::EncColumnChunk const& chunk) {
-                      return std::max(max_page_size, chunk.max_page_data_size);
-                    });
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
@@ -1922,7 +1884,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     encode_pages(
       chunks,
       {pages.data(), pages.size()},
-      max_page_uncomp_data_size,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
@@ -2063,7 +2024,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
   CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
 
   if (not _table_meta) { _table_meta = std::make_unique<table_input_metadata>(input); }
-  fill_table_meta(_table_meta, input);
+  fill_table_meta(_table_meta);
 
   // All kinds of memory allocation and data compressions/encoding are performed here.
   // If any error occurs, such as out-of-memory exception, the internal state of the current

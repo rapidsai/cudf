@@ -181,7 +181,6 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
   std::vector<const char*> expected_strings;
   std::vector<cudf::test::strings_column_wrapper> wrappers;
   std::vector<cudf::column_view> strings_columns;
-  std::string expected_string;
   for (int i = 0; i < 200; ++i) {
     wrappers.emplace_back(h_strings.data(), h_strings.data() + h_strings.size());
     strings_columns.push_back(wrappers[i]);
