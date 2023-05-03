@@ -48,7 +48,7 @@ namespace {
  * If the average byte length of a string in a column exceeds this value then
  * a warp-parallel function is used.
  *
- * Note that this value is shared by find, rfind, and contains functions
+ * Note that this value is shared by find, rfind, and contains functions.
  */
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 
@@ -62,7 +62,7 @@ struct finder_fn {
   size_type const start;
   size_type const stop;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ size_type operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return -1; }
     auto d_str = d_strings.element<string_view>(idx);
@@ -90,7 +90,7 @@ struct empty_target_fn {
   size_type const start;
   size_type const stop;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ size_type operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return -1; }
     auto d_str = d_strings.element<string_view>(idx);
