@@ -477,8 +477,8 @@ transform_lists_of_structs(column_view const& lhs,
   if (lhs.type().id() == type_id::LIST) {
     auto const child_lhs = cudf::lists_column_view{lhs}.get_sliced_child(stream);
 
-    // Found a lists-of-structs column.
-    if (child_lhs.type().id() == type_id::STRUCT) {
+    // Found a lists-of-nested-type column.
+    if (child_lhs.type().id() == type_id::STRUCT || child_lhs.type().id() == type_id::LIST) {
       if (rhs_opt) {  // rhs table is available
         auto const child_rhs = cudf::lists_column_view{rhs_opt.value()}.get_sliced_child(stream);
         auto const concatenated_children = cudf::detail::concatenate(
@@ -509,44 +509,6 @@ transform_lists_of_structs(column_view const& lhs,
                 std::nullopt,
                 std::move(out_cols_lhs),
                 std::move(out_cols_rhs)};
-      }
-    }
-    // Found a lists-of-lists column.
-    else if (child_lhs.type().id() == type_id::LIST) {
-      auto const child_rhs_opt =
-        rhs_opt
-          ? std::optional<column_view>{cudf::lists_column_view{rhs_opt.value()}.get_sliced_child(
-              stream)}
-          : std::nullopt;
-
-      // Recursively call transformation on the child column.
-      auto [new_child_lhs, new_child_rhs_opt, out_cols_child_lhs, out_cols_child_rhs] =
-        transform_lists_of_structs(child_lhs, child_rhs_opt, column_null_order, stream);
-
-      // Only transform the current pair of columns if their children have been transformed.
-      if (out_cols_child_lhs.size() > 0 || out_cols_child_rhs.size() > 0) {
-        out_cols_lhs.insert(out_cols_lhs.end(),
-                            std::make_move_iterator(out_cols_child_lhs.begin()),
-                            std::make_move_iterator(out_cols_child_lhs.end()));
-        out_cols_rhs.insert(out_cols_rhs.end(),
-                            std::make_move_iterator(out_cols_child_rhs.begin()),
-                            std::make_move_iterator(out_cols_child_rhs.end()));
-
-        auto transformed_lhs = replace_child(lhs, new_child_lhs, out_cols_lhs);
-        if (rhs_opt) {
-          auto transformed_rhs =
-            replace_child(rhs_opt.value(), new_child_rhs_opt.value(), out_cols_rhs);
-
-          return {std::move(transformed_lhs),
-                  std::optional<column_view>{std::move(transformed_rhs)},
-                  std::move(out_cols_lhs),
-                  std::move(out_cols_rhs)};
-        } else {
-          return {std::move(transformed_lhs),
-                  std::nullopt,
-                  std::move(out_cols_lhs),
-                  std::move(out_cols_rhs)};
-        }
       }
     }
     // else: child is not STRUCT or LIST: just go to the end of this function, no transformation.
