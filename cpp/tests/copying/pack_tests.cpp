@@ -18,7 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
 
 struct PackUnpackTest : public cudf::test::BaseFixture {
   void run_test(cudf::table_view const& t)
@@ -31,9 +31,9 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
     // verify pack_metadata itself works
     auto metadata = cudf::pack_metadata(
       unpacked, reinterpret_cast<uint8_t const*>(packed.gpu_data->data()), packed.gpu_data->size());
-    EXPECT_EQ(metadata.size(), packed.metadata_->size());
+    EXPECT_EQ(metadata.size(), packed.metadata->size());
     EXPECT_EQ(
-      std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata_->data()),
+      std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata->data()),
       true);
   }
   void run_test(std::vector<cudf::column_view> const& t) { run_test(cudf::table_view{t}); }
@@ -160,7 +160,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_structs(bool include_validit
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
@@ -198,7 +197,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_struct_of_list()
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
@@ -251,7 +249,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
                                  "Seventeen",
                                  "Dol",
                                  "Est"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.

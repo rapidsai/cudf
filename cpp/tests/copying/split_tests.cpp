@@ -24,6 +24,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/filling.hpp>
@@ -1977,7 +1978,6 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
                                  "Mark",
                                  "Herman",
                                  "Will"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.

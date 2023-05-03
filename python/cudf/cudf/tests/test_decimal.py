@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import decimal
 from decimal import Decimal
@@ -385,3 +385,7 @@ def test_decimal_overflow():
     s = cudf.Series([Decimal("0.0009384233522166997927180531650178250")])
     result = s * s
     assert_eq(cudf.Decimal128Dtype(precision=38, scale=37), result.dtype)
+
+    s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
+    result = s * Decimal("1.0")
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=-2), result.dtype)

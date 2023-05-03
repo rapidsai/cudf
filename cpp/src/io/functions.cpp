@@ -428,7 +428,7 @@ void write_orc(orc_writer_options const& options)
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table());
 }
@@ -444,7 +444,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**
@@ -519,7 +519,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -575,7 +575,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**

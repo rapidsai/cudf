@@ -93,9 +93,9 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
     for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
       // Collect children columns from the input structs columns at index `child_idx`.
-      auto const child_iter =
-        thrust::make_transform_iterator(structs_columns.begin(), [child_idx](auto const& col) {
-          return structs_column_view(col).get_sliced_child(child_idx);
+      auto const child_iter = thrust::make_transform_iterator(
+        structs_columns.begin(), [&stream = stream, child_idx](auto const& col) {
+          return structs_column_view(col).get_sliced_child(child_idx, stream);
         });
       auto children = std::vector<column_view>(child_iter, child_iter + num_columns);
 
