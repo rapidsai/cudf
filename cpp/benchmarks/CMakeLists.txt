@@ -301,7 +301,9 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
+ConfigureNVBench(
+  STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp string/join_strings.cpp
+)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
