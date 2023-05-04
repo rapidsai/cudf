@@ -17,7 +17,6 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <rmm/cuda_stream_pool.hpp>
 
 #include <numeric>
 
@@ -38,13 +37,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
-  // Here's the plan. Compute string sizes in case it hasn't already been done.  can work out
-  // if this is redundant later.  Then allocate buffers for the string data, and offsets to the
-  // first string.  pass this to decode, where string data will be written to the buffer rather
-  // than to _strings.  also need to allocate a size_type buffer to hold strings offsets, which
-  // will be calculated as we're writing the data.  once done, we'll have for each string column
-  // a char array with the contiguous string data, and a size_type array of offsets.  use these
-  // as child columns and create string column.  no need to call create_strings_column now.
+  // Check to see if there are any string columns present. If so, then we need to get size info
+  // for each string page. This size info will be used to pre-allocate memory for the column,
+  // allowing the page decoder to write string data directly to the column buffer, rather than
+  // doing a gather operation later on.
+  // TODO: The current implementation does a round trip for the page info. Need to explore doing
+  // this step on device. This call is also somewhat redundant if size info has already been
+  // calculated (nested schema, chunked reader).
   auto const has_strings = std::any_of(pages.begin(), pages.end(), [&chunks](auto const& page) {
     auto const& chunk = chunks[page.chunk_idx];
     return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4;
@@ -68,8 +67,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         }
       }
     }
-    // for (size_t i=0; i < col_sizes.size(); i++)
-    //  printf("col %ld size %d\n", i, col_sizes[i]);
+    pages.host_to_device(_stream);
   }
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
@@ -161,25 +159,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     page_count += chunks[c].max_num_pages;
   }
 
-  if (has_strings) {
-    pages.host_to_device(_stream);  // FIXME: get rid of this eventually
-  }
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
   chunk_nested_str_data.host_to_device(_stream);
 
-  {
-    rmm::cuda_stream_pool pool(2);
-    auto s1 = pool.get_stream();
-    auto s2 = pool.get_stream();
-    if (has_strings) {
-      gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, s1);
-    }
-    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, s2);
-    s2.synchronize();
-    s1.synchronize();
-  }
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
+  gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, _stream);
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
@@ -222,7 +208,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
                         sizeof(size_type),
                         cudaMemcpyDefault,
                         _stream.value());
-        // printf("col %ld sz %d colsize %d\n", idx, out_buf.size, sz);
       }
     }
   }
