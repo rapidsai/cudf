@@ -4066,7 +4066,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -6793,7 +6793,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         margins=False,
         dropna=None,
         margins_name="All",
-        observed=False,
+        observed=True,
         sort=True,
     ):
         return cudf.core.reshape.pivot_table(
