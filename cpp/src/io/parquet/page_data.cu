@@ -831,12 +831,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
+  // string cols handled elsewhere
+  if (is_string_col(pages[blockIdx.x], chunks)) { return; }
+
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-
-  // string cols handled elsewhere
-  if ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4) { return; }
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
