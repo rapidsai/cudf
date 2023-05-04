@@ -22,3 +22,8 @@ sed -i "s/cubinlinker/cubinlinker${CUDA_SUFFIX}/g" python/cudf/pyproject.toml
 sed -i "s/^name = \"dask_cudf\"/name = \"dask_cudf${CUDA_SUFFIX}\"/g" python/dask_cudf/pyproject.toml
 # Need to provide the == to avoid modifying the URL
 sed -i "s/\"cudf==/\"cudf${CUDA_SUFFIX}==/g" python/dask_cudf/pyproject.toml
+
+if [[ $CUDA_SUFFIX == "-cu12" ]]; then
+    sed -i "/cuda-python/ s/>=11.7.1,<12.0/>=12.0,<13.0/g" python/{cudf,dask_cudf}/pyproject.toml
+    sed -i "/cupy-cuda11x/ s/cupy-cuda11x/cupy-cuda12x/g" python/{cudf,dask_cudf}/pyproject.toml
+fi
