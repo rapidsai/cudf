@@ -394,7 +394,7 @@ namespace lexicographic {
 namespace {
 
 /**
- * @brief Replace child of the input lists colum by a new child column.
+ * @brief Replace child of the input lists column by a new child column.
  *
  * If the input is not sliced, just replace the input child by the new_child.
  * Otherwise, we have to generate new offsets and replace both offsets/child of the input by the
