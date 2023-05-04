@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import operator
 import warnings
@@ -358,6 +358,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
                     "fmax",
                     "fmin",
                     "fmod",
+                    "heaviside",
                     "gcd",
                     "hypot",
                     "lcm",
