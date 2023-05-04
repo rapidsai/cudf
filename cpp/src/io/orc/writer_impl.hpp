@@ -327,8 +327,9 @@ class writer::impl {
   /**
    * @brief Update writer-level statistics with data from the current table.
    *
-   * @param num_rows Number of rows in the current table.
-   * @param single_table_stats Statistics data from the current table.
+   * @param num_rows Number of rows in the current table
+   * @param single_table_stats Statistics data from the current table
+   * @param compression_stats Compression statistics from the current table
    */
   void update_statistics(size_type num_rows,
                          intermediate_statistics& single_table_stats,
