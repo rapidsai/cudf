@@ -112,10 +112,8 @@ struct null_count_back_copier {
 /**
  * @brief Test if the given page is in a string column
  */
-constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
+constexpr bool is_string_col(ColumnChunkDesc const& col)
 {
-  if (page.flags & PAGEINFO_FLAGS_DICTIONARY != 0) { return false; }
-  auto const& col = chunks[page.chunk_idx];
   return (col.data_type & 7) == BYTE_ARRAY and (col.data_type >> 3) != 4;
 }
 

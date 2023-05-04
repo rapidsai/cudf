@@ -615,9 +615,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(4) size_type last_offset;
 
-  // return if not a string column
-  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
-
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
@@ -626,6 +623,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+
+  // return if not a string column
+  if (not is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -830,9 +830,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(4) size_type last_offset;
 
-  // return if not a string column
-  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
-
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
@@ -841,6 +838,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+
+  // return if not a string column
+  if (not is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 

@@ -831,10 +831,10 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // string cols handled elsewhere
-  if (is_string_col(pages[blockIdx.x], chunks)) { return; }
-
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+
+  // string cols handled elsewhere
+  if (is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
