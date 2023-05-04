@@ -7133,12 +7133,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Have to use a regex match to avoid capturing "=="
-        includes_assignment = re.search("[^=]=[^=]", expr) is not None
+        includes_assignment = re.search("[^=><]=[^=><]", expr) is not None
 
         # Check if there were multiple statements. Filter out empty lines.
         statements = tuple(filter(None, expr.strip().split("\n")))
         if len(statements) > 1 and any(
-            re.search("[^=]=[^=]", st) is None for st in statements
+            re.search("[^=><]=[^=><]", st) is None for st in statements
         ):
             raise ValueError(
                 "Multi-line expressions are only valid if all expressions "
