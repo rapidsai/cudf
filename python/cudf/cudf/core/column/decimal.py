@@ -403,6 +403,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
+        cudf.Decimal128Dtype,
     ):
         if decimal_type.MAX_PRECISION >= max_precision:
             try:
@@ -412,9 +413,12 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # to try the next dtype
                 continue
 
-    # no dtypes remain; if call to _validate fails, we raise as we have
-    # encountered an overflow case
-    return cudf.Decimal128Dtype(precision=precision, scale=scale)
+    # if we've reached this point, we cannot create a decimal type without
+    # overflow; raise an informative error
+    raise ValueError(
+        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
+        "{repr(rhs_dtype)} would result in overflow"
+    )
 
 
 def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
