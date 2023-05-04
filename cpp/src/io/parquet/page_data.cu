@@ -805,7 +805,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
 }
 
 /**
- * @brief Kernel for co the column data stored in the pages
+ * @brief Kernel for computing the column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional

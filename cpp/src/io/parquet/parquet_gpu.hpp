@@ -444,12 +444,6 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream);
 
-void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
-                            hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            size_t min_row,
-                            size_t num_rows,
-                            rmm::cuda_stream_view stream);
-
 /**
  * @brief Compute page output size information.
  *

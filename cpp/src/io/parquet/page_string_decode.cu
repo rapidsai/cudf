@@ -77,7 +77,9 @@ __device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_
   }
 }
 
-// data parallel strcpy
+/**
+ * @brief char-parallel string copy.
+ */
 __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
 {
   using cudf::detail::warp_size;
@@ -90,14 +92,29 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
   }
 }
 
+/**
+ * @brief Compute the start and end page value bounds for this page
+ *
+ * This uses definition and repetition level info to determine the number of valid and null
+ * values for the page, taking into account skip_rows/num_rows (if set).
+ *
+ * @param s The local page info
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
+ * @param is_bounds_pg True if this page is clipped
+ * @param has_repetition True if the schema is nested
+ * @param decoders Definition and repetition level decoders
+ * @param t Thread index
+ * @return pair containg start and end value indexes
+ */
 template <int lvl_buf_size>
-__device__ std::pair<int, int> page_bounds(page_state_s* const s,
-                                           size_t min_row,
-                                           size_t num_rows,
-                                           bool is_bounds_pg,
-                                           bool has_repetition,
-                                           rle_stream* decoders,
-                                           int t)
+__device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
+                                              size_t min_row,
+                                              size_t num_rows,
+                                              bool is_bounds_pg,
+                                              bool has_repetition,
+                                              rle_stream* decoders,
+                                              int t)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -304,6 +321,18 @@ __device__ std::pair<int, int> page_bounds(page_state_s* const s,
   return {start_value, end_value};
 }
 
+/**
+ * @brief Compute string size information for dictionary encoded strings.
+ *
+ * @param data Pointer to the start of the page data stream
+ * @param dict_base Pointer to the start of the dictionary
+ * @param dict_bits The number of bits used to in the dictionary bit packing
+ * @param dict_size Size of the dictionary in bytes
+ * @param data_size Size of the page data in bytes
+ * @param start_value Do not count values that occur before this index
+ * @param end_value Do not count values that occur after this index
+ * @param t Thread index
+ */
 __device__ size_t countDictEntries(uint8_t const* data,
                                    uint8_t const* dict_base,
                                    int dict_bits,
@@ -421,6 +450,15 @@ __device__ size_t countDictEntries(uint8_t const* data,
   return sum_l;
 }
 
+/**
+ * @brief Compute string size information for plain encoded strings.
+ *
+ * @param data Pointer to the start of the page data stream
+ * @param data_size Length of data
+ * @param start_value Do not count values that occur before this index
+ * @param end_value Do not count values that occur after this index
+ * @param t Thread index
+ */
 __device__ size_t
 countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_value, int t)
 {
@@ -451,6 +489,19 @@ countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_v
   return total_len;
 }
 
+/**
+ * @brief Kernel for computing string page output size information.
+ *
+ * String columns need accurate data size information to preallocate memory in the column buffer to
+ * store the char data. This calls a kernel to calculate information needed by the string decoding
+ * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
+ * are updated. This call ignores non-string columns.
+ *
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param min_rows crop all rows below min_row
+ * @param num_rows Maximum number of rows to read
+ */
 template <int lvl_buf_size>
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
@@ -543,6 +594,19 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   }
 }
 
+/**
+ * @brief Kernel for computing the string column data stored in the pages
+ *
+ * This function will write the page data and the page data's validity to the
+ * output specified in the page's column chunk.
+ *
+ * This version uses a single warp to do the string copies.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
+ */
 template <int lvl_buf_size>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
@@ -745,6 +809,19 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   }
 }
 
+/**
+ * @brief Kernel for computing the string column data stored in the pages
+ *
+ * This function will write the page data and the page data's validity to the
+ * output specified in the page's column chunk.
+ *
+ * This version uses all threads in the block to do the string copies.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
+ */
 template <int lvl_buf_size>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
@@ -936,6 +1013,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 
 }  // anonymous namespace
 
+/**
+ * @copydoc cudf::io::parquet::gpu::ComputePageStringSizes
+ */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
                             size_t min_row,
@@ -949,7 +1029,7 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
 }
 
 /**
- * @copydoc cudf::io::parquet::gpu::DecodePageData
+ * @copydoc cudf::io::parquet::gpu::DecodeStringPageData
  */
 void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
                                    hostdevice_vector<ColumnChunkDesc> const& chunks,
