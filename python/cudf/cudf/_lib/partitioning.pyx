@@ -55,9 +55,10 @@ def partition(list source_columns, Column partition_map,
     cdef column_view c_partition_map_view = partition_map.view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
-    lo, hi = minmax(partition_map)
-    if lo < 0 or hi >= num_partitions:
-        raise ValueError("Partition map has invalid values")
+    if partition_map.size > 0:
+        lo, hi = minmax(partition_map)
+        if lo < 0 or hi >= num_partitions:
+            raise ValueError("Partition map has invalid values")
     with nogil:
         c_result = move(
             cpp_partition(
