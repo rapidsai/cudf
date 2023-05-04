@@ -5399,11 +5399,11 @@ TEST_F(ParquetReaderTest, SingleLevelLists)
     cudf::io::source_info{reinterpret_cast<const char*>(list_bytes), sizeof(list_bytes)});
   auto table = cudf::io::read_parquet(read_opts);
 
-  auto c0 = table.tbl->get_column(0);
+  auto const c0 = table.tbl->get_column(0);
   EXPECT_TRUE(c0.type().id() == cudf::type_id::LIST);
 
-  auto lc    = cudf::lists_column_view(c0);
-  auto child = lc.child();
+  auto const lc    = cudf::lists_column_view(c0);
+  auto const child = lc.child();
   EXPECT_TRUE(child.type().id() == cudf::type_id::INT32);
 }
 
