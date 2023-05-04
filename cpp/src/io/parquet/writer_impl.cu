@@ -1255,6 +1255,7 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
  * @param page_stats optional page-level statistics (nullptr if none)
  * @param chunk_stats optional chunk-level statistics (nullptr if none)
  * @param column_stats optional page-level statistics for column index (nullptr if none)
+ * @param comp_stats optional compression statistics (nullopt if none)
  * @param compression compression format
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1268,6 +1269,7 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                   const statistics_chunk* page_stats,
                   const statistics_chunk* chunk_stats,
                   const statistics_chunk* column_stats,
+                  std::optional<writer_compression_statistics>& comp_stats,
                   Compression compression,
                   int32_t column_index_truncate_length,
                   rmm::cuda_stream_view stream)
@@ -1334,6 +1336,10 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 d_chunks_in_batch.flat_view().size_bytes(),
                                 cudaMemcpyDefault,
                                 stream.value()));
+
+  if (comp_stats.has_value()) {
+    comp_stats.value() += collect_compression_statistics(comp_in, comp_res, stream);
+  }
   stream.synchronize();
 }
 
@@ -1412,6 +1418,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param stats_granularity Level of statistics requested in output file
  * @param compression Compression format
+ * @param collect_statistics Flag to indicate if statistics should be collected
  * @param dict_policy Policy for dictionary use
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
@@ -1434,6 +1441,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    int32_t column_index_truncate_length,
                                    statistics_freq stats_granularity,
                                    Compression compression,
+                                   bool collect_compression_statistics,
                                    dictionary_policy dict_policy,
                                    size_t max_dictionary_size,
                                    single_write_mode write_mode,
@@ -1871,6 +1879,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // Check device write support for all chunks and initialize bounce_buffer.
   bool all_device_write   = true;
   uint32_t max_write_size = 0;
+  std::optional<writer_compression_statistics> comp_stats;
+  if (collect_compression_statistics) { comp_stats = writer_compression_statistics{}; }
 
   // Encode row groups in batches
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
@@ -1892,6 +1902,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       (stats_granularity != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                               : nullptr,
       (stats_granularity == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr,
+      comp_stats,
       compression,
       column_index_truncate_length,
       stream);
@@ -1944,6 +1955,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                     std::move(first_rg_in_part),
                     std::move(batch_list),
                     std::move(rg_to_part),
+                    std::move(comp_stats),
                     std::move(uncomp_bfr),
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
@@ -1970,7 +1982,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
-    _out_sink(std::move(sinks))
+    _out_sink(std::move(sinks)),
+    _compression_statistics{options.get_compression_statistics()}
 {
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
@@ -1996,7 +2009,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
-    _out_sink(std::move(sinks))
+    _out_sink(std::move(sinks)),
+    _compression_statistics{options.get_compression_statistics()}
 {
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
@@ -2018,6 +2032,14 @@ void writer::impl::init_state()
   std::fill_n(_current_chunk_offset.begin(), _current_chunk_offset.size(), sizeof(file_header_s));
 }
 
+void writer::impl::update_compression_statistics(
+  std::optional<writer_compression_statistics> const& compression_stats)
+{
+  if (compression_stats.has_value() and _compression_statistics != nullptr) {
+    *_compression_statistics += compression_stats.value();
+  }
+}
+
 void writer::impl::write(table_view const& input, std::vector<partition_info> const& partitions)
 {
   _last_write_successful = false;
@@ -2036,6 +2058,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          first_rg_in_part,
                          batch_list,
                          rg_to_part,
+                         comp_stats,
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
@@ -2054,6 +2077,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _column_index_truncate_length,
                                            _stats_granularity,
                                            _compression,
+                                           _compression_statistics != nullptr,
                                            _dict_policy,
                                            _max_dictionary_size,
                                            _single_write_mode,
@@ -2077,6 +2101,8 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                              batch_list,
                              rg_to_part,
                              bounce_buffer);
+
+  update_compression_statistics(comp_stats);
 
   _last_write_successful = true;
 }
