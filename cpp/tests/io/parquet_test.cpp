@@ -4419,7 +4419,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
   // hard coded schema indices.
   // TODO find a way to do this without magic
-  size_t colidxs[] = {1, 3, 4, 5, 8};
+  size_t const colidxs[] = {1, 3, 4, 5, 8};
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
