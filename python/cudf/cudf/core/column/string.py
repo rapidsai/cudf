@@ -778,6 +778,7 @@ class StringMethods(ColumnMethods):
                     input_column = libstrings.to_lower(self._column)
                     pat = cudf.Scalar(pat.lower(), dtype="str")  # type: ignore
                 else:
+                    input_column = self._column
                     pat = cudf.Scalar(pat, dtype="str")  # type: ignore
                 result_col = libstrings.contains(input_column, pat)
         else:
