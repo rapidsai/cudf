@@ -386,7 +386,14 @@ def test_dataframe_sort_values_kind(nelem, dtype, kind):
     assert_eq(sorted_df["b"].values, bb[sorted_index])
 
 
-def test_dataframe_scatter_by_map_7513():
-    df = DataFrame({"id": [1, 2, 1, 2], "val": [0, 1, 2, 3]})
+@pytest.mark.parametrize("ids", [[-1, 0, 1, 0], [0, 2, 3, 0]])
+def test_dataframe_scatter_by_map_7513(ids):
+    df = DataFrame({"id": ids, "val": [0, 1, 2, 3]})
     with pytest.raises(ValueError):
         df.scatter_by_map(df["id"])
+
+
+def test_dataframe_scatter_by_map_empty():
+    df = DataFrame({"a": [], "b": []})
+    scattered = df.scatter_by_map(df["a"])
+    assert len(scattered) == 0
