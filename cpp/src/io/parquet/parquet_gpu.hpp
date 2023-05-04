@@ -281,7 +281,7 @@ struct ColumnChunkDesc {
   int8_t converted_type;                      // converted type enum
   LogicalType logical_type;                   // logical type
   int8_t decimal_precision;                   // Decimal precision
-  int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
+  int32_t ts_clock_rate;   // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index;   // my input column index
   int32_t src_col_schema;  // my schema index in the file
@@ -370,16 +370,16 @@ struct slot_type;
 struct EncColumnChunk {
   parquet_column_device_view const* col_desc;  //!< Column description
   size_type col_desc_id;
-  PageFragment* fragments;        //!< First fragment in chunk
-  uint8_t* uncompressed_bfr;      //!< Uncompressed page data
-  uint8_t* compressed_bfr;        //!< Compressed page data
-  statistics_chunk const* stats;  //!< Fragment statistics
-  uint32_t bfr_size;              //!< Uncompressed buffer size
-  uint32_t compressed_size;       //!< Compressed buffer size
-  uint32_t max_page_data_size;    //!< Max data size (excluding header) of any page in this chunk
-  uint32_t page_headers_size;     //!< Sum of size of all page headers
-  size_type start_row;            //!< First row of chunk
-  uint32_t num_rows;              //!< Number of rows in chunk
+  PageFragment* fragments;                     //!< First fragment in chunk
+  uint8_t* uncompressed_bfr;                   //!< Uncompressed page data
+  uint8_t* compressed_bfr;                     //!< Compressed page data
+  statistics_chunk const* stats;               //!< Fragment statistics
+  uint32_t bfr_size;                           //!< Uncompressed buffer size
+  uint32_t compressed_size;                    //!< Compressed buffer size
+  uint32_t max_page_data_size;  //!< Max data size (excluding header) of any page in this chunk
+  uint32_t page_headers_size;   //!< Sum of size of all page headers
+  size_type start_row;          //!< First row of chunk
+  uint32_t num_rows;            //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
   EncPage* pages;           //!< Ptr to pages that belong to this chunk
@@ -481,6 +481,20 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       bool compute_string_sizes,
                       rmm::cuda_stream_view stream);
 
+/**
+ * @brief Compute string page output size information.
+ *
+ * String columns need accurate data size information to preallocate memory in the column buffer to
+ * store the char data. This calls a kernel to calculate information needed by the string decoding
+ * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
+ * are updated. This call ignores non-string columns.
+ *
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param min_rows crop all rows below min_row
+ * @param num_rows Maximum number of rows to read
+ * @param stream CUDA stream to use, default 0
+ */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
                             size_t min_row,
@@ -505,6 +519,18 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     size_t min_row,
                     rmm::cuda_stream_view stream);
 
+/**
+ * @brief Launches kernel for reading the string column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] stream CUDA stream to use, default 0
+ */
 void DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
                           size_t num_rows,
