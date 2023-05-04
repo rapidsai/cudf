@@ -610,96 +610,6 @@ transform_lists_of_structs(column_view const& lhs,
   return {lhs, rhs, std::move(out_cols_lhs), std::move(out_cols_rhs)};
 }
 
-/**
- * @brief Transform any nested lists-of-structs column in the given table into lists-of-integers
- * column.
- *
- * @param input The input table to transform
- * @param null_precedence Optional, an array having the same length as the number of columns in
- *        the input tables that indicates how null values compare to all other. If it is empty,
- *        the order `null_order::BEFORE` will be used for all columns.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A pair consisting of a new table_view representing the transformed input, along with
- *         the rank columns (of `size_type` type) and possibly new list offsets generated during
- *         the transformation process
- */
-std::pair<table_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
-  table_view const& input,
-  host_span<null_order const> null_precedence,
-  rmm::cuda_stream_view stream)
-{
-  std::vector<column_view> transformed_cvs;
-  std::vector<std::unique_ptr<column>> out_cols;
-
-  for (size_type col_idx = 0; col_idx < input.num_columns(); ++col_idx) {
-    auto const& lhs_col = input.column(col_idx);
-
-    auto [transformed, curr_out_cols] = transform_lists_of_structs(
-      lhs_col, null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx], stream);
-
-    transformed_cvs.emplace_back(std::move(transformed));
-    out_cols.insert(out_cols.end(),
-                    std::make_move_iterator(curr_out_cols.begin()),
-                    std::make_move_iterator(curr_out_cols.end()));
-  }
-
-  return {table_view{transformed_cvs}, std::move(out_cols)};
-}
-
-/**
- * @copydoc transform_lists_of_structs(table_view const&, host_span<null_order const>,
- * rmm::cuda_stream_view)
- *
- * The input tables should be pre-checked to match their shape with each other using
- * `check_shape_compatibility` before being passed into this function.
- *
- * @param lhs The input lhs table to transform
- * @param rhs The input rhs table to transform
- * @return A tuple consisting of new table_view(s) representing the transformed input, along with
- *         the rank columns (of `size_type` type) and possibly new list offsets generated during
- *         the transformation process
- */
-std::tuple<table_view,
-           table_view,
-           std::vector<std::unique_ptr<column>>,
-           std::vector<std::unique_ptr<column>>>
-transform_lists_of_structs(table_view const& lhs,
-                           table_view const& rhs,
-                           host_span<null_order const> null_precedence,
-                           rmm::cuda_stream_view stream)
-{
-  std::vector<column_view> transformed_lhs_cvs;
-  std::vector<column_view> transformed_rhs_cvs;
-  std::vector<std::unique_ptr<column>> out_cols_lhs;
-  std::vector<std::unique_ptr<column>> out_cols_rhs;
-
-  for (size_type col_idx = 0; col_idx < lhs.num_columns(); ++col_idx) {
-    auto const& lhs_col = lhs.column(col_idx);
-    auto const& rhs_col = rhs.column(col_idx);
-
-    auto [transformed_lhs, transformed_rhs, curr_out_cols_lhs, curr_out_cols_rhs] =
-      transform_lists_of_structs(
-        lhs_col,
-        rhs_col,
-        null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
-        stream);
-
-    transformed_lhs_cvs.emplace_back(std::move(transformed_lhs));
-    transformed_rhs_cvs.emplace_back(std::move(transformed_rhs));
-    out_cols_lhs.insert(out_cols_lhs.end(),
-                        std::make_move_iterator(curr_out_cols_lhs.begin()),
-                        std::make_move_iterator(curr_out_cols_lhs.end()));
-    out_cols_rhs.insert(out_cols_rhs.end(),
-                        std::make_move_iterator(curr_out_cols_rhs.begin()),
-                        std::make_move_iterator(curr_out_cols_rhs.end()));
-  }
-
-  return {table_view{transformed_lhs_cvs},
-          table_view{transformed_rhs_cvs},
-          std::move(out_cols_lhs),
-          std::move(out_cols_rhs)};
-}
-
 }  // namespace
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
@@ -752,8 +662,28 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [decomposed_input, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(input, decompose_lists_column::NO, column_order, null_precedence);
 
-  auto [transformed_input, transformed_columns] =
-    transform_lists_of_structs(decomposed_input, new_null_precedence, stream);
+  // Transform any (nested) lists-of-structs column into lists-of-integers column.
+  std::vector<std::unique_ptr<column>> transformed_columns;
+  auto const transformed_input =
+    [&, &decomposed_input = decomposed_input, &new_null_precedence = new_null_precedence] {
+      std::vector<column_view> transformed_cvs;
+
+      for (size_type col_idx = 0; col_idx < decomposed_input.num_columns(); ++col_idx) {
+        auto const& lhs_col = decomposed_input.column(col_idx);
+
+        auto [transformed, curr_out_cols] = transform_lists_of_structs(
+          lhs_col,
+          null_precedence.empty() ? null_order::BEFORE : new_null_precedence[col_idx],
+          stream);
+
+        transformed_cvs.emplace_back(std::move(transformed));
+        transformed_columns.insert(transformed_columns.end(),
+                                   std::make_move_iterator(curr_out_cols.begin()),
+                                   std::make_move_iterator(curr_out_cols.end()));
+      }
+
+      return table_view{transformed_cvs};
+    }();
 
   auto const has_ranked_children = !transformed_columns.empty();
   return create(transformed_input,
@@ -786,8 +716,39 @@ preprocessed_table::create(table_view const& lhs,
     decompose_structs(rhs, decompose_lists_column::NO, column_order, null_precedence);
 
   // Transform any (nested) lists-of-structs column into lists-of-integers column.
-  auto [transformed_lhs, transformed_rhs, transformed_columns_lhs, transformed_columns_rhs] =
-    transform_lists_of_structs(decomposed_lhs, decomposed_rhs, new_null_precedence_lhs, stream);
+  std::vector<std::unique_ptr<column>> transformed_columns_lhs;
+  std::vector<std::unique_ptr<column>> transformed_columns_rhs;
+  auto const [transformed_lhs,
+              transformed_rhs] = [&,
+                                  &decomposed_lhs          = decomposed_lhs,
+                                  &decomposed_rhs          = decomposed_rhs,
+                                  &new_null_precedence_lhs = new_null_precedence_lhs] {
+    std::vector<column_view> transformed_lhs_cvs;
+    std::vector<column_view> transformed_rhs_cvs;
+
+    for (size_type col_idx = 0; col_idx < decomposed_lhs.num_columns(); ++col_idx) {
+      auto const& lhs_col = decomposed_lhs.column(col_idx);
+      auto const& rhs_col = decomposed_rhs.column(col_idx);
+
+      auto [transformed_lhs, transformed_rhs, curr_out_cols_lhs, curr_out_cols_rhs] =
+        transform_lists_of_structs(
+          lhs_col,
+          rhs_col,
+          null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
+          stream);
+
+      transformed_lhs_cvs.emplace_back(std::move(transformed_lhs));
+      transformed_rhs_cvs.emplace_back(std::move(transformed_rhs));
+      transformed_columns_lhs.insert(transformed_columns_lhs.end(),
+                                     std::make_move_iterator(curr_out_cols_lhs.begin()),
+                                     std::make_move_iterator(curr_out_cols_lhs.end()));
+      transformed_columns_rhs.insert(transformed_columns_rhs.end(),
+                                     std::make_move_iterator(curr_out_cols_rhs.begin()),
+                                     std::make_move_iterator(curr_out_cols_rhs.end()));
+    }
+
+    return std::pair{table_view{transformed_lhs_cvs}, table_view{transformed_rhs_cvs}};
+  }();
 
   // This should be the same for both lhs and rhs but not all the time, such as when one table
   // has 0 rows while the other has >0 rows. So we check separately for each of them.
