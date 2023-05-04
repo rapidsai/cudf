@@ -675,7 +675,8 @@ void reader::impl::allocate_level_decode_space()
   // repetition data.
   size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * sizeof(level_t);
   auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
-  _file_itm_data.level_decode_data      = rmm::device_buffer(decode_buf_size, _stream, _mr);
+  _file_itm_data.level_decode_data =
+    rmm::device_buffer(decode_buf_size, _stream, rmm::mr::get_current_device_resource());
 
   // distribute the buffers
   level_t* buf = static_cast<level_t*>(_file_itm_data.level_decode_data.data());
