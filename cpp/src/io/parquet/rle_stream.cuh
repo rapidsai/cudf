@@ -27,7 +27,7 @@ namespace gpu {
 // TODO: consider if these should be template parameters to rle_stream
 constexpr int num_rle_stream_decode_threads = 512;
 constexpr int num_rle_stream_decode_warps   = (num_rle_stream_decode_threads / 32) - 1;
-constexpr int run_buffer_size               = (num_rle_stream_decode_warps * 2) + 2;
+constexpr int run_buffer_size               = (num_rle_stream_decode_warps * 2);
 constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
 
 /**
