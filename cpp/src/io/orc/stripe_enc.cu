@@ -1360,7 +1360,7 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 
   if (collect_statistics) {
-    return cudf::io::collect_compression_statistics(comp_in, comp_res);
+    return cudf::io::collect_compression_statistics(comp_in, comp_res, stream);
   } else {
     return std::nullopt;
   }
