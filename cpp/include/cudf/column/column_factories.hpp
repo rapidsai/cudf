@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -422,29 +422,26 @@ std::unique_ptr<column> make_strings_column(
  *
  * This function makes a deep copy of the strings, offsets, null_mask to create a new column.
  *
- * @throws std::bad_alloc if device memory allocation fails
- *
- * @param[in] strings The device span of chars in device memory. This char vector is expected to be
+ * @param strings The device span of chars in device memory. This char vector is expected to be
  *  UTF-8 encoded characters.
- * @param[in] offsets The device span of byte offsets in device memory. The number of elements is
+ * @param offsets The device span of byte offsets in device memory. The number of elements is
  *  one more than the total number of strings so the `offsets.back()` is the total number of bytes
  *  in the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
- * @param[in] null_mask Device span containing the null element indicator bitmask. Arrow format for
+ * @param null_mask Device span containing the null element indicator bitmask. Arrow format for
  *  nulls is used for interpreting this bitmask.
- * @param[in] null_count The number of null string entries. If equal to `UNKNOWN_NULL_COUNT`, the
- *  null count will be computed dynamically on the first invocation of `column::null_count()`
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory.
+ * @param null_count The number of null string entries
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<char const> strings,
   cudf::device_span<size_type const> offsets,
-  cudf::device_span<bitmask_type const> null_mask = {},
-  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
-  rmm::cuda_stream_view stream                    = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
+  cudf::device_span<bitmask_type const> null_mask,
+  size_type null_count,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
@@ -487,8 +484,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask = {},
-                                            size_type null_count = cudf::UNKNOWN_NULL_COUNT);
+                                            rmm::device_buffer&& null_mask,
+                                            size_type null_count);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null

@@ -110,7 +110,8 @@ TEST_F(StringsDurationsTest, ISOFormatDaysOnly)
   auto new_durations1 = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
                                                     cudf::data_type(cudf::type_to_id<T>()),
                                                     "P%DDT%HH%MM%SS");
-  new_durations1      = cudf::strings::to_durations(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
+  new_durations1 = cudf::strings::to_durations(
     cudf::strings_column_view(expected1), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
   auto new_durations2 = cudf::strings::to_durations(
