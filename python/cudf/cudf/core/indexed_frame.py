@@ -3929,7 +3929,7 @@ class IndexedFrame(Frame):
                 "squeeze parameter is not yet implemented"
             )
 
-        if observed is False:
+        if not observed:
             raise NotImplementedError(
                 "observed parameter is not yet implemented"
             )
