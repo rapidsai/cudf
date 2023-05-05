@@ -540,7 +540,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // if we're skipping this page anyway, no need to count it
   if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) {
-    restore_decode_cache(s);
+    restore_decode_cache(s);  // TODO is this necessary?
     return;
   }
 
@@ -593,6 +593,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
     // TODO check for overflow
     pp->str_bytes = str_bytes;
   }
+  // TODO: is this necessary?
   restore_decode_cache(s);
 }
 
@@ -1046,6 +1047,8 @@ void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
+  // TODO figure out when one version is better than the other.  waiting on further changes to
+  // rle_stream to simplify the decode step.
   if constexpr (true) {
     gpuDecodeStringPageData<non_zero_buffer_size>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
