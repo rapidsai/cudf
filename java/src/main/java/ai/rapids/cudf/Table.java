@@ -3406,6 +3406,7 @@ public final class Table implements AutoCloseable {
           columnView.close();
         }
       }
+      throw t;
     }
     return ret;
   }
@@ -3497,6 +3498,7 @@ public final class Table implements AutoCloseable {
           columnView.close();
         }
       }
+      throw t;
     }
     return ret;
   }
