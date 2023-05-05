@@ -44,8 +44,7 @@ struct stacktrace_recorder {
   stacktrace_recorder()
     : stacktrace{get_stacktrace(1)} {}  // Exclude the current stackframe from stacktrace,
                                         // as it is where this struct is constructed.
-
-  std::string stacktrace;  //!< stacktrace stored as one string.
+  std::string stacktrace;               //!< stacktrace stored as one string.
 };
 
 /**
