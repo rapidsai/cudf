@@ -6793,7 +6793,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         margins=False,
         dropna=None,
         margins_name="All",
-        observed=True,
+        observed=False,
         sort=True,
     ):
         return cudf.core.reshape.pivot_table(
