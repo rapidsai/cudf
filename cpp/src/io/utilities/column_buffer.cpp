@@ -60,11 +60,11 @@ void column_buffer<contains_strings>::create(size_type _size,
 
   switch (type.id()) {
     case type_id::STRING:
-      if constexpr (!contains_strings) { this->create_strings(size, stream); }
-
       if constexpr (contains_strings) {
         // size + 1 for final offset. _string_data will be initialized later.
         _data = create_data(data_type{type_id::INT32}, size + 1, stream, mr);
+      } else {
+        this->create_strings(size, stream);
       }
       break;
 
@@ -321,8 +321,8 @@ std::unique_ptr<column> make_column<true>(utilities::column_buffer<true>& buffer
   if (buffer.type.id() == type_id::STRING) {
     auto make_string_col = [stream](auto& buffer) {
       // no need for copies, just transfer ownership of the data_buffers to the columns
-      auto mr    = buffer._string_data.memory_resource();
-      auto state = mask_state::UNALLOCATED;
+      auto const& mr   = buffer._string_data.memory_resource();
+      auto const state = mask_state::UNALLOCATED;
       auto str_col =
         buffer._string_data.size() == 0
           ? make_empty_column(data_type{type_id::INT8})
