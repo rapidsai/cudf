@@ -3396,8 +3396,16 @@ public final class Table implements AutoCloseable {
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
+    try {
+      for (int i = 0; i < ptrs.length; i++) {
+        ret[i] = new ColumnVector(ptrs[i]);
+      }
+    } catch (Throwable t) {
+      for (ColumnView columnView : ret) {
+        if (columnView != null) {
+          columnView.close();
+        }
+      }
     }
     return ret;
   }
@@ -3479,8 +3487,16 @@ public final class Table implements AutoCloseable {
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
+    try {
+      for (int i = 0; i < ptrs.length; i++) {
+        ret[i] = new ColumnVector(ptrs[i]);
+      }
+    } catch (Throwable t) {
+      for (ColumnView columnView: ret) {
+        if (columnView != null) {
+          columnView.close();
+        }
+      }
     }
     return ret;
   }
