@@ -128,7 +128,6 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/search.hpp
         - test -f $PREFIX/include/cudf/detail/sequence.hpp
         - test -f $PREFIX/include/cudf/detail/sorting.hpp
-        - test -f $PREFIX/include/cudf/detail/stacktrace.hpp
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
@@ -144,6 +143,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/logger.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/pinned_host_vector.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/stacktrace.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
         - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
