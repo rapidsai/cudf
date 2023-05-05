@@ -99,7 +99,7 @@ bool stream_is_invalid(cudaStream_t stream)
 void check_stream_and_error(cudaStream_t stream)
 {
   if (stream_is_invalid(stream)) {
-    // Exclude the current stackframe from stacktrace, as it is where this function is called.
+    // Exclude the current function from stacktrace.
     std::cout << cudf::get_stacktrace(1) << std::endl;
 
     char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
