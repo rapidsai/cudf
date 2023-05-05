@@ -19,15 +19,19 @@ package ai.rapids.cudf;
  * Exception thrown by cudf itself.
  */
 public class CudfException extends RuntimeException {
-  CudfException(String message, String stacktrace) {
+  CudfException(String message, String nativeStacktrace) {
     super(message);
-    this.stacktrace = stacktrace;
+    this.nativeStacktrace = nativeStacktrace;
   }
 
-  CudfException(String message, String stacktrace, Throwable cause) {
+  CudfException(String message, String nativeStacktrace, Throwable cause) {
     super(message, cause);
-    this.stacktrace = stacktrace;
+    this.nativeStacktrace = nativeStacktrace;
   }
 
-  public final String stacktrace;
+  public final String getNativeStacktrace() {
+    return nativeStacktrace;
+  }
+
+  private final String nativeStacktrace;
 }

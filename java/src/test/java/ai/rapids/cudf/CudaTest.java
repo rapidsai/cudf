@@ -40,7 +40,7 @@ public class CudaTest {
             Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
           } catch (CudaFatalException ignored) {
           } catch (CudaException ex) {
-            assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.cudaError);
+            assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.getCudaError());
             throw ex;
           }
         }

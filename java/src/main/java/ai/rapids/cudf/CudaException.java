@@ -31,21 +31,29 @@ import java.util.Map;
  * don't switch between threads for different parts of processing that can be retried as a chunk.
  */
 public class CudaException extends RuntimeException {
-  CudaException(String message, String stacktrace, int errorCode) {
+  CudaException(String message, String nativeStacktrace, int errorCode) {
     super(message);
-    this.stacktrace = stacktrace;
+    this.nativeStacktrace = nativeStacktrace;
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  CudaException(String message, String stacktrace, int errorCode, Throwable cause) {
+  CudaException(String message, String nativeStacktrace, int errorCode, Throwable cause) {
     super(message, cause);
-    this.stacktrace = stacktrace;
+    this.nativeStacktrace = nativeStacktrace;
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  public final String stacktrace;
+  public String getNativeStacktrace() {
+    return nativeStacktrace;
+  }
 
-  public final CudaError cudaError;
+  public CudaError getCudaError() {
+    return cudaError;
+  }
+
+  private final String nativeStacktrace;
+
+  private final CudaError cudaError;
 
   /**
    * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.
