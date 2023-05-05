@@ -824,17 +824,16 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s state_buffers;
 
+  // string cols handled elsewhere
+  if (is_string_col(pages[blockIdx.x], chunks)) { return; }
+
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
-  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
-
-  // string cols handled elsewhere
-  if (is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -850,6 +849,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
+    restore_decode_cache(s);
     return;
   }
 
@@ -988,6 +988,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
     }
     __syncthreads();
   }
+  restore_decode_cache(s);
 }
 
 }  // anonymous namespace

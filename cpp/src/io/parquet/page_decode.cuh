@@ -89,31 +89,30 @@ struct page_state_buffers_s {
   uint32_t str_len[non_zero_buffer_size];   // String length for plain encoding of strings
 };
 
-// Copies null counts back to `nesting_decode` at the end of scope
-struct null_count_back_copier {
-  page_state_s* s;
-  int t;
-  __device__ ~null_count_back_copier()
-  {
-    if (s->nesting_info != nullptr and s->nesting_info == s->nesting_decode_cache) {
-      int depth = 0;
-      while (depth < s->page.num_output_nesting_levels) {
-        int const thread_depth = depth + t;
-        if (thread_depth < s->page.num_output_nesting_levels) {
-          s->page.nesting_decode[thread_depth].null_count =
-            s->nesting_decode_cache[thread_depth].null_count;
-        }
-        depth += blockDim.x;
+// if we are using the nesting decode cache, copy null count back. call this if
+// setupLocalPageInfo returns true.
+__device__ void restore_decode_cache(page_state_s* s)
+{
+  if (s->nesting_info == s->nesting_decode_cache) {
+    int depth = 0;
+    while (depth < s->page.num_output_nesting_levels) {
+      int const thread_depth = depth + threadIdx.x;
+      if (thread_depth < s->page.num_output_nesting_levels) {
+        s->page.nesting_decode[thread_depth].null_count =
+          s->nesting_decode_cache[thread_depth].null_count;
       }
+      depth += blockDim.x;
     }
   }
-};
+}
 
 /**
  * @brief Test if the given page is in a string column
  */
-constexpr bool is_string_col(ColumnChunkDesc const& col)
+constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
 {
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY != 0) { return false; }
+  auto const& col = chunks[page.chunk_idx];
   return (col.data_type & 7) == BYTE_ARRAY and (col.data_type >> 3) != 4;
 }
 

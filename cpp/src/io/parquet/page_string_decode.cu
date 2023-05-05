@@ -142,8 +142,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
-  level_t* def_decode      = pp->lvl_decode_buf[level_type::DEFINITION];
-  level_t* rep_decode      = pp->lvl_decode_buf[level_type::REPETITION];
+  auto const def_decode    = pp->lvl_decode_buf[level_type::DEFINITION];
+  auto const rep_decode    = pp->lvl_decode_buf[level_type::REPETITION];
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
@@ -164,7 +164,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
   int processed = 0;
 
   // if this is a bounds page, we need to do extra work to find the start and/or end value index
-  // TODO calculate num_nulls
   if (is_bounds_pg) {
     __shared__ int skipped_values;
     __shared__ int skipped_leaf_values;
@@ -224,7 +223,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         if (!skipped_values_set && row_count + block_row_count > begin_row) {
           // if this thread is in row bounds
           int const row_index = (thread_row_count + row_count) - 1;
-          int in_row_bounds =
+          int const in_row_bounds =
             idx_t < processed && (row_index >= begin_row) && (row_index < end_row);
 
           int local_count, global_count;
@@ -248,8 +247,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         // test if row_count will exceed end_row in this batch
         if (!end_value_set && row_count + block_row_count >= end_row) {
           // if this thread exceeds row bounds
-          int const row_index    = (thread_row_count + row_count) - 1;
-          int exceeds_row_bounds = row_index >= end_row;
+          int const row_index          = (thread_row_count + row_count) - 1;
+          int const exceeds_row_bounds = row_index >= end_row;
 
           int local_count, global_count;
           block_scan(temp_storage.scan_storage)
@@ -385,7 +384,7 @@ __device__ size_t countDictEntries(uint8_t const* data,
       dict_run  = 0;
     }
 
-    int is_literal = dict_run & 1;
+    int const is_literal = dict_run & 1;
 
     // calculate my thread id for this batch.  way to round-robin the work.
     int mytid = t - t0;
@@ -425,8 +424,9 @@ __device__ size_t countDictEntries(uint8_t const* data,
 
       t0 += batch_len;
     } else {
-      int start_off = (pos < start_value && pos + batch_len > start_value) ? start_value - pos : 0;
-      batch_len     = min(batch_len, end_value - pos);
+      int const start_off =
+        (pos < start_value && pos + batch_len > start_value) ? start_value - pos : 0;
+      batch_len = min(batch_len, end_value - pos);
       if (mytid == 0) {
         uint32_t const dict_pos = (dict_bits > 0) ? dict_val * sizeof(string_index_pair) : 0;
         if (pos + batch_len > start_value && dict_pos < (uint32_t)dict_size) {
@@ -508,19 +508,16 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 {
   __shared__ __align__(16) page_state_s state_g;
 
+  // only count if it's a string column
+  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
+
   page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
-  PageInfo* pp          = &pages[page_idx];
+  int const page_idx    = blockIdx.x;
+  int const t           = threadIdx.x;
+  PageInfo* const pp    = &pages[page_idx];
 
   // reset str_bytes to 0 in case it's already been calculated
   if (t == 0) { pp->str_bytes = 0; }
-
-  // only count if it's a string column
-  auto const col         = &chunks[pp->chunk_idx];
-  uint32_t dtype         = col->data_type & 7;
-  uint32_t dtype_len_out = col->data_type >> 3;
-  if (dtype != BYTE_ARRAY || dtype_len_out == 4) { return; }
 
   // whether or not we have repetition levels (lists)
   bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
@@ -542,7 +539,10 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool is_bounds_pg = is_bounds_page(s, min_row, num_rows);
 
   // if we're skipping this page anyway, no need to count it
-  if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) { return; }
+  if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) {
+    restore_decode_cache(s);
+    return;
+  }
 
   // find start/end value indices
   auto const [start_value, end_value] =
@@ -556,6 +556,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // now process string info in the range [start_value, end_value)
   // set up for decoding strings...can be either plain or dictionary
+  auto const& col          = s->col;
   uint8_t const* data      = s->data_start;
   uint8_t const* const end = s->data_end;
   uint8_t const* dict_base = nullptr;
@@ -566,13 +567,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE_DICTIONARY:
       // RLE-packed dictionary indices, first byte indicates index length in bits
-      if (col->str_dict_index) {
+      if (col.str_dict_index) {
         // String dictionary: use index
-        dict_base = reinterpret_cast<const uint8_t*>(col->str_dict_index);
-        dict_size = col->page_info[0].num_input_values * sizeof(string_index_pair);
+        dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
+        dict_size = col.page_info[0].num_input_values * sizeof(string_index_pair);
       } else {
-        dict_base = col->page_info[0].page_data;  // dictionary is always stored in the first page
-        dict_size = col->page_info[0].uncompressed_page_size;
+        dict_base = col.page_info[0].page_data;  // dictionary is always stored in the first page
+        dict_size = col.page_info[0].uncompressed_page_size;
       }
 
       // FIXME: need to return an error condition...this won't actually do anything
@@ -592,6 +593,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
     // TODO check for overflow
     pp->str_bytes = str_bytes;
   }
+  restore_decode_cache(s);
 }
 
 /**
@@ -615,17 +617,16 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(4) size_type last_offset;
 
+  // return if not a string column
+  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
+
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
-  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
-
-  // return if not a string column
-  if (not is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -645,6 +646,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
+    restore_decode_cache(s);
     return;
   }
 
@@ -807,6 +809,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     }
     __syncthreads();
   }
+  restore_decode_cache(s);
 }
 
 /**
@@ -830,17 +833,16 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(4) size_type last_offset;
 
+  // return if not a string column
+  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
+
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
-  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
-
-  // return if not a string column
-  if (not is_string_col(s->col)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -860,6 +862,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
+    restore_decode_cache(s);
     return;
   }
 
@@ -1009,6 +1012,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     }
     __syncthreads();
   }
+  restore_decode_cache(s);
 }
 
 }  // anonymous namespace
