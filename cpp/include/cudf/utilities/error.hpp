@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/stacktrace.hpp>
+#include <cudf/detail/utilities/stacktrace.hpp>
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>

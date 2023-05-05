@@ -21,7 +21,7 @@
 
 #include <jni.h>
 
-#include <cudf/detail/stacktrace.hpp>
+#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/utilities/error.hpp>
 #include <rmm/detail/error.hpp>
 

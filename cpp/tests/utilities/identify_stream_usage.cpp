@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/stacktrace.hpp>
+#include <cudf/detail/utilities/stacktrace.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
