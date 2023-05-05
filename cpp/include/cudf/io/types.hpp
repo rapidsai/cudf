@@ -186,6 +186,8 @@ class writer_compression_statistics {
   /**
    * @brief Returns the compression ratio for the successfully compressed blocks.
    *
+   * Returns nan if there were no successfully compressed blocks.
+   *
    * @return double The ratio between the size of the compression inputs and the size of the
    * compressed output.
    */
