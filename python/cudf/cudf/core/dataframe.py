@@ -4072,7 +4072,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(

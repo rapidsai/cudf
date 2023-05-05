@@ -3297,7 +3297,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
