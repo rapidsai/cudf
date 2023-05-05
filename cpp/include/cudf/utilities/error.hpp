@@ -45,9 +45,9 @@ struct stacktrace_recorder {
   /**
    * @brief Get the stored stacktrace captured during object construction
    *
-   * @return The output stacktrace
+   * @return The pointer to a null-terminated string storing the output stacktrace
    */
-  std::string const& stacktrace() const { return _stacktrace; }
+  char const* stacktrace() const { return _stacktrace.c_str(); }
 
  protected:
   std::string const _stacktrace;  //!< The whole stacktrace stored as one string.
