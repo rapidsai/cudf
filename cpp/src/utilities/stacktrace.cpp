@@ -14,24 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/stacktrace.hpp>
+
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <stdlib.h>
 
 #include <sstream>
-#include <string>
 
-namespace cudf {
+namespace cudf::detail {
 
-/**
- * @brief Query the current stack trace and return as string.
- *
- * This is adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
- *
- * @param skip_depth The depth to skip from including into the output string
- * @return A string of the current stack trace
- */
-std::string get_stacktrace(int skip_depth)
+std::string get_stacktrace(capture_last_stackframe capture_last_frame)
 {
 #ifdef __GNUC__
   constexpr int max_stack_depth = 64;
@@ -40,14 +33,15 @@ std::string get_stacktrace(int skip_depth)
   auto const depth   = backtrace(stack, max_stack_depth);
   auto const modules = backtrace_symbols(stack, depth);
 
-  if (modules == nullptr) { return "No stack trace could be captured!"; }
+  if (modules == nullptr) { return "No stacktrace could be captured!"; }
 
   std::stringstream ss;
   size_t func_name_size = 256;
   char* func_name       = reinterpret_cast<char*>(malloc(func_name_size));
 
   // Skip one more depth to avoid including the stackframe of this function.
-  for (int i = skip_depth + 1; i < depth; ++i) {
+  auto const skip_depth = 1 + (capture_last_frame == capture_last_stackframe::YES ? 0 : 1);
+  for (auto i = skip_depth; i < depth; ++i) {
     char* begin_name   = nullptr;
     char* begin_offset = nullptr;
     char* end_offset   = nullptr;
@@ -65,7 +59,7 @@ std::string get_stacktrace(int skip_depth)
       }
     }
 
-    auto const frame_idx = i - skip_depth - 1;
+    auto const frame_idx = i - skip_depth;
 
     if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
       *begin_name++   = '\0';
@@ -74,7 +68,6 @@ std::string get_stacktrace(int skip_depth)
 
       // Mangled name is now in [begin_name, begin_offset) and caller offset
       // in [begin_offset, end_offset). Apply `__cxa_demangle()`:
-
       int status{0};
       char* ret = abi::__cxa_demangle(begin_name, func_name, &func_name_size, &status);
       if (status == 0 /*success*/) {
@@ -101,4 +94,4 @@ std::string get_stacktrace(int skip_depth)
 #endif  // __GNUC__
 }
 
-}  // namespace cudf
+}  // namespace cudf::detail
