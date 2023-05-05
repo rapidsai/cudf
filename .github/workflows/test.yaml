@@ -79,18 +79,17 @@ jobs:
       run_script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@cuda-120-pip
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       package-name: cudf
-      test-before-arm64: "python -m pip install 'cupy-cuda11x>=12.0.0' -f https://pip.cupy.dev/aarch64"
       test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
   wheel-tests-dask-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@cuda-120-pip
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}

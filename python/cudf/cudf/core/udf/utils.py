@@ -8,7 +8,6 @@ import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
-from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from cuda import cudart
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
@@ -49,9 +48,6 @@ _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
 )
 _heap_size = 0
 _cudf_str_dtype = dtype(str)
-
-
-logger = get_logger()
 
 
 JIT_SUPPORTED_TYPES = (
@@ -460,9 +456,17 @@ def _setup_numba_linker(path):
 def maybe_patch_numba_linker(
     driver_version, runtime_version, ptx_toolkit_version
 ):
+    from cubinlinker.patch import (
+        _numba_version_ok,
+        get_logger,
+        new_patched_linker,
+    )
+
     # Numba thinks cubinlinker is only needed if the driver is older than
     # the ctk, but when PTX files are present, it might also need to patch
     # because those PTX files may newer than the driver as well
+    logger = get_logger()
+
     if (driver_version < ptx_toolkit_version) or (
         driver_version < runtime_version
     ):
