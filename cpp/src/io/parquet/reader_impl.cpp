@@ -44,10 +44,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // TODO: The current implementation does a round trip for the page info. Need to explore doing
   // this step on device. This call is also somewhat redundant if size info has already been
   // calculated (nested schema, chunked reader).
-  auto const has_strings = std::any_of(pages.begin(), pages.end(), [&chunks](auto const& page) {
-    auto const& chunk = chunks[page.chunk_idx];
+  auto is_string_col = [](gpu::ColumnChunkDesc const& chunk) {
     return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4;
-  });
+  };
+  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), is_string_col);
 
   std::vector<size_type> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
@@ -57,10 +57,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     pages.device_to_host(_stream, true);
     for (auto& page : pages) {
       if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0) {
-        auto const& col        = chunks[page.chunk_idx];
-        uint32_t dtype         = col.data_type & 7;
-        uint32_t dtype_len_out = col.data_type >> 3;
-        if (dtype == BYTE_ARRAY && dtype_len_out != 4) {
+        auto const& col = chunks[page.chunk_idx];
+        if (is_string_col(col)) {
           size_type const offset       = col_sizes[col.src_col_index];
           page.str_offset              = offset;
           col_sizes[col.src_col_index] = offset + page.str_bytes;
