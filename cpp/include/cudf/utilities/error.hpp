@@ -29,15 +29,23 @@ namespace cudf {
  * @file
  */
 
-// Forward declaration.
+/**
+ * @brief Query the current stack trace and return as string.
+ *
+ * @param skip_depth The depth to skip from including into the output string
+ * @return A string of the current stack trace
+ */
 std::string get_stacktrace(int skip_depth);
 
 /**
- * @brief The struct to store the current stack trace upon its construction.
+ * @brief The struct to store the current stacktrace upon its construction.
  */
 struct stacktrace_recorder {
-  stacktrace_recorder() : stacktrace{get_stacktrace(1)} {}
-  std::string stacktrace;
+  stacktrace_recorder()
+    : stacktrace{get_stacktrace(1)} {}  // Exclude the current stackframe from stacktrace,
+                                        // as it is where this struct is constructed.
+
+  std::string stacktrace;  //!< stacktrace stored as one string.
 };
 
 /**
@@ -201,12 +209,9 @@ struct data_type_error : public std::invalid_argument, public stacktrace_recorde
 
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 
-#define CUDF_FAIL_2(_what, _exception_type)                             \
-  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/                        \
-  throw _exception_type                                                 \
-  {                                                                     \
-    "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what \
-  }
+#define CUDF_FAIL_2(_what, _exception_type)      \
+  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
+  throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 
