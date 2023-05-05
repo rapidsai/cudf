@@ -37,10 +37,20 @@ namespace cudf {
 struct stacktrace_recorder {
   stacktrace_recorder()
     // Exclude the current stackframe, as it is this constructor.
-    : stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
+    : _stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
   {
   }
-  std::string stacktrace;  //!< The whole stacktrace stored as one string.
+
+ public:
+  /**
+   * @brief Get the stored stacktrace captured during object construction
+   *
+   * @return The output stacktrace
+   */
+  std::string const& stacktrace() const { return _stacktrace; }
+
+ protected:
+  std::string const _stacktrace;  //!< The whole stacktrace stored as one string.
 };
 
 /**
