@@ -29,13 +29,24 @@ namespace cudf {
  * @file
  */
 
+// Forward declaration.
+std::string get_stacktrace(int skip_depth);
+
+/**
+ * @brief The struct to store the current stack trace upon its construction.
+ */
+struct stacktrace_recorder {
+  stacktrace_recorder() : stacktrace{get_stacktrace(1)} {}
+  std::string stacktrace;
+};
+
 /**
  * @brief Exception thrown when logical precondition is violated.
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  */
-struct logic_error : public std::logic_error {
+struct logic_error : public std::logic_error, public stacktrace_recorder {
   /**
    * @brief Constructs a logic_error with the error message.
    *
@@ -57,7 +68,7 @@ struct logic_error : public std::logic_error {
  * @brief Exception thrown when a CUDA error is encountered.
  *
  */
-struct cuda_error : public std::runtime_error {
+struct cuda_error : public std::runtime_error, public stacktrace_recorder {
   /**
    * @brief Construct a new cuda error object with error message and code.
    *
@@ -92,7 +103,7 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported data_type. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct data_type_error : public std::invalid_argument {
+struct data_type_error : public std::invalid_argument, public stacktrace_recorder {
   /**
    * @brief Constructs a data_type_error with the error message.
    *
@@ -190,9 +201,12 @@ struct data_type_error : public std::invalid_argument {
 
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 
-#define CUDF_FAIL_2(_what, _exception_type)      \
-  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
-  throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
+#define CUDF_FAIL_2(_what, _exception_type)                             \
+  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/                        \
+  throw _exception_type                                                 \
+  {                                                                     \
+    "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what \
+  }
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 

@@ -608,6 +608,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/stacktrace.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
