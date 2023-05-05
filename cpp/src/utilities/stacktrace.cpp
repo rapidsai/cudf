@@ -66,6 +66,8 @@ std::string get_stacktrace(int skip_depth)
         }
       }
 
+      auto const frame_idx = i - skip_depth - 1;
+
       if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
         *begin_name++   = '\0';
         *begin_offset++ = '\0';
@@ -78,15 +80,15 @@ std::string get_stacktrace(int skip_depth)
         char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
         if (status == 0) {
           funcname = ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
-          ss << "#" << i << " in " << strings[i] << " : " << funcname << "+" << begin_offset
+          ss << "#" << frame_idx << " in " << strings[i] << " : " << funcname << "+" << begin_offset
              << "\n";
         } else {
           // demangling failed. Output function name as a C function with no arguments.
-          ss << "#" << i << " in " << strings[i] << " : " << begin_name << "()+" << begin_offset
-             << "\n";
+          ss << "#" << frame_idx << " in " << strings[i] << " : " << begin_name << "()+"
+             << begin_offset << "\n";
         }
       } else {
-        ss << "#" << i << " in " << strings[i] << "\n";
+        ss << "#" << frame_idx << " in " << strings[i] << "\n";
       }
     }
 
