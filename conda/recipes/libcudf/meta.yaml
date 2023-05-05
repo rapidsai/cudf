@@ -128,6 +128,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/search.hpp
         - test -f $PREFIX/include/cudf/detail/sequence.hpp
         - test -f $PREFIX/include/cudf/detail/sorting.hpp
+        - test -f $PREFIX/include/cudf/detail/stacktrace.hpp
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
         - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp

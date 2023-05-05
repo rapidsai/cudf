@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/detail/stacktrace.hpp>
+
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <stdexcept>
@@ -30,21 +32,15 @@ namespace cudf {
  */
 
 /**
- * @brief Query the current stack trace and return as string.
- *
- * @param skip_depth The depth to skip from including into the output string
- * @return A string of the current stack trace
- */
-std::string get_stacktrace(int skip_depth);
-
-/**
  * @brief The struct to store the current stacktrace upon its construction.
  */
 struct stacktrace_recorder {
   stacktrace_recorder()
-    : stacktrace{get_stacktrace(1)} {}  // Exclude the current stackframe from stacktrace,
-                                        // as it is where this struct is constructed.
-  std::string stacktrace;               //!< stacktrace stored as one string.
+    // Exclude the current stackframe, as it is this constructor.
+    : stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
+  {
+  }
+  std::string stacktrace;  //!< The whole stacktrace stored as one string.
 };
 
 /**

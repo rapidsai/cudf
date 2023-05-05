@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/stacktrace.hpp>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
@@ -49,14 +51,6 @@
 //    properly passing streams through all of its (tested) APIs.
 
 namespace cudf {
-
-/**
- * @brief Query the current stack trace and return as string.
- *
- * @param skip_depth The depth to skip from including into the output string
- * @return A string of the current stack trace
- */
-std::string get_stacktrace(int skip_depth);
 
 #ifdef STREAM_MODE_TESTING
 namespace test {
@@ -100,7 +94,8 @@ void check_stream_and_error(cudaStream_t stream)
 {
   if (stream_is_invalid(stream)) {
     // Exclude the current function from stacktrace.
-    std::cout << cudf::get_stacktrace(1) << std::endl;
+    std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+              << std::endl;
 
     char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
     if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
