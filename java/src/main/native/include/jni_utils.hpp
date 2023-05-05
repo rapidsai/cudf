@@ -806,15 +806,6 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_THROW_NEW(env, class_name, message, ret_val)                                     \
-  {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
-      return ret_val;                                                                              \
-    }                                                                                              \
-    JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
-  }
-
-// Throw a new exception only if one is not pending then always return with the specified value
 #define JNI_CHECK_THROW_NEW(env, class_name, message, stacktrace, ret_val)                         \
   {                                                                                                \
     if (env->ExceptionOccurred()) {                                                                \
