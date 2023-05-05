@@ -18,7 +18,7 @@ dependencies:
 - cuda-python>=11.7.1,<12.0
 - cuda-sanitizer-api=11.8.86
 - cudatoolkit=11.8
-- cupy>=9.5.0,<12.0.0a0
+- cupy>=12.0.0
 - cxx-compiler
 - cython>=0.29,<0.30
 - dask-core==2023.3.2

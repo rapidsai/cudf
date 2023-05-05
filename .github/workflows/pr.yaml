@@ -112,7 +112,7 @@ jobs:
       build_type: pull-request
       package-name: cudf
       # Install cupy-cuda11x for arm from a special index url
-      test-before-arm64: "python -m pip install 'cupy-cuda11x<12.0.0' -f https://pip.cupy.dev/aarch64"
+      test-before-arm64: "python -m pip install 'cupy-cuda11x>=12.0.0' -f https://pip.cupy.dev/aarch64"
       test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
       test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:

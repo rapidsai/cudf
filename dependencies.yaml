@@ -358,7 +358,7 @@ dependencies:
       - output_types: conda
         packages:
           - cubinlinker
-          - cupy>=9.5.0,<12.0.0a0
+          - cupy>=12.0.0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -374,7 +374,7 @@ dependencies:
       - output_types: pyproject
         packages:
           - cubinlinker
-          - &cupy_pip cupy-cuda11x>=9.5.0,<12.0.0a0
+          - &cupy_pip cupy-cuda11x>=12.0.0
           - ptxcompiler
     specific:
       - output_types: requirements
@@ -382,7 +382,7 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - cupy-cuda115>=9.5.0,<12.0.0a0 # TODO: This might change to cupy-cuda11x?
+              - cupy-cuda115>=12.0.0
           - matrix:
               arch: aarch64
             packages:
