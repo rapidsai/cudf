@@ -31,6 +31,8 @@ if(DISABLE_DEPRECATION_WARNINGS)
   list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()
 
+list(APPEND CUDF_CUDA_FLAGS -Xcicc --Xllc,-nv-disable-new-remat=1)
+
 # make sure we produce smallest binary size
 list(APPEND CUDF_CUDA_FLAGS -Xfatbin=-compress-all)
 
