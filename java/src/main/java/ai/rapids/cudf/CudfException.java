@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@ package ai.rapids.cudf;
  * Exception thrown by cudf itself.
  */
 public class CudfException extends RuntimeException {
-  CudfException(String message) {
+  CudfException(String message, String stacktrace) {
     super(message);
+    this.stacktrace = stacktrace;
   }
 
-  CudfException(String message, Throwable cause) {
+  CudfException(String message, String stacktrace, Throwable cause) {
     super(message, cause);
+    this.stacktrace = stacktrace;
   }
+
+  public final String stacktrace;
 }

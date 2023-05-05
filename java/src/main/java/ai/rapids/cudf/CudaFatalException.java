@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ package ai.rapids.cudf;
  * To continue using CUDA, the process must be terminated and relaunched.
  */
 public class CudaFatalException extends CudaException {
-  CudaFatalException(String message, int errorCode) {
-    super(message, errorCode);
+  CudaFatalException(String message, String stacktrace, int errorCode) {
+    super(message, stacktrace, errorCode);
   }
 
-  CudaFatalException(String message, int errorCode, Throwable cause) {
-    super(message, errorCode, cause);
+  CudaFatalException(String message, String stacktrace, int errorCode, Throwable cause) {
+    super(message, stacktrace, errorCode, cause);
   }
 }
