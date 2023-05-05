@@ -189,10 +189,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       if (out_buf.type.id() == type_id::LIST &&
           (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED) == 0) {
         CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
-        auto& child = (*cols)[input_col.nesting[l_idx + 1]];
+        auto const& child = (*cols)[input_col.nesting[l_idx + 1]];
 
         // the final offset for a list at level N is the size of it's child
-        int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+        int const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
         CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
                                       &offset,
                                       sizeof(offset),
