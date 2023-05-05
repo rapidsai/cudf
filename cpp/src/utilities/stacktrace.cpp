@@ -26,75 +26,74 @@ namespace cudf {
 /**
  * @brief Query the current stack trace and return as string.
  *
+ * This is adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
+ *
  * @param skip_depth The depth to skip from including into the output string
  * @return A string of the current stack trace
  */
 std::string get_stacktrace(int skip_depth)
 {
 #ifdef __GNUC__
-  // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
-  constexpr int kMaxStackDepth = 64;
-  void* stack[kMaxStackDepth];
+  constexpr int max_stack_depth = 64;
+  void* stack[max_stack_depth];
 
-  auto const depth   = backtrace(stack, kMaxStackDepth);
-  auto const strings = backtrace_symbols(stack, depth);
+  auto const depth   = backtrace(stack, max_stack_depth);
+  auto const modules = backtrace_symbols(stack, depth);
+
+  if (modules == nullptr) { return "No stack trace could be captured!"; }
+
   std::stringstream ss;
+  size_t func_name_size = 256;
+  char* func_name       = reinterpret_cast<char*>(malloc(func_name_size));
 
-  if (strings == nullptr) {
-    return std::string{"No stack trace could be found!"};
-  } else {
-    // allocate string which will be filled with the demangled function name
-    size_t funcnamesize = 256;
-    char* funcname      = (char*)malloc(funcnamesize);
+  // Skip one more depth to avoid including the stackframe of this function.
+  for (int i = skip_depth + 1; i < depth; ++i) {
+    char* begin_name   = nullptr;
+    char* begin_offset = nullptr;
+    char* end_offset   = nullptr;
 
-    // Skip one more depth to avoid including the stackframe of this function.
-    for (int i = skip_depth + 1; i < depth; ++i) {
-      char* begin_name   = nullptr;
-      char* begin_offset = nullptr;
-      char* end_offset   = nullptr;
-
-      // find parentheses and +address offset surrounding the mangled name:
-      // ./module(function+0x15c) [0x8048a6d]
-      for (char* p = strings[i]; *p; ++p) {
-        if (*p == '(') {
-          begin_name = p;
-        } else if (*p == '+') {
-          begin_offset = p;
-        } else if (*p == ')' && begin_offset) {
-          end_offset = p;
-          break;
-        }
-      }
-
-      auto const frame_idx = i - skip_depth - 1;
-
-      if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
-        *begin_name++   = '\0';
-        *begin_offset++ = '\0';
-        *end_offset     = '\0';
-
-        // mangled name is now in [begin_name, begin_offset) and caller offset
-        // in [begin_offset, end_offset). now apply __cxa_demangle():
-
-        int status;
-        char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
-        if (status == 0) {
-          funcname = ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
-          ss << "#" << frame_idx << " in " << strings[i] << " : " << funcname << "+" << begin_offset
-             << "\n";
-        } else {
-          // demangling failed. Output function name as a C function with no arguments.
-          ss << "#" << frame_idx << " in " << strings[i] << " : " << begin_name << "()+"
-             << begin_offset << "\n";
-        }
-      } else {
-        ss << "#" << frame_idx << " in " << strings[i] << "\n";
+    // Find parentheses and +address offset surrounding the mangled name:
+    // ./module(function+0x15c) [0x8048a6d]
+    for (char* p = modules[i]; *p; ++p) {
+      if (*p == '(') {
+        begin_name = p;
+      } else if (*p == '+') {
+        begin_offset = p;
+      } else if (*p == ')' && begin_offset) {
+        end_offset = p;
+        break;
       }
     }
 
-    free(funcname);
+    auto const frame_idx = i - skip_depth - 1;
+
+    if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
+      *begin_name++   = '\0';
+      *begin_offset++ = '\0';
+      *end_offset     = '\0';
+
+      // Mangled name is now in [begin_name, begin_offset) and caller offset
+      // in [begin_offset, end_offset). Apply `__cxa_demangle()`:
+
+      int status{0};
+      char* ret = abi::__cxa_demangle(begin_name, func_name, &func_name_size, &status);
+      if (status == 0 /*success*/) {
+        // __cxa_demangle may realloc func_name.
+        func_name = ret;
+        ss << "#" << frame_idx << ": " << modules[i] << " : " << func_name << "+" << begin_offset
+           << "\n";
+      } else {
+        // Demangling failed. Output function name as a C function with no arguments.
+        ss << "#" << frame_idx << ": " << modules[i] << " : " << begin_name << "()+" << begin_offset
+           << "\n";
+      }
+    } else {
+      ss << "#" << frame_idx << ": " << modules[i] << "\n";
+    }
   }
-  free(strings);
+
+  free(func_name);
+  free(modules);
 
   return ss.str();
 #else
