@@ -851,6 +851,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
     )
+    target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
