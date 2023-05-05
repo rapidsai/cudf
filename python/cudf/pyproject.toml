@@ -32,7 +32,7 @@ dependencies = [
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "numba>=0.56.4,<0.57",
-    "numpy>=1.21",
+    "numpy>=1.21,<1.24",
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=1.3,<1.6.0dev0",
