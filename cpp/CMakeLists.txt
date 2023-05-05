@@ -62,11 +62,17 @@ option(
          stream to external libraries."
   OFF
 )
+# Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
+# human-readable stacktrace for debugging.
+option(
+  CUDF_ENABLE_DEBUG_SYMBOL
+  "Enable the -rdynamic option for compiling (useful for stacktrace retrieval in debugging)" OFF
+)
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
-       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
+       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
@@ -96,11 +102,15 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
+  "CUDF: Enable the -rdynamic option for compiling (useful for stacktrace retrieval in debugging): ${CUDF_ENABLE_DEBUG_SYMBOL}"
+)
+message(
+  VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
-  "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}"
+  "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO})"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 
@@ -830,7 +840,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   # depending via ctest and whether it has been updated to expose public stream APIs.
   foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
+    add_library(
+      ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
+    )
 
     set_target_properties(
       ${_tgt}
