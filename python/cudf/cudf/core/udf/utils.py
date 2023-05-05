@@ -11,12 +11,12 @@ import numpy as np
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from cuda import cudart
 from numba import cuda, typeof
-from numba.core.datamodel import default_manager
+from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
-from numba.cuda.cudadrv import nvvm
+from numba.core.extending import register_model
 from numba.cuda.cudadrv.driver import Linker
 from numba.np import numpy_support
-from numba.types import CPointer, Poison, Tuple, boolean, int64, void
+from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 
 import rmm
 
@@ -240,6 +240,26 @@ def _construct_signature(frame, return_type, args):
     return sig
 
 
+class Row(Record):
+    # Numba's Record type provides a convenient abstraction for representing a
+    # row, in that it provides a mapping from strings (column / field names) to
+    # types. However, it cannot be used directly since it assumes that all its
+    # fields can be converted to NumPy types by Numba's internal conversion
+    # mechanism (`numba.np_support.as_dtype). This is not the case for cuDF
+    # extension types that might be the column types (e.g. masked types, string
+    # types or group types).
+    #
+    # We use this type for type inference and type checking, but not in code
+    # generation. For this use case, it is sufficient to provide a dtype for a
+    # row that corresponds to any Python object.
+    @property
+    def dtype(self):
+        return np.dtype("object")
+
+
+register_model(Row)(models.RecordModel)
+
+
 @cuda.jit(device=True)
 def _mask_get(mask, pos):
     """Return the validity of mask[pos] as a word."""
@@ -356,14 +376,20 @@ def _post_process_output_col(col, retty):
     return as_column(col, retty)
 
 
+# The only supported data layout in NVVM.
+# See: https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html?#data-layout
+_nvvm_data_layout = (
+    "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-"
+    "i128:128:128-f32:32:32-f64:64:64-v16:16:16-v32:32:32-"
+    "v64:64:64-v128:128:128-n16:32:64"
+)
+
+
 def _get_extensionty_size(ty):
     """
     Return the size of an extension type in bytes
     """
-    data_layout = nvvm.data_layout
-    if isinstance(data_layout, dict):
-        data_layout = data_layout[64]
-    target_data = ll.create_target_data(data_layout)
+    target_data = ll.create_target_data(_nvvm_data_layout)
     llty = default_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
 

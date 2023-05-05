@@ -141,8 +141,6 @@ void binary_operation(mutable_column_view& out,
 {
   std::string const output_type_name = cudf::type_to_name(out.type());
 
-  std::string ptx_hash =
-    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
