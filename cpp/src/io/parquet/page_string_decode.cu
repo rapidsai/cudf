@@ -520,7 +520,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   if (t == 0) { pp->str_bytes = 0; }
 
   // whether or not we have repetition levels (lists)
-  bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // the level stream decoders
   __shared__ rle_run def_runs[run_buffer_size];
@@ -536,7 +536,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   }
   __syncthreads();
 
-  bool is_bounds_pg = is_bounds_page(s, min_row, num_rows);
+  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows);
 
   // if we're skipping this page anyway, no need to count it
   if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) {
@@ -622,8 +622,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
 
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
-  int page_idx                   = blockIdx.x;
-  int t                          = threadIdx.x;
+  int const page_idx             = blockIdx.x;
+  int const t                    = threadIdx.x;
   int out_thread0;
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
@@ -657,7 +657,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
 
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+  PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
   __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
@@ -838,8 +838,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
-  int page_idx                   = blockIdx.x;
-  int t                          = threadIdx.x;
+  int const page_idx             = blockIdx.x;
+  int const t                    = threadIdx.x;
   int out_thread0;
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
@@ -868,7 +868,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 
   out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
 
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+  PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
   __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
