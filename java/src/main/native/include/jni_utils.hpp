@@ -820,13 +820,13 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (ctor_id == nullptr) {                                                                      \
       return ret_val;                                                                              \
     }                                                                                              \
-    auto const cpp_message = message == nullptr ? std::string{""} : std::string{message};          \
-    auto const jmessage = env->NewStringUTF(cpp_message.c_str());                                  \
+    auto const empty_str = std::string{""};                                                        \
+    auto const jmessage = env->NewStringUTF(message == nullptr ? empty_str.c_str() : message);     \
     if (jmessage == nullptr) {                                                                     \
       return ret_val;                                                                              \
     }                                                                                              \
-    auto const cpp_stacktrace = stacktrace == nullptr ? std::string{""} : std::string{stacktrace}; \
-    auto const jstacktrace = env->NewStringUTF(cpp_stacktrace.c_str());                            \
+    auto const jstacktrace =                                                                       \
+        env->NewStringUTF(stacktrace == nullptr ? empty_str.c_str() : stacktrace);                 \
     if (jstacktrace == nullptr) {                                                                  \
       return ret_val;                                                                              \
     }                                                                                              \
@@ -853,14 +853,13 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (ctor_id == nullptr) {                                                                      \
       return ret_val;                                                                              \
     }                                                                                              \
-    auto const cpp_message = e.what() == nullptr ? std::string{""} : std::string{e.what()};        \
-    auto const jmessage = env->NewStringUTF(cpp_message.c_str());                                  \
+    auto const empty_str = std::string{""};                                                        \
+    auto const jmessage = env->NewStringUTF(e.what() == nullptr ? empty_str.c_str() : e.what());   \
     if (jmessage == nullptr) {                                                                     \
       return ret_val;                                                                              \
     }                                                                                              \
-    auto const cpp_stacktrace =                                                                    \
-        e.stacktrace() == nullptr ? std::string{""} : std::string{e.stacktrace()};                 \
-    auto const jstacktrace = env->NewStringUTF(cpp_stacktrace.c_str());                            \
+    auto const jstacktrace =                                                                       \
+        env->NewStringUTF(e.stacktrace() == nullptr ? empty_str.c_str() : e.stacktrace());         \
     if (jstacktrace == nullptr) {                                                                  \
       return ret_val;                                                                              \
     }                                                                                              \
