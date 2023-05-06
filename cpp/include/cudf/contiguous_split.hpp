@@ -154,8 +154,15 @@ struct contiguous_split_state;
  *
  * auto stream = cudf::get_default_stream();
  *
- * // Define a bounce buffer size: the larger the bounce buffer is, the more SMs can be
- * // occupied by this algorithm.
+ * // Define a buffer size for each chunk: the larger the buffer is, the more SMs can be
+ * // occupied by this algorithm. 
+ * //
+ * // Internally, the GPU unit-of-work is a 1MB batch. When we instantiate `cudf::chunked_pack`,
+ * // all the 1MB batches for the source table_view are computed up front. Additionally, 
+ * // chunked_pack calculates the number of iterations that are required to go through all those
+ * // batches given a `user_buffer_size` buffer. The number of 1MB batches in each iteration (chunk)
+ * // equals the number of CUDA blocks that will be used for the actual work.
+ * //
  * std::size_t user_buffer_size = 128*1024*1024;
  *
  * auto chunked_packer = make_chunked_pack(tv, user_buffer_size, stream, mr);
@@ -187,7 +194,7 @@ class chunked_pack {
    * @brief Construct a `chunked_pack` class.
    *
    * @param input source `table_view` to pack
-   * @param user_buffer_size bounce buffer size (in bytes) that will be passed on `next`. Must be
+   * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
    *                         at least 1MB
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr RMM memory resource to be used for temporary and scratch allocations only
@@ -225,8 +232,8 @@ class chunked_pack {
    * @throws cudf::logic_error If the size of `user_buffer` is different than `user_buffer_size`
    * @throws cudf::logic_error If called after all chunks have been copied
    *
-   * @param user_buffer device span representing a bounce buffer. The size of this span
-   *                    must equal the `user_buffer_size` parameter passed at construction
+   * @param user_buffer device span target for the chunk. The size of this span must equal
+   *                    the `user_buffer_size` parameter passed at construction
    * @return The number of bytes that were written to `user_buffer` (at most
    *          `user_buffer_size`)
    *
@@ -247,13 +254,13 @@ class chunked_pack {
 
 /**
  * @brief Created a `chunked_pack` instance to perform a "pack" of the `table_view`
- * "input", where a bounce buffer of `user_buffer_size` is filled with chunks of the
+ * "input", where a buffer of `user_buffer_size` is filled with chunks of the
  * overall operation. This operation can be used in cases where GPU memory is constrained.
  *
  * @throws cudf::logic_error When user_buffer_size is less than 1MB
  *
  * @param input source `table_view` to pack
- * @param user_buffer_size bounce buffer size (in bytes) that will be passed on `next`. Must be
+ * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
  *                         at least 1MB
  * @param mr RMM memory resource to be used for temporary and scratch allocations only
  * @return a unique_ptr of chunked_pack

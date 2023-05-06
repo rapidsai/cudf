@@ -437,7 +437,7 @@ template <typename InputIter>
 size_type count_src_bufs(InputIter begin, InputIter end)
 {
   auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
-    auto children_counts = count_src_bufs(col.child_begin(), col.child_end());
+    auto const children_counts = count_src_bufs(col.child_begin(), col.child_end());
     return 1 + (col.nullable() ? 1 : 0) + children_counts;
   });
   return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
@@ -793,7 +793,7 @@ BufInfo build_output_columns(InputIter begin,
     size_type col_size, null_count;
     int64_t bitmask_offset;
     int64_t data_offset;
-    std::tie(col_size, data_offset, bitmask_offset, null_count) =
+    auto [col_size, data_offset, bitmask_offset, null_count] =
       build_output_column_metadata<BufInfo>(src, current_info, mb, false);
 
     auto bitmask_ptr =
@@ -1504,7 +1504,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
           std::lower_bound(current_offset_it,
                            h_offsets.end(),
                            // We add the cumulative size + 1 because we want to find what would fit
-                           // within a bounce buffer of user_buffer_size (up to user_buffer_size).
+                           // within a buffer of user_buffer_size (up to user_buffer_size).
                            // Since h_offsets is a prefix scan, we add the size we accumulated so
                            // far so we are looking for the next user_buffer_sized boundary.
                            user_buffer_size + accum_size + 1);
@@ -1570,7 +1570,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
   } else {
     // we instantiate an "iteration state" for the regular single pass contiguous_split
     // consisting of 1 iteration with all of the batches and totalling `total_size` bytes.
-    auto total_size = std::reduce(h_buf_sizes, h_buf_sizes + num_partitions);
+    auto const total_size = std::reduce(h_buf_sizes, h_buf_sizes + num_partitions);
 
     // 1 iteration with the whole size
     return std::make_unique<chunk_iteration_state>(
@@ -1819,7 +1819,7 @@ struct contiguous_split_state {
     CUDF_EXPECTS(has_next(), "Cannot call contiguous_split_chunk with has_next() == false!");
 
     std::size_t starting_batch, num_batches_to_copy;
-    std::tie(starting_batch, num_batches_to_copy) =
+    auto [starting_batch, num_batches_to_copy] =
       chunk_iter_state->get_current_starting_index_and_buff_count();
 
     // perform the copy.
@@ -1962,7 +1962,7 @@ struct contiguous_split_state {
   //    contiguous_split will behave in a "chunked" mode in this scenario, as it will contiguously
   //    copy up until the user's buffer size limit, exposing a next() call for the user to invoke.
   //    Note that in this mode, contig split is not partitioning the original table, it is instead
-  //    only placing cuDF buffers contiguously in the user's bounce buffer.
+  //    only placing cuDF buffers contiguously in the user's buffer.
   //
   //  - single shot contiguous_split (default): when the user doesn't provide their own buffer,
   //    contiguous_split will allocate a buffer per partition and will place contiguous results in
