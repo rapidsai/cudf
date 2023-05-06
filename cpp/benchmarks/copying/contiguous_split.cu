@@ -32,14 +32,12 @@ void contiguous_split(cudf::table_view const& src_table, std::vector<cudf::size_
 
 void chunked_pack(cudf::table_view const& src_table, std::vector<cudf::size_type> const&)
 {
-  auto mr     = rmm::mr::get_current_device_resource();
-  auto stream = cudf::get_default_stream();
-  rmm::device_buffer user_buffer(100L * 1024 * 1024, stream, mr);
+  auto const mr     = rmm::mr::get_current_device_resource();
+  auto const stream = cudf::get_default_stream();
+  auto user_buffer  = rmm::device_uvector<std::uint8_t>(100L * 1024 * 1024, stream, mr);
   auto chunked_pack = cudf::make_chunked_pack(src_table, user_buffer.size(), mr);
-  auto user_buffer_span =
-    cudf::device_span<uint8_t>(static_cast<uint8_t*>(user_buffer.data()), user_buffer.size());
   while (chunked_pack->has_next()) {
-    auto iter_size = chunked_pack->next(user_buffer_span);
+    auto iter_size = chunked_pack->next(user_buffer);
   }
   stream.synchronize();
 }
