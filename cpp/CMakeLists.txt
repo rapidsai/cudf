@@ -65,8 +65,9 @@ option(
 # Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
 # human-readable stacktrace for debugging.
 option(
-  CUDF_ENABLE_DEBUG_SYMBOL
-  "Enable the -rdynamic option for compiling (useful for stacktrace retrieval in debugging)" OFF
+  CUDF_BUILD_STACKTRACE_DEBUG
+  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
+  OFF
 )
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
@@ -102,7 +103,7 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Enable the -rdynamic option for compiling (useful for stacktrace retrieval in debugging): ${CUDF_ENABLE_DEBUG_SYMBOL}"
+  "CUDF: Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG' (useful for debugging with stacktrace retrieval): ${CUDF_BUILD_STACKTRACE_DEBUG}"
 )
 message(
   VERBOSE
@@ -123,6 +124,10 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
     FATAL_ERROR
       "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
   )
+endif()
+
+if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
+  message(FATAL_ERROR "CUDF_BUILD_STACKTRACE_DEBUG is only supported with GCC compiler")
 endif()
 
 set(CUDF_CXX_FLAGS "")
