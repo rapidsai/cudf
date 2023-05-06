@@ -834,7 +834,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (jobj == nullptr) {                                                                         \
       return ret_val;                                                                              \
     }                                                                                              \
-    env->Throw(static_cast<jthrowable>(jobj));                                                     \
+    env->Throw(reinterpret_cast<jthrowable>(jobj));                                                \
     return ret_val;                                                                                \
   }
 
@@ -868,7 +868,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (jobj == nullptr) {                                                                         \
       return ret_val;                                                                              \
     }                                                                                              \
-    env->Throw(static_cast<jthrowable>(jobj));                                                     \
+    env->Throw(reinterpret_cast<jthrowable>(jobj));                                                \
     return ret_val;                                                                                \
   }
 
