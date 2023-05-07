@@ -1712,9 +1712,13 @@ struct contiguous_split_state {
     // is the result.
     if (is_empty) { return; }
 
+    // First pass over the source tables to generate a `dst_buf_info` per split and column buffer
+    // (`num_bufs`). After this, contiguous_split uses `dst_buf_info` to further subdivide the work
+    // into 1MB batches in `compute_batches`
     partition_buf_size_and_dst_buf_info =
       std::move(compute_splits(input, splits, num_partitions, num_src_bufs, num_bufs, stream, mr));
 
+    // Second pass: uses `dst_buf_info` to break down the work into 1MB batches.
     compute_batches();
 
     // allocate output partition buffers, in the non-chunked case
