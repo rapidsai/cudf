@@ -155,13 +155,13 @@ struct contiguous_split_state;
  * auto stream = cudf::get_default_stream();
  *
  * // Define a buffer size for each chunk: the larger the buffer is, the more SMs can be
- * // occupied by this algorithm. 
+ * // occupied by this algorithm.
  * //
  * // Internally, the GPU unit-of-work is a 1MB batch. When we instantiate `cudf::chunked_pack`,
- * // all the 1MB batches for the source table_view are computed up front. Additionally, 
+ * // all the 1MB batches for the source table_view are computed up front. Additionally,
  * // chunked_pack calculates the number of iterations that are required to go through all those
  * // batches given a `user_buffer_size` buffer. The number of 1MB batches in each iteration (chunk)
- * // equals the number of CUDA blocks that will be used for the actual work.
+ * // equals the number of CUDA blocks that will be used for the main kernel launch.
  * //
  * std::size_t user_buffer_size = 128*1024*1024;
  *
