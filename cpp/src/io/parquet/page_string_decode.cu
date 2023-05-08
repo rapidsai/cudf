@@ -627,6 +627,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   int const t                    = threadIdx.x;
   int out_thread0;
 
+  // set during string copy by lane 0
+  int first_non_null = -1;
+
   if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
     return;
   }
@@ -697,6 +700,22 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       }
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
+      int const me = t - out_thread0;
+
+      // if this is the first page, then the first non-null entry will have an offset of 0.
+      // pages that start with a run of nulls will have repeated 0 values, so for the fixing
+      // of null offsets done at the end, we need to know the last index that should be 0.
+      if (me == 0 && s->page.str_offset == 0 && first_non_null == -1) {
+        for (int i = src_pos; i < target_pos; i++) {
+          int dst_pos = sb->nz_idx[rolling_index(i)];
+          if (!has_repetition) { dst_pos -= s->first_row; }
+          if (dst_pos >= 0) {
+            first_non_null = dst_pos;
+            break;
+          }
+        }
+      }
+
       // WARP1..WARP3: Decode values
       src_pos += t - out_thread0;
 
@@ -722,7 +741,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       auto const use_char_ll =
         s->page.num_valids > 0 && (s->page.str_bytes / s->page.num_valids) >= warp_size;
       int const leaf_level_index = s->col.max_nesting_depth - 1;
-      int const me               = t - out_thread0;
 
       if (me < warp_size) {
         for (int i = 0; i < decode_block_size - out_thread0; i += warp_size) {
@@ -800,11 +818,11 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
         }
       }
       // just some nulls, do this serially for now
-      else if (t == 0) {
+      else if (t == out_thread0) {
         if (offptr[value_count - 1] == 0) {
           offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
         }
-        for (int i = value_count - 2; i > 0; i--) {
+        for (int i = value_count - 2; i > first_non_null; i--) {
           if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
         }
         offptr[0] = s->page.str_offset;
@@ -844,6 +862,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   int const page_idx             = blockIdx.x;
   int const t                    = threadIdx.x;
   int out_thread0;
+
+  // set during string copy by lane 0
+  int first_non_null = -1;
 
   if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
     return;
@@ -907,6 +928,20 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 
     // target_pos for value deconding
     target_pos = min(s->nz_count, target_pos);
+
+    // if this is the first page, then the first non-null entry will have an offset of 0.
+    // pages that start with a run of nulls will have repeated 0 values, so for the fixing
+    // of null offsets done at the end, we need to know the last index that should be 0.
+    if (t == 0 && s->page.str_offset == 0 && first_non_null == -1) {
+      for (int i = src_pos; i < target_pos; i++) {
+        int dst_pos = sb->nz_idx[rolling_index(i)];
+        if (!has_repetition) { dst_pos -= s->first_row; }
+        if (dst_pos >= 0) {
+          first_non_null = dst_pos;
+          break;
+        }
+      }
+    }
 
     // Decode values
     src_pos += t;
@@ -1009,7 +1044,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
         if (offptr[value_count - 1] == 0) {
           offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
         }
-        for (int i = value_count - 2; i > 0; i--) {
+        for (int i = value_count - 2; i > first_non_null; i--) {
           if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
         }
         offptr[0] = s->page.str_offset;
