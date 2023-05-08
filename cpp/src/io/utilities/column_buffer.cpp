@@ -327,7 +327,7 @@ std::unique_ptr<column> make_column<true>(utilities::column_buffer<true>& buffer
         buffer._string_data.size() == 0
           ? make_empty_column(data_type{type_id::INT8})
           : std::make_unique<column>(data_type{type_id::INT8},
-                                     buffer.size,
+                                     buffer.string_size(),
                                      std::move(buffer._string_data),
                                      cudf::detail::create_null_mask(buffer.size, state, stream, mr),
                                      state_null_count(state, buffer.size),
