@@ -163,7 +163,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_str_data.host_to_device(_stream);
 
   // TODO: explore launching these concurrently with a stream pool
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
   gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, _stream);
 
   pages.device_to_host(_stream);

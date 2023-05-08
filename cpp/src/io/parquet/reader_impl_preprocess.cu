@@ -325,10 +325,11 @@ constexpr bool is_supported_encoding(Encoding enc)
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns The size in bytes of level type data required
  */
-void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                         hostdevice_vector<gpu::PageInfo>& pages,
-                         rmm::cuda_stream_view stream)
+int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                        hostdevice_vector<gpu::PageInfo>& pages,
+                        rmm::cuda_stream_view stream)
 {
   // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
   // please update preprocess_nested_columns to reflect this.
@@ -340,6 +341,22 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
   chunks.host_to_device(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
+
+  // compute max bytes needed for level data
+  auto level_bit_size =
+    cudf::detail::make_counting_transform_iterator(0, [chunks = chunks.begin()] __device__(int i) {
+      auto c = chunks[i];
+      return static_cast<int>(std::max(c.level_bits[gpu::level_type::REPETITION],
+                                       c.level_bits[gpu::level_type::DEFINITION]));
+    });
+  // max level data bit size.
+  int const max_level_bits   = thrust::reduce(rmm::exec_policy(stream),
+                                            level_bit_size,
+                                            level_bit_size + chunks.size(),
+                                            0,
+                                            thrust::maximum<int>());
+  auto const level_type_size = max(1, cudf::util::round_up_safe(max_level_bits, 8) / 8);
+
   pages.device_to_host(stream, true);
 
   // validate page encodings
@@ -347,6 +364,8 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                            pages.end(),
                            [](auto const& page) { return is_supported_encoding(page.encoding); }),
                "Unsupported page encoding detected");
+
+  return level_type_size;
 }
 
 /**
@@ -673,20 +692,21 @@ void reader::impl::allocate_level_decode_space()
 
   // TODO: this could be made smaller if we ignored dictionary pages and pages with no
   // repetition data.
-  size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * sizeof(level_t);
-  auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
+  size_t const per_page_decode_buf_size =
+    LEVEL_DECODE_BUF_SIZE * 2 * _file_itm_data.level_type_size;
+  auto const decode_buf_size = per_page_decode_buf_size * pages.size();
   _file_itm_data.level_decode_data =
     rmm::device_buffer(decode_buf_size, _stream, rmm::mr::get_current_device_resource());
 
   // distribute the buffers
-  level_t* buf = static_cast<level_t*>(_file_itm_data.level_decode_data.data());
+  uint8_t* buf = static_cast<uint8_t*>(_file_itm_data.level_decode_data.data());
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto& p = pages[idx];
 
     p.lvl_decode_buf[gpu::level_type::DEFINITION] = buf;
-    buf += LEVEL_DECODE_BUF_SIZE;
+    buf += (LEVEL_DECODE_BUF_SIZE * _file_itm_data.level_type_size);
     p.lvl_decode_buf[gpu::level_type::REPETITION] = buf;
-    buf += LEVEL_DECODE_BUF_SIZE;
+    buf += (LEVEL_DECODE_BUF_SIZE * _file_itm_data.level_type_size);
   }
 }
 
@@ -808,7 +828,7 @@ void reader::impl::load_and_decompress_data(
 
   if (total_pages > 0) {
     // decoding of column/page information
-    decode_page_headers(chunks, pages, _stream);
+    _file_itm_data.level_type_size = decode_page_headers(chunks, pages, _stream);
     if (has_compressed_data) {
       decomp_page_data = decompress_page_data(chunks, pages, _stream);
       // Free compressed data
@@ -1600,6 +1620,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
                           std::numeric_limits<size_t>::max(),
                           true,                  // compute num_rows
                           chunk_read_limit > 0,  // compute string sizes
+                          _file_itm_data.level_type_size,
                           _stream);
 
     // computes:
@@ -1651,6 +1672,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                           num_rows,
                           false,  // num_rows is already computed
                           false,  // no need to compute string sizes
+                          _file_itm_data.level_type_size,
                           _stream);
 
     // print_pages(pages, _stream);

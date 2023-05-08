@@ -58,6 +58,7 @@ inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
 
 // an individual batch. processed by a warp.
 // batches should be in shared memory.
+template <typename level_t>
 struct rle_batch {
   uint8_t const* run_start;  // start of the run we are part of
   int run_offset;            // value offset of this batch from the start of the run
@@ -122,6 +123,7 @@ struct rle_batch {
 };
 
 // a single rle run. may be broken up into multiple rle_batches
+template <typename level_t>
 struct rle_run {
   int size;  // total size of the run
   int output_pos;
@@ -129,16 +131,17 @@ struct rle_run {
   int level_run;  // level_run header value
   int remaining;
 
-  __device__ __inline__ rle_batch next_batch(level_t* const output, int max_size)
+  __device__ __inline__ rle_batch<level_t> next_batch(level_t* const output, int max_size)
   {
     int batch_len        = min(max_size, remaining);
     int const run_offset = size - remaining;
     remaining -= batch_len;
-    return rle_batch{start, run_offset, output, level_run, batch_len};
+    return rle_batch<level_t>{start, run_offset, output, level_run, batch_len};
   }
 };
 
 // a stream of rle_runs
+template <typename level_t>
 struct rle_stream {
   int level_bits;
   uint8_t const* start;
@@ -151,7 +154,7 @@ struct rle_stream {
 
   level_t* output;
 
-  rle_run* runs;
+  rle_run<level_t>* runs;
   int run_index;
   int run_count;
   int output_pos;
@@ -160,7 +163,7 @@ struct rle_stream {
   int next_batch_run_start;
   int next_batch_run_count;
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
+  __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
 
   __device__ void init(int _level_bits,
                        uint8_t const* _start,
