@@ -673,7 +673,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      for (ColumnView columnView: columnVectors) {
+      for (ColumnVector columnView: columnVectors) {
         if (columnView != null) {
           columnView.close();
         }
