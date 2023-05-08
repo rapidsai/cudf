@@ -51,7 +51,7 @@ namespace {
  *
  * This value was found using the strings_join benchmark results.
  */
-constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 128;
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 32;
 
 struct join_base_fn {
   column_device_view const d_strings;
@@ -108,32 +108,6 @@ struct join_fn : public join_base_fn {
   }
 };
 
-/**
- * @brief Recode string pointers for use with make_strings_column that
- * employs an efficient gather algorithm
- */
-#if 0
-struct join_gather_fn : public join_base_fn {
-  string_index_pair* d_results;
-
-  join_gather_fn(column_device_view const d_strings,
-                 string_view d_separator,
-                 string_scalar_device_view d_narep,
-                 string_index_pair* d_results)
-    : join_base_fn{d_strings, d_separator, d_narep}, d_results{d_results}
-  {
-  }
-
-  __device__ void operator()(size_type idx) const
-  {
-    auto [d_str, d_sep] = process_string(idx);
-
-    auto d_output = d_results + (idx * 2);
-    d_output[0]   = string_index_pair{d_str.data(), d_str.size_bytes()};
-    d_output[1]   = string_index_pair{d_sep.data(), d_sep.size_bytes()};
-  }
-};
-#else
 struct join_gather_fn : public join_base_fn {
   join_gather_fn(column_device_view const d_strings,
                  string_view d_separator,
@@ -145,11 +119,11 @@ struct join_gather_fn : public join_base_fn {
   __device__ string_index_pair operator()(size_type idx) const
   {
     auto [d_str, d_sep] = process_string(idx / 2);
+    // every other string is the separator
     return idx % 2 ? string_index_pair{d_sep.data(), d_sep.size_bytes()}
                    : string_index_pair{d_str.data(), d_str.size_bytes()};
   }
 };
-#endif
 }  // namespace
 
 std::unique_ptr<column> join_strings(strings_column_view const& input,
@@ -168,25 +142,20 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   auto chars_column = [&] {
-    if ((input.size() == input.null_count()) ||  //(input.size() > 0) ||
-        ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
+    // build the strings column and commandeer the chars column
+    if ((input.size() == input.null_count()) ||
+        ((input.chars_size() / (input.size() - input.null_count())) <= AVG_CHAR_BYTES_THRESHOLD)) {
       return std::get<1>(
         make_strings_children(join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr));
     }
-
-    // rmm::device_uvector<string_index_pair> indices(2L * input.size(), stream);
-    // thrust::for_each_n(rmm::exec_policy(stream),
-    //                    thrust::make_counting_iterator<size_type>(0),
-    //                    input.size(),
-    //                    join_gather_fn{*d_strings, d_separator, d_narep, indices.data()});
+    // dynamically feeds index pairs to build the output
     auto indices = cudf::detail::make_counting_transform_iterator(
       0, join_gather_fn{*d_strings, d_separator, d_narep});
-    // build the strings column and commandeer the chars column
     auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
     return std::move(joined_col->release().children.back());
   }();
 
-  // build the offsets: single string has offsets [0,chars-size]
+  // build the offsets: single string output has offsets [0,chars-size]
   rmm::device_uvector<size_type> offsets(2, stream);
   offsets.set_element_to_zero_async(0, stream);
   offsets.set_element(1, chars_column->size(), stream);
@@ -199,6 +168,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
                      ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
                      : rmm::device_buffer{0, stream, mr};
 
+  // perhaps this return a string_scalar instead of a single-row column
   return make_strings_column(
     1, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
