@@ -112,6 +112,7 @@ struct join_fn : public join_base_fn {
  * @brief Recode string pointers for use with make_strings_column that
  * employs an efficient gather algorithm
  */
+#if 0
 struct join_gather_fn : public join_base_fn {
   string_index_pair* d_results;
 
@@ -132,7 +133,23 @@ struct join_gather_fn : public join_base_fn {
     d_output[1]   = string_index_pair{d_sep.data(), d_sep.size_bytes()};
   }
 };
+#else
+struct join_gather_fn : public join_base_fn {
+  join_gather_fn(column_device_view const d_strings,
+                 string_view d_separator,
+                 string_scalar_device_view d_narep)
+    : join_base_fn{d_strings, d_separator, d_narep}
+  {
+  }
 
+  __device__ string_index_pair operator()(size_type idx) const
+  {
+    auto [d_str, d_sep] = process_string(idx / 2);
+    return idx % 2 ? string_index_pair{d_sep.data(), d_sep.size_bytes()}
+                   : string_index_pair{d_str.data(), d_str.size_bytes()};
+  }
+};
+#endif
 }  // namespace
 
 std::unique_ptr<column> join_strings(strings_column_view const& input,
@@ -151,19 +168,21 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   auto chars_column = [&] {
-    if ((input.size() == input.null_count()) ||
+    if ((input.size() == input.null_count()) ||  //(input.size() > 0) ||
         ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
       return std::get<1>(
         make_strings_children(join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr));
     }
 
-    rmm::device_uvector<string_index_pair> indices(2L * input.size(), stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       input.size(),
-                       join_gather_fn{*d_strings, d_separator, d_narep, indices.data()});
+    // rmm::device_uvector<string_index_pair> indices(2L * input.size(), stream);
+    // thrust::for_each_n(rmm::exec_policy(stream),
+    //                    thrust::make_counting_iterator<size_type>(0),
+    //                    input.size(),
+    //                    join_gather_fn{*d_strings, d_separator, d_narep, indices.data()});
+    auto indices = cudf::detail::make_counting_transform_iterator(
+      0, join_gather_fn{*d_strings, d_separator, d_narep});
     // build the strings column and commandeer the chars column
-    auto joined_col = make_strings_column(indices.begin(), indices.end(), stream, mr);
+    auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
     return std::move(joined_col->release().children.back());
   }();
 
