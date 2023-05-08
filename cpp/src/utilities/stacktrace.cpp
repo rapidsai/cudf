@@ -19,6 +19,7 @@
 #include <cxxabi.h>
 #include <execinfo.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <sstream>
 
@@ -40,37 +41,28 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
   // Skip one more depth to avoid including the stackframe of this function.
   auto const skip_depth = 1 + (capture_last_frame == capture_last_stackframe::YES ? 0 : 1);
   for (auto i = skip_depth; i < depth; ++i) {
-    char* begin_name   = nullptr;
-    char* begin_offset = nullptr;
-    char* end_offset   = nullptr;
-
-    // Find parentheses and +address offset surrounding the mangled name:
-    // ./module(function+0x15c) [0x8048a6d]
-    for (char* p = modules[i]; *p; ++p) {
-      if (*p == '(') {
-        begin_name = p;
-      } else if (*p == '+') {
-        begin_offset = p;
-      } else if (*p == ')' && begin_offset) {
-        end_offset = p;
-        break;
-      }
-    }
+    // Each modules[i] string contains a mangled name in the format like following:
+    // `module_name(function_name+0x012) [0x01234567890a]`
+    // We need to extract function name and function offset.
+    char* begin_func_name   = strstr(modules[i], "(");
+    char* begin_func_offset = strstr(modules[i], "+");
+    char* end_func_offset   = strstr(modules[i], ")");
 
     auto const frame_idx = i - skip_depth;
+    if (begin_func_name && begin_func_offset && end_func_offset &&
+        begin_func_name < begin_func_offset) {
+      // Split `modules[i]` into separate null-terminated strings.
+      *(begin_func_name++)   = '\0';
+      *(begin_func_offset++) = '\0';
+      *end_func_offset       = '\0';
 
-    if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
-      *begin_name++   = '\0';
-      *begin_offset++ = '\0';
-      *end_offset     = '\0';
-
-      // Mangled name is now in [begin_name, begin_offset) and caller offset
-      // in [begin_offset, end_offset). Apply `__cxa_demangle()`:
+      // Mangled function name is now in [begin_func_name, begin_func_offset).
+      // We need to demangle it.
       int status{0};
-      char* func_name = abi::__cxa_demangle(begin_name, nullptr, nullptr, &status);
+      char* func_name = abi::__cxa_demangle(begin_func_name, nullptr, nullptr, &status);
       ss << "#" << frame_idx << ": " << modules[i] << " : "
-         << (status == 0 /*demangle success*/ ? func_name : begin_name) << "+" << begin_offset
-         << "\n";
+         << (status == 0 /*demangle success*/ ? func_name : begin_func_name) << "+"
+         << begin_func_offset << "\n";
       free(func_name);
     } else {
       ss << "#" << frame_idx << ": " << modules[i] << "\n";
