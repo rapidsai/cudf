@@ -2573,6 +2573,20 @@ def test_parquet_reader_one_level_list2(datadir):
     assert_eq(expect, got, check_dtype=False)
 
 
+# testing a specific bug-fix/edge case.
+# specifically:  in a parquet file containing a particular way of representing
+#                a list column in a schema, the cudf reader was confusing
+#                nesting information and building a list of list of int instead
+#                of a list of int
+def test_parquet_reader_one_level_list3(datadir):
+    fname = datadir / "one_level_list3.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got, check_dtype=True)
+
+
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
 def test_to_parquet_row_group_size(
