@@ -670,11 +670,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
         columnVectors[i] = new ColumnVector(nativeHandles[i]);
+        nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
       for (ColumnView columnView: columnVectors) {
         if (columnView != null) {
           columnView.close();
+        }
+      }
+      for (long nativeHandle: nativeHandles) {
+        if (nativeHandle != 0) {
+          deleteColumnView(nativeHandle);
         }
       }
       throw t;
@@ -818,11 +824,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
         columnViews[i] = new ColumnView(nativeHandles[i]);
+        nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
       for (ColumnView columnView: columnViews) {
         if (columnView != null) {
           columnView.close();
+        }
+      }
+      for (long nativeHandle: nativeHandles) {
+        if (nativeHandle != 0) {
+          deleteColumnView(nativeHandle);
         }
       }
       throw t;
