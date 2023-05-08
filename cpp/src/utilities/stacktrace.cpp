@@ -36,8 +36,6 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
   if (modules == nullptr) { return "No stacktrace could be captured!"; }
 
   std::stringstream ss;
-  size_t func_name_size = 256;
-  char* func_name       = reinterpret_cast<char*>(malloc(func_name_size));
 
   // Skip one more depth to avoid including the stackframe of this function.
   auto const skip_depth = 1 + (capture_last_frame == capture_last_stackframe::YES ? 0 : 1);
@@ -69,23 +67,16 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
       // Mangled name is now in [begin_name, begin_offset) and caller offset
       // in [begin_offset, end_offset). Apply `__cxa_demangle()`:
       int status{0};
-      char* ret = abi::__cxa_demangle(begin_name, func_name, &func_name_size, &status);
-      if (status == 0 /*success*/) {
-        // __cxa_demangle may realloc func_name.
-        func_name = ret;
-        ss << "#" << frame_idx << ": " << modules[i] << " : " << func_name << "+" << begin_offset
-           << "\n";
-      } else {
-        // Demangling failed. Output function name as a C function with no arguments.
-        ss << "#" << frame_idx << ": " << modules[i] << " : " << begin_name << "()+" << begin_offset
-           << "\n";
-      }
+      char* func_name = abi::__cxa_demangle(begin_name, nullptr, nullptr, &status);
+      ss << "#" << frame_idx << ": " << modules[i] << " : "
+         << (status == 0 /*demangle success*/ ? func_name : begin_name) << "+" << begin_offset
+         << "\n";
+      free(func_name);
     } else {
       ss << "#" << frame_idx << ": " << modules[i] << "\n";
     }
   }
 
-  free(func_name);
   free(modules);
 
   return ss.str();
