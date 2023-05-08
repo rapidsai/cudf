@@ -364,7 +364,7 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, *, mode) -> int:
+    def get_ptr(self, mode: str = "write") -> int:
         """Get a device pointer to the memory of the buffer.
 
         If this is called within an `acquire_spill_lock` context,
@@ -462,7 +462,7 @@ class SpillableBuffer(Buffer):
                 )
                 return ret
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> SpillableBufferSlice:
         return SpillableBufferSlice(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, list]:
@@ -552,14 +552,14 @@ class SpillableBufferSlice(SpillableBuffer):
         self._owner = base
         self.lock = base.lock
 
-    def get_ptr(self, *, mode) -> int:
+    def get_ptr(self, mode: str = "write") -> int:
         """
         A passthrough method to `SpillableBuffer.get_ptr`
         with factoring in the `offset`.
         """
         return self._base.get_ptr(mode=mode) + self._offset
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> SpillableBufferSlice:
         return SpillableBufferSlice(
             base=self._base, offset=offset + self._offset, size=size
         )

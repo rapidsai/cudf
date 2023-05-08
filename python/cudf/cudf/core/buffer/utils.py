@@ -7,9 +7,9 @@ from contextlib import ContextDecorator
 from typing import Any, Dict, Optional, Tuple, Union
 
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
-from cudf.core.buffer.cow_buffer import CopyOnWriteBuffer
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillLock, as_spillable_buffer
+from cudf.core.buffer.tenable_buffer import as_tenable_buffer
 from cudf.options import get_option
 
 
@@ -74,16 +74,9 @@ def as_buffer(
         )
 
     if get_option("copy_on_write"):
-        if isinstance(data, Buffer) or hasattr(
-            data, "__cuda_array_interface__"
-        ):
-            return CopyOnWriteBuffer._from_device_memory(data, exposed=exposed)
-        if exposed:
-            raise ValueError("cannot created exposed host memory")
-        return CopyOnWriteBuffer._from_host_memory(data)
+        return as_tenable_buffer(data, exposed=exposed)
     if get_global_manager() is not None:
         return as_spillable_buffer(data, exposed=exposed)
-
     if hasattr(data, "__cuda_array_interface__"):
         return Buffer._from_device_memory(data)
     return Buffer._from_host_memory(data)

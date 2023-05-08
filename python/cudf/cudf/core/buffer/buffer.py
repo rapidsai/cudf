@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Type, TypeVar
 
 import numpy
 
@@ -169,7 +169,7 @@ class Buffer(Serializable):
         # Create from device memory
         return cls._from_device_memory(buf)
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self: T, offset: int, size: int) -> T:
         """
         Sub-classes can overwrite this to implement __getitem__
         without having to handle non-slice inputs.
@@ -182,7 +182,7 @@ class Buffer(Serializable):
             )
         )
 
-    def __getitem__(self, key: slice) -> Buffer:
+    def __getitem__(self: T, key: slice) -> T:
         """Create a new slice of the buffer."""
         if not isinstance(key, slice):
             raise TypeError(
@@ -194,7 +194,7 @@ class Buffer(Serializable):
             raise ValueError("slice must be C-contiguous")
         return self._getitem(offset=start, size=stop - start)
 
-    def copy(self, deep: bool = True):
+    def copy(self: T, deep: bool = True) -> T:
         """
         Return a copy of Buffer.
 
@@ -234,7 +234,13 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
-        return self._get_cuda_array_interface(readonly=False)
+        return {
+            "data": (self.get_ptr(mode="write"), False),
+            "shape": (self.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
     def _get_cuda_array_interface(self, readonly=False):
         """Helper function to create a CUDA Array Interface.
@@ -262,7 +268,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def get_ptr(self, *, mode) -> int:
+    def get_ptr(self, mode: str = "write") -> int:
         """Device pointer to the start of the buffer.
 
         Parameters
@@ -275,19 +281,26 @@ class Buffer(Serializable):
             Failure to fulfill this contract will cause
             incorrect behavior.
 
+        Returns
+        -------
+        int
+            The device pointer as an integer
 
         See Also
         --------
         SpillableBuffer.get_ptr
-        CopyOnWriteBuffer.get_ptr
+        TenableBuffer.get_ptr
         """
         return self._ptr
 
-    def memoryview(self) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         """Read-only access to the buffer through host memory."""
-        host_buf = host_memory_allocation(self.size)
+        size = self._size if size is None else size
+        host_buf = host_memory_allocation(size)
         rmm._lib.device_buffer.copy_ptr_to_host(
-            self.get_ptr(mode="read"), host_buf
+            self.get_ptr(mode="read") + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
 
