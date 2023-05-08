@@ -588,17 +588,6 @@ struct is_stub_digest_fn {
   }
 };
 
-struct stub_size_fn {
-  offset_type const* sizes;
-  is_stub_digest_fn const is_stub_digest;
-  size_type const num_rows;
-
-  __device__ offset_type operator()(size_type i)
-  {
-    return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
-  }
-};
-
 std::unique_ptr<column> build_output_column(size_type num_rows,
                                             std::unique_ptr<column>&& means,
                                             std::unique_ptr<column>&& weights,
@@ -658,8 +647,11 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                               sizes.begin());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
-    0, stub_size_fn{sizes.begin(), is_stub_digest, num_rows});
-
+    0,
+    cuda::proclaim_return_type<offset_type>(
+      [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
+        return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          iter,
                          iter + num_rows + 1,
