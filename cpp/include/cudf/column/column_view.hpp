@@ -289,7 +289,7 @@ class column_view_base {
                    size_type size,
                    void const* data,
                    bitmask_type const* null_mask = nullptr,
-                   size_type null_count          = UNKNOWN_NULL_COUNT,
+                   size_type null_count          = 0,
                    size_type offset              = 0);
 };
 
@@ -385,7 +385,7 @@ class column_view : public detail::column_view_base {
               size_type size,
               void const* data,
               bitmask_type const* null_mask            = nullptr,
-              size_type null_count                     = UNKNOWN_NULL_COUNT,
+              size_type null_count                     = 0,
               size_type offset                         = 0,
               std::vector<column_view> const& children = {});
 
@@ -540,7 +540,7 @@ class mutable_column_view : public detail::column_view_base {
                       size_type size,
                       void* data,
                       bitmask_type* null_mask                          = nullptr,
-                      size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
+                      size_type null_count                             = 0,
                       size_type offset                                 = 0,
                       std::vector<mutable_column_view> const& children = {});
 
