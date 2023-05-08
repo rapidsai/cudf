@@ -18,9 +18,9 @@
 
 #include <cxxabi.h>
 #include <execinfo.h>
-#include <stdlib.h>
-#include <string.h>
 
+#include <cstdlib>
+#include <cstring>
 #include <sstream>
 
 namespace cudf::detail {
@@ -44,9 +44,9 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
     // Each modules[i] string contains a mangled name in the format like following:
     // `module_name(function_name+0x012) [0x01234567890a]`
     // We need to extract function name and function offset.
-    char* begin_func_name   = strstr(modules[i], "(");
-    char* begin_func_offset = strstr(modules[i], "+");
-    char* end_func_offset   = strstr(modules[i], ")");
+    char* begin_func_name   = std::strstr(modules[i], "(");
+    char* begin_func_offset = std::strstr(modules[i], "+");
+    char* end_func_offset   = std::strstr(modules[i], ")");
 
     auto const frame_idx = i - skip_depth;
     if (begin_func_name && begin_func_offset && end_func_offset &&
