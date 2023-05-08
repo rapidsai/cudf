@@ -9820,6 +9820,9 @@ def df_eval(request):
             float,
         ),
         ("a_b_are_equal = (a == b)", int),
+        ("a > b", str),
+        ("a < '1'", str),
+        ('a == "1"', str),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
