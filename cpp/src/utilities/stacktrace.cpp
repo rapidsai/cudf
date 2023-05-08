@@ -23,7 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
-#endif
+#endif  // __GNUC__
 
 namespace cudf::detail {
 
