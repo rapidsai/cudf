@@ -53,6 +53,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace tdigest {
 namespace detail {
@@ -484,16 +486,6 @@ __global__ void generate_cluster_limits_kernel(int delta,
   }
 }
 
-struct cluster_size_fn {
-  size_type const* group_num_clusters;
-  size_type const num_groups;
-
-  __device__ size_type operator()(size_type index) const
-  {
-    return index == num_groups ? 0 : group_num_clusters[index];
-  }
-};
-
 /**
  * @brief Compute a set of cluster limits (brackets, essentially) for a
  * given tdigest based on the specified delta and the total weight of values
@@ -549,7 +541,11 @@ generate_group_cluster_info(int delta,
   auto group_cluster_offsets = cudf::make_numeric_column(
     data_type{type_to_id<size_type>()}, num_groups + 1, mask_state::UNALLOCATED, stream, mr);
   auto cluster_size = cudf::detail::make_counting_transform_iterator(
-    0, cluster_size_fn{group_num_clusters.begin(), num_groups});
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [group_num_clusters = group_num_clusters.begin(), num_groups] __device__(size_type index) {
+        return index == num_groups ? 0 : group_num_clusters[index];
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          cluster_size,
                          cluster_size + num_groups + 1,
