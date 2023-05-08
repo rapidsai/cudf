@@ -673,16 +673,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      for (ColumnVector columnView: columnVectors) {
-        if (columnView != null) {
-          columnView.close();
-        }
-      }
-      for (long nativeHandle: nativeHandles) {
-        if (nativeHandle != 0) {
-          deleteColumnView(nativeHandle);
-        }
-      }
+      cleanupColumnViews(nativeHandles, columnVectors);
       throw t;
     }
     return columnVectors;
@@ -827,19 +818,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      for (ColumnView columnView: columnViews) {
-        if (columnView != null) {
-          columnView.close();
-        }
-      }
-      for (long nativeHandle: nativeHandles) {
-        if (nativeHandle != 0) {
-          deleteColumnView(nativeHandle);
-        }
-      }
+      cleanupColumnViews(nativeHandles, columnViews);
       throw t;
     }
     return columnViews;
+  }
+
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) {
+    for (ColumnView columnView: columnViews) {
+      if (columnView != null) {
+        columnView.close();
+      }
+    }
+    for (long nativeHandle: nativeHandles) {
+      if (nativeHandle != 0) {
+        deleteColumnView(nativeHandle);
+      }
+    }
   }
 
   /**
