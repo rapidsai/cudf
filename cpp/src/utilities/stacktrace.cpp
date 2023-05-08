@@ -52,14 +52,16 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
     if (begin_func_name && begin_func_offset && end_func_offset &&
         begin_func_name < begin_func_offset) {
       // Split `modules[i]` into separate null-terminated strings.
+      // After this, mangled function name will then be [begin_func_name, begin_func_offset), and
+      // function offset is in [begin_func_offset, end_func_offset).
       *(begin_func_name++)   = '\0';
       *(begin_func_offset++) = '\0';
       *end_func_offset       = '\0';
 
-      // Mangled function name is now in [begin_func_name, begin_func_offset).
-      // We need to demangle it.
+      // We need to demangle function name.
       int status{0};
       char* func_name = abi::__cxa_demangle(begin_func_name, nullptr, nullptr, &status);
+
       ss << "#" << frame_idx << ": " << modules[i] << " : "
          << (status == 0 /*demangle success*/ ? func_name : begin_func_name) << "+"
          << begin_func_offset << "\n";
