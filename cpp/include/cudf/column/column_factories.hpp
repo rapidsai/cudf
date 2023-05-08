@@ -101,7 +101,7 @@ std::unique_ptr<column> make_numeric_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -158,7 +158,7 @@ std::unique_ptr<column> make_fixed_point_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -217,7 +217,7 @@ std::unique_ptr<column> make_timestamp_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -276,7 +276,7 @@ std::unique_ptr<column> make_duration_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -335,7 +335,7 @@ std::unique_ptr<column> make_fixed_width_column(
   data_type type,
   size_type size,
   B&& null_mask,
-  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  size_type null_count,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

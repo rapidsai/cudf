@@ -489,11 +489,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 
 TYPED_TEST(FixedPointTestAllReps, NoScaleOrWrongTypeID)
 {
-  auto null_mask = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
-
-  EXPECT_THROW(
-    cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0, std::move(null_mask)),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0),
+               cudf::logic_error);
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleFixedPointColumnWrapper)
