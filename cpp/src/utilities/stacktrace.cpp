@@ -16,12 +16,14 @@
 
 #include <cudf/detail/utilities/stacktrace.hpp>
 
+#ifdef __GNUC__
 #include <cxxabi.h>
 #include <execinfo.h>
 
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#endif
 
 namespace cudf::detail {
 
@@ -75,7 +77,7 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
 
   return ss.str();
 #else
-  return std::string{"Stacktrace is only supported when built with a GNU compiler."};
+  return "Stacktrace is only supported when built with a GNU compiler.";
 #endif  // __GNUC__
 }
 
