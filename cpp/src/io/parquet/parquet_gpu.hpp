@@ -496,6 +496,7 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
                             size_t min_row,
                             size_t num_rows,
+                            int level_type_size,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -534,6 +535,7 @@ void DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
                           size_t num_rows,
                           size_t min_row,
+                          int level_type_size,
                           rmm::cuda_stream_view stream);
 
 /**

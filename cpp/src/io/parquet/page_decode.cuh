@@ -371,6 +371,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
  * @param[in] t Warp0 thread ID (0..31)
  * @param[in] lvl The level type we are decoding - DEFINITION or REPETITION
  */
+template <typename level_t>
 __device__ void gpuDecodeStream(
   level_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
 {
@@ -518,7 +519,7 @@ __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
  * @param[in] target_input_value_count The desired # of input level values we want to process
  * @param[in] t Thread index
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 inline __device__ void get_nesting_bounds(int& start_depth,
                                           int& end_depth,
                                           int& d,
@@ -533,8 +534,8 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    level_t index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
-    d             = def[index];
+    int index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    d         = static_cast<int>(def[index]);
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
@@ -562,7 +563,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value_count,
                                                       page_state_s* s,
                                                       page_state_buffers_s* sb,
@@ -585,7 +586,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
     // determine the nesting bounds for this thread (the range of nesting depths we
     // will generate new value indices and validity bits for)
     int start_depth, end_depth, d;
-    get_nesting_bounds<non_zero_buffer_size>(
+    get_nesting_bounds<non_zero_buffer_size, level_t>(
       start_depth, end_depth, d, s, rep, def, input_value_count, target_input_value_count, t);
 
     // 4 interesting things to track:
@@ -741,7 +742,7 @@ __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_input_value
  * @param[in] def Definition level buffer
  * @param[in] t Thread index
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __device__ void gpuDecodeLevels(page_state_s* s,
                                 page_state_buffers_s* sb,
                                 int32_t target_leaf_count,
@@ -767,7 +768,8 @@ __device__ void gpuDecodeLevels(page_state_s* s,
                                            : s->lvl_count[level_type::DEFINITION];
 
     // process what we got back
-    gpuUpdateValidityOffsetsAndRowIndices<lvl_buf_size>(actual_leaf_count, s, sb, rep, def, t);
+    gpuUpdateValidityOffsetsAndRowIndices<lvl_buf_size, level_t>(
+      actual_leaf_count, s, sb, rep, def, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     __syncwarp();
   }
@@ -781,15 +783,18 @@ __device__ void gpuDecodeLevels(page_state_s* s,
  * @param[in] cur The current data position
  * @param[in] end The end of the data
  * @param[in] level_bits The bits required
+ * @param[in] is_decode_step True if we are performing the decode step.
+ * @param[in,out] decoders The repetition and definition level stream decoders
  *
  * @return The length of the section
  */
+template <typename level_t>
 __device__ uint32_t InitLevelSection(page_state_s* s,
                                      const uint8_t* cur,
                                      const uint8_t* end,
                                      level_type lvl,
                                      bool is_decode_step,
-                                     rle_stream* decoders)
+                                     rle_stream<level_t>* decoders)
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];
@@ -859,13 +864,14 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * Currently only used by gpuComputePageSizes step)
  */
+template <typename level_t>
 __device__ bool setupLocalPageInfo(page_state_s* const s,
                                    PageInfo const* p,
                                    device_span<ColumnChunkDesc const> chunks,
                                    size_t min_row,
                                    size_t num_rows,
                                    bool is_decode_step,
-                                   rle_stream* decoders = nullptr)
+                                   rle_stream<level_t>* decoders = nullptr)
 {
   int t = threadIdx.x;
   int chunk_idx;

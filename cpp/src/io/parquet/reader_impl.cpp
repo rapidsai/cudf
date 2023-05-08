@@ -51,7 +51,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   std::vector<size_type> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
-    gpu::ComputePageStringSizes(pages, chunks, skip_rows, num_rows, _stream);
+    gpu::ComputePageStringSizes(
+      pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
 
     // TODO do the following on device with thrust/kernel to avoid the pages round trip
     pages.device_to_host(_stream, true);
@@ -164,7 +165,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // TODO: explore launching these concurrently with a stream pool
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
-  gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, _stream);
+  gpu::DecodeStringPageData(
+    pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);

@@ -107,13 +107,13 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
  * @param t Thread index
  * @return pair containg start and end value indexes
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
                                               size_t min_row,
                                               size_t num_rows,
                                               bool is_bounds_pg,
                                               bool has_repetition,
-                                              rle_stream* decoders,
+                                              rle_stream<level_t>* decoders,
                                               int t)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
@@ -142,8 +142,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
-  auto const def_decode    = pp->lvl_decode_buf[level_type::DEFINITION];
-  auto const rep_decode    = pp->lvl_decode_buf[level_type::REPETITION];
+  auto const def_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto const rep_decode    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
@@ -502,7 +502,7 @@ countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_v
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -523,9 +523,9 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // the level stream decoders
-  __shared__ rle_run def_runs[run_buffer_size];
-  __shared__ rle_run rep_runs[run_buffer_size];
-  rle_stream decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
+  __shared__ rle_run<level_t> def_runs[run_buffer_size];
+  __shared__ rle_run<level_t> rep_runs[run_buffer_size];
+  rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
@@ -610,7 +610,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -627,7 +627,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   int const t                    = threadIdx.x;
   int out_thread0;
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
+    return;
+  }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -682,7 +684,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<lvl_buf_size>(s, sb, target_pos, rep, def, t);
+      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
     } else if (t < out_thread0) {
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
@@ -826,7 +828,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
  */
-template <int lvl_buf_size>
+template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -843,7 +845,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   int const t                    = threadIdx.x;
   int out_thread0;
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
+    return;
+  }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -1025,12 +1029,18 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
                             size_t min_row,
                             size_t num_rows,
+                            int level_type_size,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
-  gpuComputePageStringSizes<LEVEL_DECODE_BUF_SIZE>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+  if (level_type_size == 1) {
+    gpuComputePageStringSizes<LEVEL_DECODE_BUF_SIZE, uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+  } else {
+    gpuComputePageStringSizes<LEVEL_DECODE_BUF_SIZE, uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+  }
 }
 
 /**
@@ -1040,6 +1050,7 @@ void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
                                    hostdevice_vector<ColumnChunkDesc> const& chunks,
                                    size_t num_rows,
                                    size_t min_row,
+                                   int level_type_size,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -1050,11 +1061,21 @@ void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
   // TODO figure out when one version is better than the other.  waiting on further changes to
   // rle_stream to simplify the decode step.
   if constexpr (true) {
-    gpuDecodeStringPageData<non_zero_buffer_size>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    if (level_type_size == 1) {
+      gpuDecodeStringPageData<non_zero_buffer_size, uint8_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    } else {
+      gpuDecodeStringPageData<non_zero_buffer_size, uint16_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    }
   } else {
-    gpuDecodeStringPageDataV2<non_zero_buffer_size>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    if (level_type_size == 1) {
+      gpuDecodeStringPageDataV2<non_zero_buffer_size, uint8_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    } else {
+      gpuDecodeStringPageDataV2<non_zero_buffer_size, uint16_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    }
   }
 }
 
