@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -327,4 +328,20 @@ TEST_F(PartitionTestNotTyped, ListOfListOfListOfIntEmpty)
   auto result = cudf::partition(table_to_partition, map, 2);
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
   EXPECT_EQ(3, result.second.size());
+}
+
+TEST_F(PartitionTestNotTyped, NoIntegerOverflow)
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  fixed_width_column_wrapper<int8_t> map(elements, elements + 129);
+  auto table_to_partition = cudf::table_view{{map}};
+
+  std::vector<cudf::size_type> expected_offsets{0, 65, 129};
+
+  auto expected_elements =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 65; });
+  fixed_width_column_wrapper<int8_t> expected(expected_elements, expected_elements + 129);
+  auto expected_table = cudf::table_view{{expected}};
+
+  run_partition_test(table_to_partition, map, 2, expected_table, expected_offsets);
 }
