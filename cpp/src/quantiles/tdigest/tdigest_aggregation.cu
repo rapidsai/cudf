@@ -1126,7 +1126,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();
   auto cumulative_weights = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
+    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED, stream);
   auto keys = cudf::detail::make_counting_transform_iterator(
     0,
     group_key_func<decltype(group_labels)>{
