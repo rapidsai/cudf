@@ -407,12 +407,14 @@ namespace {
  * @param[in] new_child A new child column to replace the existing child of the input
  * @param[out] out_cols An array to store the new generated offsets (if applicable)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned column
  * @return An output column_view with child replaced
  */
 auto replace_child(column_view const& input,
                    column_view const& new_child,
                    std::vector<std::unique_ptr<column>>& out_cols,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
 {
   auto const make_output = [&input](auto const& offsets_cv, auto const& child_cv) {
     return column_view{data_type{type_id::LIST},
@@ -428,8 +430,8 @@ auto replace_child(column_view const& input,
     return make_output(input.child(lists_column_view::offsets_column_index), new_child);
   }
 
-  out_cols.emplace_back(cudf::lists::detail::get_normalized_offsets(
-    lists_column_view{input}, stream, rmm::mr::get_current_device_resource()));
+  out_cols.emplace_back(
+    cudf::lists::detail::get_normalized_offsets(lists_column_view{input}, stream, mr));
   return make_output(out_cols.back()->view(), new_child);
 }
 
@@ -454,11 +456,13 @@ auto replace_child(column_view const& input,
  * @param input The input column to compute ranks
  * @param column_null_order The flag indicating how nulls compare to non-null values
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
  * @return The output rank columns
  */
 auto compute_ranks(column_view const& input,
                    null_order column_null_order,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
 {
   return cudf::detail::rank(input,
                             rank_method::DENSE,
@@ -467,7 +471,7 @@ auto compute_ranks(column_view const& input,
                             column_null_order,
                             false /*percentage*/,
                             stream,
-                            rmm::mr::get_current_device_resource());
+                            mr);
 }
 
 /**
@@ -482,12 +486,16 @@ auto compute_ranks(column_view const& input,
  * @param input The input column to transform
  * @param column_null_order The flag indicating how nulls compare to non-null values
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
  * @return A pair consisting of new column_view representing the transformed input, along with
  *         an array containing its rank column(s) (of `size_type` type) and possibly new list
  *         offsets generated during the transformation process
  */
 std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_structs(
-  column_view const& input, null_order column_null_order, rmm::cuda_stream_view stream)
+  column_view const& input,
+  null_order column_null_order,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> out_cols;
 
@@ -496,22 +504,22 @@ std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_
 
     // Found a lists-of-structs column.
     if (child.type().id() == type_id::STRUCT) {
-      out_cols.emplace_back(compute_ranks(child, column_null_order, stream));
-      auto transformed = replace_child(input, out_cols.back()->view(), out_cols, stream);
+      out_cols.emplace_back(compute_ranks(child, column_null_order, stream, mr));
+      auto transformed = replace_child(input, out_cols.back()->view(), out_cols, stream, mr);
       return {std::move(transformed), std::move(out_cols)};
     }
     // Found a lists-of-lists column.
     else if (child.type().id() == type_id::LIST) {
       // Recursively call transformation on the child column.
       auto [new_child, out_cols_child] =
-        transform_lists_of_structs(child, column_null_order, stream);
+        transform_lists_of_structs(child, column_null_order, stream, mr);
 
       // Only transform the current column if its child has been transformed.
       if (out_cols_child.size() > 0) {
         out_cols.insert(out_cols.end(),
                         std::make_move_iterator(out_cols_child.begin()),
                         std::make_move_iterator(out_cols_child.end()));
-        auto transformed = replace_child(input, new_child, out_cols, stream);
+        auto transformed = replace_child(input, new_child, out_cols, stream, mr);
         return {std::move(transformed), std::move(out_cols)};
       }
       // else: child was not transformed so input is also not transformed.
@@ -543,14 +551,15 @@ std::tuple<column_view,
 transform_lists_of_structs(column_view const& lhs,
                            column_view const& rhs,
                            null_order column_null_order,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> out_cols_lhs;
   std::vector<std::unique_ptr<column>> out_cols_rhs;
 
   auto const make_output = [&](auto const& new_child_lhs, auto const& new_child_rhs) {
-    auto transformed_lhs = replace_child(lhs, new_child_lhs, out_cols_lhs, stream);
-    auto transformed_rhs = replace_child(rhs, new_child_rhs, out_cols_rhs, stream);
+    auto transformed_lhs = replace_child(lhs, new_child_lhs, out_cols_lhs, stream, mr);
+    auto transformed_rhs = replace_child(rhs, new_child_rhs, out_cols_rhs, stream, mr);
 
     return std::tuple{std::move(transformed_lhs),
                       std::move(transformed_rhs),
@@ -569,7 +578,8 @@ transform_lists_of_structs(column_view const& lhs,
                                   stream,
                                   rmm::mr::get_current_device_resource());
 
-      auto const ranks = compute_ranks(concatenated_children->view(), column_null_order, stream);
+      auto const ranks =
+        compute_ranks(concatenated_children->view(), column_null_order, stream, mr);
       auto const ranks_slices = cudf::detail::slice(
         ranks->view(),
         {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
@@ -585,7 +595,7 @@ transform_lists_of_structs(column_view const& lhs,
     else if (child_lhs.type().id() == type_id::LIST) {
       // Recursively call transformation on the child column.
       auto [new_child_lhs, new_child_rhs, out_cols_child_lhs, out_cols_child_rhs] =
-        transform_lists_of_structs(child_lhs, child_rhs, column_null_order, stream);
+        transform_lists_of_structs(child_lhs, child_rhs, column_null_order, stream, mr);
 
       // Only transform the current pair of columns if their children have been transformed.
       if (out_cols_child_lhs.size() > 0 || out_cols_child_rhs.size() > 0) {
@@ -674,7 +684,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
         auto [transformed, curr_out_cols] = transform_lists_of_structs(
           lhs_col,
           null_precedence.empty() ? null_order::BEFORE : new_null_precedence[col_idx],
-          stream);
+          stream,
+          rmm::mr::get_current_device_resource());
 
         transformed_cvs.emplace_back(std::move(transformed));
         transformed_columns.insert(transformed_columns.end(),
@@ -735,7 +746,8 @@ preprocessed_table::create(table_view const& lhs,
           lhs_col,
           rhs_col,
           null_precedence.empty() ? null_order::BEFORE : null_precedence[col_idx],
-          stream);
+          stream,
+          rmm::mr::get_current_device_resource());
 
       transformed_lhs_cvs.emplace_back(std::move(transformed_lhs));
       transformed_rhs_cvs.emplace_back(std::move(transformed_rhs));
