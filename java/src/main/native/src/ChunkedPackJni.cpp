@@ -59,15 +59,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackNext(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackBuildMetadata(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackBuildMetadata(
     JNIEnv *env, jclass, jlong chunked_pack) {
   try {
     cudf::jni::auto_set_device(env);
     auto cs = reinterpret_cast<cudf::chunked_pack *>(chunked_pack);
     std::unique_ptr<std::vector<uint8_t>> result = cs->build_metadata();
-    return cudf::jni::packed_column_metadata_from(env, std::move(result));
+    return reinterpret_cast<jlong>(result.release());
   }
-  CATCH_STD(env, NULL);
+  CATCH_STD(env, 0);
 }
 
 } // extern "C"

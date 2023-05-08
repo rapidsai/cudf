@@ -20,8 +20,8 @@ package ai.rapids.cudf;
 /**
  * JNI interface to cudf::chunked_pack.
  * 
- * ChunkedPack is an iterator-like interface with the familiar `hasNext` and `next`
- * interface. `next` should be used in a loop until `hasNext` returns false. 
+ * ChunkedPack has an Iterator-like API with the familiar `hasNext` and `next`
+ * methods. `next` should be used in a loop until `hasNext` returns false. 
  * 
  * However, `ChunkedPack.next` is special because it takes a `DeviceMemoryBuffer` as a 
  * parameter, which means that the caller can call `next` giving any bounce buffer it 
@@ -83,7 +83,7 @@ public class ChunkedPack implements AutoCloseable {
    * @return a `PackedColumnMetadata` instance referencing cuDF packed table metadata
    */
   public PackedColumnMetadata buildMetadata() {
-    return chunkedPackBuildMetadata(nativePtr);
+    return new PackedColumnMetadata(chunkedPackBuildMetadata(nativePtr));
   }
 
   @Override
@@ -94,6 +94,6 @@ public class ChunkedPack implements AutoCloseable {
   private static native long chunkedPackGetTotalContiguousSize(long nativePtr);
   private static native boolean chunkedPackHasNext(long nativePtr);
   private static native long chunkedPackNext(long nativePtr, long userPtr, long userPtrSize);
-  private static native PackedColumnMetadata chunkedPackBuildMetadata(long nativePtr);
+  private static native long chunkedPackBuildMetadata(long nativePtr);
   private static native void chunkedPackDelete(long nativePtr);
 }

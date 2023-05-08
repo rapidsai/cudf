@@ -50,13 +50,9 @@ convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_resul
 // ContiguousTable APIs
 //
 
-bool cache_packed_column_meta_jni(JNIEnv *env);
-void release_packed_column_meta_jni(JNIEnv *env);
-
 bool cache_contiguous_table_jni(JNIEnv *env);
 void release_contiguous_table_jni(JNIEnv *env);
 
-jobject packed_column_metadata_from(JNIEnv *env, std::unique_ptr<std::vector<uint8_t>> meta);
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count);
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);

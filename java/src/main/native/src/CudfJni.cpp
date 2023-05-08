@@ -164,14 +164,6 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
-  if (!cudf::jni::cache_packed_column_meta_jni(env)) {
-    if (!env->ExceptionCheck()) {
-      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
-                    "Unable to locate packed column metadata methods needed by JNI");
-    }
-    return JNI_ERR;
-  }
-
   if (!cudf::jni::cache_contig_split_group_by_result_jni(env)) {
     if (!env->ExceptionCheck()) {
       env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
@@ -201,7 +193,6 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
   cudf::jni::release_contiguous_table_jni(env);
   cudf::jni::release_contig_split_group_by_result_jni(env);
   cudf::jni::release_host_memory_buffer_jni(env);
-  cudf::jni::release_packed_column_meta_jni(env);
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass, jlong size) {
