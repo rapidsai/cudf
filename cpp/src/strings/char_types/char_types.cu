@@ -51,9 +51,9 @@ struct char_types_fn {
   string_character_types const types;
   string_character_types const verify_types;
 
-  __device__ bool operator()(size_type idx)
+  __device__ bool operator()(size_type idx) const
   {
-    if (d_column.is_null(idx)) return false;
+    if (d_column.is_null(idx)) { return false; }
     auto const d_str = d_column.element<string_view>(idx);
     auto const end   = d_str.data() + d_str.size_bytes();
 
