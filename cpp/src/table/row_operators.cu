@@ -486,7 +486,7 @@ auto compute_ranks(column_view const& input,
  * @param input The input column to transform
  * @param column_null_order The flag indicating how nulls compare to non-null values
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column(s)
  * @return A pair consisting of new column_view representing the transformed input, along with
  *         an array containing its rank column(s) (of `size_type` type) and possibly new list
  *         offsets generated during the transformation process
