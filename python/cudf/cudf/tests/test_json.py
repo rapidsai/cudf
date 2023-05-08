@@ -32,13 +32,11 @@ def make_numeric_dataframe(nrows, dtype):
 def pdf(request):
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {f"col_{typ}": np.random.randint(0, nrows, nrows) for typ in types}
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
