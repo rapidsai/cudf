@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   CUDF_EXPECTS(count >= 0, "count value should be non-negative");
   CUDF_EXPECTS(
     static_cast<int64_t>(input_table.num_rows()) * count <= std::numeric_limits<size_type>::max(),
-    "The resulting table has more rows than size_type's limit.");
+    "The resulting table exceeds the column size limit",
+    std::overflow_error);
 
   if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
