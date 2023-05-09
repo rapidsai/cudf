@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -392,3 +392,24 @@ def test_struct_with_null_memory_usage():
 
     s[2:4] = None
     assert s.memory_usage() == 272
+
+
+@pytest.mark.parametrize(
+    "zlice",
+    [
+        pytest.param(
+            slice(0, 3),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13305"
+            ),
+        ),
+        slice(1, 4),
+    ],
+)
+def test_struct_empty_children_nulls_slice(zlice):
+    values = [None, {}, {}, None]
+
+    s = cudf.Series([None, {}, {}, None])
+    actual = s.iloc[zlice]
+    expect = cudf.Series(values[zlice], index=range(len(values))[zlice])
+    assert_eq(actual, expect)
