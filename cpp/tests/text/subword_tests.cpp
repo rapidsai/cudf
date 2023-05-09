@@ -144,6 +144,41 @@ TEST(TextSubwordTest, TokenizeMultiRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
 
+TEST(TextSubwordTest, TokenizeMultiRow2)
+{
+  std::vector<const char*> h_strings{"This is a test.", "", "This is a test. This is a tést."};
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  create_hashed_vocab(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
+
+  uint32_t max_sequence_length = 8;
+  uint32_t stride              = 6;
+
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         *vocab,
+                                         max_sequence_length,
+                                         stride,
+                                         true,   // do_lower_case
+                                         false,  // do_truncate
+                                         MAX_ROWS_TENSOR);
+
+  cudf::test::print(result.tensor_token_ids->view());
+  cudf::test::print(result.tensor_attention_mask->view());
+  cudf::test::print(result.tensor_metadata->view());
+
+  // EXPECT_EQ(uint32_t{3}, result.nrows_tensor);
+  // cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
+  //   {2023, 2003, 1037, 3231, 1012, 0,    0,    0,    2023, 2003, 1037, 3231,
+  //    1012, 2023, 2003, 1037, 2003, 1037, 3231, 1012, 0,    0,    0,    0});
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
+  // cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(
+  //   {1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0});
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
+  // cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 4, 1, 0, 6, 1, 1,
+  // 3}); CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
 TEST(TextSubwordTest, TokenizeMaxEqualsTokens)
 {
   cudf::test::strings_column_wrapper strings({"This is a test."});
@@ -234,6 +269,30 @@ TEST(TextSubwordTest, AllNullStrings)
   EXPECT_EQ(0, result.tensor_token_ids->size());
   EXPECT_EQ(0, result.tensor_attention_mask->size());
   EXPECT_EQ(0, result.tensor_metadata->size());
+}
+
+TEST(TextSubwordTest, NoTokens)
+{
+  cudf::test::strings_column_wrapper strings({"  ", "\n\r", "\t"});
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  create_hashed_vocab(hash_file);
+  auto vocab  = nvtext::load_vocabulary_file(hash_file);
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         *vocab,
+                                         16,
+                                         16,
+                                         true,  // do_lower_case
+                                         true,  // do_truncate
+                                         2);
+
+  cudf::test::print(result.tensor_token_ids->view());
+  cudf::test::print(result.tensor_attention_mask->view());
+  cudf::test::print(result.tensor_metadata->view());
+
+  // EXPECT_EQ(uint32_t{0}, result.nrows_tensor);
+  // EXPECT_EQ(0, result.tensor_token_ids->size());
+  // EXPECT_EQ(0, result.tensor_attention_mask->size());
+  // EXPECT_EQ(0, result.tensor_metadata->size());
 }
 
 TEST(TextSubwordTest, TokenizeFromVocabStruct)
