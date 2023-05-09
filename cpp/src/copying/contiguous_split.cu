@@ -1769,8 +1769,8 @@ struct contiguous_split_state {
     CUDF_EXPECTS(user_buffer_size == 0, "Cannot contiguous split with a user buffer");
     if (is_empty || input.num_columns() == 0) { return make_packed_tables(); }
 
-    auto const num_batches_total = std::get<1>(
-      chunk_iter_state->get_current_starting_index_and_buff_count());
+    auto const num_batches_total =
+      std::get<1>(chunk_iter_state->get_current_starting_index_and_buff_count());
 
     // perform the copy.
     copy_data(num_batches_total,
