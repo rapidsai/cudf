@@ -108,21 +108,24 @@ void BM_join(state_type& state, Join JoinFunc)
                                   validity + size,
                                   thrust::identity<bool>{},
                                   cudf::get_default_stream(),
-                                  rmm::mr::get_current_device_resource())
-      .first;
+                                  rmm::mr::get_current_device_resource());
   };
 
   std::unique_ptr<cudf::column> build_key_column0 = [&]() {
+    auto [null_mask, null_count] = build_random_null_mask(build_table_size);
     return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 build_table_size,
-                                                build_random_null_mask(build_table_size))
+                                                std::move(null_mask),
+                                                null_count)
                     : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 build_table_size);
   }();
   std::unique_ptr<cudf::column> probe_key_column0 = [&]() {
+    auto [null_mask, null_count] = build_random_null_mask(probe_table_size);
     return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 probe_table_size,
-                                                build_random_null_mask(probe_table_size))
+                                                std::move(null_mask),
+                                                null_count)
                     : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 probe_table_size);
   }();
@@ -139,12 +142,18 @@ void BM_join(state_type& state, Join JoinFunc)
   // If Nullable, the new columns will be assigned new nullmasks.
   auto const build_key_column1 = [&]() {
     auto col = std::make_unique<cudf::column>(build_key_column0->view());
-    if (Nullable) { col->set_null_mask(build_random_null_mask(build_table_size)); }
+    if (Nullable) {
+      auto [null_mask, null_count] = build_random_null_mask(build_table_size);
+      col->set_null_mask(std::move(null_mask), null_count);
+    }
     return col;
   }();
   auto const probe_key_column1 = [&]() {
     auto col = std::make_unique<cudf::column>(probe_key_column0->view());
-    if (Nullable) { col->set_null_mask(build_random_null_mask(probe_table_size)); }
+    if (Nullable) {
+      auto [null_mask, null_count] = build_random_null_mask(probe_table_size);
+      col->set_null_mask(std::move(null_mask), null_count);
+    }
     return col;
   }();
 

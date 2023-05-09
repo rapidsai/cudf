@@ -2244,6 +2244,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         A list of cudf.DataFrame objects.
+
+        Raises
+        ------
+        ValueError
+            If the map_index has invalid entries (not all in [0,
+            num_partitions)).
         """
         # map_index might be a column name or array,
         # make it a Column
@@ -4066,7 +4072,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -7057,7 +7063,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               Specifically, `&` must be used for bitwise operators on integers,
               not `and`, which is specifically for the logical and between
               booleans.
-            * Only numerical types are currently supported.
+            * Only numerical types currently support all operators.
+            * String types currently support comparison operators.
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.
