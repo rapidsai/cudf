@@ -87,6 +87,7 @@ public final class Table implements AutoCloseable {
     try {
       for (int i = 0; i < cudfColumns.length; i++) {
         this.columns[i] = new ColumnVector(cudfColumns[i]);
+        cudfColumns[i] = 0;
       }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
