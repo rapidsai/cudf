@@ -20,46 +20,80 @@ T = TypeVar("T", bound="TenableBuffer")
 #  - IsolatableBuffer
 
 
-def get_tenable_owner(data) -> Optional[TenableBuffer]:
-    """Get the tenable owner of `data`, if any exist
+def get_owner(data, klass: Type[T]) -> Optional[T]:
+    """Get the owner of `data`, if any exist
 
     Search through the stack of data owners in order to find an
-    owner of type `TenableBuffer` (not subclasses).
+    owner of type `klass` (not subclasses).
+
+    Parameters
+    ----------
+    data
+        The data object
+
+    Return
+    ------
+    klass or None
+        The owner of `data` if `klass` or None.
+    """
+
+    if type(data) is klass:
+        return data
+    if hasattr(data, "owner"):
+        return get_owner(data.owner, klass)
+    return None
+
+
+def as_tenable_buffer(
+    data, exposed: bool, subclass: Optional[Type[T]] = None
+) -> BufferSlice:
+    """Factory function to wrap `data` in a tenable buffer and buffer slice
+
+    If `subclass` is None, a new TenableBuffer that points to the memory of
+    `data` is created and a BufferSlice that points to all of the new
+    TenableBuffer is returned.
+
+    If `subclass` is not None, a new `subclass` is created instead. Still,
+    a BufferSlice that points to all of the new `subclass` is returned
+
+    It is illegal for a tenable buffer to own another tenable buffer. When
+    representing the same memory, we should have a single tenable buffer
+    and multiple buffer slices.
 
     Parameters
     ----------
     data : buffer-like or array-like
         A buffer-like or array-like object that represent C-contiguous memory.
+    exposed
+        Mark the buffer as permanently exposed.
+    subclass
+        If not None, a subclass of TenableBuffer to wrap `data`.
 
     Return
     ------
-    TenableBuffer or None
-        The owner of `data` if TenableBuffer or None.
+    BufferSlice
+        A buffer slice that points to a TenableBuffer (or `subclass`), which
+        in turn wraps `data`.
     """
 
-    if type(data) is TenableBuffer:
-        return data
-    if hasattr(data, "owner"):
-        return get_tenable_owner(data.owner)
-    return None
-
-
-def as_tenable_buffer(data, exposed: bool) -> TenableBuffer:
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        return TenableBuffer._from_host_memory(data)[:]
+        return cast(BufferSlice, TenableBuffer._from_host_memory(data)[:])
 
-    tenable_owner = get_tenable_owner(data)
-    if tenable_owner is None:
-        return TenableBuffer._from_device_memory(data, exposed=exposed)[:]
-    base_ptr = tenable_owner._ptr
+    owner = get_owner(data, subclass or TenableBuffer)
+    if owner is None:
+        return cast(
+            BufferSlice,
+            TenableBuffer._from_device_memory(data, exposed=exposed)[:],
+        )
+    base_ptr = owner._ptr
 
     # At this point, we know that `data` is owned by a tenable buffer
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
     if size > 0 and base_ptr == 0:
         raise ValueError("Cannot create a non-empty slice of a null buffer")
-    return BufferSlice(base=tenable_owner, offset=ptr - base_ptr, size=size)
+    return BufferSlice(base=owner, offset=ptr - base_ptr, size=size)
 
 
 class TenableBuffer(Buffer):
