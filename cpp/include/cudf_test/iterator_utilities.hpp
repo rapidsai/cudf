@@ -131,8 +131,7 @@ template <typename Iter>
 template <class T>
 [[maybe_unused]] static auto nulls_from_nullptrs(std::vector<T const*> const& ptrs)
 {
-  return thrust::make_transform_iterator(ptrs.begin(),
-                                         [&ptrs](auto ptr) { return ptr != nullptr; });
+  return thrust::make_transform_iterator(ptrs.begin(), [](auto ptr) { return ptr != nullptr; });
 }
 
 }  // namespace iterators
