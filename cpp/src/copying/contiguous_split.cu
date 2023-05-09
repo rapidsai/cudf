@@ -45,6 +45,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <cstddef>
 #include <numeric>
 
@@ -864,9 +866,11 @@ void copy_data(int num_bufs,
 
   rmm::device_uvector<offset_type> chunk_offsets(num_bufs + 1, stream);
   auto buf_count_iter = cudf::detail::make_counting_transform_iterator(
-    0, [num_bufs, num_chunks = num_chunks_func{chunks.begin()}] __device__(size_type i) {
-      return i == num_bufs ? 0 : num_chunks(i);
-    });
+    0,
+    cuda::proclaim_return_type<std::size_t>(
+      [num_bufs, num_chunks = num_chunks_func{chunks.begin()}] __device__(size_type i) {
+        return i == num_bufs ? 0 : num_chunks(i);
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          buf_count_iter,
                          buf_count_iter + num_bufs + 1,
@@ -945,9 +949,13 @@ void copy_data(int num_bufs,
 
   // postprocess valid_counts
   auto keys = cudf::detail::make_counting_transform_iterator(
-    0, [out_to_in_index] __device__(size_type i) { return out_to_in_index(i); });
+    0, cuda::proclaim_return_type<size_type>([out_to_in_index] __device__(size_type i) {
+      return out_to_in_index(i);
+    }));
   auto values = thrust::make_transform_iterator(
-    d_dst_buf_info.begin(), [] __device__(dst_buf_info const& info) { return info.valid_count; });
+    d_dst_buf_info.begin(),
+    cuda::proclaim_return_type<size_type>(
+      [] __device__(dst_buf_info const& info) { return info.valid_count; }));
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
                         keys + new_buf_count,
