@@ -563,7 +563,7 @@ class orc_writer_options {
   }
 
   /**
-   * @brief Returns compression statistics.
+   * @brief Returns a pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */
@@ -958,7 +958,7 @@ class chunked_orc_writer_options {
   }
 
   /**
-   * @brief Returns compression statistics.
+   * @brief Returns a pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */

@@ -673,7 +673,7 @@ class parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
-   * @brief Returns compression statistics.
+   * @brief Returns a pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */
@@ -1243,7 +1243,7 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
-   * @brief Returns compression statistics.
+   * @brief Returns a pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */
