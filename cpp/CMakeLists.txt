@@ -662,6 +662,35 @@ target_compile_options(
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
+if(CUDF_BUILD_STACKTRACE_DEBUG)
+  # Remove any optimization level
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO
+                       "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}"
+  )
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
+                       "${CMAKE_CUDA_FLAGS_MINSIZEREL}"
+  )
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELWITHDEBINFO
+                       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}"
+  )
+
+  add_library(cudf_backtrace INTERFACE)
+  target_compile_options(
+    cudf_backtrace INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-Og>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Og>"
+  )
+  target_link_options(
+    cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
+    "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
+  )
+  target_link_libraries(cudf PRIVATE cudf_backtrace)
+endif()
+
 # Specify include paths for the current target and dependents
 target_include_directories(
   cudf
