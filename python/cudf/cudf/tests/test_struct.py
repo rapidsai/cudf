@@ -394,18 +394,7 @@ def test_struct_with_null_memory_usage():
     assert s.memory_usage() == 272
 
 
-@pytest.mark.parametrize(
-    "zlice",
-    [
-        pytest.param(
-            slice(0, 3),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13305"
-            ),
-        ),
-        slice(1, 4),
-    ],
-)
+@pytest.mark.parametrize("zlice", [slice(0, 3), slice(1, 4)])
 def test_struct_empty_children_nulls_slice(zlice):
     values = [None, {}, {}, None]
 

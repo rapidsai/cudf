@@ -155,7 +155,11 @@ cdef class Column:
             )
 
         if value is not None:
-            required_size = bitmask_allocation_size_bytes(self.base_size)
+            # base_size may be zero for a struct column with no
+            # children, but the column may have non-zero length.
+            required_size = bitmask_allocation_size_bytes(
+                max(self.base_size, self._size)
+            )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
@@ -605,7 +609,9 @@ cdef class Column:
             else:
                 mask = as_buffer(
                     data=mask_ptr,
-                    size=bitmask_allocation_size_bytes(base_size),
+                    size=bitmask_allocation_size_bytes(
+                        max(size+offset, base_size)
+                    ),
                     owner=mask_owner,
                     exposed=True
                 )
