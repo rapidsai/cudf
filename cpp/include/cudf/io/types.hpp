@@ -104,11 +104,6 @@ enum statistics_freq {
  * @brief Statistics about compression performed by a writer.
  */
 class writer_compression_statistics {
-  size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
-  size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
-  size_t _num_skipped_bytes    = 0;  ///< The number of bytes that were skipped during compression
-  size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
-
  public:
   /**
    * @brief Default constructor
@@ -195,6 +190,12 @@ class writer_compression_statistics {
   {
     return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes;
   }
+
+ private:
+  size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
+  size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
+  size_t _num_skipped_bytes    = 0;  ///< The number of bytes that were skipped during compression
+  size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
 };
 
 /**
@@ -266,8 +267,8 @@ struct host_buffer {
 };
 
 /**
- * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer
- * to bytes.
+ * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer to
+ * bytes.
  *
  * @tparam T The representation type
  * @return `true` if the type is considered a byte-like type
@@ -731,8 +732,7 @@ class column_in_metadata {
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
 
   /**
-   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a
-   * map.
+   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
    *
    * @return Boolean indicating whether this column is to be encoded as a map
    */
