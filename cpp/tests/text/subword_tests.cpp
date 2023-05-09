@@ -174,7 +174,7 @@ TEST(TextSubwordTest, TokenizeWithEmptyRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   // clang-format off
   auto expected_attn = cudf::test::fixed_width_column_wrapper<uint32_t>(
-     {1, 1, 1, 1, 1, 0, 0, 0, 
+     {1, 1, 1, 1, 1, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0,
       1, 1, 1, 1, 1, 1, 1, 1,
       1, 1, 1, 1, 0, 0, 0, 0});
