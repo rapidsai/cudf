@@ -53,10 +53,12 @@ def as_tenable_buffer(data, exposed: bool) -> TenableBuffer:
     tenable_owner = get_tenable_owner(data)
     if tenable_owner is None:
         return TenableBuffer._from_device_memory(data, exposed=exposed)[:]
+    base_ptr = tenable_owner._ptr
 
     # At this point, we know that `data` is owned by a tenable buffer
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-    base_ptr = tenable_owner.get_raw_ptr()
+    if size > 0 and base_ptr == 0:
+        raise ValueError("Cannot create a non-empty slice of a null buffer")
     return BufferSlice(base=tenable_owner, offset=ptr - base_ptr, size=size)
 
 
@@ -116,22 +118,6 @@ class TenableBuffer(Buffer):
 
     def _getitem(self, offset: int, size: int) -> BufferSlice:
         return BufferSlice(base=self, offset=offset, size=size)
-
-    def get_raw_ptr(self) -> int:
-        """Get the memory pointer this buffer.
-
-        Warning, this memory pointer can mean many things!
-        Warning, it is not safe to access the pointer value without
-        spill lock the buffer manually.
-
-        This method neither exposes nor spill locks the buffer.
-
-        Return
-        ------
-        int
-            The memory pointer as an integer (device or host memory)
-        """
-        return self._ptr
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
@@ -197,9 +183,6 @@ class BufferSlice(TenableBuffer):
         if mode == "write" and cudf.get_option("copy_on_write"):
             self.make_single_owner_inplace()
         return self._base.get_ptr(mode=mode) + self._offset
-
-    def get_raw_ptr(self) -> int:
-        return self._base.get_raw_ptr() + self._offset
 
     def memoryview(
         self, *, offset: int = 0, size: Optional[int] = None

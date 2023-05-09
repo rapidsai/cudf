@@ -127,8 +127,8 @@ def test_series_setitem_partial_slice_cow_on():
 
     new_slice = actual[2:]
     assert (
-        new_slice._column.base_data.get_raw_ptr()
-        == actual._column.base_data.get_raw_ptr()
+        new_slice._column.base_data._base._ptr
+        == actual._column.base_data._base._ptr
     )
     new_slice[0:2] = 10
     assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
