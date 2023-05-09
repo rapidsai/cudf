@@ -584,24 +584,19 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  // TODO: due to libcudacxx bug
-  // https://github.com/NVIDIA/libcudacxx/issues/447 we can't wrap these device
-  // lambdas with cuda::proclaim_return_type if they are called by other device
-  // lambdas. However, we do have to wrap the lambda and proclaim the return
-  // type before passing the device lambda to thrust fancy iterators.
-
   // whether or not this weight is a stub
-  auto is_stub_weight = [weights = weights->view().begin<double>()] __device__(size_type i) {
-    return weights[i] == 0;
-  };
+  auto is_stub_weight =
+    cuda::proclaim_return_type<bool>([weights = weights->view().begin<double>()] __device__(
+                                       size_type i) { return weights[i] == 0; });
   // whether or not this particular tdigest is a stub
-  auto is_stub_digest = [offsets = offsets->view().begin<offset_type>(), is_stub_weight] __device__(
-                          size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
+  auto is_stub_digest = cuda::proclaim_return_type<size_type>(
+    [offsets = offsets->view().begin<offset_type>(), is_stub_weight] __device__(size_type i) {
+      return is_stub_weight(offsets[i]) ? 1 : 0;
+    });
 
   size_type const num_stubs = [&]() {
     if (!has_nulls) { return 0; }
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0, cuda::proclaim_return_type<size_type>(is_stub_digest));
+    auto iter = cudf::detail::make_counting_transform_iterator(0, is_stub_digest);
     return thrust::reduce(rmm::exec_policy(stream), iter, iter + num_rows);
   }();
 
@@ -626,7 +621,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                            col.end<double>(),
                            thrust::make_counting_iterator(0),
                            result->mutable_view().begin<double>(),
-                           cuda::proclaim_return_type<bool>(is_stub_weight));
+                           is_stub_weight);
     return result;
   };
   // remove from the means and weights column
