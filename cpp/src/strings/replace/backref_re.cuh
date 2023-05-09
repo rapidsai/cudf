@@ -45,7 +45,7 @@ struct backrefs_fn {
   string_view const d_repl;  // string replacement template
   Iterator backrefs_begin;
   Iterator backrefs_end;
-  int32_t* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -56,19 +56,18 @@ struct backrefs_fn {
     }
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const in_ptr = d_str.data();
-    auto const nchars = d_str.length();      // number of characters in input string
     auto nbytes       = d_str.size_bytes();  // number of bytes for the output string
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
     size_type lpos    = 0;                   // last byte position processed in d_str
     size_type begin   = 0;                   // first character position matching regex
-    size_type end     = nchars;              // last character position (exclusive)
+    size_type end     = nbytes;              // last character position (exclusive)
 
     // copy input to output replacing strings as we go
-    while (prog.find(prog_idx, d_str, begin, end) > 0)  // inits the begin/end vars
+    while (prog.find(prog_idx, d_str, begin, end))  // inits the begin/end vars
     {
-      auto spos = d_str.byte_offset(begin);             // get offset for the
-      auto epos = d_str.byte_offset(end);               // character position values;
-      nbytes += d_repl.size_bytes() - (epos - spos);    // compute the output size
+      auto spos = begin;
+      auto epos = end;
+      nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
 
       // copy the string data before the matched section
       if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }
@@ -84,11 +83,11 @@ struct backrefs_fn {
           }
           // extract the specific group's string for this backref's index
           auto extracted = prog.extract(prog_idx, d_str, begin, end, backref.first - 1);
-          if (!extracted || (extracted.value().second <= extracted.value().first)) {
+          if (!extracted || (extracted->second <= extracted->first)) {
             return;  // no value for this backref number; that is ok
           }
-          auto spos_extract = d_str.byte_offset(extracted.value().first);   // convert
-          auto epos_extract = d_str.byte_offset(extracted.value().second);  // to bytes
+          auto spos_extract = extracted->first;
+          auto epos_extract = extracted->second;
           nbytes += epos_extract - spos_extract;
           if (out_ptr) {
             out_ptr =
@@ -105,14 +104,14 @@ struct backrefs_fn {
       // setup to match the next section
       lpos  = epos;
       begin = end;
-      end   = nchars;
+      end   = d_str.size_bytes();
     }
 
     // finally, copy remainder of input string
     if (out_ptr && (lpos < d_str.size_bytes())) {
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     } else if (!out_ptr) {
-      d_offsets[idx] = static_cast<int32_t>(nbytes);
+      d_offsets[idx] = static_cast<size_type>(nbytes);
     }
   }
 };

@@ -33,6 +33,8 @@ namespace cudf {
 
 class string_view;
 
+using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
+
 namespace strings {
 namespace detail {
 
@@ -190,10 +192,10 @@ class reprog_device {
    * matching in the string.
    * @return Returns 0 if no match is found.
    */
-  __device__ inline int32_t find(int32_t const thread_idx,
-                                 string_view const d_str,
-                                 cudf::size_type& begin,
-                                 cudf::size_type& end) const;
+  __device__ inline bool find(int32_t const thread_idx,
+                              string_view const d_str,
+                              cudf::size_type& begin,
+                              cudf::size_type& end) const;
 
   /**
    * @brief Does an extract evaluation using the compiled expression on the given string.
@@ -255,6 +257,9 @@ class reprog_device {
                                          cudf::size_type& begin,
                                          cudf::size_type& end,
                                          cudf::size_type const group_id = 0) const;
+
+  __device__ inline size_type search_char(char_utf8 c, char const* begin, char const* end) const;
+  __device__ inline char_utf8 previous_char(char const* ptr, size_type pos) const;
 
   reprog_device(reprog const&);
 

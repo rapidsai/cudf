@@ -42,7 +42,7 @@ struct replace_regex_fn {
   column_device_view const d_strings;
   string_view const d_repl;
   size_type const maxrepl;
-  int32_t* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -52,27 +52,22 @@ struct replace_regex_fn {
       return;
     }
 
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const nchars = d_str.length();
-    auto nbytes       = d_str.size_bytes();             // number of bytes in input string
-    auto mxn     = maxrepl < 0 ? nchars + 1 : maxrepl;  // max possible replaces for this string
-    auto in_ptr  = d_str.data();                        // input pointer (i)
-    auto out_ptr = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
-                           : nullptr;
+    auto const d_str = d_strings.element<string_view>(idx);
+    auto nbytes      = d_str.size_bytes();                  // number of bytes in input string
+    auto matches     = maxrepl < 0 ? nbytes + 1 : maxrepl;  // max possible replaces for this string
+    auto in_ptr      = d_str.data();                        // input pointer (i)
+    auto out_ptr     = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
+                               : nullptr;
     size_type last_pos = 0;
     size_type begin    = 0;   // these are for calling prog.find
     size_type end      = -1;  // matches final word-boundary if at the end of the string
 
-    // copy input to output replacing strings as we go
-    while (mxn-- > 0 && begin <= nchars) {  // maximum number of replaces
-
-      if (prog.is_empty() || prog.find(prog_idx, d_str, begin, end) <= 0) {
-        break;  // no more matches
-      }
-
-      auto const start_pos = d_str.byte_offset(begin);        // get offset for these
-      auto const end_pos   = d_str.byte_offset(end);          // character position values
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // and compute new size
+    // copy input to output replacing strings as we go until max_matches==0
+    while (!prog.is_empty() && (matches-- > 0) && (begin <= d_str.size_bytes()) &&
+           prog.find(prog_idx, d_str, begin, end)) {
+      auto const start_pos = begin;
+      auto const end_pos   = end;
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // compute new size
 
       if (out_ptr) {                                          // replace:
                                                               // i:bbbbsssseeee
@@ -84,8 +79,14 @@ struct replace_regex_fn {
         last_pos = end_pos;                                   // i:bbbbsssseeee
       }                                                       //  in_ptr --^
 
-      begin = end + (begin == end);
-      end   = -1;
+      // begin = end + (begin == end);
+      begin = end_pos + [start_pos, end_pos, d_str] {
+        if (start_pos != end_pos) { return 0; }           // normal continue;
+        if (end_pos >= d_str.size_bytes()) { return 1; }  // gets us out of the while-loop;
+        auto const ptr = d_str.data();
+        return bytes_in_utf8_byte(ptr[start_pos]);        // matched a virtual position
+      }();
+      end = -1;
     }
 
     if (out_ptr) {
@@ -93,7 +94,7 @@ struct replace_regex_fn {
              in_ptr + last_pos,               // o:bbbbrrrrrreeee
              d_str.size_bytes() - last_pos);  //             ^   ^
     } else {
-      d_offsets[idx] = static_cast<int32_t>(nbytes);
+      d_offsets[idx] = static_cast<size_type>(nbytes);
     }
   }
 };

@@ -68,7 +68,6 @@ struct replace_multi_regex_fn {
     auto const number_of_patterns = static_cast<size_type>(progs.size());
 
     auto const d_str      = d_strings.element<string_view>(idx);
-    auto const nchars     = d_str.length();      // number of characters in input string
     auto nbytes           = d_str.size_bytes();  // number of bytes in input string
     auto in_ptr           = d_str.data();        // input pointer
     auto out_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
@@ -78,7 +77,7 @@ struct replace_multi_regex_fn {
     // initialize the working ranges memory to -1's
     thrust::fill(thrust::seq, d_ranges, d_ranges + number_of_patterns, found_range{-1, 1});
     // process string one character at a time
-    while (ch_pos < nchars) {
+    while (ch_pos < d_str.size_bytes()) {
       // this minimizes the regex-find calls by only calling it for stale patterns
       // -- those that have not previously matched up to this point (ch_pos)
       for (size_type ptn_idx = 0; ptn_idx < number_of_patterns; ++ptn_idx) {
@@ -87,11 +86,12 @@ struct replace_multi_regex_fn {
         reprog_device prog = progs[ptn_idx];
 
         auto begin = ch_pos;
-        auto end   = nchars;
-        if (!prog.is_empty() && prog.find(idx, d_str, begin, end) > 0)
-          d_ranges[ptn_idx] = found_range{begin, end};      // found a match
+        auto end   = d_str.size_bytes();
+        if (!prog.is_empty() && prog.find(idx, d_str, begin, end))
+          d_ranges[ptn_idx] = found_range{begin, end};  // found a match
         else
-          d_ranges[ptn_idx] = found_range{nchars, nchars};  // this pattern is done
+          d_ranges[ptn_idx] =
+            found_range{d_str.size_bytes(), d_str.size_bytes()};  // this pattern is done
       }
       // all the ranges have been updated from each regex match;
       // look for any that match at this character position (ch_pos)
@@ -106,8 +106,8 @@ struct replace_multi_regex_fn {
         size_type end      = d_ranges[ptn_idx].second;
         string_view d_repl = d_repls.size() > 1 ? d_repls.element<string_view>(ptn_idx)
                                                 : d_repls.element<string_view>(0);
-        auto spos          = d_str.byte_offset(begin);
-        auto epos          = d_str.byte_offset(end);
+        auto const spos    = begin;
+        auto const epos    = end;
         nbytes += d_repl.size_bytes() - (epos - spos);
         if (out_ptr) {  // copy unmodified content plus new replacement string
           out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
@@ -115,8 +115,11 @@ struct replace_multi_regex_fn {
           lpos    = epos;
         }
         ch_pos = end - 1;
+        while (ch_pos > 0 && is_utf8_continuation_char(in_ptr[ch_pos])) {
+          --ch_pos;  // always point to a valid begin-byte
+        }
       }
-      ++ch_pos;
+      ch_pos += bytes_in_utf8_byte(in_ptr[ch_pos]);
     }
     if (out_ptr)  // copy the remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);

@@ -53,7 +53,7 @@ struct contains_fn {
     size_type begin = 0;
     size_type end   = beginning_only ? 1    // match only the beginning of the string;
                                      : -1;  // match anywhere in the string
-    return static_cast<bool>(prog.find(thread_idx, d_str, begin, end));
+    return prog.find(thread_idx, d_str, begin, end);
   }
 };
 

@@ -63,13 +63,12 @@ struct extract_fn {
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const nchars = d_str.length();
+    auto const d_str = d_strings.element<string_view>(idx);
 
     size_type begin = 0;
-    size_type end   = nchars;
+    size_type end   = d_str.size_bytes();
     // match the regex
-    while ((begin < end) && d_prog.find(prog_idx, d_str, begin, end) > 0) {
+    while ((begin < end) && d_prog.find(prog_idx, d_str, begin, end)) {
       // extract each group into the output
       for (auto group_idx = 0; group_idx < groups; ++group_idx) {
         // result is an optional containing the bounds of the extracted string at group_idx
@@ -77,14 +76,14 @@ struct extract_fn {
 
         d_output[group_idx + output_idx] = [&] {
           if (!extracted) { return string_index_pair{nullptr, 0}; }
-          auto const start_offset = d_str.byte_offset(extracted->first);
-          auto const end_offset   = d_str.byte_offset(extracted->second);
+          auto const start_offset = extracted->first;
+          auto const end_offset   = extracted->second;
           return string_index_pair{d_str.data() + start_offset, end_offset - start_offset};
         }();
       }
       // continue to next match
       begin = end;
-      end   = nchars;
+      end   = d_str.size_bytes();
       output_idx += groups;
     }
   }
