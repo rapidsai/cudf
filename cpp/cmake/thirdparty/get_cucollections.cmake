@@ -19,7 +19,7 @@ function(find_and_configure_cucollections)
     GLOBAL_TARGETS cuco::cuco
     CPM_ARGS
     GIT_REPOSITORY https://github.com/NVIDIA/cuCollections.git
-    GIT_TAG 1a841121d1a32b83c6de0ccccbcdf037790d61ad
+    GIT_TAG 580ab2ba5c4c4241854ac939e9f91e628d3a5c65
     OPTIONS "BUILD_TESTS OFF" ￼ "BUILD_BENCHMARKS OFF" ￼ "BUILD_EXAMPLES OFF"
   )
 endfunction()
