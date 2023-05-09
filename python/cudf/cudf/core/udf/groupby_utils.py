@@ -6,7 +6,6 @@ import numpy as np
 from numba import cuda, types
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
-from numba.types import Record
 
 import cudf.core.udf.utils
 from cudf.core.udf.groupby_typing import (
@@ -19,6 +18,7 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    Row,
     _generate_cache_key,
     _get_extensionty_size,
     _get_kernel,
@@ -32,10 +32,9 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 
 def _get_frame_groupby_type(dtype, index_dtype):
     """
-    Get the numba `Record` type corresponding to a frame.
-    Models the column as a dictionary like data structure
-    containing GroupTypes.
-    See numba.np.numpy_support.from_struct_dtype for details.
+    Get the Numba type corresponding to a row of grouped data. Models the
+    column as a Record-like data structure containing GroupTypes. See
+    numba.np.numpy_support.from_struct_dtype for details.
 
     Parameters
     ----------
@@ -74,7 +73,7 @@ def _get_frame_groupby_type(dtype, index_dtype):
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
-    return Record(fields, offset, _is_aligned_struct)
+    return Row(fields, offset, _is_aligned_struct)
 
 
 def _groupby_apply_kernel_string_from_template(frame, args):

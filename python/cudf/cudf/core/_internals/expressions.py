@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import ast
 import functools
@@ -115,7 +115,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
         self.stack.append(ColumnReference(col_id))
 
     def visit_Constant(self, node):
-        if not isinstance(node, ast.Num):
+        if not isinstance(node, (ast.Num, ast.Str)):
             raise ValueError(
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
