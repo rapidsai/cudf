@@ -930,7 +930,7 @@ def test_list_2_fillna():
         [[5, 6], [None]]
     ])
     got = s.list.fillna(7)
-    assert_eq(got, cudf.Series([[[1, 2], [3]], [[5, 6], [7]]])) 
+    assert_eq(got, cudf.Series([[[1, 2], [3]], [[5, 6], [7]]]))
 
 
 def test_list_3_fillna():
@@ -947,5 +947,4 @@ def test_list_3_fillna():
         [[[13, 14], [15, 1]]]
     ])
     got = s.list.fillna(1)
-    breakpoint()
     assert_eq(got, expected)
