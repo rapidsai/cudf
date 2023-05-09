@@ -119,7 +119,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
         }
         // if it's one-level encoding list
-        else if (cur_schema.is_one_level_list()) {
+        else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx))) {
           shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
