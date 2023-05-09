@@ -242,32 +242,6 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def _get_cuda_array_interface(self, readonly=False):
-        """Helper function to create a CUDA Array Interface.
-
-        Parameters
-        ----------
-        readonly : bool, default False
-            If True, returns a CUDA Array Interface with
-            readonly flag set to True.
-            If False, returns a CUDA Array Interface with
-            readonly flag set to False.
-
-        Returns
-        -------
-        dict
-        """
-        return {
-            "data": (
-                self.get_ptr(mode="read" if readonly else "write"),
-                readonly,
-            ),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
-
     def get_ptr(self, mode: str = "write") -> int:
         """Device pointer to the start of the buffer.
 

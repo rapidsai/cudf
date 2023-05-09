@@ -138,16 +138,6 @@ class TenableBuffer(Buffer):
         self.mark_exposed()
         return super().__cuda_array_interface__
 
-    def _get_cuda_array_interface(self, readonly=False):
-        # TODO: remove, use `self.get_raw_ptr()` directly instead
-        return {
-            "data": (self.get_raw_ptr(), readonly),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
-
 
 class BufferSlice(TenableBuffer):
     """A slice (aka. a view) of a tenable buffer.
