@@ -113,8 +113,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
                                               size_t num_rows,
                                               bool is_bounds_pg,
                                               bool has_repetition,
-                                              rle_stream<level_t>* decoders,
-                                              int t)
+                                              rle_stream<level_t>* decoders)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -122,6 +121,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     typename block_reduce::TempStorage reduce_storage;
     typename block_scan::TempStorage scan_storage;
   } temp_storage;
+
+  int const t = threadIdx.x;
 
   // decode batches of level stream data using rle_stream objects and use the results to
   // calculate start and end value positions in the encoded string data.
@@ -338,9 +339,9 @@ __device__ size_t countDictEntries(uint8_t const* data,
                                    int dict_size,
                                    int data_size,
                                    int start_value,
-                                   int end_value,
-                                   int t)
+                                   int end_value)
 {
+  int const t              = threadIdx.x;
   uint8_t const* ptr       = data;
   uint8_t const* const end = data + data_size;
   int const bytecnt        = (dict_bits + 7) >> 3;
@@ -459,9 +460,12 @@ __device__ size_t countDictEntries(uint8_t const* data,
  * @param end_value Do not count values that occur after this index
  * @param t Thread index
  */
-__device__ size_t
-countPlainEntries(uint8_t const* data, int data_size, int start_value, int end_value, int t)
+__device__ size_t countPlainEntries(uint8_t const* data,
+                                    int data_size,
+                                    int start_value,
+                                    int end_value)
 {
+  int const t      = threadIdx.x;
   int pos          = 0;
   size_t total_len = 0;
 
@@ -546,7 +550,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 
   // find start/end value indices
   auto const [start_value, end_value] =
-    page_bounds<lvl_buf_size>(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders, t);
+    page_bounds<lvl_buf_size>(s, min_row, num_rows, is_bounds_pg, has_repetition, decoders);
 
   // need to save num_nulls and num_valids calculated in page_bounds in this page
   if (t == 0) {
@@ -580,11 +584,11 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
       if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
 
       str_bytes = countDictEntries(
-        data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value, t);
+        data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
       break;
     case Encoding::PLAIN:
       dict_size = static_cast<int32_t>(end - data);
-      str_bytes = is_bounds_pg ? countPlainEntries(data, dict_size, start_value, end_value, t)
+      str_bytes = is_bounds_pg ? countPlainEntries(data, dict_size, start_value, end_value)
                                : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
       break;
   }
