@@ -663,13 +663,8 @@ target_compile_options(
 )
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
-  # Remove any optimization level
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO
-                       "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}"
-  )
+  # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
+  # 'optimize'".
   string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
   string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
   string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
