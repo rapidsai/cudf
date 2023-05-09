@@ -773,9 +773,9 @@ class ListMethods(ColumnMethods):
         current = result
         while len(current._base_children) != 0:
             new_children = [child for child in current._base_children[:-1]]
-            new_children.append(current._base_children[-1].fillna(
-                value, method
-            ))
+            new_children.append(
+                current._base_children[-1].fillna(value, method)
+            )
             current.set_base_children(tuple(new_children))
             current = current._base_children[-1]
         return self._return_or_inplace(result)
