@@ -43,7 +43,7 @@ struct stacktrace_recorder {
 
  public:
   /**
-   * @brief Get the stored stacktrace captured during object construction
+   * @brief Get the stored stacktrace captured during object construction.
    *
    * @return The pointer to a null-terminated string storing the output stacktrace
    */
