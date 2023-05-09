@@ -139,10 +139,6 @@ tokenizer_result build_empty_result(cudf::size_type size,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  // the first column will be size*max_sequence_length of all zeroes
-  // the 2nd column will be size*max_sequence_length of also all zeroes
-  // the 3rd column will be size*3 with all zeros and `output[idx*3] = idx`
-
   auto zero = cudf::numeric_scalar<uint32_t>(0, true, stream);
   auto ids  = cudf::detail::sequence(size * max_sequence_length, zero, zero, stream, mr);
   auto mask = cudf::detail::sequence(size * max_sequence_length, zero, zero, stream, mr);
@@ -178,12 +174,13 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                  static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
                "max_sequence_length x max_rows_tensor is too large for cudf output column size");
   auto const strings_count = strings.size();
-  if (strings_count == strings.null_count())
+  if (strings_count == strings.null_count()) {  // empty or all-null returns empty
     return tokenizer_result{0,
                             max_sequence_length,
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32})};
+  }
 
   auto const offsets   = strings.offsets();
   auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
@@ -222,6 +219,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     thrust::plus<uint32_t>());
   // last element is the total number of output rows
   uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
+  // if there are no tokens at all, build a specific empty result
   if (nrows_tensor_token_ids == 0) {
     return build_empty_result(strings_count, max_sequence_length, stream, mr);
   }
