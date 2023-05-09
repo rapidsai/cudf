@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -43,16 +43,5 @@ endif()
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   message(VERBOSE "CUDF: Building with debugging flags")
-  list(APPEND CUDF_CXX_FLAGS -rdynamic)
   list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-rdynamic)
-endif()
-
-if(CUDF_BUILD_STACKTRACE_DEBUG)
-  message(VERBOSE "CUDF: Building with flags '-rdynamic -Og -NDEBUG'")
-  set(CMAKE_CXX_FLAGS_RELEASE "") # Remove the current optimization level
-  set(CMAKE_CUDA_FLAGS_RELEASE "") # Remove the current optimization level
-  list(APPEND CUDF_CXX_FLAGS -rdynamic -Og)
-  list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-rdynamic -Xcompiler=-Og)
-  list(APPEND CUDF_CXX_DEFINITIONS NDEBUG)
-  list(APPEND CUDF_CUDA_DEFINITIONS NDEBUG)
 endif()
