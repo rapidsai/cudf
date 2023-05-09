@@ -805,8 +805,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
 
   // if there are nulls clean up the offsets array.
   if (s->page.num_nulls != 0) {
-    int const value_count      = s->page.num_valids + s->page.num_nulls;
     int const leaf_level_index = s->col.max_nesting_depth - 1;
+    int const value_count      = nesting_info_base[leaf_level_index].value_count;
 
     auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
 
@@ -1029,8 +1029,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 
   // if there are nulls clean up the offsets array.
   if (s->page.num_nulls != 0) {
-    int const value_count      = s->page.num_valids + s->page.num_nulls;
     int const leaf_level_index = s->col.max_nesting_depth - 1;
+    int const value_count      = nesting_info_base[leaf_level_index].value_count;
 
     auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
 
