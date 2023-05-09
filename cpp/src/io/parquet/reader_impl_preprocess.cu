@@ -355,7 +355,7 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                             level_bit_size + chunks.size(),
                                             0,
                                             thrust::maximum<int>());
-  auto const level_type_size = max(1, cudf::util::round_up_safe(max_level_bits, 8) / 8);
+  auto const level_type_size = max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   pages.device_to_host(stream, true);
 
