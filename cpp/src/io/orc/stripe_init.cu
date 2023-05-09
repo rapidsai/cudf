@@ -21,6 +21,8 @@
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf {
 namespace io {
@@ -238,11 +240,15 @@ static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
   constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
 
   std::array<uint32_t, full_order.size()> partial_order;
-  auto curr_idx = 0;
-  for (auto index_type : full_order) {
-    // If the index type is present, add it to the partial order
-    if (index_types_bitmap & (1 << index_type)) { partial_order[curr_idx++] = index_type; }
-  }
+  thrust::copy_if(thrust::seq,
+                  full_order.cbegin(),
+                  full_order.cend(),
+                  partial_order.begin(),
+                  [index_types_bitmap] __device__(auto index_type) {
+                    // Check if the index type is present
+                    return index_types_bitmap & (1 << index_type);
+                  });
+
   return partial_order;
 }
 
