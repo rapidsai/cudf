@@ -742,7 +742,7 @@ class ListMethods(ColumnMethods):
 
         Notes
         -----
-        value and method cannot be specified simulatenously.
+        value and method cannot be specified simultaneously.
 
         Using this function on Lists with varying nesting levels containing
         None or nan will result in an error. The list type specification is
