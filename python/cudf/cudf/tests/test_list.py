@@ -914,3 +914,37 @@ def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
     assert series[idx] == data[idx]
+
+
+def test_list_fillna():
+    series = cudf.Series([
+        [1.0, 2.0],
+        [3.0, None]
+    ])
+    assert_eq(series.list.fillna(4.0), cudf.Series([[1.0, 2.0], [3.0, 4.0]]))
+
+
+def test_list_2_fillna():
+    s = cudf.Series([
+        [[1, 2], [3]],
+        [[5, 6], [None]]
+    ])
+    got = s.list.fillna(7)
+    assert_eq(got, cudf.Series([[[1, 2], [3]], [[5, 6], [7]]])) 
+
+
+def test_list_3_fillna():
+    s = cudf.Series([
+        [[[None, 2], [3, 4]]],
+        [[[5, None], [7, 8]]],
+        [[[9, 10], [None, 12]]],
+        [[[13, 14], [15, None]]]
+    ])
+    expected = cudf.Series([
+        [[[1, 2], [3, 4]]],
+        [[[5, 1], [7, 8]]],
+        [[[9, 10], [1, 12]]],
+        [[[13, 14], [15, 1]]]
+    ])
+    got = s.list.fillna(1)
+    assert_eq(got, expected)

@@ -725,3 +725,27 @@ class ListMethods(ColumnMethods):
                 lambda col, dtype: col.astype(dtype), dtype
             )
         )
+
+    def fillna(self, value, method=None):
+        if value is not None and method is not None:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        if method:
+            if method not in {"ffill", "bfill", "pad", "backfill"}:
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
+            if method == "pad":
+                method = "ffill"
+            elif method == "backfill":
+                method = "bfill"
+        result = self._column.copy(deep=True)
+        current = result
+        while len(current._base_children) != 0:
+            new_children = [child for child in current._base_children[:-1]]
+            new_children.append(current._base_children[-1].fillna(
+                value, method
+            ))
+            current.set_base_children(tuple(new_children))
+            current = current._base_children[-1]
+        return result
