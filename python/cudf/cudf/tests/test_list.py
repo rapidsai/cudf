@@ -947,4 +947,5 @@ def test_list_3_fillna():
         [[[13, 14], [15, 1]]]
     ])
     got = s.list.fillna(1)
+    breakpoint()
     assert_eq(got, expected)

@@ -727,6 +727,36 @@ class ListMethods(ColumnMethods):
         )
 
     def fillna(self, value, method=None):
+        """
+        Replaces None and nan at all leaf levels with the specified value
+        or replacement method.
+
+        Parameters
+        ----------
+        value: the value to replace None and nan with.
+        method (optional): the method to use to replace None values.
+
+        Returns
+        -------
+        A new list without None or nan values.
+
+        Notes
+        -----
+        value and method cannot be specified simulatenously.
+
+        Using this function on Lists with varying nesting levels containing
+        None or nan will result in an error. The list type specification is
+        more flexible for lists containing None than those without.
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2], [None, 4]])
+        >>> s2 = s.list.fillna(3)
+        >>> s2
+        0    [1, 2]
+        1    [3, 4]
+        dtype: list
+        """
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
@@ -748,4 +778,4 @@ class ListMethods(ColumnMethods):
             ))
             current.set_base_children(tuple(new_children))
             current = current._base_children[-1]
-        return result
+        return self._return_or_inplace(result)
