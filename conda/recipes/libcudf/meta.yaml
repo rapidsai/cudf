@@ -42,10 +42,13 @@ requirements:
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm ={{ minor_version }}
+    - libkvikio ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
+    - libcufile {{ libcufile_host_version }}      # [linux64]
+    - libcufile-dev {{ libcufile_host_version }}  # [linux64]
     - libcurand {{ libcurand_host_version }}
     - libcurand-dev {{ libcurand_host_version }}
     - libarrow {{ libarrow_version }}
@@ -73,7 +76,10 @@ outputs:
       run:
         - cudatoolkit {{ cuda_spec }}
         - librmm ={{ minor_version }}
+        - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
+        - libcufile {{ libcufile_run_version }}      # [linux64]
+        - libcufile-dev {{ libcufile_run_version }}  # [linux64]
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}

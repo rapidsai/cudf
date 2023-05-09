@@ -78,10 +78,11 @@ sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/dask_cudf/so
 
 # bump rmm & dask-cuda
 for FILE in conda/environments/*.yaml dependencies.yaml; do
-  sed_runner "s/dask-cuda==${CURRENT_SHORT_TAG_PEP440}/dask-cuda==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
-  sed_runner "s/rmm==${CURRENT_SHORT_TAG_PEP440}/rmm==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
   sed_runner "s/cudf==${CURRENT_SHORT_TAG_PEP440}/cudf==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
   sed_runner "s/cudf_kafka==${CURRENT_SHORT_TAG_PEP440}/cudf_kafka==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
+  sed_runner "s/dask-cuda==${CURRENT_SHORT_TAG_PEP440}/dask-cuda==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
+  sed_runner "s/kvikio==${CURRENT_SHORT_TAG_PEP440}/kvikio==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
+  sed_runner "s/rmm==${CURRENT_SHORT_TAG_PEP440}/rmm==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
 done
 
 # Doxyfile update

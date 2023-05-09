@@ -16,9 +16,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/scatter.cuh>
+#include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -618,8 +619,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = detail::scatter(
-      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, stream, mr);
+    auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::pair(std::move(output), std::move(partition_offsets));
@@ -693,7 +693,7 @@ struct dispatch_map_type {
 
     // Unfortunately need to materialize the scatter map because
     // `detail::scatter` requires multiple passes through the iterator
-    rmm::device_uvector<MapType> scatter_map(partition_map.size(), stream);
+    rmm::device_uvector<size_type> scatter_map(partition_map.size(), stream);
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
@@ -706,8 +706,7 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered =
-      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, stream, mr);
+    auto scattered = detail::scatter(t, scatter_map, t, stream, mr);
 
     return std::pair(std::move(scattered), std::move(partition_offsets));
   }
