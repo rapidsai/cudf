@@ -819,7 +819,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       }
       // just some nulls, do this serially for now
       else if (t == out_thread0) {
-        if (offptr[value_count - 1] == 0) {
+        if (first_non_null == -1) { first_non_null = 0; }
+
+        if (offptr[value_count - 1] == 0 && value_count - 1 != first_non_null) {
           offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
         }
         for (int i = value_count - 2; i > first_non_null; i--) {
@@ -1041,7 +1043,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
       }
       // just some nulls, do this serially for now
       else if (t == 0) {
-        if (offptr[value_count - 1] == 0) {
+        if (first_non_null == -1) { first_non_null = 0; }
+
+        if (offptr[value_count - 1] == 0 && value_count - 1 != first_non_null) {
           offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
         }
         for (int i = value_count - 2; i > first_non_null; i--) {
