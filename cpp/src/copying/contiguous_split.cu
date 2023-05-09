@@ -1587,25 +1587,6 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
   }
 }
 
-// template<bool T>
-// struct index_to_buffer_func {
-//   uint8_t **d_dst_bufs;
-//   rmm::device_uvector<dst_buf_info>&d_dst_buf_info;
-//   uint8_t *user_buffer;
-
-//  typename std::enable_if<true, uint8_t*>
-//  __device__ operator()(unsigned int) const
-//  {
-//    return user_buffer;
-//  }
-
-//  typename std::enable_if<false, uint8_t*>
-//  __device__ operator()(unsigned int) const
-//  {
-//    auto const dst_buf_index = dst_buf_info[buf_index].dst_buf_index;
-//    return d_dst_bufs[dst_buf_index];
-//  }
-//};
 void copy_data(int num_batches_to_copy,
                int starting_batch,
                uint8_t const** d_src_bufs,
@@ -1788,9 +1769,8 @@ struct contiguous_split_state {
     CUDF_EXPECTS(user_buffer_size == 0, "Cannot contiguous split with a user buffer");
     if (is_empty || input.num_columns() == 0) { return make_packed_tables(); }
 
-    std::size_t num_batches_total;
-    std::tie(std::ignore, num_batches_total) =
-      chunk_iter_state->get_current_starting_index_and_buff_count();
+    auto const num_batches_total = std::get<1>(
+      chunk_iter_state->get_current_starting_index_and_buff_count());
 
     // perform the copy.
     copy_data(num_batches_total,
