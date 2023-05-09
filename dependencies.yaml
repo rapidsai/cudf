@@ -209,6 +209,7 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - librmm==23.6.*
+          - libkvikio==23.6.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
