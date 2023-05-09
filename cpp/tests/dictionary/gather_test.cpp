@@ -66,7 +66,6 @@ TEST_F(DictionaryGatherTest, SortStrings)
   auto dictionary = cudf::dictionary::encode(strings);
   cudf::dictionary_column_view view(dictionary->view());
 
-  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                            std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();
@@ -85,7 +84,6 @@ TEST_F(DictionaryGatherTest, SortFloat)
   auto dictionary = cudf::dictionary::encode(data);
   cudf::dictionary_column_view view(dictionary->view());
 
-  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                            std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();

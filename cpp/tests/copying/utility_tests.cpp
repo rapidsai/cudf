@@ -83,7 +83,7 @@ TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
 {
   // make a column
   auto input = make_fixed_width_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{});
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{}, 0);
   // get a scalar out of it
   std::unique_ptr<cudf::scalar> sc = cudf::get_element(*input, 0);
 
