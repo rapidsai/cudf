@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import Any, Mapping, Optional, Type, TypeVar, cast
+from typing import Any, Container, Mapping, Optional, Type, TypeVar, cast
 
 import cudf
 from cudf.core.buffer.buffer import Buffer, get_ptr_and_size
@@ -66,13 +66,20 @@ class TenableBuffer(Buffer):
     In order to implement copy-on-write and spillable buffers, we need the
     ability to detect external access to the underlying memory. We say that
     the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of TenableBuffer. In this case, we cannot change
-    the underlying memory in-place since it would invalidate the device
-    pointer referenced externally.
+    been accessed outside of TenableBuffer. In this case, we have no control
+    over knowing if the data is being modified by a third-party.
+
+    Attributes
+    ----------
+    _exposed
+        The current expose status of the buffer. Notice, once the expose status
+        becomes False, it should never change back.
+    _slices
+        The set of BufferSlice that points to this buffer.
     """
 
     _exposed: bool
-    _slices: weakref.WeakSet
+    _slices: weakref.WeakSet[BufferSlice]
 
     @property
     def exposed(self) -> bool:
@@ -143,13 +150,27 @@ class TenableBuffer(Buffer):
 
 
 class BufferSlice(TenableBuffer):
+    """A slice (aka. a view) of a tenable buffer.
+
+    Parameters
+    ----------
+    base
+        The tenable buffer this slice refers to.
+    offset
+        The offset relative to the start memory of base (in bytes).
+    size
+        The size of the slice (in bytes)
+    passthrough_attributes
+        Attribute names that are passed through to the base as-is.
+    """
+
     def __init__(
         self,
         base: TenableBuffer,
         offset: int,
         size: int,
         *,
-        passthrough_attributes=("exposed",),
+        passthrough_attributes: Container[str] = ("exposed",),
     ) -> None:
         if size < 0:
             raise ValueError("size cannot be negative")
@@ -196,6 +217,28 @@ class BufferSlice(TenableBuffer):
         return self._base.memoryview(offset=self._offset + offset, size=size)
 
     def copy(self, deep: bool = True) -> BufferSlice:
+        """Return a copy of Buffer.
+
+        What actually happens when `deep == False` is altered by the
+        "copy_on_write" option. When copy-on-write is enabled, a shallow copy
+        because a deep copy if the buffer has been exposed. This is because we
+        have no control over knowing if the data is being modified when the
+        buffer has been exposed to third-party.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            The meaning when copy-on-write is disabled:
+                - If True, returns a deep copy of the underlying Buffer data.
+                - If False, returns a shallow copy of the Buffer pointing to
+                  the same underlying data.
+            The meaning when copy-on-write is enabled:
+                - Always a deep copy of the underlying Buffer data.
+
+        Returns
+        -------
+        Buffer
+        """
         if deep or not cudf.get_option("copy_on_write"):
             base_copy = self._base.copy(deep=deep)
         else:
@@ -211,6 +254,21 @@ class BufferSlice(TenableBuffer):
         return super().__cuda_array_interface__
 
     def make_single_owner_inplace(self) -> None:
+        """Make sure this slice is the only own pointing to `._base`
+
+        No data is being copied.
+
+        Parameters
+        ----------
+        data : device-buffer-like
+            An object implementing the CUDA Array Interface.
+
+        Returns
+        -------
+        Buffer
+            Buffer representing the same device memory as `data`
+        """
+
         if len(self._base._slices) > 1:
             t = self.copy(deep=True)
             self._base = t._base

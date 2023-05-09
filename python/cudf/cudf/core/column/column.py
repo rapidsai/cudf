@@ -1948,8 +1948,6 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        # TODO: decide, do we want `exposed=True` or `exposed=False`
-        # for external buffers.
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=current_dtype, mask=mask)
 

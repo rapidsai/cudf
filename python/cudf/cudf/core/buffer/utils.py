@@ -45,9 +45,9 @@ def as_buffer(
         Python object to which the lifetime of the memory allocation is tied.
         A reference to this object is kept in the returned Buffer.
     exposed : bool, optional
-        Mark the buffer as permanently exposed (unspillable). This is ignored
-        unless spilling is enabled and the data represents device memory, see
-        SpillableBuffer.
+        Mark the buffer as permanently exposed. This is used by TenableBuffer
+        to determine when a deep copy is required and by SpillableBuffer to
+        mark the buffer unspillable.
 
     Return
     ------
