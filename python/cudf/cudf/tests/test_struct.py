@@ -394,11 +394,11 @@ def test_struct_with_null_memory_usage():
     assert s.memory_usage() == 272
 
 
-@pytest.mark.parametrize("zlice", [slice(0, 3), slice(1, 4)])
-def test_struct_empty_children_nulls_slice(zlice):
+@pytest.mark.parametrize("indices", [slice(0, 3), slice(1, 4)])
+def test_struct_empty_children_nulls_slice(indices):
     values = [None, {}, {}, None]
 
     s = cudf.Series([None, {}, {}, None])
-    actual = s.iloc[zlice]
-    expect = cudf.Series(values[zlice], index=range(len(values))[zlice])
+    actual = s.iloc[indices]
+    expect = cudf.Series(values[indices], index=range(len(values))[indices])
     assert_eq(actual, expect)
