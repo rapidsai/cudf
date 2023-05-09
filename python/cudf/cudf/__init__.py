@@ -85,6 +85,7 @@ from cudf.utils.utils import clear_cache, set_allocator
 
 try:
     from cubinlinker.patch import patch_numba_linker_if_needed
+    from ptxcompiler.patch import patch_numba_codegen_if_needed
 except ImportError:
     pass
 else:
@@ -96,6 +97,7 @@ else:
 
     _setup_numba_linker(_PTX_FILE)
 
+    patch_numba_codegen_if_needed()
     del patch_numba_linker_if_needed
 
 cuda.set_memory_manager(RMMNumbaManager)

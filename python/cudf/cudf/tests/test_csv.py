@@ -150,8 +150,8 @@ def make_all_numeric_extremes_dataframe():
         np_type = pdf_dtypes[gdf_dtype]
         if np.issubdtype(np_type, np.integer):
             itype = np.iinfo(np_type)
-            extremes = [0, +1, -1, itype.min, itype.max]
-            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+            extremes = [itype.min, itype.max]
+            df[gdf_dtype] = np.array(extremes * 10, dtype=np_type)[:20]
         else:
             ftype = np.finfo(np_type)
             extremes = [
@@ -1433,7 +1433,7 @@ def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
 
     gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
 
-    expected = np.array(values, dtype=np_dtype)
+    expected = np.array(values).astype(np_dtype)
     actual = gdf["hex_int"].to_numpy()
     np.testing.assert_array_equal(expected, actual)
 

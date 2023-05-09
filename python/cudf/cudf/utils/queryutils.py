@@ -137,7 +137,7 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
+    funcid = f"queryexpr_{np.uintp(abs(hash(expr))):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
