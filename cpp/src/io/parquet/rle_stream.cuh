@@ -26,8 +26,12 @@ namespace gpu {
 
 // TODO: consider if these should be template parameters to rle_stream
 constexpr int num_rle_stream_decode_threads = 512;
-constexpr int num_rle_stream_decode_warps   = (num_rle_stream_decode_threads / 32) - 1;
-constexpr int run_buffer_size               = (num_rle_stream_decode_warps * 2);
+// the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
+// in an overlapped manner. so if we had 16 total warps:
+// - warp 0 would be filling in batches of runs to be processed
+// - warps 1-15 would be decoding the previous batch of runs generated
+constexpr int num_rle_stream_decode_warps = (num_rle_stream_decode_threads / 32) - 1;
+constexpr int run_buffer_size             = (num_rle_stream_decode_warps * 2);
 constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
 
 /**
@@ -86,14 +90,14 @@ struct rle_batch {
     int _level_val;
     if (!(level_run & 1)) {
       _level_val = run_start[0];
-      if (level_bits > 8) { _level_val |= run_start[0] << 8; }
+      if (level_bits > 8) { _level_val |= run_start[1] << 8; }
     }
 
     // process
     while (remain > 0) {
       int batch_len = min(32, remain);
 
-      // if this is a literal run. each thread computes it's own level_val
+      // if this is a literal run. each thread computes its own level_val
       if (level_run & 1) {
         int const batch_len8 = (batch_len + 7) >> 3;
         if (lane < batch_len) {
