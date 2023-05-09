@@ -29,6 +29,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -69,19 +71,20 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
   auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
-    [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
+    cuda::proclaim_return_type<bool>([lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
       return filter_fn(idx) ? lhs_begin[idx].has_value() : rhs_begin[idx].has_value();
-    },
+    }),
     stream,
     mr);
   size_type null_count = valid_mask.second;
   auto null_mask       = (null_count > 0) ? std::move(valid_mask.first) : rmm::device_buffer{};
 
   // build offsets column
-  auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
-    auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
-    return result.has_value() ? result->size_bytes() : 0;
-  };
+  auto offsets_transformer = cuda::proclaim_return_type<size_type>(
+    [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
+      auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
+      return result.has_value() ? result->size_bytes() : 0;
+    });
 
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
