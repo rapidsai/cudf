@@ -11,14 +11,6 @@ from cudf.utils.string import format_bytes
 
 T = TypeVar("T", bound="TenableBuffer")
 
-# Alternativ names:
-#  - ShieldedBuffer
-#  - TenableBuffer
-#  - ExposeTrackedBuffer
-#  - UniqueBuffer
-#  - IsolatedBuffer
-#  - IsolatableBuffer
-
 
 def get_owner(data, klass: Type[T]) -> Optional[T]:
     """Get the owner of `data`, if any exist
@@ -171,7 +163,7 @@ class BufferSlice(TenableBuffer):
     size
         The size of the slice (in bytes)
     passthrough_attributes
-        Attribute names that are passed through to the base as-is.
+        Name of attributes that are passed through to the base as-is.
     """
 
     def __init__(
@@ -261,7 +253,7 @@ class BufferSlice(TenableBuffer):
         return super().__cuda_array_interface__
 
     def make_single_owner_inplace(self) -> None:
-        """Make sure this slice is the only own pointing to `._base`
+        """Make sure this slice is the only one pointing to the base.
 
         No data is being copied.
 
@@ -277,15 +269,18 @@ class BufferSlice(TenableBuffer):
         """
 
         if len(self._base._slices) > 1:
+            # If this is not the only slice pointing to `self._base`, we
+            # point to a new deep copy of the base.
             t = self.copy(deep=True)
             self._base = t._base
             self._offset = t._offset
             self._size = t._size
             self._owner = t._base
-            t._base._slices.add(self)
+            self._base._slices.add(self)
 
     def __repr__(self) -> str:
         return (
-            f"<BufferSlice size={format_bytes(self._size)} "
-            f"offset={format_bytes(self._offset)} of {self._base} "
+            f"<BufferSlice exposed={self._exposed} "
+            f"size={format_bytes(self._size)} "
+            f"offset={format_bytes(self._offset)} of {self._base}>"
         )
