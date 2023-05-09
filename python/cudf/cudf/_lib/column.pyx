@@ -524,7 +524,7 @@ cdef class Column:
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype_itemsize)
                 )
-            if isinstance(data_owner, TenableBuffer):
+            elif column_owner and isinstance(data_owner, TenableBuffer):
                 data = as_buffer(
                     data=data_ptr,
                     size=base_nbytes,
