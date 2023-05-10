@@ -120,7 +120,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * This method is internal and exposed purely for testing purpopses
+   * This method is internal and exposed purely for testing purposes
    */
   static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
