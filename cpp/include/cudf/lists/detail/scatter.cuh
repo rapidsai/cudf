@@ -39,6 +39,8 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <cinttypes>
 
 namespace cudf {
@@ -62,9 +64,10 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
                     index_begin,
                     index_end,
                     vector.begin(),
-                    [label, lists_column] __device__(size_type row_index) {
-                      return unbound_list_view{label, lists_column, row_index};
-                    });
+                    cuda::proclaim_return_type<unbound_list_view>(
+                      [label, lists_column] __device__(size_type row_index) {
+                        return unbound_list_view{label, lists_column, row_index};
+                      }));
 
   return vector;
 }
@@ -115,7 +118,8 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
     lists_column_view(target);  // Checks that target is a list column.
 
   auto list_size_begin = thrust::make_transform_iterator(
-    target_vector.begin(), [] __device__(unbound_list_view l) { return l.size(); });
+    target_vector.begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(unbound_list_view l) { return l.size(); }));
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr));
 
