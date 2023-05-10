@@ -52,6 +52,13 @@ def as_tenable_buffer(
     representing the same memory, we should have a single tenable buffer
     and multiple buffer slices.
 
+    Developer Notes
+    ---------------
+    This function always returns slices thus all buffers in cudf will use
+    `BufferSlice` when copy-on-write is enabled. The slices implements
+    copy-on-write by trigging deep copies when write access is detected
+    and multiple slices points to the same tenable buffer.
+
     Parameters
     ----------
     data : buffer-like or array-like
@@ -218,7 +225,7 @@ class BufferSlice(TenableBuffer):
     def copy(self, deep: bool = True) -> BufferSlice:
         """Return a copy of Buffer.
 
-        What actually happens when `deep == False` is altered by the
+        What actually happens when `deep == False` depends on the
         "copy_on_write" option. When copy-on-write is enabled, a shallow copy
         because a deep copy if the buffer has been exposed. This is because we
         have no control over knowing if the data is being modified when the
@@ -227,16 +234,19 @@ class BufferSlice(TenableBuffer):
         Parameters
         ----------
         deep : bool, default True
-            The meaning when copy-on-write is disabled:
+            The semantics when copy-on-write is disabled:
                 - If True, returns a deep copy of the underlying Buffer data.
                 - If False, returns a shallow copy of the Buffer pointing to
                   the same underlying data.
-            The meaning when copy-on-write is enabled:
+            The semantics when copy-on-write is enabled:
                 - Always a deep copy of the underlying Buffer data.
 
         Returns
         -------
-        Buffer
+        BufferSlice
+            A slice pointing to either a new or the existing base buffer
+            depending on the expose status of the base buffer and the
+            copy-on-write option (see above).
         """
         if deep or not cudf.get_option("copy_on_write"):
             base_copy = self._base.copy(deep=deep)
@@ -255,7 +265,8 @@ class BufferSlice(TenableBuffer):
     def make_single_owner_inplace(self) -> None:
         """Make sure this slice is the only one pointing to the base.
 
-        No data is being copied.
+        This is used by copy-on-write to trigger a deep copy when write
+        access is detected.
 
         Parameters
         ----------
