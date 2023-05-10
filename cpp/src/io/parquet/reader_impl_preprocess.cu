@@ -346,8 +346,8 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   auto level_bit_size =
     cudf::detail::make_counting_transform_iterator(0, [chunks = chunks.begin()] __device__(int i) {
       auto c = chunks[i];
-      return static_cast<int>(std::max(c.level_bits[gpu::level_type::REPETITION],
-                                       c.level_bits[gpu::level_type::DEFINITION]));
+      return static_cast<int>(
+        max(c.level_bits[gpu::level_type::REPETITION], c.level_bits[gpu::level_type::DEFINITION]));
     });
   // max level data bit size.
   int const max_level_bits   = thrust::reduce(rmm::exec_policy(stream),
@@ -355,7 +355,7 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                             level_bit_size + chunks.size(),
                                             0,
                                             thrust::maximum<int>());
-  auto const level_type_size = max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  auto const level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   pages.device_to_host(stream, true);
 
