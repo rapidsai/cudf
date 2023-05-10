@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -54,7 +56,9 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      [] __device__(auto b) { return static_cast<size_type>(b); });
+                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
+                                        return static_cast<size_type>(b);
+                                      }));
 
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           group_labels.begin(),
