@@ -329,8 +329,8 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data.get_ptr(
-                mode="write")
+            data = <void*><uintptr_t>(
+                col.base_data.get_ptr(mode="write")
             )
 
         cdef Column child_column
@@ -554,7 +554,10 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, SpillableBuffer):
+                if isinstance(data_owner, TenableBuffer):
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
+                elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(
                             f"{data_owner} is spilled, which invalidates "
