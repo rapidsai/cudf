@@ -106,8 +106,8 @@ class TenableBuffer(Buffer):
     Attributes
     ----------
     _exposed
-        The current exposure status of the buffer. Notice, once the exposure status
-        becomes True, it should never change back.
+        The current exposure status of the buffer. Notice, once the exposure
+        status becomes True, it should never change back.
     _slices
         The set of BufferSlice instances that point to this buffer.
     """
@@ -218,7 +218,7 @@ class BufferSlice(TenableBuffer):
     def exposed(self) -> bool:
         return self._base.exposed
 
-    def get_ptr(self, mode: str = "write") -> int:
+    def get_ptr(self, *, mode: str) -> int:
         if mode == "write" and cudf.get_option("copy_on_write"):
             self.make_single_owner_inplace()
         return self._base.get_ptr(mode=mode) + self._offset

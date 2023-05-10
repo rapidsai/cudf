@@ -242,7 +242,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def get_ptr(self, mode: str = "write") -> int:
+    def get_ptr(self, *, mode: str) -> int:
         """Device pointer to the start of the buffer.
 
         Parameters
