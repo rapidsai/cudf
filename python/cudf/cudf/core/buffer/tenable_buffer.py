@@ -86,13 +86,12 @@ def as_tenable_buffer(
             BufferSlice,
             TenableBuffer._from_device_memory(data, exposed=exposed)[:],
         )
-    base_ptr = owner._ptr
 
     # At this point, we know that `data` is owned by a tenable buffer
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-    if size > 0 and base_ptr == 0:
+    if size > 0 and owner._ptr == 0:
         raise ValueError("Cannot create a non-empty slice of a null buffer")
-    return BufferSlice(base=owner, offset=ptr - base_ptr, size=size)
+    return BufferSlice(base=owner, offset=ptr - owner._ptr, size=size)
 
 
 class TenableBuffer(Buffer):
@@ -156,6 +155,13 @@ class TenableBuffer(Buffer):
     def __cuda_array_interface__(self) -> Mapping:
         self.mark_exposed()
         return super().__cuda_array_interface__
+
+    def __repr__(self) -> str:
+        return (
+            f"<TenableBuffer exposed={self.exposed} "
+            f"size={format_bytes(self._size)} "
+            f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
+        )
 
 
 class BufferSlice(TenableBuffer):
@@ -291,7 +297,6 @@ class BufferSlice(TenableBuffer):
 
     def __repr__(self) -> str:
         return (
-            f"<BufferSlice exposed={self._exposed} "
-            f"size={format_bytes(self._size)} "
+            f"<BufferSlice size={format_bytes(self._size)} "
             f"offset={format_bytes(self._offset)} of {self._base}>"
         )
