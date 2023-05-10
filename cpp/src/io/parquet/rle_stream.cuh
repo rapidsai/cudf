@@ -17,6 +17,7 @@
 #pragma once
 
 #include "parquet_gpu.hpp"
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf {
@@ -30,8 +31,9 @@ constexpr int num_rle_stream_decode_threads = 512;
 // in an overlapped manner. so if we had 16 total warps:
 // - warp 0 would be filling in batches of runs to be processed
 // - warps 1-15 would be decoding the previous batch of runs generated
-constexpr int num_rle_stream_decode_warps = (num_rle_stream_decode_threads / 32) - 1;
-constexpr int run_buffer_size             = (num_rle_stream_decode_warps * 2);
+constexpr int num_rle_stream_decode_warps =
+  (num_rle_stream_decode_threads / cudf::detail::warp_size) - 1;
+constexpr int run_buffer_size = (num_rle_stream_decode_warps * 2);
 constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
 
 /**
@@ -42,7 +44,7 @@ constexpr int rolling_run_index(int index) { return index % run_buffer_size; }
  *
  * @return The 32-bit value read
  */
-inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
+inline __device__ uint32_t get_vlq32(uint8_t const*& cur, uint8_t const* end)
 {
   uint32_t v = *cur++;
   if (v >= 0x80 && cur < end) {
@@ -87,15 +89,15 @@ struct rle_batch {
     }
 
     // if this is a repeated run, compute the repeated value
-    int _level_val;
+    int level_val;
     if (!(level_run & 1)) {
-      _level_val = run_start[0];
-      if (level_bits > 8) { _level_val |= run_start[1] << 8; }
+      level_val = run_start[0];
+      if (level_bits > 8) { level_val |= run_start[1] << 8; }
     }
 
     // process
     while (remain > 0) {
-      int batch_len = min(32, remain);
+      int const batch_len = min(32, remain);
 
       // if this is a literal run. each thread computes its own level_val
       if (level_run & 1) {
@@ -104,22 +106,22 @@ struct rle_batch {
           int bitpos                = lane * level_bits;
           uint8_t const* cur_thread = cur + (bitpos >> 3);
           bitpos &= 7;
-          _level_val = 0;
-          if (cur_thread < end) { _level_val = cur_thread[0]; }
+          level_val = 0;
+          if (cur_thread < end) { level_val = cur_thread[0]; }
           cur_thread++;
           if (level_bits > 8 - bitpos && cur_thread < end) {
-            _level_val |= cur_thread[0] << 8;
+            level_val |= cur_thread[0] << 8;
             cur_thread++;
-            if (level_bits > 16 - bitpos && cur_thread < end) { _level_val |= cur_thread[0] << 16; }
+            if (level_bits > 16 - bitpos && cur_thread < end) { level_val |= cur_thread[0] << 16; }
           }
-          _level_val = (_level_val >> bitpos) & ((1 << level_bits) - 1);
+          level_val = (level_val >> bitpos) & ((1 << level_bits) - 1);
         }
 
         cur += batch_len8 * level_bits;
       }
 
       // store level_val
-      if (lane < batch_len && (lane + output_pos) >= 0) { output[lane + output_pos] = _level_val; }
+      if (lane < batch_len && (lane + output_pos) >= 0) { output[lane + output_pos] = level_val; }
       remain -= batch_len;
       output_pos += batch_len;
     }
@@ -137,7 +139,7 @@ struct rle_run {
 
   __device__ __inline__ rle_batch<level_t> next_batch(level_t* const output, int max_size)
   {
-    int batch_len        = min(max_size, remaining);
+    int const batch_len  = min(max_size, remaining);
     int const run_offset = size - remaining;
     remaining -= batch_len;
     return rle_batch<level_t>{start, run_offset, output, level_run, batch_len};
@@ -251,8 +253,8 @@ struct rle_stream {
     // if we've reached the output limit on the last run
     if (output_pos >= max_count) {
       // first, see if we've spilled over
-      auto& src       = runs[rolling_run_index(run_index - 1)];
-      int spill_count = output_pos - max_count;
+      auto const& src       = runs[rolling_run_index(run_index - 1)];
+      int const spill_count = output_pos - max_count;
 
       // a spill has occurred in the current run. spill the extra values over into the beginning of
       // the next run.
@@ -279,7 +281,7 @@ struct rle_stream {
     }
   }
 
-  __device__ __inline__ int decode_next(int t)
+  __device__ inline int decode_next(int t)
   {
     int const output_count = min(max_output_values, (total_values - cur_values));
 
@@ -297,9 +299,9 @@ struct rle_stream {
     }
 
     // otherwise, full decode.
-    int const warp_id        = t / 32;
+    int const warp_id        = t / cudf::detail::warp_size;
     int const warp_decode_id = warp_id - 1;
-    int const warp_lane      = t % 32;
+    int const warp_lane      = t % cudf::detail::warp_size;
 
     __shared__ int run_start;
     __shared__ int num_runs;

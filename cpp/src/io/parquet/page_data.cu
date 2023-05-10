@@ -1389,14 +1389,14 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
-    d         = static_cast<int>(def[index]);
+    int const index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    d               = static_cast<int>(def[index]);
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
-      level_t r   = rep[index];
-      start_depth = s->nesting_info[r].start_depth;
-      end_depth   = s->nesting_info[d].end_depth;
+      level_t const r = rep[index];
+      start_depth     = s->nesting_info[r].start_depth;
+      end_depth       = s->nesting_info[d].end_depth;
     }
     // for columns without repetition (even ones involving structs) we always
     // traverse the entire hierarchy.
