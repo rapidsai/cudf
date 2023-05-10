@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sorting.hpp>
