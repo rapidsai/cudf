@@ -35,7 +35,7 @@ void chunked_pack(cudf::table_view const& src_table, std::vector<cudf::size_type
   auto const mr     = rmm::mr::get_current_device_resource();
   auto const stream = cudf::get_default_stream();
   auto user_buffer  = rmm::device_uvector<std::uint8_t>(100L * 1024 * 1024, stream, mr);
-  auto chunked_pack = cudf::make_chunked_pack(src_table, user_buffer.size(), mr);
+  auto chunked_pack = cudf::chunked_pack::create(src_table, user_buffer.size(), mr);
   while (chunked_pack->has_next()) {
     auto iter_size = chunked_pack->next(user_buffer);
   }

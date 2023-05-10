@@ -759,7 +759,7 @@ BufInfo build_output_columns(InputIter begin,
     auto [col_size, data_offset, bitmask_offset, null_count] =
       build_output_column_metadata<BufInfo>(src, current_info, mb, false);
 
-    auto bitmask_ptr =
+    auto const bitmask_ptr =
       base_ptr != nullptr && bitmask_offset != -1
         ? reinterpret_cast<bitmask_type const*>(base_ptr + static_cast<uint64_t>(bitmask_offset))
         : nullptr;
@@ -927,14 +927,11 @@ struct batch_byte_size_function {
   dst_buf_info const* infos;
   __device__ std::size_t operator()(size_type i) const
   {
-    if (i == num_batches) {
-      return 0;
-    } else {
-      auto& buf = *(infos + i);
-      std::size_t const bytes =
-        static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
-      return util::round_up_unsafe(bytes, split_align);
-    }
+    if (i == num_batches) { return 0; }
+    auto& buf = *(infos + i);
+    std::size_t const bytes =
+      static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
+    return util::round_up_unsafe(bytes, split_align);
   }
 };
 
@@ -2026,9 +2023,9 @@ std::unique_ptr<std::vector<uint8_t>> chunked_pack::build_metadata() const
   return state->build_packed_column_metadata();
 }
 
-std::unique_ptr<chunked_pack> make_chunked_pack(cudf::table_view const& input,
-                                                std::size_t user_buffer_size,
-                                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input,
+                                                   std::size_t user_buffer_size,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(user_buffer_size >= desired_batch_size,
                "The output buffer size must be at least 1MB in size");

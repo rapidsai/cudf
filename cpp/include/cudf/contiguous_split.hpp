@@ -165,7 +165,7 @@ struct contiguous_split_state;
  * //
  * std::size_t user_buffer_size = 128*1024*1024;
  *
- * auto chunked_packer = make_chunked_pack(tv, user_buffer_size, stream, mr);
+ * auto chunked_packer = cudf::chunked_pack::create(tv, user_buffer_size, stream, mr);
  *
  * std::size_t host_offset = 0;
  * auto host_buffer = ...; // obtain a host buffer you would like to copy to
@@ -236,7 +236,6 @@ class chunked_pack {
    *                    the `user_buffer_size` parameter passed at construction
    * @return The number of bytes that were written to `user_buffer` (at most
    *          `user_buffer_size`)
-   *
    */
   [[nodiscard]] std::size_t next(cudf::device_span<uint8_t> const& user_buffer);
 
@@ -247,27 +246,27 @@ class chunked_pack {
    */
   [[nodiscard]] std::unique_ptr<std::vector<uint8_t>> build_metadata() const;
 
+  /**
+   * @brief Creates a `chunked_pack` instance to perform a "pack" of the `table_view`
+   * "input", where a buffer of `user_buffer_size` is filled with chunks of the
+   * overall operation. This operation can be used in cases where GPU memory is constrained.
+   *
+   * @throws cudf::logic_error When user_buffer_size is less than 1MB
+   *
+   * @param input source `table_view` to pack
+   * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
+   *                         at least 1MB
+   * @param mr RMM memory resource to be used for temporary and scratch allocations only
+   * @return a unique_ptr of chunked_pack
+   */
+  [[nodiscard]] static std::unique_ptr<chunked_pack> create(cudf::table_view const& input,
+                                                            std::size_t user_buffer_size,
+                                                            rmm::mr::device_memory_resource* mr);
+
  private:
   // internal state of contiguous split
   std::unique_ptr<detail::contiguous_split_state> state;
 };
-
-/**
- * @brief Created a `chunked_pack` instance to perform a "pack" of the `table_view`
- * "input", where a buffer of `user_buffer_size` is filled with chunks of the
- * overall operation. This operation can be used in cases where GPU memory is constrained.
- *
- * @throws cudf::logic_error When user_buffer_size is less than 1MB
- *
- * @param input source `table_view` to pack
- * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
- *                         at least 1MB
- * @param mr RMM memory resource to be used for temporary and scratch allocations only
- * @return a unique_ptr of chunked_pack
- */
-std::unique_ptr<chunked_pack> make_chunked_pack(cudf::table_view const& input,
-                                                std::size_t user_buffer_size,
-                                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Deep-copy a `table_view` into a serialized contiguous memory format.
