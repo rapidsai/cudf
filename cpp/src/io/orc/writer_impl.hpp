@@ -344,7 +344,7 @@ class writer::impl {
   size_type const _row_index_stride;
   CompressionKind const _compression_kind;
   size_t const _compression_blocksize;
-  std::shared_ptr<writer_compression_statistics> _compression_statistics;
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
   single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
                                                // indicate that we are guaranteeing a single table

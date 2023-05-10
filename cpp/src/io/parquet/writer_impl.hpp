@@ -175,8 +175,7 @@ class writer::impl {
   std::vector<std::size_t> _current_chunk_offset;  // To track if the last write(table) call
                                                    // completed successfully current write
                                                    // position for rowgroups/chunks.
-  std::shared_ptr<writer_compression_statistics>
-    _compression_statistics;                       // Optional output compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   bool _last_write_successful = false;
   bool _closed                = false;  // To track if the output has been written to sink.
 };
