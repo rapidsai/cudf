@@ -396,6 +396,8 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
         - libcurand {{ libcurand_run_version }}
     about:
       home: https://rapids.ai/
