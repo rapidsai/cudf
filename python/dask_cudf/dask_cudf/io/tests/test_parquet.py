@@ -267,7 +267,7 @@ def test_filters_at_row_group_level(tmpdir):
         tmp_path, filters=[("x", "==", 1)], split_row_groups=True
     )
     assert a.npartitions == 1
-    assert (a.shape[0] == 2).compute()
+    assert (a.shape[0] == 1).compute()
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
 

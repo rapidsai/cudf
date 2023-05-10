@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
+import operator
 import shutil
 import tempfile
 import warnings
@@ -9,6 +10,7 @@ from contextlib import ExitStack
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import numpy as np
 import pandas as pd
 from pyarrow import dataset as ds, parquet as pq
 
@@ -547,7 +549,8 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
-    return _parquet_to_frame(
+    # Convert parquet data to a cudf.DataFrame
+    df = _parquet_to_frame(
         filepaths_or_buffers,
         engine,
         *args,
@@ -560,6 +563,117 @@ def read_parquet(
         dataset_kwargs=dataset_kwargs,
         **kwargs,
     )
+
+    # Can re-set the index before returning if we filter
+    # out rows from a DataFrame with a default RangeIndex
+    # (to reduce memory usage)
+    reset_index = filters and (
+        isinstance(df.index, cudf.RangeIndex)
+        and df.index.name is None
+        and df.index.start == 0
+        and df.index.step == 1
+    )
+
+    # Apply filters (if any are defined)
+    df = _apply_dnf_filters(df, filters)
+
+    # Return final cudf.DataFrame
+    return df.reset_index(drop=True) if reset_index else df
+
+
+def _apply_dnf_filters(df, filters):
+    # Apply DNF filters to a DataFrame
+    #
+    # Disjunctive normal form (DNF) means that the inner-most
+    # tuple describes a single column predicate. These inner
+    # predicates are combined with an AND conjunction into a
+    # larger predicate. The outer-most list then combines all
+    # of the combined filters with an OR disjunction.
+
+    if not filters:
+        # No filters to apply
+        return df
+
+    _comparisons = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+    }
+
+    try:
+        # Disjunction loop
+        #
+        # All elements of `disjunctions` shall be combined with
+        # an `OR` disjunction (operator.or_)
+        disjunctions = []
+        other = filters.copy()
+        while other:
+
+            # Conjunction loop
+            #
+            # All elements of `conjunctions` shall be combined with
+            # an `AND` conjunction (operator.and_)
+            conjunctions = []
+            comparisons, *other = (
+                other if isinstance(other[0], list) else [other]
+            )
+            for (column, op, value) in comparisons:
+
+                # Inner comparison loop
+                #
+                # `op` is expected to be the string representation
+                # of a comparison operator (e.g. "==")
+                if op == "in":
+                    # Special case: "in"
+                    if not isinstance(value, (list, set, tuple)):
+                        raise TypeError(
+                            "Value of 'in' filter must be a "
+                            "list, set, or tuple."
+                        )
+                    if len(value) == 1:
+                        conjunctions.append(operator.eq(df[column], value[0]))
+                    else:
+                        conjunctions.append(
+                            operator.or_(
+                                *[operator.eq(df[column], v) for v in value]
+                            )
+                        )
+                elif op in ("is", "is not"):
+                    # Special case: "is" or "is not"
+                    if value not in (np.nan, None):
+                        raise TypeError(
+                            "Value of 'is' or 'is not' filter "
+                            "must be np.nan or None."
+                        )
+                    conjunctions.append(
+                        df[column].isna() if op == "is" else ~df[column].isna()
+                    )
+                else:
+                    # Conventional comparison operator
+                    conjunctions.append(_comparisons[op](df[column], value))
+
+            disjunctions.append(
+                operator.and_(*conjunctions)
+                if len(conjunctions) > 1
+                else conjunctions[0]
+            )
+
+        return df[
+            operator.or_(*disjunctions)
+            if len(disjunctions) > 1
+            else disjunctions[0]
+        ]
+
+    except (KeyError, TypeError):
+
+        # Unsupported op or value
+        warnings.warn(
+            f"Row-wise filtering failed in read_parquet for {filters}"
+        )
+        return df
 
 
 @_cudf_nvtx_annotate
