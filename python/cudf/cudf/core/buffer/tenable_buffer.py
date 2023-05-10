@@ -214,10 +214,6 @@ class BufferSlice(TenableBuffer):
             base=self._base, offset=offset + self._offset, size=size
         )
 
-    @property
-    def exposed(self) -> bool:
-        return self._base.exposed
-
     def get_ptr(self, *, mode: str) -> int:
         if mode == "write" and cudf.get_option("copy_on_write"):
             self.make_single_owner_inplace()
