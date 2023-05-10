@@ -565,8 +565,20 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def to_arrow(self):
-        return pa.compute.assume_timezone(
-            self._local_time.to_arrow(), str(self.dtype.tz)
+        return self._local_time.to_arrow().cast(
+            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+        )
+
+    @property
+    def _utc_time(self):
+        """Return UTC time as naive timestamps."""
+        return DatetimeColumn(
+            data=self.base_data,
+            dtype=_get_base_dtype(self.dtype),
+            mask=self.base_mask,
+            size=self.size,
+            offset=self.offset,
+            null_count=self.null_count,
         )
 
     @property

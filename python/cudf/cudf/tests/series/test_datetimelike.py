@@ -111,3 +111,19 @@ def test_delocalize(unit, tz):
     expect = psr.dt.tz_localize(tz).dt.tz_localize(None)
     got = sr.dt.tz_localize(tz).dt.tz_localize(None)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "from_tz", ["Europe/London", "America/Chicago", "UTC"]
+)
+@pytest.mark.parametrize(
+    "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
+)
+def test_convert(from_tz, to_tz):
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="H"))
+    gs = cudf.from_pandas(ps)
+    ps = ps.dt.tz_localize(from_tz)
+    gs = gs.dt.tz_localize(from_tz)
+    expect = ps.dt.tz_convert(to_tz)
+    got = gs.dt.tz_convert(to_tz)
+    assert_eq(expect, got)

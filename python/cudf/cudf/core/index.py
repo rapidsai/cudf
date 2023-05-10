@@ -2547,6 +2547,24 @@ class DatetimeIndex(GenericIndex):
             result_col = localize(self._column, tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data({self.name: result_col})
 
+    def tz_convert(self, tz):
+        """
+        Parameters
+        ----------
+        tz: str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the timezone
+            information.
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self._column._utc_time.localize(None)
+        else:
+            result_col = convert(self._column, tz)
+        return DatetimeIndex._from_data({self.name: result_col})
+
 
 class TimedeltaIndex(GenericIndex):
     """
