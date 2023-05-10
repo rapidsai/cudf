@@ -535,8 +535,8 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   end_depth   = -1;
   d           = -1;
   if (input_value_count + t < target_input_value_count) {
-    int index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
-    d         = static_cast<int>(def[index]);
+    int const index = rolling_lvl_index<lvl_buf_size>(input_value_count + t);
+    d               = static_cast<int>(def[index]);
     // if we have repetition (there are list columns involved) we have to
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
