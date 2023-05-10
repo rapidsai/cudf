@@ -436,7 +436,7 @@ class column_view : public detail::column_view_base {
   {
     CUDF_EXPECTS(
       data.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Data exceeds the column size limit.",
+      "Data exceeds the column size limit",
       std::overflow_error);
   }
 
