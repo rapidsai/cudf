@@ -441,6 +441,7 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    post_filters=None,
     *args,
     **kwargs,
 ):
@@ -567,22 +568,23 @@ def read_parquet(
     # Can re-set the index before returning if we filter
     # out rows from a DataFrame with a default RangeIndex
     # (to reduce memory usage)
-    reset_index = filters and (
+    post_filters = post_filters or filters
+    reset_index = post_filters and (
         isinstance(df.index, cudf.RangeIndex)
         and df.index.name is None
         and df.index.start == 0
         and df.index.step == 1
     )
 
-    # Apply filters (if any are defined)
-    df = _apply_dnf_filters(df, filters)
+    # Apply post_filters (if any are defined)
+    df = _apply_post_filters(df, post_filters)
 
     # Return final cudf.DataFrame
     return df.reset_index(drop=True) if reset_index else df
 
 
-def _apply_dnf_filters(df, filters):
-    # Apply DNF filters to a DataFrame
+def _apply_post_filters(df, filters):
+    # Apply DNF filters to an in-memory DataFrame
     #
     # Disjunctive normal form (DNF) means that the inner-most
     # tuple describes a single column predicate. These inner

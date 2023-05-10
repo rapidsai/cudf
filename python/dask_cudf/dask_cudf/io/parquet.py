@@ -103,7 +103,7 @@ class CudfEngine(ArrowDatasetEngine):
                     engine="cudf",
                     columns=columns,
                     row_groups=row_groups if row_groups else None,
-                    filters=filters,
+                    post_filters=filters,
                     strings_to_categorical=strings_to_categorical,
                     dataset_kwargs=dataset_kwargs,
                     categorical_partitions=False,
@@ -122,7 +122,7 @@ class CudfEngine(ArrowDatasetEngine):
                                 row_groups=row_groups[i]
                                 if row_groups
                                 else None,
-                                filters=filters,
+                                post_filters=filters,
                                 strings_to_categorical=strings_to_categorical,
                                 dataset_kwargs=dataset_kwargs,
                                 categorical_partitions=False,

@@ -147,7 +147,7 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
-filters : list of tuple, list of lists of tuples default None
+filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
     that do not match the given filter predicate are not read. The
@@ -161,6 +161,10 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
+post_filters : list of tuple, list of lists of tuples, default None
+    Row-wise filters to be applied to the in-memory `DataFrame` after IO
+    is performed. If `None` (the default), `post_filters` will be set equal
+    to the value of `filters`.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list

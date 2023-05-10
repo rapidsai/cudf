@@ -545,6 +545,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
         ([("y", "==", "c"), ("x", ">", 8)], 0),
         ([("y", "==", "c"), ("x", ">=", 5)], 1),
         ([[("y", "==", "c")], [("x", "<", 3)]], 5),
+        ([[("y", "==", "c")], [("x", "in", (0, 9))]], 4),
     ],
 )
 def test_parquet_read_filtered_complex_predicate(
@@ -553,13 +554,43 @@ def test_parquet_read_filtered_complex_predicate(
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
     df = pd.DataFrame(
-        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "z": reversed(range(10)),
+            "j": [0] * 4 + [np.nan] * 2 + [0] * 4,
+            "k": [""] * 4 + [None] * 2 + [""] * 4,
+        }
     )
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
     df_filtered = cudf.read_parquet(fname, filters=predicate)
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
+    assert_eq(len(df_filtered), expected_len)
+
+
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([[("j", "is not", np.nan)], [("i", "<", 3)]], 8),
+        ([("k", "is", None)], 2),
+    ],
+)
+def test_parquet_post_filters(tmpdir, predicate, expected_len):
+    # Check that "is" and "is not" are supported
+    # as `post_filters` (even though they are not
+    # supported by pyarrow)
+    fname = tmpdir.join("post_filters.parquet")
+    df = pd.DataFrame(
+        {
+            "i": range(10),
+            "j": [0] * 4 + [np.nan] * 2 + [0] * 4,
+            "k": [""] * 4 + [None] * 2 + [""] * 4,
+        }
+    )
+    df.to_parquet(fname, row_group_size=2)
+    df_filtered = cudf.read_parquet(fname, post_filters=predicate)
     assert_eq(len(df_filtered), expected_len)
 
 
