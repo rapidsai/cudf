@@ -66,7 +66,7 @@ jobs:
       run_script: "ci/build_docs.sh"
   wheel-build-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@cuda-120-pip
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -78,7 +78,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@cuda-120-pip
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -88,7 +88,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@cuda-120-pip
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -99,7 +99,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@manylinux_v2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@cuda-120-pip
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
