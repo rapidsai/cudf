@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory

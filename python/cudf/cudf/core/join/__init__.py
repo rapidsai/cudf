@@ -1,3 +1,3 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.join.join import Merge, MergeSemi
