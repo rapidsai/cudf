@@ -1745,7 +1745,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
         // we found it
         if (global_count > 0) {
           // this is the thread that represents the first row.
-          if (local_count == 1) {
+          if (local_count == 1 && in_row_bounds) {
             s->page.skipped_values = value_count + t;
             s->page.skipped_leaf_values =
               leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
