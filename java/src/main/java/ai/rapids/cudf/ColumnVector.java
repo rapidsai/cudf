@@ -119,6 +119,9 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
+  /**
+   * This method is internal and exposed purely for testing purpopses
+   */
   static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {

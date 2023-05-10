@@ -6687,23 +6687,41 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
          BaseDeviceMemoryBuffer baseValidityBuffer = input.getDeviceBufferFor(BufferType.VALIDITY);
          BaseDeviceMemoryBuffer baseOffsetBuffer = input.getDeviceBufferFor(BufferType.OFFSET);
-         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(3))) {
+         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4))) {
 
       newValidity.copyFromDeviceBuffer(baseValidityBuffer);
+      // we are setting list1 with 3 elements to null. This will result in a non-empty null in the
+      // ColumnView at index 1
       BitVectorHelper.setNullAt(newValidity, 1);
-      DeviceMemoryBuffer validityBuffer = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(3));
-      validityBuffer.copyFromHostBuffer(newValidity);
-      DeviceMemoryBuffer offsetBuffer = DeviceMemoryBuffer.allocate(baseOffsetBuffer.getLength());
-      offsetBuffer.copyFromMemoryBuffer(0, baseOffsetBuffer, 0,
-          baseOffsetBuffer.length, Cuda.DEFAULT_STREAM);
-
-      ColumnVector.OffHeapState offHeapState = ColumnVector.makeOffHeap(input.type, input.rows, Optional.of(2L),
-          null, validityBuffer, offsetBuffer,
-          null, Arrays.stream(input.getChildColumnViews()).mapToLong((c) -> c.viewHandle).toArray());
+      // validityBuffer will be closed by offHeapState later
+      DeviceMemoryBuffer validityBuffer = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4));
       try {
-        new ColumnView(offHeapState);
-      } catch (AssertionError ae) {
-        assert offHeapState.isClean();
+        // offsetBuffer will be closed by offHeapState later
+        DeviceMemoryBuffer offsetBuffer = DeviceMemoryBuffer.allocate(baseOffsetBuffer.getLength());
+        try {
+          validityBuffer.copyFromHostBuffer(newValidity);
+          offsetBuffer.copyFromMemoryBuffer(0, baseOffsetBuffer, 0,
+              baseOffsetBuffer.length, Cuda.DEFAULT_STREAM);
+
+          // The new offHeapState will have 2 nulls, one null at index 4 from the original ColumnVector
+          // the other at index 1 which is non-empty
+          ColumnVector.OffHeapState offHeapState = ColumnVector.makeOffHeap(input.type, input.rows, Optional.of(2L),
+              null, validityBuffer, offsetBuffer,
+              null, Arrays.stream(input.getChildColumnViews()).mapToLong((c) -> c.viewHandle).toArray());
+          try {
+            new ColumnView(offHeapState);
+          } catch (AssertionError ae) {
+            assert offHeapState.isClean();
+          }
+        } catch (Exception e) {
+          if (!offsetBuffer.closed) {
+            offsetBuffer.close();
+          }
+        }
+      } catch (Exception e) {
+        if (!validityBuffer.closed) {
+          validityBuffer.close();
+        }
       }
     }
   }
