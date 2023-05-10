@@ -203,6 +203,12 @@ def localize(
 
 
 def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
+    if not isinstance(data, DatetimeTZColumn):
+        raise TypeError(
+            "Cannot convert from timezone-naive timestamps to "
+            "timezone-aware timestamps. For that, "
+            "use `tz_localize instead."
+        )
     utc_time = data._utc_time
     out = cast(
         DatetimeTZColumn,

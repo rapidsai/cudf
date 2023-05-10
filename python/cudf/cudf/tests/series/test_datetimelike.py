@@ -127,3 +127,9 @@ def test_convert(from_tz, to_tz):
     expect = ps.dt.tz_convert(to_tz)
     got = gs.dt.tz_convert(to_tz)
     assert_eq(expect, got)
+
+
+def test_convert_from_naive():
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="H"))
+    with pytest.raises(TypeError):
+        gs.dt.tz_convert("America/New_York")
