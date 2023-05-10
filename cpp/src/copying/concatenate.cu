@@ -101,12 +101,14 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
+ * @tparam block_size Block size for using with single_lane_block_sum_reduce
+ *
  * @param views Array of column_device_view
  * @param output_offsets Prefix sum of sizes of elements of `views`
  * @param number_of_views Size of `views` array
  * @param dest_mask The output buffer to copy null masks into
- * @param number_of_mask_bits The total number of null masks bits that are being
- * copied
+ * @param number_of_mask_bits The total number of null masks bits that are being copied
+ * @param out_valid_count To hold the total number of valid bits set
  */
 template <size_type block_size>
 __global__ void concatenate_masks_kernel(column_device_view const* views,
