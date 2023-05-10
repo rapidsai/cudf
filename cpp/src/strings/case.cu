@@ -255,7 +255,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // convert sizes to offsets
   auto const bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
                "Size of output exceeds column size limit",
                std::overflow_error);
 

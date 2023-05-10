@@ -173,14 +173,14 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   }
   CUDF_EXPECTS(tensor.shape[0] >= 0,
                "DLTensor first dim should be of shape greater than or equal to 0.");
-  CUDF_EXPECTS(tensor.shape[0] < std::numeric_limits<size_type>::max(),
-               "DLTensor first dim exceeds column size limit",
+  CUDF_EXPECTS(tensor.shape[0] <= std::numeric_limits<size_type>::max(),
+               "DLTensor first dim exceeds the column size limit",
                std::overflow_error);
   if (tensor.ndim > 1) {
     CUDF_EXPECTS(tensor.shape[1] >= 0,
                  "DLTensor second dim should be of shape greater than or equal to 0.");
-    CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
-                 "DLTensor second dim exceeds column size limit",
+    CUDF_EXPECTS(tensor.shape[1] <= std::numeric_limits<size_type>::max(),
+                 "DLTensor second dim exceeds the column size limit",
                  std::overflow_error);
   }
   size_t const num_columns = (tensor.ndim == 2) ? static_cast<size_t>(tensor.shape[1]) : 1;

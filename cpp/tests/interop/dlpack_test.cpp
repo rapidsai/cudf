@@ -157,7 +157,7 @@ TEST_F(DLPackUntypedTests, TooManyRowsFromDlpack)
   // Spoof too many rows
   constexpr int64_t max_size_type{std::numeric_limits<int32_t>::max()};
   tensor->dl_tensor.shape[0] = max_size_type + 1;
-  EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
+  EXPECT_THROW(cudf::from_dlpack(tensor.get()), std::overflow_error);
 }
 
 TEST_F(DLPackUntypedTests, TooManyColsFromDlpack)
@@ -170,7 +170,7 @@ TEST_F(DLPackUntypedTests, TooManyColsFromDlpack)
   // Spoof too many cols
   constexpr int64_t max_size_type{std::numeric_limits<int32_t>::max()};
   tensor->dl_tensor.shape[1] = max_size_type + 1;
-  EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
+  EXPECT_THROW(cudf::from_dlpack(tensor.get()), std::overflow_error);
 }
 
 TEST_F(DLPackUntypedTests, InvalidTypeFromDlpack)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,9 +139,11 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
-  CUDF_EXPECTS(max_sequence_length * max_rows_tensor <
-                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-               "max_sequence_length x max_rows_tensor is too large for cudf output column size");
+  CUDF_EXPECTS(
+    max_sequence_length <=
+      (static_cast<uint64_t>(std::numeric_limits<cudf::size_type>::max()) / max_rows_tensor),
+    "max_sequence_length times max_rows_tensor exceeds column size limit",
+    std::overflow_error);
   auto const strings_count = strings.size();
   if (strings_count == 0 || strings.chars_size() == 0)
     return tokenizer_result{0,

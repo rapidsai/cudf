@@ -114,11 +114,10 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
   CUDF_EXPECTS(hash_function == cudf::hash_id::HASH_MURMUR3,
                "Only murmur3 hash algorithm supported",
                std::invalid_argument);
-  CUDF_EXPECTS(
-    (static_cast<std::size_t>(input.size()) * seeds.size()) <
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-    "The number of seeds times the number of input rows must not exceed maximum of size_type",
-    std::invalid_argument);
+  CUDF_EXPECTS((static_cast<std::size_t>(input.size()) * seeds.size()) <
+                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+               "The number of seeds times the number of input rows exceeds the column size limit",
+               std::overflow_error);
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }
