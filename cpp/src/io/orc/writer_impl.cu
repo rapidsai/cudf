@@ -376,7 +376,7 @@ __global__ void copy_string_data(char* string_pool,
 
 void persisted_statistics::persist(int num_table_rows,
                                    single_write_mode write_mode,
-                                   intermediate_statistics& intermediate_stats,
+                                   intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
   if (write_mode == single_write_mode::NO) {
@@ -2481,16 +2481,17 @@ void writer::impl::write(table_view const& input)
   add_table_to_footer_data(orc_table, stripes);
 
   // Update file-level and compression statistics
-  update_statistics(orc_table.num_rows(), intermediate_stats, compression_stats);
+  update_statistics(orc_table.num_rows(), std::move(intermediate_stats), compression_stats);
 }
 
 void writer::impl::update_statistics(
   size_type num_rows,
-  intermediate_statistics& intermediate_stats,  // why not const?
+  intermediate_statistics&& intermediate_stats,
   std::optional<writer_compression_statistics> const& compression_stats)
 {
   if (intermediate_stats.stripe_stat_chunks.size() > 0) {
-    _persisted_stripe_statistics.persist(num_rows, _single_write_mode, intermediate_stats, _stream);
+    _persisted_stripe_statistics.persist(
+      num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
   }
 
   if (compression_stats.has_value() and _compression_statistics != nullptr) {

@@ -210,7 +210,7 @@ struct persisted_statistics {
 
   void persist(int num_table_rows,
                single_write_mode write_mode,
-               intermediate_statistics& intermediate_stats,
+               intermediate_statistics&& intermediate_stats,
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
@@ -332,7 +332,7 @@ class writer::impl {
    * @param compression_stats Compression statistics from the current table
    */
   void update_statistics(size_type num_rows,
-                         intermediate_statistics& single_table_stats,
+                         intermediate_statistics&& single_table_stats,
                          std::optional<writer_compression_statistics> const& compression_stats);
 
  private:
