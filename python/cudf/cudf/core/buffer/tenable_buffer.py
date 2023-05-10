@@ -106,10 +106,10 @@ class TenableBuffer(Buffer):
     Attributes
     ----------
     _exposed
-        The current expose status of the buffer. Notice, once the expose status
-        becomes False, it should never change back.
+        The current exposure status of the buffer. Notice, once the exposure status
+        becomes True, it should never change back.
     _slices
-        The set of BufferSlice that points to this buffer.
+        The set of BufferSlice instances that point to this buffer.
     """
 
     _exposed: bool
@@ -233,7 +233,7 @@ class BufferSlice(TenableBuffer):
 
         What actually happens when `deep == False` depends on the
         "copy_on_write" option. When copy-on-write is enabled, a shallow copy
-        because a deep copy if the buffer has been exposed. This is because we
+        becomes a deep copy if the buffer has been exposed. This is because we
         have no control over knowing if the data is being modified when the
         buffer has been exposed to third-party.
 
