@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -41,7 +40,7 @@ static void bench_join(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
-  auto chars_size = input.chars_size();
+  auto const chars_size = input.chars_size();
   state.add_element_count(chars_size, "chars_size");            // number of bytes;
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
