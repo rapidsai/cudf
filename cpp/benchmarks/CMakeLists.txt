@@ -280,7 +280,6 @@ ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
   STRINGS_BENCH
-  string/case.cpp
   string/combine.cpp
   string/contains.cpp
   string/convert_datetime.cpp
@@ -301,7 +300,9 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
+ConfigureNVBench(
+  STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp string/case.cpp
+)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
