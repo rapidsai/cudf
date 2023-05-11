@@ -204,10 +204,6 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     return output
 
 
-def _jit_groupby_eligible(frame, func, args):
-    return (not frame._has_nulls) and _can_be_jitted(frame, func, args)
-
-
 def _can_be_jitted(frame, func, args):
     """
     Determine if this UDF is supported through the JIT engine

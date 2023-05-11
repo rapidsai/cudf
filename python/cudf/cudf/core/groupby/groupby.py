@@ -25,10 +25,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_utils import (
-    _jit_groupby_eligible,
-    jit_groupby_apply,
-)
+from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -1347,7 +1344,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "auto":
-            if _jit_groupby_eligible(grouped_values, function, args):
+            if (not grouped_values._has_nulls) and _can_be_jitted(
+                grouped_values, function, args
+            ):
                 engine = "jit"
             else:
                 engine = "cudf"
