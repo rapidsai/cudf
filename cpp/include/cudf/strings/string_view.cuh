@@ -64,6 +64,32 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
 }
 
 /**
+ * @brief Count the bytes to a specified character position
+ *
+ * Returns the number of bytes and any left over position value.
+ * The returned position is > 0 if the given position would read past
+ * the end of the input string.
+ *
+ * @param d_str Input string to count bytes within
+ * @param pos Character position to count to
+ * @return The number of bytes and the left over non-counted position value
+ */
+__device__ inline std::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
+                                                                              size_type pos)
+{
+  size_type bytes    = 0;
+  auto ptr           = d_str.data();
+  auto const end_ptr = ptr + d_str.size_bytes();
+  while ((pos > 0) && (ptr < end_ptr)) {
+    auto const width = strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(*ptr));
+    if (width) { --pos; }
+    bytes += width;
+    ++ptr;
+  }
+  return {bytes, pos};
+}
+
+/**
  * @brief string value for sentinel which is used in min, max reduction
  * operators
  *
@@ -266,16 +292,8 @@ __device__ inline char_utf8 string_view::operator[](size_type pos) const
 
 __device__ inline size_type string_view::byte_offset(size_type pos) const
 {
-  size_type offset = 0;
-  const char* sptr = _data;
-  const char* eptr = sptr + _bytes;
   if (length() == size_bytes()) return pos;
-  while ((pos > 0) && (sptr < eptr)) {
-    size_type charbytes = strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(*sptr++));
-    if (charbytes) --pos;
-    offset += charbytes;
-  }
-  return offset;
+  return std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
 }
 
 __device__ inline int string_view::compare(const string_view& in) const
