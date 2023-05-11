@@ -55,6 +55,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 #include <limits>
 
 namespace cudf::io::json {
@@ -274,9 +276,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   {
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
     auto const push_pop_it = thrust::make_transform_iterator(
-      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
-        return does_push(token) - does_pop(token);
-      });
+      tokens.begin(),
+      cuda::proclaim_return_type<size_type>(
+        [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+          return does_push(token) - does_pop(token);
+        }));
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
@@ -415,32 +419,38 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                         cuco::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
-  auto const d_hasher = [d_input          = d_input.data(),
-                         node_range_begin = d_tree.node_range_begin.data(),
-                         node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-    auto const field_name = cudf::string_view(d_input + node_range_begin[node_id],
-                                              node_range_end[node_id] - node_range_begin[node_id]);
-    return cudf::detail::default_hash<cudf::string_view>{}(field_name);
-  };
-  auto const d_equal = [d_input          = d_input.data(),
-                        node_range_begin = d_tree.node_range_begin.data(),
-                        node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
-                                                                                  auto node_id2) {
-    auto const field_name1 = cudf::string_view(
-      d_input + node_range_begin[node_id1], node_range_end[node_id1] - node_range_begin[node_id1]);
-    auto const field_name2 = cudf::string_view(
-      d_input + node_range_begin[node_id2], node_range_end[node_id2] - node_range_begin[node_id2]);
-    return field_name1 == field_name2;
-  };
+  auto const d_hasher =
+    cuda::proclaim_return_type<typename cudf::detail::default_hash<cudf::string_view>::result_type>(
+      [d_input          = d_input.data(),
+       node_range_begin = d_tree.node_range_begin.data(),
+       node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+        auto const field_name = cudf::string_view(
+          d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
+        return cudf::detail::default_hash<cudf::string_view>{}(field_name);
+      });
+  auto const d_equal = cuda::proclaim_return_type<bool>(
+    [d_input          = d_input.data(),
+     node_range_begin = d_tree.node_range_begin.data(),
+     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1, auto node_id2) {
+      auto const field_name1 =
+        cudf::string_view(d_input + node_range_begin[node_id1],
+                          node_range_end[node_id1] - node_range_begin[node_id1]);
+      auto const field_name2 =
+        cudf::string_view(d_input + node_range_begin[node_id2],
+                          node_range_end[node_id2] - node_range_begin[node_id2]);
+      return field_name1 == field_name2;
+    });
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
   auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+    0, cuda::proclaim_return_type<cuco::pair<size_type&, size_type&>>([] __device__(size_type i) {
+      return cuco::make_pair(i, i);
+    }));
 
-  auto const is_field_name_node = [node_categories =
-                                     d_tree.node_categories.data()] __device__(auto node_id) {
-    return node_categories[node_id] == node_t::NC_FN;
-  };
+  auto const is_field_name_node = cuda::proclaim_return_type<bool>(
+    [node_categories = d_tree.node_categories.data()] __device__(auto node_id) {
+      return node_categories[node_id] == node_t::NC_FN;
+    });
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil
