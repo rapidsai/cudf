@@ -816,10 +816,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
+   * The result will be sanitized to not contain any non-empty nulls in case of nested types
    *
    * @param mergeOp binary operator, currently only BITWISE_AND is supported.
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
+   * @throws IllegalStateException if existing nulls are set to valid data in the validity buffer
+   *
    */
   public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
@@ -832,7 +835,35 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       columnViews[i] = columns[i].getNativeView();
     }
 
-    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+    ColumnVector potentialRes = new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+
+    /**
+     * We need to sanitize the vector to make sure of two things
+     * 1. Nulls set in the new vector don't have non-empty nested types
+     * 2. Nulls in 'this' stay nulls otherwise bad things will happen
+     */
+    ColumnVector finalRes;
+    if (potentialRes.getType().isNestedType() || potentialRes.getType().hasOffsets() && potentialRes.hasNonEmptyNulls()) {
+      // purge non-empty nulls in the vector
+      finalRes = potentialRes.purgeNonEmptyNulls();
+      potentialRes.close();
+    } else {
+      finalRes = potentialRes;
+    }
+
+    // Verify the nulls in the original vector remain null
+    if (getNullCount() > 0) {
+      try (ColumnVector isNull = isNull();
+           ColumnVector resultNulls = finalRes.isNull();
+           ColumnVector resultAndOrigNulls = resultNulls.and(isNull);
+           ColumnVector equal = isNull.equalTo(resultAndOrigNulls);
+           Scalar allEqual = equal.all()) {
+        if (allEqual.isValid() && !allEqual.getBoolean()) {
+          throw new IllegalStateException("Setting nulls to valid can result in unintended behavior");
+        }
+      }
+    }
+    return finalRes;
   }
 
   /**

@@ -27,6 +27,7 @@ import java.util.Optional;
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,11 +42,10 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
          ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
          ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
          ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
-         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
-         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null)) {
       assertColumnsAreEqual(v0, intResult);
       assertColumnsAreEqual(stringExpected, stringResult);
-      assertColumnsAreEqual(v2, noMaskResult);
+      assertThrows(IllegalStateException.class, () -> v2.mergeAndSetValidity(BinaryOp.BITWISE_AND));
     }
   }
 
@@ -60,14 +60,13 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
          ColumnVector intResultv0v1v2 = v2.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1, v2);
          ColumnVector v3 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
          ColumnVector stringResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR, v0, v1);
-         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", null);
-         ColumnVector noMaskResult = v3.mergeAndSetValidity(BinaryOp.BITWISE_OR)) {
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", null)) {
       assertColumnsAreEqual(v0, intResultV0);
       assertColumnsAreEqual(v1, intResultV0V1);
       assertColumnsAreEqual(v1, intResultMulti);
       assertColumnsAreEqual(v2, intResultv0v1v2);
       assertColumnsAreEqual(stringExpected, stringResult);
-      assertColumnsAreEqual(v3, noMaskResult);
+      assertThrows(IllegalStateException.class, () ->  v3.mergeAndSetValidity(BinaryOp.BITWISE_OR));
     }
   }
 
