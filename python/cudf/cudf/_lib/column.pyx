@@ -156,7 +156,9 @@ cdef class Column:
 
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
-            required_size = bitmask_allocation_size_bytes(self._size + self._offset)
+            required_size = bitmask_allocation_size_bytes(
+                self._size + self._offset
+            )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
