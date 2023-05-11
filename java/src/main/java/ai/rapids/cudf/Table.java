@@ -87,6 +87,7 @@ public final class Table implements AutoCloseable {
     try {
       for (int i = 0; i < cudfColumns.length; i++) {
         this.columns[i] = new ColumnVector(cudfColumns[i]);
+        cudfColumns[i] = 0;
       }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
@@ -95,13 +96,7 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        if (this.columns[i] != null) {
-          this.columns[i].close();
-        } else {
-          ColumnVector.deleteCudfColumn(cudfColumns[i]);
-        }
-      }
+      ColumnView.cleanupColumnViews(cudfColumns, this.columns);
       throw t;
     }
   }
@@ -3396,8 +3391,14 @@ public final class Table implements AutoCloseable {
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
+    try {
+      for (int i = 0; i < ptrs.length; i++) {
+        ret[i] = new ColumnVector(ptrs[i]);
+        ptrs[i] = 0;
+      }
+    } catch (Throwable t) {
+      ColumnView.cleanupColumnViews(ptrs, ret);
+      throw t;
     }
     return ret;
   }
@@ -3479,8 +3480,14 @@ public final class Table implements AutoCloseable {
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
+    try {
+      for (int i = 0; i < ptrs.length; i++) {
+        ret[i] = new ColumnVector(ptrs[i]);
+        ptrs[i] = 0;
+      }
+    } catch (Throwable t) {
+      ColumnView.cleanupColumnViews(ptrs, ret);
+      throw t;
     }
     return ret;
   }
@@ -3552,14 +3559,7 @@ public final class Table implements AutoCloseable {
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      for (int i = 0; i < columns.length; i++) {
-        if (columns[i] != null) {
-          columns[i].close();
-        }
-        if (columnViewAddresses[i] != 0) {
-          ColumnView.deleteColumnView(columnViewAddresses[i]);
-        }
-      }
+      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
       throw t;
     }
 
