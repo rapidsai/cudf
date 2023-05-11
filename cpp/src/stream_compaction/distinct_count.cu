@@ -139,7 +139,6 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const hash_key   = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const iter              = thrust::counting_iterator<cudf::size_type>(0);
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
     auto key_set      = cuco::experimental::static_set{
@@ -150,6 +149,7 @@ cudf::size_type distinct_count(table_view const& keys,
       detail::hash_table_allocator_type{default_allocator<char>{}, stream},
       stream.value()};
 
+    auto const iter = thrust::counting_iterator<cudf::size_type>(0);
     // when nulls are equal, insert non-null rows only to improve efficiency
     if (nulls_equal == null_equality::EQUAL and has_nulls) {
       thrust::counting_iterator<size_type> stencil(0);
