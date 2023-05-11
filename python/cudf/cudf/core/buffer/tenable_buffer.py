@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import weakref
-from typing import Any, Container, Mapping, Optional, Type, TypeVar, cast
+from typing import (
+    Any,
+    Container,
+    Literal,
+    Mapping,
+    Optional,
+    Type,
+    TypeVar,
+    cast,
+)
 
 import cudf
 from cudf.core.buffer.buffer import Buffer, get_ptr_and_size
@@ -214,7 +223,7 @@ class BufferSlice(TenableBuffer):
             base=self._base, offset=offset + self._offset, size=size
         )
 
-    def get_ptr(self, *, mode: str) -> int:
+    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         if mode == "write" and cudf.get_option("copy_on_write"):
             self.make_single_owner_inplace()
         return self._base.get_ptr(mode=mode) + self._offset

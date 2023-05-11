@@ -5,7 +5,17 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Type, TypeVar
+from typing import (
+    Any,
+    Dict,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 import numpy
 
@@ -242,7 +252,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def get_ptr(self, *, mode: str) -> int:
+    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         """Device pointer to the start of the buffer.
 
         Parameters
