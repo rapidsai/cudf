@@ -92,11 +92,15 @@ def maybe_patch_numba_linker(
     # Numba thinks cubinlinker is only needed if the driver is older than
     # the ctk, but when PTX files are present, it might also need to patch
     # because those PTX files may newer than the driver as well
-    raise AssertionError(
-        f"driver_version={driver_version},"
-        f"runtime_version={runtime_version},"
-        f"ptx_toolkit_version={ptx_toolkit_version}"
-    )
+    if (driver_version < ptx_toolkit_version) or (
+        driver_version < runtime_version
+    ):
+        config.NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+        raise AssertionError(
+            f"driver_version={driver_version},"
+            f"runtime_version={runtime_version},"
+            f"ptx_toolkit_version={ptx_toolkit_version}"
+        )
 
 
 def _get_cuda_version_from_ptx_file(path):
