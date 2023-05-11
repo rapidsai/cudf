@@ -25,6 +25,16 @@ dlpack_version:
 librdkafka_version:
   - ">=1.9.0,<1.10.0a0"
 
+# The CTK libraries below are missing from the conda-forge::cudatoolkit
+# package. The "*_host_*" version specifiers correspond to `11.8` packages and the
+# "*_run_*" version specifiers correspond to `11.x` packages.
+
+libcufile_host_version:
+  - "1.4.0.31"
+
+libcufile_run_version:
+  - ">=1.0.0.82,<=1.4.0.31"
+
 libcurand_host_version:
   - "=10.3.0.86"
 
