@@ -53,6 +53,9 @@ struct contains_fn {
     size_type begin = 0;
     size_type end   = beginning_only ? 1    // match only the beginning of the string;
                                      : -1;  // match anywhere in the string
+
+    end = (!d_str.empty() && (d_str.size_bytes() < 128)) ? std::min(d_str.length(), end)
+                                                         : end;  // byte3
     return prog.find(thread_idx, d_str, begin, end);
   }
 };
