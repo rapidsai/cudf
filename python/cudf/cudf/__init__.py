@@ -5,7 +5,7 @@ from cudf.utils.gpu_utils import validate_setup
 validate_setup()
 
 import cupy
-from numba import config as numba_config, cuda
+from numba import config as numba_config
 
 import rmm
 from rmm.allocators.cupy import rmm_cupy_allocator
@@ -92,11 +92,12 @@ else:
     # cuDF requires a stronger set of conditions than what is
     # checked by patch_numba_linker_if_needed due to the PTX
     # files needed for JIT Groupby Apply and string UDFs
-    from cudf.core.udf.utils import _PTX_FILE, _setup_numba_linker
+    from cudf.utils._numba_setup import ANY_PTX_FILE, _setup_numba_linker
 
-    _setup_numba_linker(_PTX_FILE)
+    _setup_numba_linker(ANY_PTX_FILE)
 
     del patch_numba_linker_if_needed
+from numba import cuda
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
