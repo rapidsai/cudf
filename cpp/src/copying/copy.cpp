@@ -66,7 +66,7 @@ struct scalar_empty_like_functor_impl<cudf::list_view> {
     auto ls = static_cast<list_scalar const*>(&input);
 
     // TODO:  add a manual constructor for lists_column_view.
-    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr};
+    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0};
     std::vector<column_view> children;
     children.push_back(offsets);
     children.push_back(ls->view());
