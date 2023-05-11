@@ -565,8 +565,8 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def to_arrow(self):
-        return self._local_time.to_arrow().cast(
-            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+        return pa.compute.assume_timezone(
+            self._local_time.to_arrow(), str(self.dtype.tz)
         )
 
     @property
@@ -592,6 +592,18 @@ class DatetimeTZColumn(DatetimeColumn):
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         return self._local_time.as_string_column(dtype, format, **kwargs)
+
+    def __repr__(self):
+        # Arrow prints the UTC timestamps, but we want to print the
+        # local timestamps:
+        arr = self._local_time.to_arrow().cast(
+            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+        )
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{arr.to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
 
 
 def infer_format(element: str, **kwargs) -> str:
