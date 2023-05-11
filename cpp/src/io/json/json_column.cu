@@ -48,6 +48,8 @@
 #include <thrust/transform.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <cstdint>
 
@@ -645,11 +647,12 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
-    [col_ids         = col_ids.begin(),
-     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                : col_ids[parent_node_ids[node_id]];
-    });
+    cuda::proclaim_return_type<NodeIndexT>(
+      [col_ids         = col_ids.begin(),
+       parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+        return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                  : col_ids[parent_node_ids[node_id]];
+      }));
   auto const list_children_end = thrust::copy_if(
     rmm::exec_policy(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
@@ -763,18 +766,22 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto offset_length_it =
         thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
       // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      auto string_ranges_it =
-        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-          return thrust::pair<json_column::row_offset_t, std::size_t>{
-            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
+      auto string_ranges_it = thrust::make_transform_iterator(
+        offset_length_it,
+        cuda::proclaim_return_type<thrust::pair<json_column::row_offset_t, std::size_t>>(
+          [] __device__(auto ip) {
+            return thrust::pair<json_column::row_offset_t, std::size_t>{
+              thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+          }));
 
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
-        offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<const char*, std::size_t>{
-            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-        });
+        offset_length_it,
+        cuda::proclaim_return_type<thrust::pair<const char*, std::size_t>>(
+          [data = d_input.data()] __device__(auto ip) {
+            return thrust::pair<const char*, std::size_t>{
+              data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+          }));
 
       data_type target_type{};
 
