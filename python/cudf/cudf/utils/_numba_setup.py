@@ -8,6 +8,11 @@ from numba import config
 ANY_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
 
+def _setup_numba():
+    _setup_numba_linker(ANY_PTX_FILE)
+    config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
+
 def _get_best_ptx_file(archs, max_compute_capability):
     """
     Determine of the available PTX files which one is

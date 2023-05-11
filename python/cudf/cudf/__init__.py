@@ -80,35 +80,18 @@ from cudf.io import (
     read_text,
 )
 from cudf.options import describe_option, get_option, set_option
+from cudf.utils._numba_setup import _setup_numba
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
 
-try:
-    from cubinlinker.patch import patch_numba_linker_if_needed
-except ImportError:
-    pass
-else:
-    # Patch Numba to support CUDA enhanced compatibility.
-    # cuDF requires a stronger set of conditions than what is
-    # checked by patch_numba_linker_if_needed due to the PTX
-    # files needed for JIT Groupby Apply and string UDFs
-    from cudf.utils._numba_setup import ANY_PTX_FILE, _setup_numba_linker
+_setup_numba()
 
-    _setup_numba_linker(ANY_PTX_FILE)
-
-    del patch_numba_linker_if_needed
+# This must be imported after _setup_numba_linker is called and the numba
+# config is modified otherwise the config option will have no effect
 from numba import cuda
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
-
-try:
-    # Numba 0.54: Disable low occupancy warnings
-    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
-except AttributeError:
-    # Numba < 0.54: No occupancy warnings
-    pass
-del numba_config
 
 
 rmm.register_reinitialize_hook(clear_cache)
