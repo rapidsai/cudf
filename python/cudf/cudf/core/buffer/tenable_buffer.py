@@ -250,10 +250,10 @@ class BufferSlice(TenableBuffer):
             depending on the expose status of the base buffer and the
             copy-on-write option (see above).
         """
-        if deep or not cudf.get_option("copy_on_write"):
-            base_copy = self._base.copy(deep=deep)
+        if cudf.get_option("copy_on_write"):
+            base_copy = self._base.copy(deep=deep or self.exposed)
         else:
-            base_copy = self._base.copy(deep=self.exposed)
+            base_copy = self._base.copy(deep=deep)
         return cast(
             BufferSlice, base_copy[self._offset : self._offset + self._size]
         )
