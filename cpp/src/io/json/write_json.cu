@@ -55,6 +55,8 @@
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -253,7 +255,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto old_offsets = strings_column_view(joined_col->view()).offsets();
   rmm::device_uvector<size_type> row_string_offsets(strings_columns.num_rows() + 1, stream, mr);
   auto const d_strview_offsets = cudf::detail::make_counting_transform_iterator(
-    0, [num_strviews_per_row] __device__(size_type const i) { return i * num_strviews_per_row; });
+    0, cuda::proclaim_return_type<size_type>([num_strviews_per_row] __device__(size_type const i) {
+      return i * num_strviews_per_row;
+    }));
   thrust::gather(rmm::exec_policy(stream),
                  d_strview_offsets,
                  d_strview_offsets + row_string_offsets.size(),
@@ -311,11 +315,13 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
 
   rmm::device_uvector<size_type> d_strview_offsets(num_offsets, stream);
   auto num_strings_per_list = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
-      if (idx + 1 >= num_offsets) return 0;
-      auto const length = offsets[idx + 1] - offsets[idx];
-      return length == 0 ? 2 : (2 + length + length - 1);
-    });
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
+        if (idx + 1 >= num_offsets) return 0;
+        auto const length = offsets[idx + 1] - offsets[idx];
+        return length == 0 ? 2 : (2 + length + length - 1);
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          num_strings_per_list,
                          num_strings_per_list + num_offsets,
