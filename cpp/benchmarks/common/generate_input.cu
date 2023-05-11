@@ -441,7 +441,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype,
     num_rows,
     data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    null_count);
 }
 
 struct valid_or_zero {
