@@ -327,7 +327,7 @@ below.
 
 The core copy-on-write implementation relies on the factory function `as_tenable_buffer` and the two classes `TenableBuffer` and `BufferSlice`.
 
-`TenableBuffer` is a subclass of the regular `Buffer` that tracks its "expose" status of its underlying memory. We say that the buffer has been exposed if the device pointer (integer or void*) has been accessed outside of cudf, in which case we have no control over knowing if the data is being modified by a third-party. Additionally, `TenableBuffer` also maintains [weak references](https://docs.python.org/3/library/weakref.html) to every existing `BufferSlice` that points to its underlying memory.
+A `TenableBuffer` is a subclass of the regular `Buffer` that tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `BufferSlice` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
 
 `BufferSlice` is a subclass of `TenableBuffer` that represents a _slice_ of the memory underlying a tenable buffer.
 
