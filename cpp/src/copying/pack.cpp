@@ -167,7 +167,7 @@ std::vector<uint8_t> pack_metadata(ColumnIter begin,
 
 class metadata_builder_impl {
  public:
-  metadata_builder_impl() = default;
+  metadata_builder_impl(size_type const num_root_columns) { metadata.reserve(num_root_columns); }
 
   void add_column_info_to_meta(data_type const col_type,
                                size_type const col_size,
@@ -182,14 +182,11 @@ class metadata_builder_impl {
 
   std::vector<uint8_t> build() const
   {
-    // convert to anonymous bytes
-    std::vector<uint8_t> metadata_bytes;
-    auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
-    std::copy(metadata_begin,
-              metadata_begin + (metadata.size() * sizeof(detail::serialized_column)),
-              std::back_inserter(metadata_bytes));
-
-    return metadata_bytes;
+    auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
+    std::memcpy(reinterpret_cast<void*>(output.data()),
+                reinterpret_cast<void const*>(metadata.data()),
+                output.size());
+    return output;
   }
 
  private:
@@ -228,7 +225,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 }
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
-  : impl(std::make_unique<metadata_builder_impl>())
+  : impl(std::make_unique<metadata_builder_impl>(num_root_columns))
 {
   // first metadata entry is a stub indicating how many total (top level) columns
   // there are
