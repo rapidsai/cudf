@@ -43,8 +43,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final ColumnVector.OffHeapState offHeap;
 
   /**
-   * Constructs a Column View given a native view address
+   * Constructs a Column View given a native view address. This asserts that if the ColumnView is
+   * of nested-type it doesn't contain non-empty nulls
    * @param address the view handle
+   * @throws AssertionError if the address points to a nested-type view with non-empty nulls
    */
   ColumnView(long address) {
     this.viewHandle = address;
@@ -52,15 +54,24 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
     this.offHeap = null;
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (AssertionError ae) {
+      // offHeap state is null, so there is nothing to clean in offHeap
+      // delete ColumnView to avoid memory leak
+      deleteColumnView(viewHandle);
+      viewHandle = 0;
+      throw ae;
+    }
   }
 
 
   /**
    * Intended to be called from ColumnVector when it is being constructed. Because state creates a
    * cudf::column_view instance and will close it in all cases, we don't want to have to double
-   * close it.
+   * close it. This asserts that if the offHeapState is of nested-type it doesn't contain non-empty nulls
    * @param state the state this view is based off of.
+   * @throws AssertionError if offHeapState points to a nested-type view with non-empty nulls
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
@@ -68,7 +79,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     rows = ColumnView.getNativeRowCount(viewHandle);
     nullCount = ColumnView.getNativeNullCount(viewHandle);
-    AssertEmptyNulls.assertNullsAreEmpty(this);
+    try {
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (AssertionError ae) {
+      // cleanup offHeap
+      offHeap.clean(false);
+      viewHandle = 0;
+      throw ae;
+    }
   }
 
   /**
@@ -649,8 +667,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] slice(int... indices) {
     long[] nativeHandles = slice(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        columnVectors[i] = new ColumnVector(nativeHandles[i]);
+        nativeHandles[i] = 0;
+      }
+    } catch (Throwable t) {
+      cleanupColumnViews(nativeHandles, columnVectors);
+      throw t;
     }
     return columnVectors;
   }
@@ -788,10 +812,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public ColumnView[] splitAsViews(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnViews[i] = new ColumnView(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        columnViews[i] = new ColumnView(nativeHandles[i]);
+        nativeHandles[i] = 0;
+      }
+    } catch (Throwable t) {
+      cleanupColumnViews(nativeHandles, columnViews);
+      throw t;
     }
     return columnViews;
+  }
+
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) {
+    for (ColumnView columnView: columnViews) {
+      if (columnView != null) {
+        columnView.close();
+      }
+    }
+    for (long nativeHandle: nativeHandles) {
+      if (nativeHandle != 0) {
+        deleteColumnView(nativeHandle);
+      }
+    }
   }
 
   /**
