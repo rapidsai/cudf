@@ -86,8 +86,8 @@ from cudf.utils.utils import clear_cache, set_allocator
 
 _setup_numba()
 
-# This must be imported after _setup_numba_linker is called and the numba
-# config is modified otherwise the config option will have no effect
+# This must be imported after _setup_numba is called and the numba
+# config is modified otherwise the config options will have no effect
 from numba import cuda
 
 cuda.set_memory_manager(RMMNumbaManager)
