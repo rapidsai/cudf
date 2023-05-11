@@ -139,17 +139,14 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const hash_key   = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  using extent_type = cuco::experimental::extent<cudf::size_type>;
-  using probing_type =
-    cuco::experimental::double_hashing<4, decltype(hash_key), decltype(hash_key)>;
-
   auto const iter              = thrust::counting_iterator<cudf::size_type>(0);
   auto const comparator_helper = [&](auto const row_equal) {
-    auto key_set = cuco::experimental::static_set{
+    using hasher_type = decltype(hash_key);
+    auto key_set      = cuco::experimental::static_set{
       cuco::experimental::extent{static_cast<cudf::size_type>(compute_hash_table_size(num_rows))},
       cuco::empty_key<cudf::size_type>{COMPACTION_EMPTY_KEY_SENTINEL},
       row_equal,
-      probing_type{hash_key, hash_key},
+      cuco::experimental::double_hashing<4, hasher_type, hasher_type>{hash_key, hash_key},
       detail::hash_table_allocator_type{default_allocator<char>{}, stream},
       stream.value()};
 
