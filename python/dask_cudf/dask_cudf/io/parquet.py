@@ -33,7 +33,7 @@ class CudfEngine(ArrowDatasetEngine):
     @classmethod
     def _create_dd_meta(cls, dataset_info, **kwargs):
         # Start with pandas-version of meta
-        meta_pd = ArrowDatasetEngine._create_dd_meta(dataset_info, **kwargs)
+        meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
         # Convert to cudf
         meta_cudf = cudf.from_pandas(meta_pd)
