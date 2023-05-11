@@ -183,9 +183,7 @@ class metadata_builder_impl {
   std::vector<uint8_t> build() const
   {
     auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
-    std::memcpy(reinterpret_cast<void*>(output.data()),
-                reinterpret_cast<void const*>(metadata.data()),
-                output.size());
+    std::memcpy(output.data(), metadata.data(), output.size());
     return output;
   }
 
