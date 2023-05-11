@@ -744,7 +744,7 @@ class StringMethods(ColumnMethods):
         4    False
         dtype: bool
 
-        The ``pat`` may also be a list of strings in which case
+        The ``pat`` may also be a sequence of strings in which case
         the individual strings are searched in corresponding rows.
 
         >>> s2 = cudf.Series(['house', 'dog', 'and', '', ''])
@@ -756,8 +756,6 @@ class StringMethods(ColumnMethods):
         4     <NA>
         dtype: bool
         """  # noqa W605
-        if case is not True:
-            raise NotImplementedError("`case` parameter is not yet supported")
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
@@ -767,22 +765,31 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
-
-        if pat is None:
-            result_col = column.column_empty(
-                len(self._column), dtype="bool", masked=True
+        if regex and not case:
+            raise NotImplementedError(
+                "`case=False` only supported when `regex=False`"
             )
-        elif is_scalar(pat):
+
+        if is_scalar(pat):
             if regex:
                 result_col = libstrings.contains_re(self._column, pat, flags)
             else:
-                result_col = libstrings.contains(
-                    self._column, cudf.Scalar(pat, "str")
-                )
+                if case is False:
+                    input_column = libstrings.to_lower(self._column)
+                    pat = cudf.Scalar(pat.lower(), dtype="str")  # type: ignore
+                else:
+                    input_column = self._column
+                    pat = cudf.Scalar(pat, dtype="str")  # type: ignore
+                result_col = libstrings.contains(input_column, pat)
         else:
-            result_col = libstrings.contains_multiple(
-                self._column, column.as_column(pat, dtype="str")
-            )
+            # TODO: we silently ignore the `regex=` flag here
+            if case is False:
+                input_column = libstrings.to_lower(self._column)
+                pat = libstrings.to_lower(column.as_column(pat, dtype="str"))
+            else:
+                input_column = self._column
+                pat = column.as_column(pat, dtype="str")
+            result_col = libstrings.contains_multiple(input_column, pat)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
