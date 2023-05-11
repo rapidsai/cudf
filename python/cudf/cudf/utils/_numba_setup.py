@@ -9,6 +9,14 @@ ANY_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
 
 def _setup_numba():
+    """
+    Configure numba for use with cuDF. This consists of potentially
+    putting numba into enhanced compatibility mode based on the user
+    driver and runtime versions as well as the version of the cuda
+    toolkit used to build the PTX files shipped with the user cuDF
+    package. It also sets any other config options within numba that
+    are desired for cuDF's operation.
+    """
     _setup_numba_linker(ANY_PTX_FILE)
     config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
