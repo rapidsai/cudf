@@ -96,11 +96,6 @@ def maybe_patch_numba_linker(
         driver_version < runtime_version
     ):
         config.NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
-        raise AssertionError(
-            f"driver_version={driver_version},"
-            f"runtime_version={runtime_version},"
-            f"ptx_toolkit_version={ptx_toolkit_version}"
-        )
 
 
 def _get_cuda_version_from_ptx_file(path):
