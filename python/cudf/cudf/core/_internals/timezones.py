@@ -209,6 +209,8 @@ def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
             "timezone-aware timestamps. For that, "
             "use `tz_localize instead."
         )
+    if zone_name == str(data.dtype.tz):
+        return data.copy()
     utc_time = data._utc_time
     out = cast(
         DatetimeTZColumn,
