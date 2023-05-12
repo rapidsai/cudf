@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Sequence, cast
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -80,10 +80,10 @@ class TimeDeltaColumn(ColumnBase):
         self,
         data: Buffer,
         dtype: Dtype,
-        size: int = None,  # TODO: make non-optional
-        mask: Buffer = None,
+        size: Optional[int] = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -251,7 +251,10 @@ class TimeDeltaColumn(ColumnBase):
         return self._time_unit
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> TimeDeltaColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -313,7 +316,7 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         )
 
-    def median(self, skipna: bool = None) -> pd.Timedelta:
+    def median(self, skipna: Optional[bool] = None) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -340,9 +343,9 @@ class TimeDeltaColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
-        dtype: Dtype = None,
+        dtype: Optional[Dtype] = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
@@ -356,7 +359,7 @@ class TimeDeltaColumn(ColumnBase):
 
     def std(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
