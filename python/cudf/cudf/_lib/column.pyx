@@ -383,7 +383,7 @@ cdef class Column:
         null_count = self._null_count
 
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
 
         self._mask = None
@@ -403,7 +403,7 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
