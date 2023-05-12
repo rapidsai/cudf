@@ -1907,24 +1907,25 @@ struct contiguous_split_state {
     auto& h_dst_bufs     = src_and_dst_pointers->h_dst_bufs;
 
     auto cur_dst_buf_info = h_dst_buf_info;
+    metadata_builder mb(input.num_columns());
+
     for (std::size_t idx = 0; idx < num_partitions; idx++) {
       // traverse the buffers and build the columns.
-      metadata_builder mb(input.num_columns());
-      cur_dst_buf_info = cudf::build_output_columns(input.begin(),
-                                                    input.end(),
-                                                    cur_dst_buf_info,
-                                                    std::back_inserter(cols),
-                                                    h_dst_bufs[idx],
-                                                    mb);
+      cur_dst_buf_info = build_output_columns(input.begin(),
+                                              input.end(),
+                                              cur_dst_buf_info,
+                                              std::back_inserter(cols),
+                                              h_dst_bufs[idx],
+                                              mb);
 
       // pack the columns
-      cudf::table_view t{cols};
-      result.push_back(packed_table{
-        t,
+      result.emplace_back(packed_table{
+        cudf::table_view{cols},
         packed_columns{std::make_unique<std::vector<uint8_t>>(mb.build()),
                        std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
 
       cols.clear();
+      mb.clear();
     }
 
     return result;
