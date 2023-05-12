@@ -1568,7 +1568,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
 
   auto make_validity = [](std::vector<int> const& validity) {
     return cudf::detail::make_counting_transform_iterator(
-      0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
+      0, [&](auto i) -> bool { return static_cast<bool>(validity[i]); });
   };
 
   constexpr int int_ignore{};
