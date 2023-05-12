@@ -187,7 +187,12 @@ class metadata_builder_impl {
     return output;
   }
 
-  void clear() { metadata.resize(0); }
+  void clear()
+  {
+    // Clear all, except the first metadata entry storing the number of top level columns that
+    // was added upon object construction.
+    metadata.resize(1);
+  }
 
  private:
   std::vector<detail::serialized_column> metadata;
@@ -225,7 +230,8 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 }
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
-  : impl(std::make_unique<metadata_builder_impl>(num_root_columns))
+  : impl(std::make_unique<metadata_builder_impl>(num_root_columns +
+                                                 1 /*one more extra metadata entry as below*/))
 {
   // first metadata entry is a stub indicating how many total (top level) columns
   // there are
