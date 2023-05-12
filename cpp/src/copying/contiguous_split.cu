@@ -957,10 +957,9 @@ struct packed_split_indices_and_src_buf_info {
                                                  cudf::size_type num_src_bufs,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
+    : indices_size(cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align)),
+      src_buf_info_size(cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align))
   {
-    indices_size = cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align);
-    src_buf_info_size = cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align);
-
     // host-side
     h_indices_and_source_info = std::vector<uint8_t>(indices_size + src_buf_info_size);
     h_indices                 = reinterpret_cast<size_type*>(h_indices_and_source_info.data());
@@ -993,8 +992,8 @@ struct packed_split_indices_and_src_buf_info {
       d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyDefault, stream.value()));
   }
 
-  size_type indices_size;
-  std::size_t src_buf_info_size;
+  size_type const indices_size;
+  std::size_t const src_buf_info_size;
   std::size_t offset_stack_size;
 
   std::vector<uint8_t> h_indices_and_source_info;
@@ -1105,8 +1104,8 @@ struct packed_src_and_dst_pointers {
 
   std::vector<uint8_t> h_src_and_dst_buffers;
   rmm::device_buffer d_src_and_dst_buffers;
-  const uint8_t** h_src_bufs;
-  const uint8_t** d_src_bufs;
+  uint8_t const** h_src_bufs;
+  uint8_t const** d_src_bufs;
   uint8_t** h_dst_bufs;
   uint8_t** d_dst_bufs;
 };
