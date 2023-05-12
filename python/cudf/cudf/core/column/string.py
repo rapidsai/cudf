@@ -259,12 +259,14 @@ class StringMethods(ColumnMethods):
         )
 
     @overload
-    def cat(self, sep: str = None, na_rep: str = None) -> str:
+    def cat(
+        self, sep: Optional[str] = None, na_rep: Optional[str] = None
+    ) -> str:
         ...
 
     @overload
     def cat(
-        self, others, sep: str = None, na_rep: str = None
+        self, others, sep: Optional[str] = None, na_rep: Optional[str] = None
     ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]:
         ...
 
@@ -792,7 +794,7 @@ class StringMethods(ColumnMethods):
             result_col = libstrings.contains_multiple(input_column, pat)
         return self._return_or_inplace(result_col)
 
-    def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
+    def like(self, pat: str, esc: Optional[str] = None) -> SeriesOrIndex:
         """
         Test if a like pattern matches a string of a Series or Index.
 
@@ -1072,7 +1074,10 @@ class StringMethods(ColumnMethods):
         )
 
     def slice(
-        self, start: int = None, stop: int = None, step: int = None
+        self,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+        step: Optional[int] = None,
     ) -> SeriesOrIndex:
         """
         Slice substrings from each element in the Series or Index.
@@ -2047,7 +2052,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.is_title(self._column))
 
     def filter_alphanum(
-        self, repl: str = None, keep: bool = True
+        self, repl: Optional[str] = None, keep: bool = True
     ) -> SeriesOrIndex:
         """
         Remove non-alphanumeric characters from strings in this column.
@@ -2133,7 +2138,10 @@ class StringMethods(ColumnMethods):
         )
 
     def slice_replace(
-        self, start: int = None, stop: int = None, repl: str = None
+        self,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+        repl: Optional[str] = None,
     ) -> SeriesOrIndex:
         """
         Replace the specified section of each string with a new string.
@@ -2221,7 +2229,9 @@ class StringMethods(ColumnMethods):
             ),
         )
 
-    def insert(self, start: int = 0, repl: str = None) -> SeriesOrIndex:
+    def insert(
+        self, start: int = 0, repl: Optional[str] = None
+    ) -> SeriesOrIndex:
         """
         Insert the specified string into each string in the specified
         position.
@@ -2401,10 +2411,10 @@ class StringMethods(ColumnMethods):
 
     def split(
         self,
-        pat: str = None,
+        pat: Optional[str] = None,
         n: int = -1,
         expand: bool = False,
-        regex: bool = None,
+        regex: Optional[bool] = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
@@ -2569,10 +2579,10 @@ class StringMethods(ColumnMethods):
 
     def rsplit(
         self,
-        pat: str = None,
+        pat: Optional[str] = None,
         n: int = -1,
         expand: bool = False,
-        regex: bool = None,
+        regex: Optional[bool] = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
@@ -3221,7 +3231,7 @@ class StringMethods(ColumnMethods):
             libstrings.rjust(self._column, width, fillchar)
         )
 
-    def strip(self, to_strip: str = None) -> SeriesOrIndex:
+    def strip(self, to_strip: Optional[str] = None) -> SeriesOrIndex:
         r"""
         Remove leading and trailing characters.
 
@@ -3280,7 +3290,7 @@ class StringMethods(ColumnMethods):
             libstrings.strip(self._column, cudf.Scalar(to_strip, "str"))
         )
 
-    def lstrip(self, to_strip: str = None) -> SeriesOrIndex:
+    def lstrip(self, to_strip: Optional[str] = None) -> SeriesOrIndex:
         r"""
         Remove leading and trailing characters.
 
@@ -3327,7 +3337,7 @@ class StringMethods(ColumnMethods):
             libstrings.lstrip(self._column, cudf.Scalar(to_strip, "str"))
         )
 
-    def rstrip(self, to_strip: str = None) -> SeriesOrIndex:
+    def rstrip(self, to_strip: Optional[str] = None) -> SeriesOrIndex:
         r"""
         Remove leading and trailing characters.
 
@@ -3980,7 +3990,9 @@ class StringMethods(ColumnMethods):
         )
         return self._return_or_inplace(result)
 
-    def find(self, sub: str, start: int = 0, end: int = None) -> SeriesOrIndex:
+    def find(
+        self, sub: str, start: int = 0, end: Optional[int] = None
+    ) -> SeriesOrIndex:
         """
         Return lowest indexes in each strings in the Series/Index
         where the substring is fully contained between ``[start:end]``.
@@ -4036,7 +4048,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(result_col)
 
     def rfind(
-        self, sub: str, start: int = 0, end: int = None
+        self, sub: str, start: int = 0, end: Optional[int] = None
     ) -> SeriesOrIndex:
         """
         Return highest indexes in each strings in the Series/Index
@@ -4097,7 +4109,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(result_col)
 
     def index(
-        self, sub: str, start: int = 0, end: int = None
+        self, sub: str, start: int = 0, end: Optional[int] = None
     ) -> SeriesOrIndex:
         """
         Return lowest indexes in each strings where the substring
@@ -4159,7 +4171,7 @@ class StringMethods(ColumnMethods):
             return result
 
     def rindex(
-        self, sub: str, start: int = 0, end: int = None
+        self, sub: str, start: int = 0, end: Optional[int] = None
     ) -> SeriesOrIndex:
         """
         Return highest indexes in each strings where the substring
@@ -4426,7 +4438,7 @@ class StringMethods(ColumnMethods):
         )
 
     def filter_characters(
-        self, table: dict, keep: bool = True, repl: str = None
+        self, table: dict, keep: bool = True, repl: Optional[str] = None
     ) -> SeriesOrIndex:
         """
         Remove characters from each string using the character ranges
@@ -4877,7 +4889,7 @@ class StringMethods(ColumnMethods):
         )
 
     def replace_tokens(
-        self, targets, replacements, delimiter: str = None
+        self, targets, replacements, delimiter: Optional[str] = None
     ) -> SeriesOrIndex:
         """
         The targets tokens are searched for within each string in the series
@@ -4962,8 +4974,8 @@ class StringMethods(ColumnMethods):
     def filter_tokens(
         self,
         min_token_length: int,
-        replacement: str = None,
-        delimiter: str = None,
+        replacement: Optional[str] = None,
+        delimiter: Optional[str] = None,
     ) -> SeriesOrIndex:
         """
         Remove tokens from within each string in the series that are
@@ -5351,10 +5363,10 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: Buffer = None,
-        size: int = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,  # TODO: make non-optional
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
         dtype = cudf.api.types.dtype("object")
@@ -5484,8 +5496,8 @@ class StringColumn(column.ColumnBase):
 
     def sum(
         self,
-        skipna: bool = None,
-        dtype: Dtype = None,
+        skipna: Optional[bool] = None,
+        dtype: Optional[Dtype] = None,
         min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
@@ -5616,7 +5628,10 @@ class StringColumn(column.ColumnBase):
         raise TypeError("String Arrays is not yet implemented in cudf")
 
     def to_pandas(
-        self, index: pd.Index = None, nullable: bool = False, **kwargs
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
     ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
@@ -5686,8 +5701,8 @@ class StringColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: str = None,
-        dtype: Dtype = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
@@ -5835,7 +5850,6 @@ class StringColumn(column.ColumnBase):
 
 
 def _get_cols_list(parent_obj, others):
-
     parent_index = (
         parent_obj.index if isinstance(parent_obj, cudf.Series) else parent_obj
     )
