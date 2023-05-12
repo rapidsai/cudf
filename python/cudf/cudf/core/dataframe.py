@@ -1988,8 +1988,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cls,
         data: dict,
         orient: str = "columns",
-        dtype: Dtype = None,
-        columns: list = None,
+        dtype: Optional[Dtype] = None,
+        columns: Optional[list] = None,
     ) -> DataFrame:
         """
         Construct DataFrame from dict of array-like or dicts.
