@@ -42,7 +42,6 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/transform_scan.h>
 #include <thrust/tuple.h>
 
 #include <cstddef>
@@ -723,7 +722,7 @@ std::tuple<size_type, int64_t, int64_t, size_type> build_output_column_metadata(
     src.type(), col_size, null_count, data_offset, bitmask_offset, src.num_children());
 
   ++current_info;
-  return std::make_tuple(col_size, data_offset, bitmask_offset, null_count);
+  return {col_size, data_offset, bitmask_offset, null_count};
 }
 
 /**
