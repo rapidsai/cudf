@@ -3480,8 +3480,8 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
       auto const vec = thrust::host_vector<cudf::size_type>(begin, end);
       auto buf = rmm::device_buffer{vec.data(), size * sizeof(cudf::size_type),
                                     cudf::get_default_stream()};
-      auto gather_map_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                           size, std::move(buf));
+      auto gather_map_col = std::make_unique<cudf::column>(
+          cudf::data_type{cudf::type_id::INT32}, size, std::move(buf), rmm::device_buffer{}, 0);
 
       // gather the first key in each group to remove duplicated ones.
       group_by_result_table = cudf::gather(groups.keys->view(), gather_map_col->view());
