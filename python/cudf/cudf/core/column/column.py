@@ -202,7 +202,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def to_pandas(
         self, index: Optional[pd.Index] = None, **kwargs
-    ) -> "pd.Series":
+    ) -> pd.Series:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
