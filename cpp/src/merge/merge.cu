@@ -43,6 +43,8 @@
 #include <queue>
 #include <vector>
 
+#include <cudf_test/column_utilities.hpp>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -160,8 +162,6 @@ struct side_index_generator {
  * @param[in] column_order Sort order types of index columns
  * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the
  * index columns
- * @param[in] nullable Flag indicating if at least one of the table_view arguments has nulls
- * (defaults to true)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return A device_uvector of merged indices
@@ -170,11 +170,11 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     bool nullable,
                                      rmm::cuda_stream_view stream)
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
+
   const size_type total_size = left_size + right_size;
 
   auto left_gen    = side_index_generator{side::LEFT};
@@ -184,18 +184,32 @@ index_vector generate_merged_indices(table_view const& left_table,
 
   index_vector merged_indices(total_size, stream);
 
-  auto lhs_device_view = table_device_view::create(left_table, stream);
-  auto rhs_device_view = table_device_view::create(right_table, stream);
+  // auto lhs_device_view = table_device_view::create(left_table, stream);
+  // auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto d_column_order = cudf::detail::make_device_uvector_async(
-    column_order, stream, rmm::mr::get_current_device_resource());
+  // auto d_column_order = cudf::detail::make_device_uvector_async(
+  //   column_order, stream, rmm::mr::get_current_device_resource());
+  auto left_comp = cudf::experimental::row::lexicographic::self_comparator{
+    left_table, column_order, null_precedence, stream};
+  auto left_right_comp = cudf::experimental::row::lexicographic::two_table_comparator{
+    left_table, right_table, column_order, null_precedence, stream};
+  auto right_comp = cudf::experimental::row::lexicographic::self_comparator{
+    right_table, column_order, null_precedence, stream};
 
-  if (nullable) {
-    auto d_null_precedence = cudf::detail::make_device_uvector_async(
-      null_precedence, stream, rmm::mr::get_current_device_resource());
+  auto const left_has_nulls       = nullate::DYNAMIC{cudf::has_nested_nulls(left_table)};
+  auto const right_has_nulls      = nullate::DYNAMIC{cudf::has_nested_nulls(right_table)};
+  auto const left_right_has_nulls = nullate::DYNAMIC{left_has_nulls or right_has_nulls};
 
-    auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
-      *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
+  if (cudf::detail::has_nested_columns(left_table) or
+      cudf::detail::has_nested_columns(right_table)) {
+    auto d_left_comp       = left_comp.less<true>(left_has_nulls);
+    auto d_left_right_comp = left_right_comp.less<true>(left_right_has_nulls);
+    auto d_right_comp      = right_comp.less<true>(right_has_nulls);
+    // auto d_null_precedence = cudf::detail::make_device_uvector_async(
+    //   null_precedence, stream, rmm::mr::get_current_device_resource());
+
+    auto ineq_op =
+      detail::row_lexicographic_tagged_comparator(d_left_comp, d_left_right_comp, d_right_comp);
     thrust::merge(rmm::exec_policy(stream),
                   left_begin,
                   left_begin + left_size,
@@ -204,8 +218,12 @@ index_vector generate_merged_indices(table_view const& left_table,
                   merged_indices.begin(),
                   ineq_op);
   } else {
-    auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
-      *lhs_device_view, *rhs_device_view, d_column_order.data());
+    auto d_left_comp       = left_comp.less<false>(left_has_nulls);
+    auto d_left_right_comp = left_right_comp.less<false>(left_right_has_nulls);
+    auto d_right_comp      = right_comp.less<false>(right_has_nulls);
+
+    auto ineq_op =
+      detail::row_lexicographic_tagged_comparator(d_left_comp, d_left_right_comp, d_right_comp);
     thrust::merge(rmm::exec_policy(stream),
                   left_begin,
                   left_begin + left_size,
@@ -411,12 +429,11 @@ table_ptr_type merge(cudf::table_view const& left_table,
   //
   cudf::table_view index_left_view{left_table.select(key_cols)};
   cudf::table_view index_right_view{right_table.select(key_cols)};
-  bool const nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
   // extract merged row order according to indices:
   //
   auto const merged_indices = generate_merged_indices(
-    index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
+    index_left_view, index_right_view, column_order, null_precedence, stream);
 
   // create merged table:
   //
