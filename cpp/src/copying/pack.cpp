@@ -35,6 +35,8 @@ namespace {
  * and unpack.
  */
 struct serialized_column {
+  serialized_column() = default;
+
   serialized_column(data_type _type,
                     size_type _size,
                     size_type _null_count,
@@ -150,19 +152,17 @@ packed_columns pack(cudf::table_view const& input,
   return contig_split_result.empty() ? packed_columns{} : std::move(contig_split_result[0].data);
 }
 
-template <typename ColumnIter>
-std::vector<uint8_t> pack_metadata(ColumnIter begin,
-                                   ColumnIter end,
+std::vector<uint8_t> pack_metadata(table_view const& table,
                                    uint8_t const* contiguous_buffer,
-                                   size_t buffer_size)
+                                   size_t buffer_size,
+                                   metadata_builder& builder)
 {
-  auto mb = metadata_builder(std::distance(begin, end));
+  std::for_each(
+    table.begin(), table.end(), [&builder, contiguous_buffer, buffer_size](column_view const& col) {
+      build_column_metadata(builder, col, contiguous_buffer, buffer_size);
+    });
 
-  std::for_each(begin, end, [&mb, &contiguous_buffer, &buffer_size](column_view const& col) {
-    build_column_metadata(mb, col, contiguous_buffer, buffer_size);
-  });
-
-  return mb.build();
+  return builder.build();
 }
 
 class metadata_builder_impl {
@@ -186,6 +186,8 @@ class metadata_builder_impl {
     std::memcpy(output.data(), metadata.data(), output.size());
     return output;
   }
+
+  void clear() { metadata.resize(0); }
 
  private:
   std::vector<detail::serialized_column> metadata;
@@ -230,6 +232,8 @@ metadata_builder::metadata_builder(size_type const num_root_columns)
   impl->add_column_info_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
 
+metadata_builder::~metadata_builder() = default;
+
 void metadata_builder::add_column_info_to_meta(data_type const col_type,
                                                size_type const col_size,
                                                size_type const col_null_count,
@@ -242,6 +246,8 @@ void metadata_builder::add_column_info_to_meta(data_type const col_type,
 }
 
 std::vector<uint8_t> metadata_builder::build() const { return impl->build(); }
+
+void metadata_builder::clear() { return impl->clear(); }
 
 }  // namespace detail
 
@@ -263,7 +269,9 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 {
   CUDF_FUNC_RANGE();
   if (table.is_empty()) { return std::vector<uint8_t>{}; }
-  return detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
+
+  auto builder = cudf::detail::metadata_builder(table.num_columns());
+  return detail::pack_metadata(table, contiguous_buffer, buffer_size, builder);
 }
 
 /**
