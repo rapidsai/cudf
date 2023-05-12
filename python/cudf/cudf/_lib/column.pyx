@@ -17,13 +17,14 @@ from cudf.core.buffer import (
     as_buffer,
 )
 from cudf.utils.dtypes import _get_base_dtype
+
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.types cimport dtype_from_column_view, dtype_to_data_type
 
@@ -37,6 +38,10 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.null_mask cimport (
+    copy_bitmask as c_copy_bitmask,
+    null_count as c_null_count,
+)
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -307,8 +312,37 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
+        cdef device_buffer db
+        cdef unique_ptr[device_buffer] up_db
+        cdef DeviceBuffer rmm_db
         with acquire_spill_lock():
-            return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
+            if self.nullable:
+                if self.offset == 0:
+                    mask = self.base_mask
+                else:
+                    # Can't use the normal copy_bitmask function because that
+                    # requires creating a view, which leads to infinite
+                    # recursion
+                    db = move(c_copy_bitmask(
+                        <libcudf_types.bitmask_type*><uintptr_t>(
+                            self.base_mask.get_ptr(mode="read")
+                        ),
+                        self.offset,
+                        self.offset + self.size,
+                    ))
+                    up_db = make_unique[device_buffer](move(db))
+                    rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
+                    mask = as_buffer(rmm_db)
+
+                return c_null_count(
+                    <libcudf_types.bitmask_type*><uintptr_t>(
+                        mask.get_ptr(mode="read")
+                    ),
+                    0,
+                    self.size
+                )
+            else:
+                return 0
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
