@@ -100,6 +100,8 @@ TEST_F(TransformTest, IsNull)
   auto c_0   = column_wrapper<int32_t>{{0, 1, 2, 0}, {0, 1, 1, 0}};
   auto table = cudf::table_view{{c_0}};
 
+  // result of IS_NULL on literal, will be a column of table size, with all values set to
+  // !literal.is_valid(). The table values are irrelevant.
   auto literal_value = cudf::numeric_scalar<int32_t>(-123);
   auto literal       = cudf::ast::literal(literal_value);
   auto expression    = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, literal);

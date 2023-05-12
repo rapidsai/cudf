@@ -57,6 +57,7 @@ python_cudf_function_map = {
     # that we don't support yet:
     # expm1, log1p, arctan2 and log10.
     "isnull": ASTOperator.IS_NULL,
+    "isna": ASTOperator.IS_NULL,
     "sin": ASTOperator.SIN,
     "cos": ASTOperator.COS,
     "tan": ASTOperator.TAN,
