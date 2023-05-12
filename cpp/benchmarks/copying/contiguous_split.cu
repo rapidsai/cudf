@@ -145,7 +145,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
     ->Args({size, num_columns, num_splits, validity})                        \
     ->Unit(benchmark::kMillisecond)                                          \
     ->UseManualTime()                                                        \
-    ->Iterations(32)
+    ->Iterations(8)
 CSBM_BENCHMARK_DEFINE(6Gb512ColsNoValidity, (int64_t)6 * 1024 * 1024 * 1024, 512, 256, 0);
 CSBM_BENCHMARK_DEFINE(6Gb512ColsValidity, (int64_t)6 * 1024 * 1024 * 1024, 512, 256, 1);
 CSBM_BENCHMARK_DEFINE(6Gb10ColsNoValidity, (int64_t)6 * 1024 * 1024 * 1024, 10, 256, 0);
@@ -174,7 +174,7 @@ CSBM_BENCHMARK_DEFINE(1Gb1ColValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 
     ->Args({size, num_columns, num_splits, validity})                                \
     ->Unit(benchmark::kMillisecond)                                                  \
     ->UseManualTime()                                                                \
-    ->Iterations(32)
+    ->Iterations(8)
 
 CSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 256, 0);
 CSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 256, 1);
