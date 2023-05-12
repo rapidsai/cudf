@@ -35,6 +35,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/partition.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
@@ -147,23 +149,25 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
          group_offsets.element(group_offsets.size() - 1, stream) == input.size() &&
          "Must have at least one group.");
 
-  auto preceding_calculator = [d_group_offsets = group_offsets.data(),
-                               d_group_labels  = group_labels.data(),
-                               preceding_window] __device__(size_type idx) {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    return thrust::minimum{}(preceding_window,
-                             idx - group_start + 1);  // Preceding includes current row.
-  };
+  auto preceding_calculator =
+    cuda::proclaim_return_type<size_type>([d_group_offsets = group_offsets.data(),
+                                           d_group_labels  = group_labels.data(),
+                                           preceding_window] __device__(size_type idx) {
+      auto group_label = d_group_labels[idx];
+      auto group_start = d_group_offsets[group_label];
+      return thrust::minimum{}(preceding_window,
+                               idx - group_start + 1);  // Preceding includes current row.
+    });
 
-  auto following_calculator = [d_group_offsets = group_offsets.data(),
-                               d_group_labels  = group_labels.data(),
-                               following_window] __device__(size_type idx) {
-    auto group_label = d_group_labels[idx];
-    auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+  auto following_calculator =
+    cuda::proclaim_return_type<size_type>([d_group_offsets = group_offsets.data(),
+                                           d_group_labels  = group_labels.data(),
+                                           following_window] __device__(size_type idx) {
+      auto group_label = d_group_labels[idx];
+      auto group_end = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
                                                           // is capped with `input.size()`.
-    return thrust::minimum{}(following_window, (group_end - 1) - idx);
-  };
+      return thrust::minimum{}(following_window, (group_end - 1) - idx);
+    });
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{

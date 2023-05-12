@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 
 #include <thrust/extrema.h>
 #include <thrust/iterator/constant_iterator.h>
+
+#include <cuda/functional>
 
 namespace cudf::detail {
 
@@ -59,12 +61,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     // E.g. If preceding_window == 2, then for a column of 5 elements, preceding_window will be:
     //      [1, 2, 2, 2, 1]
     auto const preceding_window_begin = cudf::detail::make_counting_transform_iterator(
-      0,
-      [preceding_window] __device__(size_type i) { return thrust::min(i + 1, preceding_window); });
+      0, cuda::proclaim_return_type<size_type>([preceding_window] __device__(size_type i) {
+        return thrust::min(i + 1, preceding_window);
+      }));
     auto const following_window_begin = cudf::detail::make_counting_transform_iterator(
-      0, [col_size = input.size(), following_window] __device__(size_type i) {
-        return thrust::min(col_size - i - 1, following_window);
-      });
+      0,
+      cuda::proclaim_return_type<size_type>(
+        [col_size = input.size(), following_window] __device__(size_type i) {
+          return thrust::min(col_size - i - 1, following_window);
+        }));
 
     return cudf::detail::rolling_window(input,
                                         default_outputs,
