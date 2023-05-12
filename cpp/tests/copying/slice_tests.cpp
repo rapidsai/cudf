@@ -69,12 +69,12 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
   auto valids =
     cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
-  cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
+  cudf::test::fixed_width_column_wrapper<T> input = create_fixed_columns<T>(start, size, valids);
 
   std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
   std::vector<cudf::test::fixed_width_column_wrapper<T>> expected =
     create_expected_columns<T>(indices, true);
-  std::vector<cudf::column_view> result = cudf::slice(col, indices);
+  std::vector<cudf::column_view> result = cudf::slice(input, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 

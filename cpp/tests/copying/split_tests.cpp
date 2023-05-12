@@ -1978,7 +1978,6 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
                                  "Mark",
                                  "Herman",
                                  "Will"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.

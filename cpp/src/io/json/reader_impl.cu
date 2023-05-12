@@ -23,7 +23,6 @@
 #include <io/comp/io_uncomp.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -136,9 +135,12 @@ std::unique_ptr<table> create_json_keys_info_table(parse_options_view const& par
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
   auto const num_keys = key_counter.value(stream);
   std::vector<std::unique_ptr<column>> info_columns;
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_keys));
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_keys));
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_keys));
+  info_columns.emplace_back(
+    make_numeric_column(data_type(type_id::UINT64), num_keys, mask_state::UNALLOCATED, stream));
+  info_columns.emplace_back(
+    make_numeric_column(data_type(type_id::UINT16), num_keys, mask_state::UNALLOCATED, stream));
+  info_columns.emplace_back(
+    make_numeric_column(data_type(type_id::UINT32), num_keys, mask_state::UNALLOCATED, stream));
   // Create a table out of these columns to pass them around more easily
   auto info_table           = std::make_unique<table>(std::move(info_columns));
   auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);

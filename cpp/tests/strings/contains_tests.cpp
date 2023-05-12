@@ -301,7 +301,7 @@ TEST_F(StringsContainsTests, HexTest)
     ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto d_offsets = cudf::detail::make_device_uvector_sync(
     offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto input = cudf::make_strings_column(d_chars, d_offsets);
+  auto input = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
 
   auto strings_view = cudf::strings_column_view(input->view());
   for (auto ch : ascii_chars) {
