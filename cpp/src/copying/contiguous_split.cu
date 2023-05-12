@@ -1258,14 +1258,12 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
     // pack the columns
     cudf::table_view t{cols};
-    result.push_back(packed_table{
-      std::move(t),
-      packed_columns{
-        std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
-          t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
-        std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
-
     cols.clear();
+    auto packed_cols = packed_columns{
+      std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
+        t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
+      std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))};
+    result.emplace_back(packed_table{std::move(t), std::move(packed_cols)});
   }
   return result;
 }
