@@ -114,6 +114,10 @@ class metadata_builder {
   std::unique_ptr<metadata_builder_impl> impl;
 };
 
+/**
+ * @copydoc pack_metadata
+ * @param builder The reusable builder object to create packed column metadata.
+ */
 std::vector<uint8_t> pack_metadata(table_view const& table,
                                    uint8_t const* contiguous_buffer,
                                    size_t buffer_size,
