@@ -569,18 +569,21 @@ def read_parquet(
     return _apply_post_filters(df, filters)
 
 
-def _handle_in(column, value):
+def _handle_in(column, value, *, negate):
     if not isinstance(value, (list, set, tuple)):
         raise TypeError(
-            "Value of 'in' filter must be a " "list, set, or tuple."
+            "Value of 'in' or 'not in' filter must be a list, set, or tuple."
         )
-    return reduce(operator.or_, (operator.eq(column, v) for v in value))
+    if negate:
+        return reduce(operator.and_, (operator.ne(column, v) for v in value))
+    else:
+        return reduce(operator.or_, (operator.eq(column, v) for v in value))
 
 
 def _handle_is(column, value, *, negate):
     if value not in {np.nan, None}:
         raise TypeError(
-            "Value of 'is' or 'is not' filter " "must be np.nan or None."
+            "Value of 'is' or 'is not' filter must be np.nan or None."
         )
     return ~column.isna() if negate else column.isna()
 
@@ -605,7 +608,8 @@ def _apply_post_filters(df, filters):
         "<=": operator.le,
         ">": operator.gt,
         ">=": operator.ge,
-        "in": _handle_in,
+        "in": partial(_handle_in, negate=False),
+        "not in": partial(_handle_in, negate=True),
         "is": partial(_handle_is, negate=False),
         "is not": partial(_handle_is, negate=True),
     }
