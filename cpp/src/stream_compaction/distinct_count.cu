@@ -142,7 +142,7 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
     auto key_set      = cuco::experimental::static_set{
-      cuco::experimental::extent{static_cast<cudf::size_type>(compute_hash_table_size(num_rows))},
+      cuco::experimental::extent{compute_hash_table_size(num_rows)},
       cuco::empty_key<cudf::size_type>{COMPACTION_EMPTY_KEY_SENTINEL},
       row_equal,
       cuco::experimental::linear_probing<1, hasher_type>{hash_key},
