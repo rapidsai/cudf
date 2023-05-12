@@ -145,7 +145,7 @@ cudf::size_type distinct_count(table_view const& keys,
       cuco::experimental::extent{static_cast<cudf::size_type>(compute_hash_table_size(num_rows))},
       cuco::empty_key<cudf::size_type>{COMPACTION_EMPTY_KEY_SENTINEL},
       row_equal,
-      cuco::experimental::double_hashing<4, hasher_type, hasher_type>{hash_key, hash_key},
+      cuco::experimental::linear_probing<1, hasher_type>{hash_key},
       detail::hash_table_allocator_type{default_allocator<char>{}, stream},
       stream.value()};
 
