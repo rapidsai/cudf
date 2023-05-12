@@ -109,8 +109,8 @@ struct dst_buf_info {
   int bit_shift;           // # of bits to shift right by (for validity buffers)
   size_type valid_count;   // validity count for this block of work
 
-  int src_buf_index;       // source buffer index
-  int dst_buf_index;       // destination buffer index
+  int src_buf_index;  // source buffer index
+  int dst_buf_index;  // destination buffer index
 };
 
 /**
@@ -1259,7 +1259,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     // pack the columns
     cudf::table_view t{cols};
     result.push_back(packed_table{
-      t,
+      std::move(t),
       packed_columns{
         std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
           t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
