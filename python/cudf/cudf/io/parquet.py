@@ -485,6 +485,9 @@ def read_parquet(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
 
+    # Normalize filters
+    filters = _normalize_filters(filters)
+
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
@@ -505,8 +508,6 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    elif filters is not None:
-        raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
@@ -617,7 +618,7 @@ def _handle_is(column, value, *, negate):
     return ~column.isna() if negate else column.isna()
 
 
-def _apply_post_filters(df: cudf.DataFrame, filters: list | None):
+def _apply_post_filters(df: cudf.DataFrame, filters: List[List[tuple]] | None):
     # Apply DNF filters to an in-memory DataFrame
     #
     # Disjunctive normal form (DNF) means that the inner-most
@@ -626,7 +627,6 @@ def _apply_post_filters(df: cudf.DataFrame, filters: list | None):
     # larger predicate. The outer-most list then combines all
     # of the combined filters with an OR disjunction.
 
-    filters = _normalize_filters(filters)
     if not filters:
         # No filters to apply
         return df

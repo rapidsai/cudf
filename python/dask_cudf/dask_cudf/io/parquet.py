@@ -20,7 +20,11 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import _apply_post_filters, _default_open_file_options
+from cudf.io.parquet import (
+    _apply_post_filters,
+    _default_open_file_options,
+    _normalize_filters,
+)
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
@@ -133,6 +137,7 @@ class CudfEngine(ArrowDatasetEngine):
                     raise err
 
         # Apply filters (if any are defined)
+        filters = _normalize_filters(filters)
         df = _apply_post_filters(df, filters)
 
         if partitions and partition_keys is None:
