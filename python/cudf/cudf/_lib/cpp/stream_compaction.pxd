@@ -23,6 +23,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         KEEP_FIRST 'cudf::duplicate_keep_option::KEEP_FIRST'
         KEEP_LAST 'cudf::duplicate_keep_option::KEEP_LAST'
         KEEP_NONE 'cudf::duplicate_keep_option::KEEP_NONE'
+        KEEP_ANY 'cudf::duplicate_keep_option::KEEP_ANY'
 
     cdef unique_ptr[table] drop_nulls(table_view source_table,
                                       vector[size_type] keys,
@@ -33,7 +34,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         column_view boolean_mask
     ) except +
 
-    cdef unique_ptr[table] unique(
+    cdef unique_ptr[table] distinct(
         table_view source_table,
         vector[size_type] keys,
         duplicate_keep_option keep,

@@ -3791,7 +3791,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if any(not is_categorical_dtype(c.dtype) for c in source_columns):
                 raise ValueError("Columns must all have the same dtype")
             cats = list(c.categories for c in source_columns)
-            cats = cudf.core.column.concat_columns(cats).unique()
+            cats = cudf.core.column.concat_columns(cats).unique(
+                preserve_order=True
+            )
             source_columns = [
                 col._set_categories(cats, is_unique=True).codes
                 for col in source_columns
