@@ -75,15 +75,19 @@ def _get_ptx_file(path, prefix):
 
 
 def _setup_numba_linker(path):
-    from ptxcompiler.patch import NO_DRIVER, safe_get_versions
+    try:
+        # ptxcompiler will not be present for cuda 12+
+        from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
-    versions = safe_get_versions()
-    if versions != NO_DRIVER:
-        driver_version, runtime_version = versions
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
-        maybe_patch_numba_linker(
-            driver_version, runtime_version, ptx_toolkit_version
-        )
+        versions = safe_get_versions()
+        if versions != NO_DRIVER:
+            driver_version, runtime_version = versions
+            ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
+            maybe_patch_numba_linker(
+                driver_version, runtime_version, ptx_toolkit_version
+            )
+    except ImportError:
+        pass
 
 
 def maybe_patch_numba_linker(
