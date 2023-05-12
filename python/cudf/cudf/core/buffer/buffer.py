@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Type, TypeVar
 
 import numpy
 
@@ -42,7 +42,7 @@ def host_memory_allocation(nbytes: int) -> memoryview:
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: object = None,
+    owner: Optional[object] = None,
     readonly=False,
     typestr="|u1",
     version=0,
