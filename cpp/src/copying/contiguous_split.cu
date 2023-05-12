@@ -833,8 +833,8 @@ struct buf_size_functor {
  * The key is simply the partition index.
  */
 struct split_key_functor {
-  int num_src_bufs;
-  int operator() __device__(int buf_index) { return buf_index / num_src_bufs; }
+  int const num_src_bufs;
+  int operator() __device__(int buf_index) const { return buf_index / num_src_bufs; }
 };
 
 /**
@@ -914,7 +914,7 @@ struct size_of_helper {
  * structs) return 0.
  */
 struct num_batches_func {
-  thrust::pair<std::size_t, std::size_t> const* batches;
+  thrust::pair<std::size_t, std::size_t> const* const batches;
   __device__ std::size_t operator()(size_type i) const { return thrust::get<0>(batches[i]); }
 };
 
@@ -922,12 +922,12 @@ struct num_batches_func {
  * @brief Get the size in bytes of a batch described by `dst_buf_info`.
  */
 struct batch_byte_size_function {
-  size_type num_batches;
-  dst_buf_info const* infos;
+  size_type const num_batches;
+  dst_buf_info const* const infos;
   __device__ std::size_t operator()(size_type i) const
   {
     if (i == num_batches) { return 0; }
-    auto& buf = *(infos + i);
+    auto const& buf = *(infos + i);
     std::size_t const bytes =
       static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
     return util::round_up_unsafe(bytes, split_align);
@@ -938,8 +938,8 @@ struct batch_byte_size_function {
  * @brief Get the input buffer index given the output buffer index.
  */
 struct out_to_in_index_function {
-  offset_type const* batch_offsets;
-  int num_bufs;
+  offset_type const* const batch_offsets;
+  int const num_bufs;
   __device__ int operator()(size_type i) const
   {
     return static_cast<size_type>(
@@ -1018,10 +1018,10 @@ struct packed_partition_buf_size_and_dst_buf_info {
                                              std::size_t num_bufs,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
-    : stream(stream)
+    : stream(stream),
+      buf_sizes_size{cudf::util::round_up_safe(num_partitions * sizeof(std::size_t), split_align)},
+      dst_buf_info_size{cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align)}
   {
-    buf_sizes_size = cudf::util::round_up_safe(num_partitions * sizeof(std::size_t), split_align);
-    dst_buf_info_size = cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align);
     // host-side
     h_buf_sizes_and_dst_info = std::vector<uint8_t>(buf_sizes_size + dst_buf_info_size);
     h_buf_sizes              = reinterpret_cast<std::size_t*>(h_buf_sizes_and_dst_info.data());
@@ -1047,11 +1047,11 @@ struct packed_partition_buf_size_and_dst_buf_info {
                                   stream.value()));
   }
 
-  rmm::cuda_stream_view stream;
+  rmm::cuda_stream_view const stream;
 
   // buffer sizes and destination info (used in batched copies)
-  std::size_t buf_sizes_size;
-  std::size_t dst_buf_info_size;
+  std::size_t const buf_sizes_size;
+  std::size_t const dst_buf_info_size;
 
   std::vector<uint8_t> h_buf_sizes_and_dst_info;
   std::size_t* h_buf_sizes;
@@ -1071,12 +1071,10 @@ struct packed_src_and_dst_pointers {
                               cudf::size_type num_src_bufs,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
-    : stream(stream)
+    : stream(stream),
+      src_bufs_size{cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align)},
+      dst_bufs_size{cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align)}
   {
-    src_bufs_size = cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align);
-
-    dst_bufs_size = cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
-
     // host-side
     h_src_and_dst_buffers = std::vector<uint8_t>(src_bufs_size + dst_bufs_size);
     h_src_bufs            = reinterpret_cast<uint8_t const**>(h_src_and_dst_buffers.data());
@@ -1101,12 +1099,12 @@ struct packed_src_and_dst_pointers {
                                   stream.value()));
   }
 
-  const rmm::cuda_stream_view stream;
+  rmm::cuda_stream_view const stream;
+  std::size_t const src_bufs_size;
+  std::size_t const dst_bufs_size;
 
   std::vector<uint8_t> h_src_and_dst_buffers;
   rmm::device_buffer d_src_and_dst_buffers;
-  std::size_t src_bufs_size;
-  std::size_t dst_bufs_size;
   const uint8_t** h_src_bufs;
   const uint8_t** d_src_bufs;
   uint8_t** h_dst_bufs;
@@ -1181,17 +1179,18 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
     std::make_unique<packed_partition_buf_size_and_dst_buf_info>(
       input, splits, num_partitions, num_src_bufs, num_bufs, stream, mr);
 
-  auto d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info;
-  auto h_buf_sizes    = partition_buf_size_and_dst_buf_info->h_buf_sizes;
-  auto d_buf_sizes    = partition_buf_size_and_dst_buf_info->d_buf_sizes;
+  auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info;
+  auto const h_buf_sizes    = partition_buf_size_and_dst_buf_info->h_buf_sizes;
+  auto const d_buf_sizes    = partition_buf_size_and_dst_buf_info->d_buf_sizes;
 
-  auto split_indices_and_src_buf_info =
+  auto const split_indices_and_src_buf_info =
     packed_split_indices_and_src_buf_info(input, splits, num_partitions, num_src_bufs, stream, mr);
 
-  auto const d_src_buf_info        = split_indices_and_src_buf_info.d_src_buf_info;
-  auto offset_stack_partition_size = split_indices_and_src_buf_info.offset_stack_partition_size;
-  auto d_offset_stack              = split_indices_and_src_buf_info.d_offset_stack;
-  auto d_indices                   = split_indices_and_src_buf_info.d_indices;
+  auto const d_src_buf_info = split_indices_and_src_buf_info.d_src_buf_info;
+  auto const offset_stack_partition_size =
+    split_indices_and_src_buf_info.offset_stack_partition_size;
+  auto const d_offset_stack = split_indices_and_src_buf_info.d_offset_stack;
+  auto const d_indices      = split_indices_and_src_buf_info.d_indices;
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
@@ -1275,7 +1274,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
   // compute total size of each partition
   // key is the split index
   {
-    auto keys = cudf::detail::make_counting_transform_iterator(
+    auto const keys = cudf::detail::make_counting_transform_iterator(
       0, split_key_functor{static_cast<int>(num_src_bufs)});
     auto values =
       cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
@@ -1290,7 +1289,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 
   // compute start offset for each output buffer for each split
   {
-    auto keys = cudf::detail::make_counting_transform_iterator(
+    auto const keys = cudf::detail::make_counting_transform_iterator(
       0, split_key_functor{static_cast<int>(num_src_bufs)});
     auto values =
       cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
@@ -1323,8 +1322,8 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 struct chunk_iteration_state {
   chunk_iteration_state(rmm::device_uvector<dst_buf_info> _d_batched_dst_buf_info,
                         rmm::device_uvector<offset_type> _d_batch_offsets,
-                        std::vector<std::size_t> _h_num_buffs_per_iteration,
-                        std::vector<std::size_t> _h_size_of_buffs_per_iteration,
+                        std::vector<std::size_t>&& _h_num_buffs_per_iteration,
+                        std::vector<std::size_t>&& _h_size_of_buffs_per_iteration,
                         std::size_t total_size)
     : num_iterations(_h_num_buffs_per_iteration.size()),
       current_iteration(0),
@@ -1364,15 +1363,15 @@ struct chunk_iteration_state {
   bool has_more_copies() const { return current_iteration < num_iterations; }
 
   rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info;
-  rmm::device_uvector<offset_type> d_batch_offsets;
-  std::size_t total_size;
-  int num_iterations;
+  rmm::device_uvector<offset_type> const d_batch_offsets;
+  std::size_t const total_size;
+  int const num_iterations;
   int current_iteration;
 
  private:
   std::size_t starting_batch;
-  std::vector<std::size_t> h_num_buffs_per_iteration;
-  std::vector<std::size_t> h_size_of_buffs_per_iteration;
+  std::vector<std::size_t> const h_num_buffs_per_iteration;
+  std::vector<std::size_t> const h_size_of_buffs_per_iteration;
 };
 
 std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
@@ -1387,7 +1386,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
 {
   rmm::device_uvector<offset_type> d_batch_offsets(num_bufs + 1, stream, mr);
 
-  auto buf_count_iter = cudf::detail::make_counting_transform_iterator(
+  auto const buf_count_iter = cudf::detail::make_counting_transform_iterator(
     0, [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {
       return i == num_bufs ? 0 : num_batches(i);
     });
@@ -1405,7 +1404,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
 
   auto out_to_in_index = out_to_in_index_function{d_batch_offsets.begin(), num_bufs};
 
-  auto iter = thrust::make_counting_iterator(0);
+  auto const iter = thrust::make_counting_iterator(0);
 
   // load up the batches as d_dst_buf_info
   rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info(num_batches, stream, mr);
@@ -1472,7 +1471,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
     std::vector<std::size_t> h_offsets(num_batches + 1);
     {
       rmm::device_uvector<std::size_t> offsets(h_offsets.size(), stream, mr);
-      auto batch_byte_size_iter = cudf::detail::make_counting_transform_iterator(
+      auto const batch_byte_size_iter = cudf::detail::make_counting_transform_iterator(
         0, batch_byte_size_function{num_batches, d_batched_dst_buf_info.begin()});
 
       thrust::exclusive_scan(rmm::exec_policy(stream, mr),
@@ -1544,7 +1543,7 @@ std::unique_ptr<chunk_iteration_state> make_chunk_iteration_state(
       // we want to update the offset of batches for every iteration, except the first one (because
       // offsets in the first iteration are all 0 based)
       auto num_batches_in_first_iteration = num_batches_per_iteration[0];
-      auto iter           = thrust::make_counting_iterator(num_batches_in_first_iteration);
+      auto const iter     = thrust::make_counting_iterator(num_batches_in_first_iteration);
       auto num_iterations = accum_size_per_iteration.size();
       thrust::for_each(
         rmm::exec_policy(stream, mr),
@@ -1784,7 +1783,7 @@ struct contiguous_split_state {
 
     // postprocess valid_counts: apply the valid counts computed by copy_data for each
     // batch back to the original dst_buf_infos
-    auto keys = cudf::detail::make_counting_transform_iterator(
+    auto const keys = cudf::detail::make_counting_transform_iterator(
       0, out_to_in_index_function{chunk_iter_state->d_batch_offsets.begin(), (int)num_bufs});
 
     auto values = thrust::make_transform_iterator(
@@ -1858,7 +1857,7 @@ struct contiguous_split_state {
     // build the empty results
     std::vector<packed_table> result;
     result.reserve(num_partitions);
-    auto iter = thrust::make_counting_iterator(0);
+    auto const iter = thrust::make_counting_iterator(0);
     std::transform(iter,
                    iter + num_partitions,
                    std::back_inserter(result),
