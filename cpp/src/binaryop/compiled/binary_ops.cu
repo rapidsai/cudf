@@ -53,7 +53,7 @@ struct scalar_as_column_view {
     auto col_v               = column_view(s.type(),
                              1,
                              h_scalar_type_view.data(),
-                             (bitmask_type const*)s.validity_data(),
+                             reinterpret_cast<bitmask_type const*>(s.validity_data()),
                              !s.is_valid());
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
