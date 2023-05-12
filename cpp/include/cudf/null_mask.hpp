@@ -178,9 +178,9 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @throws cudf::logic_error if `start > stop`
  * @throws cudf::logic_error if `start < 0`
  *
- * @param[in] bitmask Validity bitmask residing in device memory.
- * @param[in] start Index of the first bit to count (inclusive).
- * @param[in] stop Index of the last bit to count (exclusive).
+ * @param bitmask Validity bitmask residing in device memory.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
  * @return The number of null elements in the specified range.
  */
 cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop);
