@@ -140,7 +140,6 @@ class SingleColumnFrame(Frame, NotIterable):
         return super().to_numpy(dtype, copy, na_value).flatten()
 
     def tolist(self):  # noqa: D102
-
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
