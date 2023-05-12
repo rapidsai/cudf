@@ -262,9 +262,8 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
-  return table.is_empty()
-           ? std::vector<uint8_t>{}
-           : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
+  if (table.is_empty()) { return std::vector<uint8_t>{}; }
+  return detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 
 /**
