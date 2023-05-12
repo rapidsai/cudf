@@ -201,7 +201,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             f"dtype: {self.dtype}"
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> "pd.Series":
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
@@ -548,7 +550,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return libcudf.copying.get_element(self, idx).value
 
-    def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
+    def slice(
+        self, start: int, stop: int, stride: Optional[int] = None
+    ) -> ColumnBase:
         stride = 1 if stride is None else stride
         if start < 0:
             start = start + len(self)
@@ -699,8 +703,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def fillna(
         self: T,
         value: Any = None,
-        method: str = None,
-        dtype: Dtype = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> T:
         """Fill null values with ``value``.
 
@@ -1097,7 +1101,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def argsort(
         self, ascending: bool = True, na_position: str = "last"
     ) -> "cudf.core.column.NumericalColumn":
-
         return self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
@@ -1244,14 +1247,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
 
-    def _minmax(self, skipna: bool = None):
+    def _minmax(self, skipna: Optional[bool] = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.minmax(result_col)
         return result_col
 
     def _reduce(
-        self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
+        self,
+        op: str,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        *args,
+        **kwargs,
     ) -> ScalarLike:
         """Compute {op} of column values.
 
@@ -1273,7 +1281,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self.null_count != 0
 
     def _process_for_reduction(
-        self, skipna: bool = None, min_count: int = 0
+        self, skipna: Optional[bool] = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:
         skipna = True if skipna is None else skipna
 
@@ -1314,8 +1322,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _label_encoding(
         self,
         cats: ColumnBase,
-        dtype: Dtype = None,
-        na_sentinel: ScalarLike = None,
+        dtype: Optional[Dtype] = None,
+        na_sentinel: Optional[ScalarLike] = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1389,9 +1397,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
 def column_empty_like(
     column: ColumnBase,
-    dtype: Dtype = None,
+    dtype: Optional[Dtype] = None,
     masked: bool = False,
-    newsize: int = None,
+    newsize: Optional[int] = None,
 ) -> ColumnBase:
     """Allocate a new column like the given *column*"""
     if dtype is None:
@@ -1494,10 +1502,10 @@ def build_column(
     data: Union[Buffer, None],
     dtype: Dtype,
     *,
-    size: int = None,
-    mask: Buffer = None,
+    size: Optional[int] = None,
+    mask: Optional[Buffer] = None,
     offset: int = 0,
-    null_count: int = None,
+    null_count: Optional[int] = None,
     children: Tuple[ColumnBase, ...] = (),
 ) -> ColumnBase:
     """
@@ -1666,10 +1674,10 @@ def build_column(
 def build_categorical_column(
     categories: ColumnBase,
     codes: ColumnBase,
-    mask: Buffer = None,
-    size: int = None,
+    mask: Optional[Buffer] = None,
+    size: Optional[int] = None,
     offset: int = 0,
-    null_count: int = None,
+    null_count: Optional[int] = None,
     ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
@@ -1757,10 +1765,10 @@ def build_interval_column(
 def build_list_column(
     indices: ColumnBase,
     elements: ColumnBase,
-    mask: Buffer = None,
-    size: int = None,
+    mask: Optional[Buffer] = None,
+    size: Optional[int] = None,
     offset: int = 0,
-    null_count: int = None,
+    null_count: Optional[int] = None,
 ) -> "cudf.core.column.ListColumn":
     """
     Build a ListColumn
@@ -1803,10 +1811,10 @@ def build_struct_column(
     names: Sequence[str],
     children: Tuple[ColumnBase, ...],
     dtype: Optional[Dtype] = None,
-    mask: Buffer = None,
-    size: int = None,
+    mask: Optional[Buffer] = None,
+    size: Optional[int] = None,
     offset: int = 0,
-    null_count: int = None,
+    null_count: Optional[int] = None,
 ) -> "cudf.core.column.StructColumn":
     """
     Build a StructColumn
@@ -1863,9 +1871,9 @@ def _make_copy_replacing_NaT_with_null(column):
 
 def as_column(
     arbitrary: Any,
-    nan_as_null: bool = None,
-    dtype: Dtype = None,
-    length: int = None,
+    nan_as_null: Optional[bool] = None,
+    dtype: Optional[Dtype] = None,
+    length: Optional[int] = None,
 ):
     """Create a Column from an arbitrary object
 
@@ -2106,7 +2114,6 @@ def as_column(
 
             data = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
         elif arb_dtype.kind == "m":
-
             time_unit = get_time_unit(arbitrary)
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
@@ -2466,7 +2473,7 @@ def deserialize_columns(headers: List[dict], frames: List) -> List[ColumnBase]:
 
 def arange(
     start: Union[int, float],
-    stop: Union[int, float] = None,
+    stop: Optional[Union[int, float]] = None,
     step: Union[int, float] = 1,
     dtype=None,
 ) -> cudf.core.column.NumericalColumn:
@@ -2524,7 +2531,9 @@ def arange(
     )
 
 
-def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
+def full(
+    size: int, fill_value: ScalarLike, dtype: Optional[Dtype] = None
+) -> ColumnBase:
     """
     Returns a column of given size and dtype, filled with a given value.
 

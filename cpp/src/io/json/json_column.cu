@@ -813,10 +813,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), {{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
-      return {std::move(col), {}};
+      return {std::move(col), std::vector<column_name_info>{}};
     }
     case json_col_t::StructColumn: {
       std::vector<std::unique_ptr<column>> child_columns;
@@ -860,7 +860,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                                        data_type{type_id::INT8},
                                                        0,
                                                        rmm::device_buffer{0, stream, mr}),
-                                                     {}}
+                                                     std::vector<column_name_info>{}}
           : device_json_column_to_cudf_column(
               json_col.child_columns.begin()->second,
               d_input,

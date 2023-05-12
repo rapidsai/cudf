@@ -35,6 +35,8 @@ namespace {
  * and unpack.
  */
 struct serialized_column {
+  serialized_column() = default;
+
   serialized_column(data_type _type,
                     size_type _size,
                     size_type _null_count,
@@ -150,24 +152,22 @@ packed_columns pack(cudf::table_view const& input,
   return contig_split_result.empty() ? packed_columns{} : std::move(contig_split_result[0].data);
 }
 
-template <typename ColumnIter>
-std::vector<uint8_t> pack_metadata(ColumnIter begin,
-                                   ColumnIter end,
+std::vector<uint8_t> pack_metadata(table_view const& table,
                                    uint8_t const* contiguous_buffer,
-                                   size_t buffer_size)
+                                   size_t buffer_size,
+                                   metadata_builder& builder)
 {
-  auto mb = metadata_builder(std::distance(begin, end));
+  std::for_each(
+    table.begin(), table.end(), [&builder, contiguous_buffer, buffer_size](column_view const& col) {
+      build_column_metadata(builder, col, contiguous_buffer, buffer_size);
+    });
 
-  std::for_each(begin, end, [&mb, &contiguous_buffer, &buffer_size](column_view const& col) {
-    build_column_metadata(mb, col, contiguous_buffer, buffer_size);
-  });
-
-  return mb.build();
+  return builder.build();
 }
 
 class metadata_builder_impl {
  public:
-  metadata_builder_impl() = default;
+  metadata_builder_impl(size_type const num_root_columns) { metadata.reserve(num_root_columns); }
 
   void add_column_info_to_meta(data_type const col_type,
                                size_type const col_size,
@@ -182,14 +182,16 @@ class metadata_builder_impl {
 
   std::vector<uint8_t> build() const
   {
-    // convert to anonymous bytes
-    std::vector<uint8_t> metadata_bytes;
-    auto const metadata_begin = reinterpret_cast<uint8_t const*>(metadata.data());
-    std::copy(metadata_begin,
-              metadata_begin + (metadata.size() * sizeof(detail::serialized_column)),
-              std::back_inserter(metadata_bytes));
+    auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
+    std::memcpy(output.data(), metadata.data(), output.size());
+    return output;
+  }
 
-    return metadata_bytes;
+  void clear()
+  {
+    // Clear all, except the first metadata entry storing the number of top level columns that
+    // was added upon object construction.
+    metadata.resize(1);
   }
 
  private:
@@ -228,12 +230,15 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 }
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
-  : impl(std::make_unique<metadata_builder_impl>())
+  : impl(std::make_unique<metadata_builder_impl>(num_root_columns +
+                                                 1 /*one more extra metadata entry as below*/))
 {
   // first metadata entry is a stub indicating how many total (top level) columns
   // there are
   impl->add_column_info_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
+
+metadata_builder::~metadata_builder() = default;
 
 void metadata_builder::add_column_info_to_meta(data_type const col_type,
                                                size_type const col_size,
@@ -247,6 +252,8 @@ void metadata_builder::add_column_info_to_meta(data_type const col_type,
 }
 
 std::vector<uint8_t> metadata_builder::build() const { return impl->build(); }
+
+void metadata_builder::clear() { return impl->clear(); }
 
 }  // namespace detail
 
@@ -267,9 +274,10 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
-  return table.is_empty()
-           ? std::vector<uint8_t>{}
-           : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
+  if (table.is_empty()) { return std::vector<uint8_t>{}; }
+
+  auto builder = cudf::detail::metadata_builder(table.num_columns());
+  return detail::pack_metadata(table, contiguous_buffer, buffer_size, builder);
 }
 
 /**
