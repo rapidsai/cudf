@@ -80,14 +80,11 @@ class column {
    * @brief Construct a new column by taking ownership of the contents of a device_uvector.
    *
    * @param other The device_uvector whose contents will be moved into the new column.
-   * @param null_mask Optional, column's null value indicator bitmask. May
-   * be empty if `null_count` is 0.
+   * @param null_mask Column's null value indicator bitmask. May be empty if `null_count` is 0.
    * @param null_count The count of null elements.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
-  column(rmm::device_uvector<T>&& other,
-         rmm::device_buffer&& null_mask = {},
-         size_type null_count           = 0)
+  column(rmm::device_uvector<T>&& other, rmm::device_buffer&& null_mask, size_type null_count)
     : _type{cudf::data_type{cudf::type_to_id<T>()}},
       _size{[&]() {
         CUDF_EXPECTS(
@@ -109,11 +106,10 @@ class column {
    *
    * @throws cudf::logic_error if `size < 0`
    *
-   * @param[in] dtype The element type
-   * @param[in] size The number of elements in the column
-   * @param[in] data The column's data
-   * @param[in] null_mask Optional, column's null value indicator bitmask. May
-   * be empty if `null_count` is 0.
+   * @param dtype The element type
+   * @param size The number of elements in the column
+   * @param data The column's data
+   * @param null_mask Column's null value indicator bitmask. May be empty if `null_count` is 0.
    * @param null_count Optional, the count of null elements.
    * @param children Optional, vector of child columns
    */
@@ -121,8 +117,8 @@ class column {
   column(data_type dtype,
          size_type size,
          B1&& data,
-         B2&& null_mask                                  = {},
-         size_type null_count                            = 0,
+         B2&& null_mask,
+         size_type null_count,
          std::vector<std::unique_ptr<column>>&& children = {})
     : _type{dtype},
       _size{size},

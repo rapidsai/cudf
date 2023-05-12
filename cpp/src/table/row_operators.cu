@@ -490,8 +490,8 @@ transform_lists_of_structs(column_view const& lhs,
           {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
           stream);
 
-        out_cols_lhs.emplace_back(std::make_unique<column>(ranks_slices.front()));
-        out_cols_rhs.emplace_back(std::make_unique<column>(ranks_slices.back()));
+        out_cols_lhs.emplace_back(std::make_unique<column>(ranks_slices.front(), stream));
+        out_cols_rhs.emplace_back(std::make_unique<column>(ranks_slices.back(), stream));
 
         auto transformed_lhs = replace_child(lhs, out_cols_lhs.back()->view(), out_cols_lhs);
         auto transformed_rhs =
