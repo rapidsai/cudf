@@ -448,7 +448,9 @@ class SpillableBuffer(Buffer):
             "version": 0,
         }
 
-    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         size = self._size if size is None else size
         with self.lock:
             if self.spillable:
@@ -573,7 +575,9 @@ class SpillableBufferSlice(SpillableBuffer):
         # copied.
         return SpillableBuffer.deserialize(header, frames)
 
-    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         size = self._size if size is None else size
         return self._base.memoryview(offset=self._offset + offset, size=size)
 
