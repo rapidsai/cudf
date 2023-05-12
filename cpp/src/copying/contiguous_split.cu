@@ -957,7 +957,8 @@ struct packed_split_indices_and_src_buf_info {
                                                  cudf::size_type num_src_bufs,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
-    : indices_size(cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align)),
+    : indices_size(
+        cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align)),
       src_buf_info_size(cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align))
   {
     // host-side
