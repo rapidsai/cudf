@@ -6,7 +6,7 @@ import datetime
 import locale
 import re
 from locale import nl_langinfo
-from typing import Any, Mapping, Sequence, cast
+from typing import Any, Mapping, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -125,10 +125,10 @@ class DatetimeColumn(column.ColumnBase):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Buffer = None,
-        size: int = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,  # TODO: make non-optional
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -202,7 +202,10 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("day_of_year")
 
     def to_pandas(
-        self, index: pd.Index = None, nullable: bool = False, **kwargs
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
@@ -363,7 +366,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def std(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
@@ -375,7 +378,7 @@ class DatetimeColumn(column.ColumnBase):
             * _unit_to_nanoseconds_conversion[self.time_unit],
         )
 
-    def median(self, skipna: bool = None) -> pd.Timestamp:
+    def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -451,7 +454,10 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> DatetimeColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -495,7 +501,6 @@ class DatetimeColumn(column.ColumnBase):
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         if np.issubdtype(to_dtype, np.datetime64):
-
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
@@ -542,10 +547,10 @@ class DatetimeTZColumn(DatetimeColumn):
         self,
         data: Buffer,
         dtype: pd.DatetimeTZDtype,
-        mask: Buffer = None,
-        size: int = None,
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         super().__init__(
             data=data,
@@ -558,7 +563,10 @@ class DatetimeTZColumn(DatetimeColumn):
         self._dtype = dtype
 
     def to_pandas(
-        self, index: pd.Index = None, nullable: bool = False, **kwargs
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
     ) -> "cudf.Series":
         return self._local_time.to_pandas().dt.tz_localize(
             self.dtype.tz, ambiguous="NaT", nonexistent="NaT"

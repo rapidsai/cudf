@@ -2642,7 +2642,6 @@ class TimedeltaIndex(GenericIndex):
         copy=False,
         name=None,
     ):
-
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
