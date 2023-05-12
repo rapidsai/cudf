@@ -24,8 +24,8 @@ target_compile_options(
 
 target_link_libraries(
   cudf_datagen
-  PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main benchmark::benchmark
-         nvbench::nvbench Threads::Threads cudf cudftestutil
+  PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+         cudftestutil
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -91,14 +91,14 @@ endfunction()
 # This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
 # setting all of the associated properties and linking to build the benchmark
 function(ConfigureNVBench CMAKE_BENCH_NAME)
-  add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+  add_executable(${CMAKE_BENCH_NAME} ${ARGN} fixture/nvbench_main.cpp)
   set_target_properties(
     ${CMAKE_BENCH_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::nvbench
                                 $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
@@ -274,11 +274,12 @@ ConfigureBench(
   text/subword.cpp text/tokenize.cpp
 )
 
+ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
+
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
   STRINGS_BENCH
-  string/case.cpp
   string/combine.cpp
   string/contains.cpp
   string/convert_datetime.cpp
@@ -290,7 +291,6 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
-  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
@@ -300,7 +300,9 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
+ConfigureNVBench(
+  STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp string/case.cpp
+)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------

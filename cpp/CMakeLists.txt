@@ -397,7 +397,6 @@ add_library(
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/trie.cu
-  src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
   src/jit/util.cpp
@@ -514,6 +513,7 @@ add_library(
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
+  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
@@ -580,6 +580,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
   src/text/replace.cu

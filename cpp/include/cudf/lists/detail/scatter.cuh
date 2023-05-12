@@ -141,7 +141,7 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
                                   target.size(),
                                   rmm::device_buffer{},
                                   std::move(null_mask),
-                                  cudf::UNKNOWN_NULL_COUNT,
+                                  target.null_count(),
                                   std::move(children));
 }
 

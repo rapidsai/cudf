@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,6 +151,96 @@ enum class table_reference {
 };
 
 /**
+ * @brief A type-erased scalar_device_view where the value is a fixed width type or a string
+ */
+class generic_scalar_device_view : public cudf::detail::scalar_device_view_base {
+ public:
+  /**
+   * @brief Returns the stored value.
+   *
+   * @tparam T The desired type
+   * @returns The stored value
+   */
+  template <typename T>
+  __device__ T const value() const noexcept
+  {
+    if constexpr (std::is_same_v<T, cudf::string_view>) {
+      return string_view(static_cast<char const*>(_data), _size);
+    }
+    return *static_cast<T const*>(_data);
+  }
+
+  /** @brief Construct a new generic scalar device view object from a numeric scalar
+   *
+   * @param s The numeric scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(numeric_scalar<T>& s)
+    : generic_scalar_device_view(s.type(), s.data(), s.validity_data())
+  {
+  }
+
+  /** @brief Construct a new generic scalar device view object from a timestamp scalar
+   *
+   * @param s The timestamp scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(timestamp_scalar<T>& s)
+    : generic_scalar_device_view(s.type(), s.data(), s.validity_data())
+  {
+  }
+
+  /** @brief Construct a new generic scalar device view object from a duration scalar
+   *
+   * @param s The duration scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(duration_scalar<T>& s)
+    : generic_scalar_device_view(s.type(), s.data(), s.validity_data())
+  {
+  }
+
+  /** @brief Construct a new generic scalar device view object from a string scalar
+   *
+   * @param s The string scalar to construct from
+   */
+  generic_scalar_device_view(string_scalar& s)
+    : generic_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size())
+  {
+  }
+
+ protected:
+  void const* _data{};      ///< Pointer to device memory containing the value
+  size_type const _size{};  ///< Size of the string in bytes for string scalar
+
+  /**
+   * @brief Construct a new fixed width scalar device view object
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
+  generic_scalar_device_view(data_type type, void const* data, bool* is_valid)
+    : cudf::detail::scalar_device_view_base(type, is_valid), _data(data)
+  {
+  }
+
+  /** @brief Construct a new string scalar device view object
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   * @param size The size of the string in bytes
+   */
+  generic_scalar_device_view(data_type type, void const* data, bool* is_valid, size_type size)
+    : cudf::detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
+  {
+  }
+};
+
+/**
  * @brief A literal value used in an abstract syntax tree.
  */
 class literal : public expression {
@@ -162,8 +252,7 @@ class literal : public expression {
    * @param value A numeric scalar value
    */
   template <typename T>
-  literal(cudf::numeric_scalar<T>& value)
-    : scalar(value), value(cudf::get_scalar_device_view(value))
+  literal(cudf::numeric_scalar<T>& value) : scalar(value), value(value)
   {
   }
 
@@ -174,8 +263,7 @@ class literal : public expression {
    * @param value A timestamp scalar value
    */
   template <typename T>
-  literal(cudf::timestamp_scalar<T>& value)
-    : scalar(value), value(cudf::get_scalar_device_view(value))
+  literal(cudf::timestamp_scalar<T>& value) : scalar(value), value(value)
   {
   }
 
@@ -186,10 +274,16 @@ class literal : public expression {
    * @param value A duration scalar value
    */
   template <typename T>
-  literal(cudf::duration_scalar<T>& value)
-    : scalar(value), value(cudf::get_scalar_device_view(value))
+  literal(cudf::duration_scalar<T>& value) : scalar(value), value(value)
   {
   }
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A string scalar value
+   */
+  literal(cudf::string_scalar& value) : scalar(value), value(value) {}
 
   /**
    * @brief Get the data type.
@@ -203,10 +297,7 @@ class literal : public expression {
    *
    * @return The device scalar object
    */
-  [[nodiscard]] cudf::detail::fixed_width_scalar_device_view_base get_value() const
-  {
-    return value;
-  }
+  [[nodiscard]] generic_scalar_device_view get_value() const { return value; }
 
   /**
    * @brief Accepts a visitor class.
@@ -236,7 +327,7 @@ class literal : public expression {
 
  private:
   cudf::scalar const& scalar;
-  cudf::detail::fixed_width_scalar_device_view_base const value;
+  generic_scalar_device_view const value;
 };
 
 /**

@@ -88,11 +88,11 @@ class string_view {
     __device__ inline const_iterator& operator++();
     __device__ inline const_iterator operator++(int);
     __device__ inline const_iterator& operator+=(difference_type);
-    __device__ inline const_iterator operator+(difference_type);
+    __device__ inline const_iterator operator+(difference_type) const;
     __device__ inline const_iterator& operator--();
     __device__ inline const_iterator operator--(int);
     __device__ inline const_iterator& operator-=(difference_type);
-    __device__ inline const_iterator operator-(difference_type);
+    __device__ inline const_iterator operator-(difference_type) const;
     __device__ inline bool operator==(const const_iterator&) const;
     __device__ inline bool operator!=(const const_iterator&) const;
     __device__ inline bool operator<(const const_iterator&) const;
@@ -104,10 +104,12 @@ class string_view {
     [[nodiscard]] __device__ inline size_type byte_offset() const;
 
    private:
+    friend class string_view;
     const char* p{};
     size_type bytes{};
     size_type char_pos{};
     size_type byte_pos{};
+    __device__ inline const_iterator(string_view const& str, size_type pos, size_type offset);
     /// @endcond
   };
 

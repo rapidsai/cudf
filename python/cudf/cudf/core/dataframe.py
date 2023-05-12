@@ -1697,20 +1697,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
                 )
-
-        # Reassign precision for decimal cols & type schema for struct cols
         for name, col in out._data.items():
-            if isinstance(
-                col,
-                (
-                    cudf.core.column.DecimalBaseColumn,
-                    cudf.core.column.StructColumn,
-                    cudf.core.column.ListColumn,
-                ),
-            ):
-                out._data[name] = col._with_type_metadata(
-                    tables[0]._data[name].dtype
-                )
+            out._data[name] = col._with_type_metadata(
+                tables[0]._data[name].dtype
+            )
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
@@ -2254,6 +2244,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         A list of cudf.DataFrame objects.
+
+        Raises
+        ------
+        ValueError
+            If the map_index has invalid entries (not all in [0,
+            num_partitions)).
         """
         # map_index might be a column name or array,
         # make it a Column
@@ -3805,10 +3801,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 for codes in result_columns
             ]
-        elif isinstance(
-            source_dtype,
-            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
-        ):
+        else:
             result_columns = [
                 result_column._with_type_metadata(source_dtype)
                 for result_column in result_columns
@@ -4079,7 +4072,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -7070,7 +7063,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               Specifically, `&` must be used for bitwise operators on integers,
               not `and`, which is specifically for the logical and between
               booleans.
-            * Only numerical types are currently supported.
+            * Only numerical types currently support all operators.
+            * String types currently support comparison operators.
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.
