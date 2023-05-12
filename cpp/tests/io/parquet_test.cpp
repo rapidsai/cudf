@@ -285,14 +285,15 @@ cudf::io::parquet::OffsetIndex read_offset_index(
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
 cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnChunk& chunk)
 {
-  auto& stats_blob = chunk.meta_data.statistics_blob;
-  CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
+  return chunk.meta_data.statistics_blob;
+  // auto& stats_blob = chunk.meta_data.statistics_blob;
+  // CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
-  cudf::io::parquet::Statistics stats;
-  cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  bool res = cp.read(&stats);
-  CUDF_EXPECTS(res, "Cannot parse column statistics");
-  return stats;
+  // cudf::io::parquet::Statistics stats;
+  // cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
+  // bool res = cp.read(&stats);
+  // CUDF_EXPECTS(res, "Cannot parse column statistics");
+  // return stats;
 }
 
 // read page header from datasource at location indicated by page_loc,
