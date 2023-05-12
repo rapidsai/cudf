@@ -133,8 +133,6 @@ class CudfEngine(ArrowDatasetEngine):
                     raise err
 
         # Apply filters (if any are defined)
-        if filters is not None and not isinstance(filters, list):
-            raise TypeError(f"filters must be a list, got {type(filters)}.")
         df = _apply_post_filters(df, filters)
 
         if partitions and partition_keys is None:

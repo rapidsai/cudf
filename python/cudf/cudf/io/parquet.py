@@ -567,9 +567,35 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
-    if filters is not None and not isinstance(filters, list):
-        raise TypeError(f"filters must be list, got {type(filters)}.")
     return _apply_post_filters(df, filters)
+
+
+def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
+    # Utility to normalize and validate the `filters`
+    # argument to `read_parquet`
+    if filters is not None:
+        msg = (
+            f"filters must be None, or non-empty List[Tuple] "
+            f"or List[List[Tuple]]. Got {filters}"
+        )
+        if not filters or not isinstance(filters, list):
+            raise TypeError(msg)
+
+        def _validate_predicate(item):
+            if not isinstance(item, tuple) or len(item) != 3:
+                raise TypeError(
+                    f"Predicate must be Tuple[str, str, Any], "
+                    f"got {predicate}."
+                )
+
+        filters = filters if isinstance(filters[0], list) else [filters]
+        for conjunction in filters:
+            if not conjunction or not isinstance(conjunction, list):
+                raise TypeError(msg)
+            for predicate in conjunction:
+                _validate_predicate(predicate)
+
+    return filters
 
 
 def _handle_in(column, value, *, negate):
@@ -591,7 +617,7 @@ def _handle_is(column, value, *, negate):
     return ~column.isna() if negate else column.isna()
 
 
-def _apply_post_filters(df, filters: list | None):
+def _apply_post_filters(df: cudf.DataFrame, filters: list | None):
     # Apply DNF filters to an in-memory DataFrame
     #
     # Disjunctive normal form (DNF) means that the inner-most
@@ -600,15 +626,10 @@ def _apply_post_filters(df, filters: list | None):
     # larger predicate. The outer-most list then combines all
     # of the combined filters with an OR disjunction.
 
+    filters = _normalize_filters(filters)
     if not filters:
         # No filters to apply
         return df
-
-    if filters is not None and (
-        not isinstance(filters, list)
-        or not isinstance(filters[0], (list, tuple))
-    ):
-        raise TypeError("filters must be List[Tuple] or ListList[[Tuple]]")
 
     handlers: Dict[str, Callable] = {
         "==": operator.eq,
@@ -633,27 +654,20 @@ def _apply_post_filters(df, filters: list | None):
         and df.index.step == 1
     )
 
-    # Make sure we have List[List[Tuple]]. If filters
-    # is List[Tuple], then we only have a conjunction
-    expressions = filters if isinstance(filters[0], list) else [filters]
-
     try:
-        # Disjunction loop
-        #
-        # All elements of `disjunctions` shall be combined with
-        # an `OR` disjunction (operator.or_)
-        disjunctions = []
-        for expr in expressions:
-            conjunction = reduce(
-                operator.and_,
-                (
-                    handlers[op](df[column], value)
-                    for (column, op, value) in expr
-                ),
-            )
-            disjunctions.append(conjunction)
-
-        selection = reduce(operator.or_, disjunctions)
+        selection: cudf.Series = reduce(
+            operator.or_,
+            (
+                reduce(
+                    operator.and_,
+                    (
+                        handlers[op](df[column], value)
+                        for (column, op, value) in expr
+                    ),
+                )
+                for expr in filters
+            ),
+        )
         if reset_index:
             return df[selection].reset_index(drop=True)
         return df[selection]
