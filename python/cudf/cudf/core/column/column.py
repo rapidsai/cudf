@@ -16,7 +16,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    TypeVar,
     Union,
     cast,
 )
@@ -98,8 +97,6 @@ if PANDAS_GE_150:
     from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 else:
     from pandas.core.arrays._arrow_utils import ArrowIntervalType
-
-T = TypeVar("T", bound="ColumnBase")
 
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
