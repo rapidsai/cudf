@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import math
 import operator
@@ -8,7 +9,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
@@ -566,6 +567,8 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
+    if filters is not None and not isinstance(filters, list):
+        raise TypeError(f"filters must be list, got {type(filters)}.")
     return _apply_post_filters(df, filters)
 
 
@@ -588,7 +591,7 @@ def _handle_is(column, value, *, negate):
     return ~column.isna() if negate else column.isna()
 
 
-def _apply_post_filters(df, filters):
+def _apply_post_filters(df, filters: list | None):
     # Apply DNF filters to an in-memory DataFrame
     #
     # Disjunctive normal form (DNF) means that the inner-most
@@ -601,7 +604,13 @@ def _apply_post_filters(df, filters):
         # No filters to apply
         return df
 
-    handlers = {
+    if filters is not None and (
+        not isinstance(filters, list)
+        or not isinstance(filters[0], (list, tuple))
+    ):
+        raise TypeError("filters must be List[Tuple] or ListList[[Tuple]]")
+
+    handlers: Dict[str, Callable] = {
         "==": operator.eq,
         "!=": operator.ne,
         "<": operator.lt,
@@ -617,12 +626,16 @@ def _apply_post_filters(df, filters):
     # Can re-set the index before returning if we filter
     # out rows from a DataFrame with a default RangeIndex
     # (to reduce memory usage)
-    reset_index = filters and (
+    reset_index = (
         isinstance(df.index, cudf.RangeIndex)
         and df.index.name is None
         and df.index.start == 0
         and df.index.step == 1
     )
+
+    # Make sure we have List[List[Tuple]]. If filters
+    # is List[Tuple], then we only have a conjunction
+    expressions = filters if isinstance(filters[0], list) else [filters]
 
     try:
         # Disjunction loop
@@ -630,7 +643,7 @@ def _apply_post_filters(df, filters):
         # All elements of `disjunctions` shall be combined with
         # an `OR` disjunction (operator.or_)
         disjunctions = []
-        for expr in filters if isinstance(filters[0], list) else [filters]:
+        for expr in expressions:
             conjunction = reduce(
                 operator.and_,
                 (
