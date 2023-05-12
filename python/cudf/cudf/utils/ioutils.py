@@ -150,8 +150,9 @@ storage_options : dict, optional, default None
 filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
-    that do not match the given filter predicate are not read. The
-    predicate is expressed in disjunctive normal form (DNF) like
+    that do not match the given filter predicate are not read. The filters
+    will also be applied to the rows of the in-memory DataFrame after IO.
+    The predicate is expressed in disjunctive normal form (DNF) like
     `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
@@ -161,10 +162,6 @@ filters : list of tuple, list of lists of tuples, default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
-post_filters : list of tuple, list of lists of tuples, default None
-    Row-wise filters to be applied to the in-memory `DataFrame` after IO
-    is performed. If `None` (the default), `post_filters` will be set equal
-    to the value of `filters`.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list

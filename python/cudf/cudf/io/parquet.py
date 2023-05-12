@@ -7,6 +7,7 @@ import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
+from functools import partial, reduce
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -441,7 +442,6 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
-    post_filters=None,
     *args,
     **kwargs,
 ):
@@ -565,22 +565,24 @@ def read_parquet(
         **kwargs,
     )
 
-    # Can re-set the index before returning if we filter
-    # out rows from a DataFrame with a default RangeIndex
-    # (to reduce memory usage)
-    post_filters = post_filters or filters
-    reset_index = post_filters and (
-        isinstance(df.index, cudf.RangeIndex)
-        and df.index.name is None
-        and df.index.start == 0
-        and df.index.step == 1
-    )
+    # Apply filters row-wise (if any are defined), and return
+    return _apply_post_filters(df, filters)
 
-    # Apply post_filters (if any are defined)
-    df = _apply_post_filters(df, post_filters)
 
-    # Return final cudf.DataFrame
-    return df.reset_index(drop=True) if reset_index else df
+def _handle_in(column, value):
+    if not isinstance(value, (list, set, tuple)):
+        raise TypeError(
+            "Value of 'in' filter must be a " "list, set, or tuple."
+        )
+    return reduce(operator.or_, (operator.eq(column, v) for v in value))
+
+
+def _handle_is(column, value, *, negate):
+    if value not in {np.nan, None}:
+        raise TypeError(
+            "Value of 'is' or 'is not' filter " "must be np.nan or None."
+        )
+    return ~column.isna() if negate else column.isna()
 
 
 def _apply_post_filters(df, filters):
@@ -596,14 +598,27 @@ def _apply_post_filters(df, filters):
         # No filters to apply
         return df
 
-    _comparisons = {
+    handlers = {
         "==": operator.eq,
         "!=": operator.ne,
         "<": operator.lt,
         "<=": operator.le,
         ">": operator.gt,
         ">=": operator.ge,
+        "in": _handle_in,
+        "is": partial(_handle_is, negate=False),
+        "is not": partial(_handle_is, negate=True),
     }
+
+    # Can re-set the index before returning if we filter
+    # out rows from a DataFrame with a default RangeIndex
+    # (to reduce memory usage)
+    reset_index = filters and (
+        isinstance(df.index, cudf.RangeIndex)
+        and df.index.name is None
+        and df.index.start == 0
+        and df.index.step == 1
+    )
 
     try:
         # Disjunction loop
@@ -611,67 +626,21 @@ def _apply_post_filters(df, filters):
         # All elements of `disjunctions` shall be combined with
         # an `OR` disjunction (operator.or_)
         disjunctions = []
-        other = filters.copy()
-        while other:
-
-            # Conjunction loop
-            #
-            # All elements of `conjunctions` shall be combined with
-            # an `AND` conjunction (operator.and_)
-            conjunctions = []
-            comparisons, *other = (
-                other if isinstance(other[0], list) else [other]
+        for expr in filters if isinstance(filters[0], list) else [filters]:
+            conjunction = reduce(
+                operator.and_,
+                (
+                    handlers[op](df[column], value)
+                    for (column, op, value) in expr
+                ),
             )
-            for (column, op, value) in comparisons:
+            disjunctions.append(conjunction)
 
-                # Inner comparison loop
-                #
-                # `op` is expected to be the string representation
-                # of a comparison operator (e.g. "==")
-                if op == "in":
-                    # Special case: "in"
-                    if not isinstance(value, (list, set, tuple)):
-                        raise TypeError(
-                            "Value of 'in' filter must be a "
-                            "list, set, or tuple."
-                        )
-                    if len(value) == 1:
-                        conjunctions.append(operator.eq(df[column], value[0]))
-                    else:
-                        conjunctions.append(
-                            operator.or_(
-                                *[operator.eq(df[column], v) for v in value]
-                            )
-                        )
-                elif op in ("is", "is not"):
-                    # Special case: "is" or "is not"
-                    if value not in (np.nan, None):
-                        raise TypeError(
-                            "Value of 'is' or 'is not' filter "
-                            "must be np.nan or None."
-                        )
-                    conjunctions.append(
-                        df[column].isna() if op == "is" else ~df[column].isna()
-                    )
-                else:
-                    # Conventional comparison operator
-                    conjunctions.append(_comparisons[op](df[column], value))
-
-            disjunctions.append(
-                operator.and_(*conjunctions)
-                if len(conjunctions) > 1
-                else conjunctions[0]
-            )
-
-        return df[
-            operator.or_(*disjunctions)
-            if len(disjunctions) > 1
-            else disjunctions[0]
-        ]
-
+        selection = reduce(operator.or_, disjunctions)
+        if reset_index:
+            return df[selection].reset_index(drop=True)
+        return df[selection]
     except (KeyError, TypeError):
-
-        # Unsupported op or value
         warnings.warn(
             f"Row-wise filtering failed in read_parquet for {filters}"
         )
