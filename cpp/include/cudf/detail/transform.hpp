@@ -41,8 +41,8 @@ std::unique_ptr<column> transform(column_view const& input,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> compute_column(table_view const table,
-                                       ast::operation const& expr,
+std::unique_ptr<column> compute_column(table_view const& table,
+                                       ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 
