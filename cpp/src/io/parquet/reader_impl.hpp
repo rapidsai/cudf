@@ -73,7 +73,8 @@ class reader::impl {
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> const& num_rows,
                            bool uses_custom_row_bounds,
-                           host_span<std::vector<size_type> const> row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices,
+                           std::optional<std::reference_wrapper<ast::expression const>> _filter);
 
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
@@ -190,7 +191,9 @@ class reader::impl {
    *        bounds
    * @return The output table along with columns' metadata
    */
-  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
+  table_with_metadata read_chunk_internal(
+    bool uses_custom_row_bounds,
+    std::optional<std::reference_wrapper<ast::expression const>> _filter);
 
   /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
@@ -200,8 +203,10 @@ class reader::impl {
    * @param out_columns The columns for building the output table
    * @return The output table along with columns' metadata
    */
-  table_with_metadata finalize_output(table_metadata& out_metadata,
-                                      std::vector<std::unique_ptr<column>>& out_columns);
+  table_with_metadata finalize_output(
+    table_metadata& out_metadata,
+    std::vector<std::unique_ptr<column>>& out_columns,
+    std::optional<std::reference_wrapper<ast::expression const>> _filter);
 
   /**
    * @brief Allocate data buffers for the output columns.

@@ -16,6 +16,8 @@
 
 #include "reader_impl.hpp"
 
+#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <numeric>
@@ -260,7 +262,8 @@ void reader::impl::prepare_data(int64_t skip_rows,
   _file_preprocessed = true;
 }
 
-table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
+table_with_metadata reader::impl::read_chunk_internal(
+  bool uses_custom_row_bounds, std::optional<std::reference_wrapper<ast::expression const>> _filter)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -270,7 +273,7 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
   out_columns.reserve(_output_buffers.size());
 
   if (!has_next() || _chunk_read_info.size() == 0) {
-    return finalize_output(out_metadata, out_columns);
+    return finalize_output(out_metadata, out_columns, _filter);
   }
 
   auto const& read_info = _chunk_read_info[_current_read_chunk++];
@@ -295,12 +298,14 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     }
   }
 
-  // Add empty columns if needed.
-  return finalize_output(out_metadata, out_columns);
+  // Add empty columns if needed. Filter output columns based on filter.
+  return finalize_output(out_metadata, out_columns, _filter);
 }
 
-table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
-                                                  std::vector<std::unique_ptr<column>>& out_columns)
+table_with_metadata reader::impl::finalize_output(
+  table_metadata& out_metadata,
+  std::vector<std::unique_ptr<column>>& out_columns,
+  std::optional<std::reference_wrapper<ast::expression const>> _filter)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
@@ -329,17 +334,28 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  if (_filter.has_value()) {
+    auto read_table = std::make_unique<table>(std::move(out_columns));
+    auto predicate  = cudf::detail::compute_column(
+      *read_table, _filter.value().get(), _stream, rmm::mr::get_current_device_resource());
+    CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
+                 "Predicate filter should return a boolean");
+    auto output_table = cudf::detail::apply_boolean_mask(*read_table, *predicate, _stream, _mr);
+    return {std::move(output_table), std::move(out_metadata)};
+  }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read(int64_t skip_rows,
-                                       std::optional<size_type> const& num_rows,
-                                       bool uses_custom_row_bounds,
-                                       host_span<std::vector<size_type> const> row_group_indices)
+table_with_metadata reader::impl::read(
+  int64_t skip_rows,
+  std::optional<size_type> const& num_rows,
+  bool uses_custom_row_bounds,
+  host_span<std::vector<size_type> const> row_group_indices,
+  std::optional<std::reference_wrapper<ast::expression const>> _filter)
 {
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
   prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
-  return read_chunk_internal(uses_custom_row_bounds);
+  return read_chunk_internal(uses_custom_row_bounds, _filter);
 }
 
 table_with_metadata reader::impl::read_chunk()
@@ -357,7 +373,7 @@ table_with_metadata reader::impl::read_chunk()
                std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/);
-  return read_chunk_internal(true);
+  return read_chunk_internal(true, std::nullopt);
 }
 
 bool reader::impl::has_next()

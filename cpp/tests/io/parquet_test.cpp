@@ -30,9 +30,11 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -5435,6 +5437,37 @@ TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
     auto chunk = reader.read_chunk();
   }
   EXPECT_TRUE(iterations < 10);
+}
+
+TEST_F(ParquetReaderTest, FilterAST)
+{
+  srand(31337);
+  auto written_table = create_random_fixed_table<int>(9, 9, false);
+
+  auto filepath = temp_env->get_temp_filepath("NonNullable.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *written_table);
+  cudf::io::write_parquet(args);
+
+  // Filtering AST - table[0] < RAND_MAX/2
+  auto literal_value     = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_reference(0);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto predicate = cudf::compute_column(*written_table, filter_expression);
+  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+    << "Predicate filter should return a boolean";
+  auto expected = cudf::apply_boolean_mask(*written_table, *predicate);
+  // To make sure AST filters out some elements
+  EXPECT_NE(written_table->num_rows(), expected->num_rows());
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
