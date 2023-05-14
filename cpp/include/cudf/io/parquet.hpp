@@ -163,7 +163,7 @@ class parquet_reader_options {
    * @return List of individual row groups to be read
    */
   [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
-  
+
   /**
    * @brief Returns AST based filter for predicate pushdown.
    *
@@ -294,7 +294,7 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets vector of individual row groups to read.
    *
-   * @param row_groups Vector of row groups to read
+   * @param filter Vector of row groups to read
    * @return this for chaining
    */
   parquet_reader_options_builder& filter(ast::expression const& filter)
