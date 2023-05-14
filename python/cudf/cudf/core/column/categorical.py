@@ -710,10 +710,10 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         dtype: CategoricalDtype,
-        mask: Buffer = None,
-        size: int = None,
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
 
@@ -889,7 +889,7 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def slice(
-        self, start: int, stop: int, stride: int = None
+        self, start: int, stop: int, stride: Optional[int] = None
     ) -> "column.ColumnBase":
         codes = self.codes.slice(start, stop, stride)
         return cudf.core.column.build_categorical_column(
@@ -962,7 +962,9 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -1219,7 +1221,10 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def fillna(
-        self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Any = None,
+        dtype: Optional[Dtype] = None,
     ) -> CategoricalColumn:
         """
         Fill null values with *fill_value*
@@ -1237,7 +1242,7 @@ class CategoricalColumn(column.ColumnBase):
                     try:
                         fill_value = self._encode(fill_value)
                         fill_value = self.codes.dtype.type(fill_value)
-                    except (ValueError) as err:
+                    except ValueError as err:
                         err_msg = "fill value must be in categories"
                         raise ValueError(err_msg) from err
             else:
@@ -1641,7 +1646,7 @@ def _create_empty_categorical_column(
 
 
 def pandas_categorical_as_column(
-    categorical: ColumnLike, codes: ColumnLike = None
+    categorical: ColumnLike, codes: Optional[ColumnLike] = None
 ) -> CategoricalColumn:
     """Creates a CategoricalColumn from a pandas.Categorical
 
