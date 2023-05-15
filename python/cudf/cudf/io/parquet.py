@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-import operator
 import shutil
 import tempfile
 import warnings
@@ -485,7 +484,7 @@ def read_parquet(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
 
-    # Normalize filters
+    # Normalize and validate filters
     filters = _normalize_filters(filters)
 
     # Use pyarrow dataset to detect/process directory-partitioned
@@ -574,12 +573,12 @@ def read_parquet(
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
     # Utility to normalize and validate the `filters`
     # argument to `read_parquet`
-    if filters is not None:
+    if filters:
         msg = (
             f"filters must be None, or non-empty List[Tuple] "
             f"or List[List[Tuple]]. Got {filters}"
         )
-        if not filters or not isinstance(filters, list):
+        if not isinstance(filters, list):
             raise TypeError(msg)
 
         def _validate_predicate(item):
@@ -596,48 +595,63 @@ def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
             for predicate in conjunction:
                 _validate_predicate(predicate)
 
-    return filters
-
-
-def _handle_in(column, value, *, negate):
-    if not isinstance(value, (list, set, tuple)):
-        raise TypeError(
-            "Value of 'in' or 'not in' filter must be a list, set, or tuple."
-        )
-    if negate:
-        return reduce(operator.and_, (operator.ne(column, v) for v in value))
+        return filters
     else:
-        return reduce(operator.or_, (operator.eq(column, v) for v in value))
+        return None
 
 
-def _handle_is(column, value, *, negate):
-    if value not in {np.nan, None}:
-        raise TypeError(
-            "Value of 'is' or 'is not' filter must be np.nan or None."
-        )
-    return ~column.isna() if negate else column.isna()
+def _apply_post_filters(
+    df: cudf.DataFrame, filters: List[List[tuple]] | None
+) -> cudf.DataFrame:
+    """Apply DNF filters to an in-memory DataFrame
 
-
-def _apply_post_filters(df: cudf.DataFrame, filters: List[List[tuple]] | None):
-    # Apply DNF filters to an in-memory DataFrame
-    #
-    # Disjunctive normal form (DNF) means that the inner-most
-    # tuple describes a single column predicate. These inner
-    # predicates are combined with an AND conjunction into a
-    # larger predicate. The outer-most list then combines all
-    # of the combined filters with an OR disjunction.
+    Disjunctive normal form (DNF) means that the inner-most
+    tuple describes a single column predicate. These inner
+    predicates are combined with an AND conjunction into a
+    larger predicate. The outer-most list then combines all
+    of the combined filters with an OR disjunction.
+    """
 
     if not filters:
         # No filters to apply
         return df
 
+    def _handle_eq(column: cudf.Series, value, *, negate) -> cudf.Series:
+        return column != value if negate else column == value
+
+    def _handle_gt(column: cudf.Series, value, *, negate) -> cudf.Series:
+        return column <= value if negate else column > value
+
+    def _handle_lt(column: cudf.Series, value, *, negate) -> cudf.Series:
+        return column >= value if negate else column < value
+
+    def _handle_in(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if not isinstance(value, (list, set, tuple)):
+            raise TypeError(
+                "Value of 'in'/'not in' filter must be a list, set, or tuple."
+            )
+        return ~column.isin(value) if negate else column.isin(value)
+
+    def _handle_is(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if value not in {np.nan, None}:
+            raise TypeError(
+                "Value of 'is'/'is not' filter must be np.nan or None."
+            )
+        return ~column.isna() if negate else column.isna()
+
+    def _handle_and(left: cudf.Series, right: cudf.Series) -> cudf.Series:
+        return left & right
+
+    def _handle_or(left: cudf.Series, right: cudf.Series) -> cudf.Series:
+        return left | right
+
     handlers: Dict[str, Callable] = {
-        "==": operator.eq,
-        "!=": operator.ne,
-        "<": operator.lt,
-        "<=": operator.le,
-        ">": operator.gt,
-        ">=": operator.ge,
+        "==": partial(_handle_eq, negate=False),
+        "!=": partial(_handle_eq, negate=True),
+        "<": partial(_handle_lt, negate=False),
+        ">=": partial(_handle_lt, negate=True),
+        ">": partial(_handle_gt, negate=False),
+        "<=": partial(_handle_gt, negate=True),
         "in": partial(_handle_in, negate=False),
         "not in": partial(_handle_in, negate=True),
         "is": partial(_handle_is, negate=False),
@@ -656,10 +670,10 @@ def _apply_post_filters(df: cudf.DataFrame, filters: List[List[tuple]] | None):
 
     try:
         selection: cudf.Series = reduce(
-            operator.or_,
+            _handle_or,
             (
                 reduce(
-                    operator.and_,
+                    _handle_and,
                     (
                         handlers[op](df[column], value)
                         for (column, op, value) in expr
