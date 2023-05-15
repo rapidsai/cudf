@@ -146,7 +146,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
   }
 
   using detail::single_lane_block_sum_reduce;
-  auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+  auto const block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
   if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
 }
 }  // namespace
