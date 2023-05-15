@@ -673,12 +673,11 @@ class parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
-   * @brief Returns a pointer to the user-provided compression statistics.
+   * @brief Returns a shared pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */
-  [[nodiscard]] std::shared_ptr<writer_compression_statistics> const& get_compression_statistics()
-    const
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
   {
     return _compression_stats;
   }
@@ -1243,12 +1242,11 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
-   * @brief Returns a pointer to the user-provided compression statistics.
+   * @brief Returns a shared pointer to the user-provided compression statistics.
    *
    * @return Compression statistics
    */
-  [[nodiscard]] std::shared_ptr<writer_compression_statistics> const& get_compression_statistics()
-    const
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
   {
     return _compression_stats;
   }
