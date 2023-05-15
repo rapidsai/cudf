@@ -2334,7 +2334,7 @@ auto convert_table_to_orc_data(table_view const& input,
                compression_result{0, compression_status::FAILURE});
   if (compression_kind != NONE) {
     strm_descs.host_to_device(stream);
-    compression_stats = gpu::CompressOrcDataStreams(compressed_data.data(),
+    compression_stats = gpu::CompressOrcDataStreams(compressed_data,
                                                     num_compressed_blocks,
                                                     compression_kind,
                                                     compression_blocksize,

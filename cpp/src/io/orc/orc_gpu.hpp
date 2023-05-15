@@ -360,7 +360,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @return Compression statistics (if requested)
  */
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
-  uint8_t* compressed_data,
+  device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
   CompressionKind compression,
   uint32_t comp_blk_size,
