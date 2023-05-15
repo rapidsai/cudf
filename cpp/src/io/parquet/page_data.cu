@@ -469,7 +469,6 @@ static __device__ void gpuOutputGeneric(
 }
 
 /**
- * @brief Returns the total size in bytes of string char data in the page.
  *
  * This function expects the dictionary position to be at 0 and will traverse
  * the entire thing.
