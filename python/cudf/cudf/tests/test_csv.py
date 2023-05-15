@@ -150,8 +150,8 @@ def make_all_numeric_extremes_dataframe():
         np_type = pdf_dtypes[gdf_dtype]
         if np.issubdtype(np_type, np.integer):
             itype = np.iinfo(np_type)
-            extremes = [itype.min, itype.max]
-            df[gdf_dtype] = np.array(extremes * 10, dtype=np_type)[:20]
+            extremes = [0, +1, -1, itype.min, itype.max]
+            df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
         else:
             ftype = np.finfo(np_type)
             extremes = [
@@ -324,6 +324,7 @@ def test_csv_reader_dtype_dict(use_names):
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize("use_names", [True, False])
 def test_csv_reader_dtype_extremes(use_names):
     # Save with the column header if not explicitly specifying a list of names
