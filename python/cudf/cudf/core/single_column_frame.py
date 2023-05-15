@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -20,8 +20,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -138,7 +136,6 @@ class SingleColumnFrame(Frame, NotIterable):
         return super().to_numpy(dtype, copy, na_value).flatten()
 
     def tolist(self):  # noqa: D102
-
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "

@@ -100,7 +100,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         name=None,
         **kwargs,
     ):
-
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
         if name is not None:
@@ -737,7 +736,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def _index_and_downcast(self, result, index, index_key):
-
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
         if (
@@ -995,7 +993,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @classmethod
     @_cudf_nvtx_annotate
     def _concat(cls, objs):
-
         source_data = [o.to_frame(index=False) for o in objs]
 
         # TODO: Verify if this is really necessary or if we can rely on

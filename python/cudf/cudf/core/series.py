@@ -59,7 +59,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -1467,15 +1467,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        # Reassign precision for decimal cols & type schema for struct cols
-        if isinstance(
-            col,
-            (
-                cudf.core.column.DecimalBaseColumn,
-                cudf.core.column.StructColumn,
-                cudf.core.column.ListColumn,
-            ),
-        ):
+        if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
@@ -3215,7 +3207,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         sort=False,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -4510,6 +4502,21 @@ class DatetimeProperties:
         )
         return Series(
             data=str_col, index=self.series._index, name=self.series.name
+        )
+
+    @copy_docstring(DatetimeIndex.tz_localize)
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+        from cudf.core._internals.timezones import localize
+
+        if tz is None:
+            result_col = self.series._column._local_time
+        else:
+            result_col = localize(
+                self.series._column, tz, ambiguous, nonexistent
+            )
+        return Series._from_data(
+            data={self.series.name: result_col},
+            index=self.series._index,
         )
 
 

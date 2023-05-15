@@ -101,7 +101,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def __init__(
         self,
-        data: Union[abc.MutableMapping, ColumnAccessor] = None,
+        data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
     ):

@@ -820,6 +820,17 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         assert_eq(expect, got)
 
 
+def test_string_contains_case(ps_gs):
+    ps, gs = ps_gs
+    with pytest.raises(NotImplementedError):
+        gs.str.contains("A", case=False)
+    expected = ps.str.contains("A", regex=False, case=False)
+    got = gs.str.contains("A", regex=False, case=False)
+    assert_eq(expected, got)
+    got = gs.str.contains("a", regex=False, case=False)
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "pat,esc,expect",
     [
