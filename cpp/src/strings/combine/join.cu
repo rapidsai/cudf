@@ -157,10 +157,8 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   }();
 
   // build the offsets: single string output has offsets [0,chars-size]
-  auto offsets =
-    cudf::detail::make_device_uvector_async(std::vector<size_type>({0, chars_column->size()}),
-                                            stream,
-                                            rmm::mr::get_current_device_resource());
+  auto offsets = cudf::detail::make_device_uvector_async(
+    std::vector<size_type>({0, chars_column->size()}), stream, mr);
   auto offsets_column = std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
 
   // build the null mask: only one output row so it is either all-valid or all-null
