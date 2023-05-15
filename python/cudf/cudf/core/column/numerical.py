@@ -723,7 +723,7 @@ class NumericalColumn(NumericalBaseColumn):
         index: Optional[pd.Index] = None,
         nullable: bool = False,
         **kwargs,
-    ) -> "pd.Series":
+    ) -> pd.Series:
         if nullable and self.dtype in np_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
             arrow_array = self.to_arrow()
