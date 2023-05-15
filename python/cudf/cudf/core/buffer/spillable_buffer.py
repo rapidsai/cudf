@@ -7,19 +7,10 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
 
 import numpy
+from typing_extensions import Self
 
 import rmm
 
@@ -33,9 +24,6 @@ from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spill_manager import SpillManager
-
-
-T = TypeVar("T", bound="SpillableBuffer")
 
 
 def get_spillable_owner(data) -> Optional[SpillableBuffer]:
@@ -213,9 +201,7 @@ class SpillableBuffer(Buffer):
         self._manager.add(self)
 
     @classmethod
-    def _from_device_memory(
-        cls: Type[T], data: Any, *, exposed: bool = False
-    ) -> T:
+    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -237,7 +223,7 @@ class SpillableBuffer(Buffer):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         """Create a spillabe buffer from host memory.
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -279,7 +265,7 @@ class SpillableBuffer(Buffer):
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
 
-    def copy(self, deep: bool = True):
+    def copy(self, deep: bool = True) -> Self:
         spill_lock = SpillLock()
         self.spill_lock(spill_lock=spill_lock)
         return super().copy(deep=deep)

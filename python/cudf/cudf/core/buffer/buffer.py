@@ -5,27 +5,16 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import (
-    Any,
-    Dict,
-    Literal,
-    Mapping,
-    Optional,
-    Optional, Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
 
 import numpy
+from typing_extensions import Self
 
 import rmm
 
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
-
-T = TypeVar("T", bound="Buffer")
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
@@ -118,7 +107,7 @@ class Buffer(Serializable):
         )
 
     @classmethod
-    def _from_device_memory(cls: Type[T], data: Any) -> T:
+    def _from_device_memory(cls, data: Any) -> Self:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -149,7 +138,7 @@ class Buffer(Serializable):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -179,7 +168,7 @@ class Buffer(Serializable):
         # Create from device memory
         return cls._from_device_memory(buf)
 
-    def _getitem(self: T, offset: int, size: int) -> T:
+    def _getitem(self, offset: int, size: int) -> Self:
         """
         Sub-classes can overwrite this to implement __getitem__
         without having to handle non-slice inputs.
@@ -192,7 +181,7 @@ class Buffer(Serializable):
             )
         )
 
-    def __getitem__(self: T, key: slice) -> T:
+    def __getitem__(self, key: slice) -> Self:
         """Create a new slice of the buffer."""
         if not isinstance(key, slice):
             raise TypeError(
@@ -204,7 +193,7 @@ class Buffer(Serializable):
             raise ValueError("slice must be C-contiguous")
         return self._getitem(offset=start, size=stop - start)
 
-    def copy(self: T, deep: bool = True) -> T:
+    def copy(self, deep: bool = True) -> Self:
         """
         Return a copy of Buffer.
 
@@ -307,7 +296,7 @@ class Buffer(Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls: Type[T], header: dict, frames: list) -> T:
+    def deserialize(cls, header: dict, frames: list) -> Self:
         """Create an Buffer from a serialized representation.
 
         Parameters

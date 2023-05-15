@@ -14,6 +14,8 @@ from typing import (
     cast,
 )
 
+from typing_extensions import Self
+
 import cudf
 from cudf.core.buffer.buffer import Buffer, get_ptr_and_size
 from cudf.utils.string import format_bytes
@@ -133,9 +135,7 @@ class TenableBuffer(Buffer):
         self._exposed = True
 
     @classmethod
-    def _from_device_memory(
-        cls: Type[T], data: Any, *, exposed: bool = False
-    ) -> T:
+    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
         """Create an tenable buffer from device memory.
 
         No data is being copied.
@@ -233,7 +233,7 @@ class BufferSlice(TenableBuffer):
     ) -> memoryview:
         return self._base.memoryview(offset=self._offset + offset, size=size)
 
-    def copy(self, deep: bool = True) -> BufferSlice:
+    def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
 
         What actually happens when `deep == False` depends on the
@@ -263,9 +263,7 @@ class BufferSlice(TenableBuffer):
             base_copy = self._base.copy(deep=deep or self.exposed)
         else:
             base_copy = self._base.copy(deep=deep)
-        return cast(
-            BufferSlice, base_copy[self._offset : self._offset + self._size]
-        )
+        return cast(Self, base_copy[self._offset : self._offset + self._size])
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
