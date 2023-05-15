@@ -5632,7 +5632,7 @@ class StringColumn(column.ColumnBase):
         index: Optional[pd.Index] = None,
         nullable: bool = False,
         **kwargs,
-    ) -> "pd.Series":
+    ) -> pd.Series:
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)

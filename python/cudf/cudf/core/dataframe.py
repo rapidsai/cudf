@@ -22,7 +22,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -37,6 +36,7 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
+from typing_extensions import Self
 
 import cudf
 import cudf.core.common
@@ -104,9 +104,6 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
-
-T = TypeVar("T", bound="DataFrame")
-
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -1306,7 +1303,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_cudf_nvtx_annotate
-    def _slice(self: T, arg: slice) -> T:
+    def _slice(self, arg: slice) -> Self:
         """
         _slice : slice the frame as per the arg
 
