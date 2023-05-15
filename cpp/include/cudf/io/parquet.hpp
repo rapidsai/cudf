@@ -795,9 +795,9 @@ class parquet_writer_options {
    *
    * @param comp_stats Pointer to compression statistics to be updated after writing
    */
-  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
   {
-    _compression_stats = comp_stats;
+    _compression_stats = std::move(comp_stats);
   }
 };
 
@@ -1349,9 +1349,9 @@ class chunked_parquet_writer_options {
    *
    * @param comp_stats Pointer to compression statistics to be updated after writing
    */
-  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
   {
-    _compression_stats = comp_stats;
+    _compression_stats = std::move(comp_stats);
   }
 
   /**
