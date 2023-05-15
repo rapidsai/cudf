@@ -129,10 +129,6 @@ __global__ void kernel_compute_tensor_metadata(
   }
 }
 
-struct tabulator {
-  uint32_t __device__ operator()(cudf::size_type idx) { return ((idx % 3) == 0) ? idx : 0; }
-};
-
 // this happens if there are no tokens in the input
 tokenizer_result build_empty_result(cudf::size_type size,
                                     uint32_t max_sequence_length,
@@ -145,11 +141,10 @@ tokenizer_result build_empty_result(cudf::size_type size,
 
   auto metadata = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::UINT32}, size * 3, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto d_metadata = cudf::mutable_column_device_view::create(*metadata, stream);
   thrust::tabulate(rmm::exec_policy(stream),
-                   d_metadata->begin<uint32_t>(),
-                   d_metadata->end<uint32_t>(),
-                   tabulator{});
+                   metadata->mutable_view().begin<uint32_t>(),
+                   metadata->mutable_view().end<uint32_t>(),
+                   [] __device__(auto idx) { return ((idx % 3) == 0) ? idx : 0; });
   metadata->set_null_count(0);
 
   return tokenizer_result{
