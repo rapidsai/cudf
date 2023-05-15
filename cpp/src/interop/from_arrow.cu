@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <thrust/gather.h>
 
@@ -169,7 +170,7 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return make_empty_column(type_id::EMPTY);
+  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer{}, rmm::device_buffer{}, size);
 }
 
 /**
