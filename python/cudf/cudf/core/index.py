@@ -76,24 +76,16 @@ class IndexMeta(type):
         return super().__call__(data, *args, **kwargs)
 
     def __instancecheck__(self, instance):
-        if self in {
-            cudf.CategoricalIndex,
-            cudf.TimedeltaIndex,
-            cudf.DatetimeIndex,
-            cudf.IntervalIndex,
-        }:
+        if self is cudf.Index:
+            return isinstance(instance, BaseIndex)
+        else:
             return False
-        return isinstance(instance, BaseIndex)
 
     def __subclasscheck__(self, subclass):
-        if self in {
-            cudf.CategoricalIndex,
-            cudf.TimedeltaIndex,
-            cudf.DatetimeIndex,
-            cudf.IntervalIndex,
-        }:
+        if self is cudf.Index:
+            return issubclass(subclass, BaseIndex)
+        else:
             return False
-        return issubclass(subclass, BaseIndex)
 
 
 def _lexsorted_equal_range(
