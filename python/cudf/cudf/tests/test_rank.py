@@ -125,9 +125,10 @@ sort_group_args = [
     np.full((3,), np.inf),
     np.full((3,), -np.inf),
 ]
-sort_dtype_args = [np.float32, np.float64]
+sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "elem,dtype",
     list(
@@ -139,7 +140,7 @@ sort_dtype_args = [np.float32, np.float64]
 )
 def test_series_rank_combinations(elem, dtype):
     np.random.seed(0)
-    aa = np.fromiter(chain.from_iterable(elem), dtype=dtype)
+    aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(dtype)
     gdf = DataFrame()
     df = pd.DataFrame()
     gdf["a"] = aa
