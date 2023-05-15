@@ -33,7 +33,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
-  private static boolean IF_ELSE = Boolean.getBoolean("ai.rapids.cudf.test.ifelse");
 
   public static final long UNKNOWN_NULL_COUNT = -1;
 
@@ -815,47 +814,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a deep copy of the column while replacing the validity mask. The resultant validity mask
-   * is the bitwise merge of the validity masks in the columns given as arguments. Validity mask is true
-   * when data is not null and false when it's null.
-   *
-   * The result will be sanitized to not contain any non-empty nulls in case of nested types
-   *
-   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
-   * @param columns array of columns whose null masks are merged, must have identical number of rows.
-   * @return the new ColumnVector with merged null mask.
-   * @throws IllegalStateException if existing nulls are set to valid data in the validity buffer
-   *
-   */
-  public final ColumnVector mergeAndSetValidityUsingIfElse(BinaryOp mergeOp, ColumnView... columns) {
-    System.out.println("************ if else *******");
-    assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
-
-    if (columns.length == 0) {
-      return copyToColumnVector();
-    }
-
-    ColumnVector shouldNotBeNull = columns[0].isNotNull();
-    try {
-      for (int i = 1; i < columns.length; i++) {
-        try (ColumnVector tmp = columns[i].isNotNull();
-             ColumnVector toClose = shouldNotBeNull) {
-          shouldNotBeNull = toClose.binaryOp(mergeOp, tmp, DType.BOOL8);
-        }
-      }
-
-      // Now make sure the original nulls are kept
-      try (ColumnVector originalIsNotNull = isNotNull();
-           ColumnVector finalShouldNotBeNull = shouldNotBeNull.and(originalIsNotNull);
-           Scalar nullScalar = Scalar.fromNull(this.getType())) {
-        return finalShouldNotBeNull.ifElse(this, nullScalar);
-      }
-    } finally {
-      shouldNotBeNull.close();
-    }
-  }
-
-  /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
    * The result will be sanitized to not contain any non-empty nulls in case of nested types
@@ -867,14 +825,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    */
   public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
-    if (IF_ELSE) {
-      return mergeAndSetValidityUsingIfElse(mergeOp, columns);
-    } else {
-      return mergeAndSetValidityOld(mergeOp, columns);
-    }
-  }
-
-  public final ColumnVector mergeAndSetValidityOld(BinaryOp mergeOp, ColumnView... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
@@ -885,25 +835,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       columnViews[i] = columns[i].getNativeView();
     }
 
-    ColumnVector potentialRes = new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
-
-    /**
-     * We need to sanitize the vector to make sure nulls in 'this' stay nulls otherwise bad things
-     * will happen
-     */
-    // Verify the nulls in the original vector remain null
-    if (getNullCount() > 0) {
-      try (ColumnVector isNull = isNull();
-           ColumnVector resultNulls = potentialRes.isNull();
-           ColumnVector resultAndOrigNulls = resultNulls.and(isNull);
-           ColumnVector equal = isNull.equalTo(resultAndOrigNulls);
-           Scalar allEqual = equal.all()) {
-        if (allEqual.isValid() && !allEqual.getBoolean()) {
-          throw new IllegalStateException("Setting nulls to valid can result in unintended behavior");
-        }
-      }
-    }
-    return potentialRes;
+    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
   }
 
   /**
