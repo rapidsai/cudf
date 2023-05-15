@@ -1251,6 +1251,8 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
   auto cur_dst_buf_info = h_dst_buf_info;
+  cudf::detail::metadata_builder meta_builder(num_root_columns);
+
   for (std::size_t idx = 0; idx < num_partitions; idx++) {
     // traverse the buffers and build the columns.
     cur_dst_buf_info = build_output_columns(
@@ -1258,14 +1260,18 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
     // pack the columns
     cudf::table_view t{cols};
-    result.push_back(packed_table{
-      t,
-      packed_columns{
-        std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(
-          t, reinterpret_cast<uint8_t const*>(out_buffers[idx].data()), out_buffers[idx].size())),
-        std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))}});
-
     cols.clear();
+
+    cudf::packed_columns packed_cols{
+      std::make_unique<std::vector<uint8_t>>(
+        cudf::detail::pack_metadata(t,
+                                    reinterpret_cast<uint8_t const*>(out_buffers[idx].data()),
+                                    out_buffers[idx].size(),
+                                    meta_builder)),
+      std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))};
+    meta_builder.clear();
+
+    result.emplace_back(packed_table{std::move(t), std::move(packed_cols)});
   }
   return result;
 }
