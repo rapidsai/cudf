@@ -36,6 +36,8 @@ namespace cudf {
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.
  *
+ * @throw std::invalid_argument if state is UNINITIALIZED
+ *
  * @param state The state of the null mask
  * @param size The number of elements represented by the mask
  * @return The count of null elements

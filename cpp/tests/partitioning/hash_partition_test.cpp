@@ -186,8 +186,6 @@ TEST_F(HashPartition, IdentityHashFailure)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
   EXPECT_THROW(
     cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_IDENTITY),
     cudf::logic_error);
@@ -203,8 +201,6 @@ TEST_F(HashPartition, UnsupportedHashFunction)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
   EXPECT_THROW(
     cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MD5),
     cudf::logic_error);

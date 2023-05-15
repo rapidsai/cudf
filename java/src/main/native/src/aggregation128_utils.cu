@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,8 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const &in_col, c
   CUDF_EXPECTS(type.id() == cudf::type_id::INT32 || type.id() == cudf::type_id::UINT32,
                "not a 32-bit integer type");
   auto const num_rows = in_col.size();
-  auto out_col = cudf::make_fixed_width_column(type, num_rows, copy_bitmask(in_col));
+  auto out_col =
+      cudf::make_fixed_width_column(type, num_rows, copy_bitmask(in_col), in_col.null_count());
   auto out_view = out_col->mutable_view();
   auto const in_begin = in_col.begin<int32_t>();
 
@@ -111,8 +112,9 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const &chunks
                "chunks type mismatch");
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8}, num_rows,
-                                                  copy_bitmask(chunks0)));
-  columns.push_back(cudf::make_fixed_width_column(output_type, num_rows, copy_bitmask(chunks0)));
+                                                  copy_bitmask(chunks0), chunks0.null_count()));
+  columns.push_back(cudf::make_fixed_width_column(output_type, num_rows, copy_bitmask(chunks0),
+                                                  chunks0.null_count()));
   auto overflows_view = columns[0]->mutable_view();
   auto assembled_view = columns[1]->mutable_view();
   thrust::transform(rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0),
