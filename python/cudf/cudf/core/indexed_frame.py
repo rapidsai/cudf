@@ -27,6 +27,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
@@ -224,8 +225,6 @@ class _FrameIndexer:
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
 
-T = TypeVar("T", bound="IndexedFrame")
-
 
 class IndexedFrame(Frame):
     """A frame containing an index.
@@ -357,8 +356,8 @@ class IndexedFrame(Frame):
         )
 
     def _mimic_inplace(
-        self: T, result: T, inplace: bool = False
-    ) -> Optional[Frame]:
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             self._index = result._index
         return super()._mimic_inplace(result, inplace)
@@ -441,7 +440,7 @@ class IndexedFrame(Frame):
             results[name] = getattr(result_col, op)()
         return self._from_data(results, self._index)
 
-    def _check_data_index_length_match(self: T) -> None:
+    def _check_data_index_length_match(self) -> None:
         # Validate that the number of rows in the data matches the index if the
         # data is not empty. This is a helper for the constructor.
         if self._data.nrows > 0 and self._data.nrows != len(self._index):
@@ -450,7 +449,7 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(self._index)})"
             )
 
-    def copy(self: T, deep: bool = True) -> T:
+    def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
         When ``deep=True`` (default), a new object will be created with a
@@ -918,12 +917,12 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(output, inplace=inplace)
 
     def _copy_type_metadata(
-        self: T,
-        other: T,
+        self,
+        other: Self,
         include_index: bool = True,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> T:
+    ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -2322,12 +2321,12 @@ class IndexedFrame(Frame):
             raise ValueError('keep must be either "first", "last"')
 
     def _align_to_index(
-        self: T,
+        self,
         index: ColumnLike,
         how: str = "outer",
         sort: bool = True,
         allow_non_unique: bool = False,
-    ) -> T:
+    ) -> Self:
         index = cudf.core.index.as_index(index)
 
         if self.index.equals(index):
