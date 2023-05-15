@@ -32,28 +32,23 @@ namespace {
 struct count_fn {
   column_device_view const d_strings;
 
-  __device__ size_type operator()(size_type const idx,
-                                  reprog_device const prog,
-                                  int32_t const thread_idx)
+  __device__ int32_t operator()(size_type const idx,
+                                reprog_device const prog,
+                                int32_t const thread_idx)
   {
     if (d_strings.is_null(idx)) return 0;
-    auto const d_str = d_strings.element<string_view>(idx);
-    size_type count  = 0;
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+    int32_t count     = 0;
 
-    size_type begin = 0;
-    size_type end   = -1;
-    while ((begin <= d_str.size_bytes()) && prog.find(thread_idx, d_str, begin, end)) {
+    auto itr = d_str.begin();
+    while (itr.position() <= nchars) {
+      auto result = prog.find(thread_idx, d_str, itr, -1);
+      if (!result) { break; }
       ++count;
-
-      // begin = end + (begin == end);
-      begin = end + [begin, end, d_str] {
-        if (begin != end) { return 0; }               // normal continue;
-        if (end >= d_str.size_bytes()) { return 1; }  // exit the while-loop;
-        auto const ptr = d_str.data();
-        return bytes_in_utf8_byte(ptr[begin]);        // matched a virtual position
-      }();
-
-      end = -1;
+      // increment the iterator is faster than creating a new one
+      // +1 if the match was on a virtual position (e.g. word boundary)
+      itr += (result->second - itr.position()) + (result->first == result->second);
     }
     return count;
   }

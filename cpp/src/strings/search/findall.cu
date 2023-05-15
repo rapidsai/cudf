@@ -56,28 +56,21 @@ struct findall_fn {
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    size_type begin = 0;
-    size_type end   = d_str.size_bytes();
-    while ((begin < end) && prog.find(prog_idx, d_str, begin, end)) {
-      auto const spos = begin;
-      auto const epos = end;
+    auto itr = d_str.begin();
+    while (itr.position() < nchars) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
 
-      d_output[output_idx++] = string_index_pair{d_str.data() + spos, (epos - spos)};
+      auto const d_result    = string_from_match(*match, d_str, itr);
+      d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      // begin = end + (begin == end);
-      begin = end + [begin, end, d_str] {
-        if (begin != end) { return 0; }               // normal continue;
-        if (end >= d_str.size_bytes()) { return 1; }  // exit the while-loop;
-        auto const ptr = d_str.data();
-        return bytes_in_utf8_byte(ptr[begin]);        // matched a virtual position
-      }();
-
-      end = d_str.size_bytes();
+      itr += (match->second - itr.position());
     }
   }
 };

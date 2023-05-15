@@ -52,49 +52,43 @@ struct replace_regex_fn {
       return;
     }
 
-    auto const d_str = d_strings.element<string_view>(idx);
-    auto nbytes      = d_str.size_bytes();                  // number of bytes in input string
-    auto matches     = maxrepl < 0 ? nbytes + 1 : maxrepl;  // max possible replaces for this string
-    auto in_ptr      = d_str.data();                        // input pointer (i)
-    auto out_ptr     = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
-                               : nullptr;
-    size_type last_pos = 0;
-    size_type begin    = 0;   // these are for calling prog.find
-    size_type end      = -1;  // matches final word-boundary if at the end of the string
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+    auto nbytes       = d_str.size_bytes();              // number of bytes in input string
+    auto mxn      = maxrepl < 0 ? nchars + 1 : maxrepl;  // max possible replaces for this string
+    auto in_ptr   = d_str.data();                        // input pointer (i)
+    auto out_ptr  = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
+                            : nullptr;
+    auto itr      = d_str.begin();
+    auto last_pos = itr;
 
-    // copy input to output replacing strings as we go until max_matches==0
-    while (!prog.is_empty() && (matches-- > 0) && (begin <= d_str.size_bytes()) &&
-           prog.find(prog_idx, d_str, begin, end)) {
-      auto const start_pos = begin;
-      auto const end_pos   = end;
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // compute new size
+    // copy input to output replacing strings as we go
+    while (mxn-- > 0 && itr.position() <= nchars && !prog.is_empty()) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }  // no more matches
 
-      if (out_ptr) {                                          // replace:
-                                                              // i:bbbbsssseeee
-        out_ptr = copy_and_increment(out_ptr,                 //   ^
-                                     in_ptr + last_pos,       // o:bbbb
-                                     start_pos - last_pos);   //       ^
-        out_ptr = copy_string(out_ptr, d_repl);               // o:bbbbrrrrrr
-                                                              //  out_ptr ---^
-        last_pos = end_pos;                                   // i:bbbbsssseeee
-      }                                                       //  in_ptr --^
+      auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);               // and compute new size
 
-      // begin = end + (begin == end);
-      begin = end_pos + [start_pos, end_pos, d_str] {
-        if (start_pos != end_pos) { return 0; }           // normal continue;
-        if (end_pos >= d_str.size_bytes()) { return 1; }  // gets us out of the while-loop;
-        auto const ptr = d_str.data();
-        return bytes_in_utf8_byte(ptr[start_pos]);        // matched a virtual position
-      }();
-      end = -1;
+      if (out_ptr) {                                                       // replace:
+                                                                           // i:bbbbsssseeee
+        out_ptr = copy_and_increment(out_ptr,                              //   ^
+                                     in_ptr + last_pos.byte_offset(),      // o:bbbb
+                                     start_pos - last_pos.byte_offset());  //       ^
+        out_ptr = copy_string(out_ptr, d_repl);                            // o:bbbbrrrrrr
+      }                                                                    //  out_ptr ---^
+      last_pos += (match->second - last_pos.position());                   // i:bbbbsssseeee
+                                                                           //  in_ptr --^
+
+      itr = last_pos + (match->first == match->second);
     }
 
     if (out_ptr) {
-      memcpy(out_ptr,                         // copy the remainder
-             in_ptr + last_pos,               // o:bbbbrrrrrreeee
-             d_str.size_bytes() - last_pos);  //             ^   ^
+      memcpy(out_ptr,                                       // copy the remainder
+             in_ptr + last_pos.byte_offset(),               // o:bbbbrrrrrreeee
+             d_str.size_bytes() - last_pos.byte_offset());  //             ^   ^
     } else {
-      d_offsets[idx] = static_cast<size_type>(nbytes);
+      d_offsets[idx] = nbytes;
     }
   }
 };

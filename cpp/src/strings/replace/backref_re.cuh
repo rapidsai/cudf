@@ -56,24 +56,29 @@ struct backrefs_fn {
     }
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const in_ptr = d_str.data();
+    auto const nchars = d_str.length();      // number of characters in input string
     auto nbytes       = d_str.size_bytes();  // number of bytes for the output string
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
-    size_type lpos    = 0;                   // last byte position processed in d_str
-    size_type begin   = 0;                   // first character position matching regex
-    size_type end     = nbytes;              // last character position (exclusive)
+    auto itr          = d_str.begin();
 
     // copy input to output replacing strings as we go
-    while (prog.find(prog_idx, d_str, begin, end))  // inits the begin/end vars
+    while (itr.position() < nchars)  // inits the begin/end vars
     {
-      auto spos = begin;
-      auto epos = end;
-      nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+
+      auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, itr);
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // compute the output size
 
       // copy the string data before the matched section
-      if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }
+      if (out_ptr) {
+        out_ptr =
+          copy_and_increment(out_ptr, in_ptr + itr.byte_offset(), start_pos - itr.byte_offset());
+      }
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
 
+      itr += (match->first - itr.position());
       thrust::for_each(
         thrust::seq, backrefs_begin, backrefs_end, [&] __device__(backref_type backref) {
           if (out_ptr) {
@@ -82,17 +87,13 @@ struct backrefs_fn {
             lpos_template += copy_length;
           }
           // extract the specific group's string for this backref's index
-          auto extracted = prog.extract(prog_idx, d_str, begin, end, backref.first - 1);
+          auto extracted = prog.extract(prog_idx, d_str, itr, match->second, backref.first - 1);
           if (!extracted || (extracted->second <= extracted->first)) {
             return;  // no value for this backref number; that is ok
           }
-          auto spos_extract = extracted->first;
-          auto epos_extract = extracted->second;
-          nbytes += epos_extract - spos_extract;
-          if (out_ptr) {
-            out_ptr =
-              copy_and_increment(out_ptr, in_ptr + spos_extract, (epos_extract - spos_extract));
-          }
+          auto const d_str_ex = string_from_match(*extracted, d_str, itr);
+          nbytes += d_str_ex.size_bytes();
+          if (out_ptr) { out_ptr = copy_string(out_ptr, d_str_ex); }
         });
 
       // copy remainder of template
@@ -102,16 +103,14 @@ struct backrefs_fn {
       }
 
       // setup to match the next section
-      lpos  = epos;
-      begin = end;
-      end   = d_str.size_bytes();
+      itr += (match->second - itr.position());
     }
 
     // finally, copy remainder of input string
-    if (out_ptr && (lpos < d_str.size_bytes())) {
-      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
+    if (out_ptr && (itr.byte_offset() < d_str.size_bytes())) {
+      memcpy(out_ptr, in_ptr + itr.byte_offset(), d_str.size_bytes() - itr.byte_offset());
     } else if (!out_ptr) {
-      d_offsets[idx] = static_cast<size_type>(nbytes);
+      d_offsets[idx] = nbytes;
     }
   }
 };

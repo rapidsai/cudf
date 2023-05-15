@@ -62,17 +62,20 @@ struct extract_fn {
     if (d_strings.is_valid(idx)) {
       auto const d_str = d_strings.element<string_view>(idx);
 
-      size_type begin = 0;
-      size_type end   = -1;  // handles empty strings automatically
-      if (d_prog.find(prog_idx, d_str, begin, end)) {
+      auto itr   = d_str.begin();
+      auto match = d_prog.find(prog_idx, d_str, d_str.begin(), std::min(d_str.length(), -1));
+      if (match) {
+        auto const itr = d_str.begin() + match->first;
+        auto last_pos  = itr;
         for (auto col_idx = 0; col_idx < groups; ++col_idx) {
-          auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, col_idx);
-          d_output[col_idx]    = [&] {
-            if (!extracted) return string_index_pair{nullptr, 0};
-            auto const spos = extracted->first;
-            auto const epos = extracted->second;
-            return string_index_pair{d_str.data() + spos, epos - spos};
-          }();
+          auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, col_idx);
+          if (extracted) {
+            auto const d_extracted = string_from_match(*extracted, d_str, last_pos);
+            d_output[col_idx] = string_index_pair{d_extracted.data(), d_extracted.size_bytes()};
+            last_pos += (extracted->second - last_pos.position());
+          } else {
+            d_output[col_idx] = string_index_pair{nullptr, 0};
+          }
         }
         return;
       }
