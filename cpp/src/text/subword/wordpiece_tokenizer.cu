@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -498,9 +498,12 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
 
-  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
-  detail::
-    kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  if (num_words > 0) {
+    cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
+    detail::kernel_wordpiece_tokenizer<<<grid.num_blocks,
+                                         grid.num_threads_per_block,
+                                         0,
+                                         stream.value()>>>(
       device_code_points,
       vocab_table.table->view().data<uint64_t>(),
       vocab_table.bin_coefficients->view().data<uint64_t>(),
@@ -515,7 +518,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       num_words,
       device_token_ids.data(),
       device_tokens_per_word.data());
-  CUDF_CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
+  }
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.

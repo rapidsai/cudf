@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
@@ -57,7 +58,9 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
 
