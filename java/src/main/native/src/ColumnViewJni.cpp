@@ -1850,7 +1850,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
-      default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
+      default:
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation",
+                      0);
     }
 
     return release_as_jlong(copy);

@@ -152,7 +152,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDeviceCount(JNIEnv *env, jcla
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, jint dev) {
   try {
     if (Cudf_device != cudaInvalidDeviceId && dev != Cudf_device) {
-      cudf::jni::throw_java_exception(env, cudf::jni::CUDF_ERROR_CLASS,
+      cudf::jni::throw_java_exception(env, cudf::jni::CUDF_EXCEPTION_CLASS,
                                       "Cannot change device after RMM init");
     }
     CUDF_CUDA_TRY(cudaSetDevice(dev));
@@ -386,7 +386,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv *env, jclas
   }
   CATCH_STD(env, );
 #else
-  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_ERROR_CLASS,
+  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_EXCEPTION_CLASS,
                                   "This library was built without CUDA profiler support.");
 #endif
 }
@@ -398,7 +398,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass
   }
   CATCH_STD(env, );
 #else
-  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_ERROR_CLASS,
+  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_EXCEPTION_CLASS,
                                   "This library was built without CUDA profiler support.");
 #endif
 }

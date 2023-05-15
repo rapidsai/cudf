@@ -111,21 +111,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(
     std::shared_ptr<arrow::Array> arrow_array;
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet",
-                      0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting DECIMAL32 yet", 0);
         break;
       case cudf::type_id::DECIMAL64:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet",
-                      0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting DECIMAL64 yet", 0);
         break;
       case cudf::type_id::STRUCT:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting STRUCT yet", 0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting STRUCT yet", 0);
         break;
       case cudf::type_id::LIST:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting LIST yet", 0);
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting LIST yet", 0);
         break;
       case cudf::type_id::DICTIONARY32:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS,
+        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                       "Don't support converting DICTIONARY32 yet", 0);
         break;
       case cudf::type_id::STRING:
