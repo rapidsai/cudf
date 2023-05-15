@@ -2150,6 +2150,7 @@ def test_default_integer_bitwidth_partial(
     )
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 def test_default_integer_bitwidth_extremes(
     cudf_extreme_numeric_dataframe, default_integer_bitwidth
 ):
