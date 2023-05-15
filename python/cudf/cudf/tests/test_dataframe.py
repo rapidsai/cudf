@@ -9757,9 +9757,19 @@ def test_empty_numeric_only(data):
     assert_eq(expected, actual)
 
 
-@pytest.fixture
-def df_eval():
-    N = 10
+@pytest.fixture(params=[0, 10], ids=["empty", "10"])
+def df_eval(request):
+    N = request.param
+    if N == 0:
+        value = np.zeros(0, dtype="int")
+        return cudf.DataFrame(
+            {
+                "a": value,
+                "b": value,
+                "c": value,
+                "d": value,
+            }
+        )
     int_max = 10
     rng = cupy.random.default_rng(0)
     return cudf.DataFrame(
@@ -9784,6 +9794,7 @@ def df_eval():
         ("a / b", float),
         ("a * b", int),
         ("a > b", int),
+        ("a >= b", int),
         ("a > b > c", int),
         ("a > b < c", int),
         ("a & b", int),
@@ -9810,6 +9821,9 @@ def df_eval():
             float,
         ),
         ("a_b_are_equal = (a == b)", int),
+        ("a > b", str),
+        ("a < '1'", str),
+        ('a == "1"', str),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
@@ -9822,7 +9836,7 @@ def test_dataframe_eval(df_eval, expr, dtype):
     assert_eq(expect, got, check_names=False)
 
     # Test inplace
-    if re.search("[^=]=[^=]", expr) is not None:
+    if re.search("[^=><]=[^=]", expr) is not None:
         pdf_eval = df_eval.to_pandas()
         pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)

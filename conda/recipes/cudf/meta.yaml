@@ -32,6 +32,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
   ignore_run_exports:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
@@ -63,9 +64,9 @@ requirements:
     - python
     - typing_extensions
     - pandas >=1.3,<1.6.0dev0
-    - cupy >=9.5.0,<12.0.0a0
+    - cupy >=12.0.0
     - numba >=0.56.4,<0.57
-    - numpy >=1.21
+    - numpy >=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - libcudf {{ version }}
     - fastavro >=0.22.0

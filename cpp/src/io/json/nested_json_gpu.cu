@@ -1678,11 +1678,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), {{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
-        return {std::move(col), {}};
+        return {std::move(col), std::vector<column_name_info>{}};
       }
       break;
     }
@@ -1724,7 +1724,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
-                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+                      std::vector<column_name_info>>{std::make_unique<column>(),
+                                                     std::vector<column_name_info>{}}
           : json_column_to_cudf_column(json_col.child_columns.begin()->second,
                                        d_input,
                                        options,

@@ -5,9 +5,10 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set, TypeVar
+from typing import Any, Set
 
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 from cudf._lib.copying import _gather_map_is_valid, gather
@@ -62,8 +63,6 @@ Int64Index([1, 2, 3], dtype='int64')
 Float64Index([1.0, 2.0, 3.0], dtype='float64')
 """
 
-BaseIndexT = TypeVar("BaseIndexT", bound="BaseIndex")
-
 
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
@@ -101,8 +100,8 @@ class BaseIndex(Serializable):
         return item in self._values
 
     def _copy_type_metadata(
-        self: BaseIndexT, other: BaseIndexT, *, override_dtypes=None
-    ) -> BaseIndexT:
+        self, other: Self, *, override_dtypes=None
+    ) -> Self:
         raise NotImplementedError
 
     def get_level_values(self, level):
@@ -1451,7 +1450,6 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     def __array_function__(self, func, types, args, kwargs):
-
         # check if the function is implemented for the current type
         cudf_index_module = type(self)
         for submodule in func.__module__.split(".")[1:]:
