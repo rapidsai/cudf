@@ -228,6 +228,9 @@ std::unique_ptr<column> empty_like(scalar const& input);
  *
  * Supports only fixed-width types.
  *
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
+ *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -243,6 +246,9 @@ std::unique_ptr<column> allocate_like(
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  *
  * Supports only fixed-width types.
+ *
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
  *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
