@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -19,8 +19,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 class SingleColumnFrame(Frame, NotIterable):
