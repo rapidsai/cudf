@@ -100,8 +100,9 @@ def maybe_patch_numba_linker(
     driver_version, runtime_version, ptx_toolkit_version
 ):
     # Numba thinks cubinlinker is only needed if the driver is older than
-    # the CUDA runtime, but when PTX files are present, it might also need to patch
-    # because those PTX files may be compiled by a CUDA version that is newer than the driver as well
+    # the CUDA runtime, but when PTX files are present, it might also need
+    # to patch because those PTX files may be compiled by a CUDA version
+    # that is newer than the driver as well
     if (driver_version < ptx_toolkit_version) or (
         driver_version < runtime_version
     ):
