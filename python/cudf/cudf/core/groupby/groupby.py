@@ -1249,7 +1249,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           on the grouped chunk.
         args : tuple
             Optional positional arguments to pass to the function.
-        engine: {'cudf', 'jit'}, default 'auto'
+        engine: 'auto', 'cudf', or 'jit', default 'auto'
           Selects the GroupBy.apply implementation. Use `jit` to
           select the numba JIT pipeline. Only certain operations are allowed
           within the function when using this option: min, max, sum, mean, var,
