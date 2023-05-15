@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
@@ -94,7 +95,7 @@ struct join_fn : public join_base_fn {
 
   __device__ void operator()(size_type idx) const
   {
-    auto [d_str, d_sep] = process_string(idx);
+    auto const [d_str, d_sep] = process_string(idx);
 
     char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
     size_type bytes = 0;
@@ -118,7 +119,7 @@ struct join_gather_fn : public join_base_fn {
 
   __device__ string_index_pair operator()(size_type idx) const
   {
-    auto [d_str, d_sep] = process_string(idx / 2);
+    auto const [d_str, d_sep] = process_string(idx / 2);
     // every other string is the separator
     return idx % 2 ? string_index_pair{d_sep.data(), d_sep.size_bytes()}
                    : string_index_pair{d_str.data(), d_str.size_bytes()};
@@ -156,9 +157,10 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   }();
 
   // build the offsets: single string output has offsets [0,chars-size]
-  rmm::device_uvector<size_type> offsets(2, stream);
-  offsets.set_element_to_zero_async(0, stream);
-  offsets.set_element(1, chars_column->size(), stream);
+  auto offsets =
+    cudf::detail::make_device_uvector_async(std::vector<size_type>({0, chars_column->size()}),
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
   auto offsets_column = std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
 
   // build the null mask: only one output row so it is either all-valid or all-null
