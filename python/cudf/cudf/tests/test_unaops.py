@@ -77,14 +77,11 @@ def generate_valid_scalar_unaop_combos():
     return results
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in scalar negative")
 @pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
 def test_scalar_unary_operations(slr, dtype, op):
     slr_host = np.array([slr])[0].astype(cudf.dtype(dtype))
     slr_device = cudf.Scalar(slr, dtype=dtype)
-
-    if op.__name__ == "neg" and np.dtype(dtype).kind == "u":
-        # TODO: what do we want to do here?
-        return
 
     expect = op(slr_host)
     got = op(slr_device)
