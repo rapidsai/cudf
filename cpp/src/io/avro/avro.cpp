@@ -27,8 +27,9 @@ template <>
 uint64_t container::get_encoded()
 {
   uint64_t val = 0;
-  for (uint64_t len = 0; len < 64; len += 7) {
-    auto const byte = get_raw<uint8_t>();
+  for (auto len = 0; len < 64; len += 7) {
+    // 64-bit int since shift left is upto 64.
+    uint64_t const byte = get_raw<uint8_t>();
     val |= (byte & 0x7f) << len;
     if (byte < 0x80) break;
   }

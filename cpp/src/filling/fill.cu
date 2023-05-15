@@ -122,6 +122,7 @@ struct out_of_place_fill_range_dispatch {
       auto ret_view    = p_ret->mutable_view();
       using DeviceType = cudf::device_storage_type_t<T>;
       in_place_fill<DeviceType>(ret_view, begin, end, value, stream);
+      p_ret->set_null_count(ret_view.null_count());
     }
 
     return p_ret;
