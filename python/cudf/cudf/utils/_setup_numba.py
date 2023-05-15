@@ -5,7 +5,7 @@ import os
 
 from numba import config
 
-ANY_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
+CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
 
 def _setup_numba():
@@ -17,7 +17,10 @@ def _setup_numba():
     package. It also sets any other config options within numba that
     are desired for cuDF's operation.
     """
-    _setup_numba_linker(ANY_PTX_FILE)
+    _setup_numba_linker(CC_60_PTX_FILE)
+
+    # disable low occupancy warnings for internal usages of numba,
+    # such as in our iloc implementation
     config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 
@@ -80,20 +83,19 @@ def _setup_numba_linker(path):
         # packages. This is ok, because in this situation putting
         # numba in enhanced compatibility mode is not necessary.
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
-
-        versions = safe_get_versions()
-        if versions != NO_DRIVER:
-            driver_version, runtime_version = versions
-            # Don't check if CEC is necessary in the possible edge
-            # case where a user has a CUDA 12 package and ptxcompiler
-            # in their environment anyways, perhaps installed separately
-            if driver_version < (12, 0):
-                ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
-                maybe_patch_numba_linker(
-                    driver_version, runtime_version, ptx_toolkit_version
-                )
     except ImportError:
-        pass
+        return
+    versions = safe_get_versions()
+    if versions != NO_DRIVER:
+        driver_version, runtime_version = versions
+        # Don't check if CEC is necessary in the possible edge
+        # case where a user has a CUDA 12 package and ptxcompiler
+        # in their environment anyways, perhaps installed separately
+        if driver_version < (12, 0):
+            ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
+            maybe_patch_numba_linker(
+                driver_version, runtime_version, ptx_toolkit_version
+            )
 
 
 def maybe_patch_numba_linker(
