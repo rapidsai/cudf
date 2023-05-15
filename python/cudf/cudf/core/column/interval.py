@@ -21,7 +21,6 @@ class IntervalColumn(StructColumn):
         children=(),
         closed="right",
     ):
-
         super().__init__(
             data=None,
             dtype=dtype,
@@ -128,7 +127,7 @@ class IntervalColumn(StructColumn):
 
     def to_pandas(
         self, index: Optional[pd.Index] = None, **kwargs
-    ) -> "pd.Series":
+    ) -> pd.Series:
         # Note: This does not handle null values in the interval column.
         # However, this exact sequence (calling __from_arrow__ on the output of
         # self.to_arrow) is currently the best known way to convert interval
