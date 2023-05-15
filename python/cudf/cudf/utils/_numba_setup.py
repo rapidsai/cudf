@@ -76,16 +76,22 @@ def _get_ptx_file(path, prefix):
 
 def _setup_numba_linker(path):
     try:
-        # ptxcompiler will not be present for cuda 12+
+        # By default, ptxcompiler will not be installed with CUDA 12
+        # packages. This is ok, because in this situation putting
+        # numba in enhanced compatibility mode is not necessary.
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
         versions = safe_get_versions()
         if versions != NO_DRIVER:
             driver_version, runtime_version = versions
-            ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
-            maybe_patch_numba_linker(
-                driver_version, runtime_version, ptx_toolkit_version
-            )
+            # Don't check if CEC is necessary in the possible edge
+            # case where a user has a CUDA 12 package and ptxcompiler
+            # in their environment anyways, perhaps installed separately
+            if driver_version < (12, 0):
+                ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
+                maybe_patch_numba_linker(
+                    driver_version, runtime_version, ptx_toolkit_version
+                )
     except ImportError:
         pass
 
