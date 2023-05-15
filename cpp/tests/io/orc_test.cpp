@@ -1709,7 +1709,7 @@ TEST_F(OrcWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::orc_writer_options opts =
@@ -1727,7 +1727,7 @@ TEST_F(OrcChunkedWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::chunked_orc_writer_options opts =
@@ -1762,7 +1762,7 @@ TEST_F(OrcWriterTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::orc_writer_options opts = cudf::io::orc_writer_options::builder(
@@ -1777,7 +1777,7 @@ TEST_F(OrcChunkedWriterTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::chunked_orc_writer_options opts =

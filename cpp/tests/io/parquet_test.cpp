@@ -5440,7 +5440,7 @@ TEST_F(ParquetWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::parquet_writer_options opts =
@@ -5458,7 +5458,7 @@ TEST_F(ParquetChunkedWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::chunked_parquet_writer_options opts =
@@ -5493,7 +5493,7 @@ TEST_F(ParquetWriterTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::parquet_writer_options opts =
@@ -5509,7 +5509,7 @@ TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
-  auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
   std::vector<char> unused_buffer;
   cudf::io::chunked_parquet_writer_options opts =

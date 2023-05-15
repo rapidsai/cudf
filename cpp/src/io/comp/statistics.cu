@@ -38,9 +38,9 @@ writer_compression_statistics collect_compression_statistics(
     thrust::plus<size_t>());
 
   auto input_size_with_status = [inputs, results, stream](compression_status status) {
-    auto zipped_begin =
+    auto const zipped_begin =
       thrust::make_zip_iterator(thrust::make_tuple(inputs.begin(), results.begin()));
-    auto zipped_end = thrust::make_zip_iterator(thrust::make_tuple(inputs.end(), results.end()));
+    auto const zipped_end = zipped_begin + inputs.size();
 
     return thrust::transform_reduce(
       rmm::exec_policy(stream),
