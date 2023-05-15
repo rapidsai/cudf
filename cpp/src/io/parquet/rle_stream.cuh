@@ -20,10 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::gpu {
 
 // TODO: consider if these should be template parameters to rle_stream
 constexpr int num_rle_stream_decode_threads = 512;
@@ -248,9 +245,15 @@ struct rle_stream {
       run_index++;
     }
 
+    // the above loop computes a batch of runs to be processed. mark down
+    // the number of runs because the code after this point resets run_count
+    // for the next batch. each batch is returned via get_next_batch().
     next_batch_run_count = run_count;
 
-    // if we've reached the output limit on the last run
+    // -------------------------------------
+    // prepare for the next run:
+
+    // if we've reached the value output limit on the last run
     if (output_pos >= max_count) {
       // first, see if we've spilled over
       auto const& src       = runs[rolling_run_index(run_index - 1)];
@@ -353,7 +356,4 @@ struct rle_stream {
   }
 };
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::gpu
