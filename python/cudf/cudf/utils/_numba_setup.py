@@ -12,8 +12,8 @@ def _setup_numba():
     """
     Configure numba for use with cuDF. This consists of potentially
     putting numba into enhanced compatibility mode based on the user
-    driver and runtime versions as well as the version of the cuda
-    toolkit used to build the PTX files shipped with the user cuDF
+    driver and runtime versions as well as the version of the CUDA
+    Toolkit used to build the PTX files shipped with the user cuDF
     package. It also sets any other config options within numba that
     are desired for cuDF's operation.
     """
@@ -24,11 +24,11 @@ def _setup_numba():
 def _get_best_ptx_file(archs, max_compute_capability):
     """
     Determine of the available PTX files which one is
-    the most recent up to and including the device cc
+    the most recent up to and including the device compute capability.
     """
     filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
     if filtered_archs:
-        return max(filtered_archs, key=lambda y: y[0])
+        return max(filtered_archs, key=lambda x: x[0])
     else:
         return None
 
@@ -100,8 +100,8 @@ def maybe_patch_numba_linker(
     driver_version, runtime_version, ptx_toolkit_version
 ):
     # Numba thinks cubinlinker is only needed if the driver is older than
-    # the ctk, but when PTX files are present, it might also need to patch
-    # because those PTX files may newer than the driver as well
+    # the CUDA runtime, but when PTX files are present, it might also need to patch
+    # because those PTX files may be compiled by a CUDA version that is newer than the driver as well
     if (driver_version < ptx_toolkit_version) or (
         driver_version < runtime_version
     ):
