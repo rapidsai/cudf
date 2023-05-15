@@ -29,8 +29,8 @@ class Column:
         size: int,
         dtype: Dtype,
         mask: Optional[Buffer] = None,
-        offset: int = None,
-        null_count: int = None,
+        offset: Optional[int] = None,
+        null_count: Optional[int] = None,
         children: Tuple[ColumnBase, ...] = (),
     ) -> None: ...
     @property

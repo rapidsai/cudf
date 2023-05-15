@@ -16,8 +16,8 @@ from cudf.options import get_option
 def as_buffer(
     data: Union[int, Any],
     *,
-    size: int = None,
-    owner: object = None,
+    size: Optional[int] = None,
+    owner: Optional[object] = None,
     exposed: bool = False,
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
