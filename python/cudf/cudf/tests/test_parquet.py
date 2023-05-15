@@ -73,7 +73,10 @@ def simple_pdf(request):
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        {f"col_{typ}": np.random.randint(0, nrows, nrows) for typ in types},
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
@@ -112,8 +115,10 @@ def build_pdf(num_columns, day_resolution_timestamps):
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        {f"col_{typ}": np.random.randint(0, nrows, nrows) for typ in types},
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
