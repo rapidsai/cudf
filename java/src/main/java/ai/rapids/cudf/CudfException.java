@@ -19,6 +19,10 @@ package ai.rapids.cudf;
  * Exception thrown by cudf itself.
  */
 public class CudfException extends RuntimeException {
+  CudfException(String message) {
+    this(message, "No native stacktrace is available.");
+  }
+
   CudfException(String message, String nativeStacktrace) {
     super(message);
     this.nativeStacktrace = nativeStacktrace;

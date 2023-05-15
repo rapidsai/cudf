@@ -886,18 +886,14 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     }                                                                                              \
   }
 
-#define JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val)                                                 \
-  {                                                                                                \
+#define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
+  catch (const rmm::out_of_memory &e) {                                                            \
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
-  }
-
-#define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
-  catch (const rmm::out_of_memory &e) {                                                            \
     auto what =                                                                                    \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), nullptr, ret_val);                \
+    JNI_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                               \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
     JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
