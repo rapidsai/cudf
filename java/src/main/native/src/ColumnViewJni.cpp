@@ -1840,7 +1840,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
     switch (op) {
       case cudf::binary_operator::BITWISE_AND: {
-        std::vector<cudf::column_view> cols = n_cudf_columns.get_dereferenced();
+        auto cols = n_cudf_columns.get_dereferenced();
         cols.push_back(copy->view());
         auto table_view = cudf::table_view{cols};
         auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
