@@ -5,17 +5,16 @@ from __future__ import annotations
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy
+from typing_extensions import Self
 
 import rmm
 
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
-
-T = TypeVar("T", bound="Buffer")
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
@@ -42,7 +41,7 @@ def host_memory_allocation(nbytes: int) -> memoryview:
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: object = None,
+    owner: Optional[object] = None,
     readonly=False,
     typestr="|u1",
     version=0,
@@ -108,7 +107,7 @@ class Buffer(Serializable):
         )
 
     @classmethod
-    def _from_device_memory(cls: Type[T], data: Any) -> T:
+    def _from_device_memory(cls, data: Any) -> Self:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -139,7 +138,7 @@ class Buffer(Serializable):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -310,7 +309,7 @@ class Buffer(Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls: Type[T], header: dict, frames: list) -> T:
+    def deserialize(cls, header: dict, frames: list) -> Self:
         """Create an Buffer from a serialized representation.
 
         Parameters

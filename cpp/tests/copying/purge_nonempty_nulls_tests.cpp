@@ -75,6 +75,7 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
@@ -158,6 +159,7 @@ TEST_F(PurgeNonEmptyNullsTest, TwoLevelList)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(
     input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
+  input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
@@ -213,6 +215,7 @@ TEST_F(PurgeNonEmptyNullsTest, ThreeLevelList)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(
     input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
+  input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
@@ -267,6 +270,7 @@ TEST_F(PurgeNonEmptyNullsTest, ListOfStrings)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
@@ -332,6 +336,7 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
 
   // Set strings nullmask, post construction.
   cudf::set_null_mask(strings->mutable_view().null_mask(), 7, 8, false);
+  strings->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*strings));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*strings));
 
@@ -358,6 +363,7 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
   // Set lists nullmask, post construction.
   cudf::detail::set_null_mask(
     lists->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  lists->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
