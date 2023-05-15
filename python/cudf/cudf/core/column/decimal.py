@@ -2,7 +2,7 @@
 
 import warnings
 from decimal import Decimal
-from typing import Any, Sequence, Union, cast
+from typing import Any, Optional, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -103,7 +103,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result
 
     def fillna(
-        self, value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ):
         """Fill null values with ``value``.
 

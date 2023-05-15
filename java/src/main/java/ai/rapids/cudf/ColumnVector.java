@@ -119,7 +119,10 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
-  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+  /**
+   * This method is internal and exposed purely for testing purposes
+   */
+  static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
     long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
@@ -141,7 +144,7 @@ public final class ColumnVector extends ColumnView {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param toClose  List of buffers to track adn close once done, usually in case of children
+   * @param toClose  List of buffers to track and close once done, usually in case of children
    * @param childHandles array of longs for child column view handles.
    */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
