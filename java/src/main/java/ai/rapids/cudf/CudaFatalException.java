@@ -21,6 +21,10 @@ package ai.rapids.cudf;
  * To continue using CUDA, the process must be terminated and relaunched.
  */
 public class CudaFatalException extends CudaException {
+  CudaFatalException(String message, int errorCode) {
+    this(message, "No native stacktrace is available.", errorCode);
+  }
+
   CudaFatalException(String message, String nativeStacktrace, int errorCode) {
     super(message, nativeStacktrace, errorCode);
   }

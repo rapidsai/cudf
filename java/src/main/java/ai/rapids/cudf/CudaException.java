@@ -31,6 +31,10 @@ import java.util.Map;
  * don't switch between threads for different parts of processing that can be retried as a chunk.
  */
 public class CudaException extends RuntimeException {
+  CudaException(String message, int errorCode) {
+    this(message, "No native stacktrace is available.", errorCode);
+  }
+
   CudaException(String message, String nativeStacktrace, int errorCode) {
     super(message);
     this.nativeStacktrace = nativeStacktrace;

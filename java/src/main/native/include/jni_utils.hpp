@@ -21,7 +21,6 @@
 
 #include <jni.h>
 
-#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/utilities/error.hpp>
 #include <rmm/detail/error.hpp>
 
@@ -764,20 +763,14 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
     return NULL;
   }
 
-  jstring jmsg = env->NewStringUTF(cudaGetErrorString(status));
-  if (jmsg == NULL) {
-    return NULL;
-  }
-
-  auto const stacktrace = cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO);
-  jstring jstacktrace = env->NewStringUTF(stacktrace.c_str());
-  if (jstacktrace == NULL) {
+  jstring msg = env->NewStringUTF(cudaGetErrorString(status));
+  if (msg == NULL) {
     return NULL;
   }
 
   jint err_code = static_cast<jint>(status);
 
-  jobject ret = env->NewObject(ex_class, ctor_id, jmsg, jstacktrace, err_code, cause);
+  jobject ret = env->NewObject(ex_class, ctor_id, msg, err_code, cause);
   return (jthrowable)ret;
 }
 
