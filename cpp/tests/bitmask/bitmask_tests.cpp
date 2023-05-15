@@ -37,6 +37,7 @@ TEST_F(BitmaskUtilitiesTest, StateNullCount)
   EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::UNALLOCATED, 42));
   EXPECT_EQ(42, cudf::state_null_count(cudf::mask_state::ALL_NULL, 42));
   EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::ALL_VALID, 42));
+  EXPECT_THROW(cudf::state_null_count(cudf::mask_state::UNINITIALIZED, 42), std::invalid_argument);
 }
 
 TEST_F(BitmaskUtilitiesTest, BitmaskAllocationSize)
