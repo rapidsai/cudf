@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import weakref
 from collections import defaultdict
-from typing import Any, DefaultDict, Tuple, Type, TypeVar
+from typing import Any, DefaultDict, Tuple
 from weakref import WeakSet
+
+from typing_extensions import Self
 
 import rmm
 
 from cudf.core.buffer.buffer import Buffer
-
-T = TypeVar("T", bound="CopyOnWriteBuffer")
 
 
 def _keys_cleanup(ptr):
@@ -55,9 +55,7 @@ class CopyOnWriteBuffer(Buffer):
         weakref.finalize(self, _keys_cleanup, self._ptr)
 
     @classmethod
-    def _from_device_memory(
-        cls: Type[T], data: Any, *, exposed: bool = False
-    ) -> T:
+    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -82,7 +80,7 @@ class CopyOnWriteBuffer(Buffer):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         ret = super()._from_host_memory(data)
         ret._finalize_init()
         return ret

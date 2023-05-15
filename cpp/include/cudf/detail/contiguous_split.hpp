@@ -67,7 +67,7 @@ class metadata_builder {
    * @brief Destructor that will be implemented as default, required because metadata_builder_impl
    * is incomplete at this stage.
    */
-  ~metadata_builder() = default;
+  ~metadata_builder();
 
   /**
    * @brief Add a column to this metadata builder.
@@ -105,9 +105,23 @@ class metadata_builder {
    */
   std::vector<uint8_t> build() const;
 
+  /**
+   * @brief Clear the internal buffer containing all added metadata.
+   */
+  void clear();
+
  private:
   std::unique_ptr<metadata_builder_impl> impl;
 };
+
+/**
+ * @copydoc pack_metadata
+ * @param builder The reusable builder object to create packed column metadata.
+ */
+std::vector<uint8_t> pack_metadata(table_view const& table,
+                                   uint8_t const* contiguous_buffer,
+                                   size_t buffer_size,
+                                   metadata_builder& builder);
 
 }  // namespace detail
 }  // namespace cudf
