@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,6 +39,23 @@ import java.util.function.Consumer;
  * to increment the reference count.
  */
 public final class ColumnVector extends ColumnView {
+  /**
+   * Interface to handle events for this ColumnVector. Only invoked during
+   * close, hence `onClosed` is the only event.
+   */
+  public interface EventHandler {
+    /**
+     * `onClosed` is invoked with the updated `refCount` during `close`.
+     * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `ColumnVector`'s lock held.
+     *
+     * @param refCount - the updated ref count for this ColumnVector at the time
+     *                 of invocation
+     */
+    void onClosed(int refCount);
+  }
+
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
   static {
@@ -47,6 +64,7 @@ public final class ColumnVector extends ColumnView {
 
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
+  private EventHandler eventHandler;
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector. The new
@@ -101,7 +119,10 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
-  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+  /**
+   * This method is internal and exposed purely for testing purposes
+   */
+  static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
     long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
@@ -123,7 +144,7 @@ public final class ColumnVector extends ColumnView {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param toClose  List of buffers to track adn close once done, usually in case of children
+   * @param toClose  List of buffers to track and close once done, usually in case of children
    * @param childHandles array of longs for child column view handles.
    */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -201,6 +222,27 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Set an event handler for this vector. This method can be invoked with null
+   * to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
+   */
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
+  }
+
+  /**
+   * Returns the current event handler for this ColumnVector or null if no handler
+   * is associated.
+   */
+  public synchronized EventHandler getEventHandler() {
+    return this.eventHandler;
+  }
+
+  /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
    * tracking code that this is expected for this column, and big scary warnings should
@@ -217,6 +259,9 @@ public final class ColumnVector extends ColumnView {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
+    if (eventHandler != null) {
+      eventHandler.onClosed(refCount);
+    }
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
@@ -272,7 +317,7 @@ public final class ColumnVector extends ColumnView {
   /**
    * Returns this column's current refcount
    */
-  synchronized int getRefCount() {
+  public synchronized int getRefCount() {
     return refCount;
   }
 

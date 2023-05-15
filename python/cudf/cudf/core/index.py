@@ -13,7 +13,6 @@ from typing import (
     MutableMapping,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -62,8 +61,6 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
 from cudf.core._compat import PANDAS_GE_200
-
-T = TypeVar("T", bound="Frame")
 
 
 class IndexMeta(type):
@@ -1030,7 +1027,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     def _binaryop(
         self,
-        other: T,
+        other: Frame,
         op: str,
         fill_value: Any = None,
         *args,
@@ -1993,7 +1990,13 @@ class DatetimeIndex(Index):
         if PANDAS_GE_200:
             nanos = self._values
         else:
-            nanos = self._values.astype("datetime64[ns]")
+            # no need to convert to nanos with Pandas 2.x
+            if isinstance(self.dtype, pd.DatetimeTZDtype):
+                nanos = self._values.astype(
+                    pd.DatetimeTZDtype("ns", self.dtype.tz)
+                )
+            else:
+                nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     @_cudf_nvtx_annotate
@@ -2119,6 +2122,57 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+        """
+        Localize timezone-naive data to timezone-aware data.
+
+        Parameters
+        ----------
+        tz : str
+            Timezone to convert timestamps to.
+
+        Returns
+        -------
+        DatetimeIndex containing timezone aware timestamps.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> tz_aware = tz_naive.tz_localize("America/New_York")
+        >>> tz_aware
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+
+        Ambiguous or nonexistent datetimes are converted to NaT.
+
+        >>> s = cudf.to_datetime(cudf.Series(['2018-10-28 01:20:00',
+        ...                                   '2018-10-28 02:36:00',
+        ...                                   '2018-10-28 03:46:00']))
+        >>> s.dt.tz_localize("CET")
+        0    2018-10-28 01:20:00.000000000
+        1                             <NA>
+        2    2018-10-28 03:46:00.000000000
+        dtype: datetime64[ns, CET]
+
+        Notes
+        -----
+        'NaT' is currently the only supported option for the
+        ``ambiguous`` and ``nonexistent`` arguments. Any
+        ambiguous or nonexistent timestamps are converted
+        to 'NaT'.
+        """
+        from cudf.core._internals.timezones import localize
+
+        if tz is None:
+            result_col = self._column._local_time
+        else:
+            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        return DatetimeIndex._from_data({self.name: result_col})
+
 
 class TimedeltaIndex(Index):
     """
@@ -2173,7 +2227,6 @@ class TimedeltaIndex(Index):
         copy=False,
         name=None,
     ):
-
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 

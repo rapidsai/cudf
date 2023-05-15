@@ -141,8 +141,6 @@ void binary_operation(mutable_column_view& out,
 {
   std::string const output_type_name = cudf::type_to_name(out.type());
 
-  std::string ptx_hash =
-    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
@@ -219,6 +217,8 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
 
   auto out_view = out->mutable_view();
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  // TODO: consider having the binary_operation count nulls instead
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace compiled
@@ -375,6 +375,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace detail

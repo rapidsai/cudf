@@ -209,11 +209,12 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - librmm==23.6.*
+          - libkvikio==23.6.*
       - output_types: conda
         packages:
           - fmt>=9.1.0,<10
-          - &gtest gtest>=1.13.0.*
-          - &gmock gmock>=1.13.0.*
+          - &gtest gtest>=1.13.0
+          - &gmock gmock>=1.13.0
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - libarrow==11.0.0.*
@@ -233,7 +234,7 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==11.0.0.*
-          - numpy>=1.21
+          - numpy>=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -341,7 +342,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.21
+          - numpy>=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
@@ -358,7 +359,7 @@ dependencies:
       - output_types: conda
         packages:
           - cubinlinker
-          - cupy>=9.5.0,<12.0.0a0
+          - cupy>=12.0.0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -374,7 +375,7 @@ dependencies:
       - output_types: pyproject
         packages:
           - cubinlinker
-          - &cupy_pip cupy-cuda11x>=9.5.0,<12.0.0a0
+          - &cupy_pip cupy-cuda11x>=12.0.0
           - ptxcompiler
     specific:
       - output_types: requirements
@@ -382,7 +383,7 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - cupy-cuda115>=9.5.0,<12.0.0a0 # TODO: This might change to cupy-cuda11x?
+              - cupy-cuda115>=12.0.0
           - matrix:
               arch: aarch64
             packages:
@@ -395,6 +396,7 @@ dependencies:
           - distributed==2023.3.2.1
       - output_types: conda
         packages:
+          - cupy>=12.0.0
           - dask-core==2023.3.2  # dask-core in conda is the actual package & dask is the meta package
       - output_types: pyproject
         packages:

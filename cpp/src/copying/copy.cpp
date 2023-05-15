@@ -129,7 +129,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                   size,
                                   rmm::device_buffer(size * size_of(input.type()), stream, mr),
                                   detail::create_null_mask(size, allocate_mask, stream, mr),
-                                  state_null_count(allocate_mask, input.size()));
+                                  0);
 }
 
 }  // namespace detail

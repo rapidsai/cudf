@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -529,13 +530,12 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         dtype: CategoricalDtype,
-        mask: Buffer = None,
-        size: int = None,
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-
         if size is None:
             for child in children:
                 assert child.offset == 0
@@ -693,7 +693,7 @@ class CategoricalColumn(column.ColumnBase):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> "column.ColumnBase":
+    ) -> Self:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -708,18 +708,21 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def slice(
-        self, start: int, stop: int, stride: int = None
-    ) -> "column.ColumnBase":
+        self, start: int, stop: int, stride: Optional[int] = None
+    ) -> Self:
         codes = self.codes.slice(start, stop, stride)
-        return cudf.core.column.build_categorical_column(
-            categories=self.categories,
-            codes=cudf.core.column.build_column(
-                codes.base_data, dtype=codes.dtype
+        return cast(
+            Self,
+            cudf.core.column.build_categorical_column(
+                categories=self.categories,
+                codes=cudf.core.column.build_column(
+                    codes.base_data, dtype=codes.dtype
+                ),
+                mask=codes.base_mask,
+                ordered=self.ordered,
+                size=codes.size,
+                offset=codes.offset,
             ),
-            mask=codes.base_mask,
-            ordered=self.ordered,
-            size=codes.size,
-            offset=codes.offset,
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -781,7 +784,9 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -1038,7 +1043,10 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def fillna(
-        self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Any = None,
+        dtype: Optional[Dtype] = None,
     ) -> CategoricalColumn:
         """
         Fill null values with *fill_value*
@@ -1056,7 +1064,7 @@ class CategoricalColumn(column.ColumnBase):
                     try:
                         fill_value = self._encode(fill_value)
                         fill_value = self.codes.dtype.type(fill_value)
-                    except (ValueError) as err:
+                    except ValueError as err:
                         err_msg = "fill value must be in categories"
                         raise ValueError(err_msg) from err
             else:
@@ -1170,7 +1178,7 @@ class CategoricalColumn(column.ColumnBase):
         out = out.set_mask(self.mask)
         return out
 
-    def copy(self, deep: bool = True) -> CategoricalColumn:
+    def copy(self, deep: bool = True) -> Self:
         result_col = super().copy(deep=deep)
         if deep:
             result_col.categories = libcudf.copying.copy_column(
@@ -1184,7 +1192,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
-    ) -> Optional[ColumnBase]:
+    ) -> Optional[Self]:
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col._codes
@@ -1460,7 +1468,7 @@ def _create_empty_categorical_column(
 
 
 def pandas_categorical_as_column(
-    categorical: ColumnLike, codes: ColumnLike = None
+    categorical: ColumnLike, codes: Optional[ColumnLike] = None
 ) -> CategoricalColumn:
     """Creates a CategoricalColumn from a pandas.Categorical
 

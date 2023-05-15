@@ -1095,8 +1095,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns = values._columns
             aggs_per_column = (aggs,) * len(columns)
 
+        # is_list_like performs type narrowing but type-checkers don't
+        # know it. One could add a TypeGuard annotation to
+        # is_list_like (see PEP647), but that is less useful than it
+        # seems because unlike the builtin narrowings it only performs
+        # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs

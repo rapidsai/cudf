@@ -153,8 +153,8 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
-  STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
-  stream_compaction/unique_count.cpp
+  STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/distinct_count.cpp
+  stream_compaction/unique.cpp stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -195,8 +195,7 @@ ConfigureBench(
   reduction/reduce.cpp reduction/scan.cpp
 )
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
-  reduction/segmented_reduce.cpp
+  REDUCTION_NVBENCH reduction/rank.cpp reduction/scan_structs.cpp reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################
@@ -280,7 +279,6 @@ ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
   STRINGS_BENCH
-  string/case.cpp
   string/combine.cpp
   string/contains.cpp
   string/convert_datetime.cpp
@@ -301,7 +299,10 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp string/lengths.cpp)
+ConfigureNVBench(
+  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/lengths.cpp string/like.cpp
+  string/reverse.cpp
+)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
