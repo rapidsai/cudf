@@ -821,8 +821,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
-   * @throws IllegalStateException if existing nulls are set to valid data in the validity buffer
-   *
    */
   public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
