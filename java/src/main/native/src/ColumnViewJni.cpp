@@ -1837,20 +1837,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       return release_as_jlong(copy);
     }
 
-    auto input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
     switch (op) {
       case cudf::binary_operator::BITWISE_AND: {
-        auto [new_bitmask, null_count] = cudf::bitmask_and(input_table);
+        auto cols = n_cudf_columns.get_dereferenced();
+        cols.push_back(copy->view());
+        auto table_view = cudf::table_view{cols};
+        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
       case cudf::binary_operator::BITWISE_OR: {
-        auto [new_bitmask, null_count] = cudf::bitmask_or(input_table);
+        auto input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
+        auto [tmp_new_bitmask, tmp_null_count] = cudf::bitmask_or(input_table);
+        copy->set_null_mask(std::move(tmp_new_bitmask), tmp_null_count);
+        // and the bitmask with the original column
+        cudf::table_view table_view{std::vector<cudf::column_view>{copy->view(), *original_column}};
+        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
       default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
+    }
+    auto const copy_cv = copy->view();
+    if (cudf::has_nonempty_nulls(copy_cv)) {
+      copy = cudf::purge_nonempty_nulls(copy_cv);
     }
 
     return release_as_jlong(copy);
