@@ -3064,6 +3064,9 @@ class IntervalIndex(GenericIndex):
 class StringIndex(GenericIndex):
     """String defined indices into another Column
 
+    .. deprecated:: 23.06
+        `StringIndex` is deprecated, use `Index` instead.
+
     Attributes
     ----------
     _values: A StringColumn object or NDArray of strings
