@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import operator
 import shutil
 import tempfile
 import warnings
@@ -616,15 +617,6 @@ def _apply_post_filters(
         # No filters to apply
         return df
 
-    def _handle_eq(column: cudf.Series, value, *, negate) -> cudf.Series:
-        return column != value if negate else column == value
-
-    def _handle_gt(column: cudf.Series, value, *, negate) -> cudf.Series:
-        return column <= value if negate else column > value
-
-    def _handle_lt(column: cudf.Series, value, *, negate) -> cudf.Series:
-        return column >= value if negate else column < value
-
     def _handle_in(column: cudf.Series, value, *, negate) -> cudf.Series:
         if not isinstance(value, (list, set, tuple)):
             raise TypeError(
@@ -639,19 +631,13 @@ def _apply_post_filters(
             )
         return ~column.isna() if negate else column.isna()
 
-    def _handle_and(left: cudf.Series, right: cudf.Series) -> cudf.Series:
-        return left & right
-
-    def _handle_or(left: cudf.Series, right: cudf.Series) -> cudf.Series:
-        return left | right
-
     handlers: Dict[str, Callable] = {
-        "==": partial(_handle_eq, negate=False),
-        "!=": partial(_handle_eq, negate=True),
-        "<": partial(_handle_lt, negate=False),
-        ">=": partial(_handle_lt, negate=True),
-        ">": partial(_handle_gt, negate=False),
-        "<=": partial(_handle_gt, negate=True),
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
         "in": partial(_handle_in, negate=False),
         "not in": partial(_handle_in, negate=True),
         "is": partial(_handle_is, negate=False),
@@ -670,10 +656,10 @@ def _apply_post_filters(
 
     try:
         selection: cudf.Series = reduce(
-            _handle_or,
+            operator.or_,
             (
                 reduce(
-                    _handle_and,
+                    operator.and_,
                     (
                         handlers[op](df[column], value)
                         for (column, op, value) in expr
