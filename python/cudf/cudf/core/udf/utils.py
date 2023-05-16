@@ -31,7 +31,7 @@ from cudf.core.udf.strings_typing import (
     udf_string,
 )
 from cudf.utils import cudautils
-from cudf.utils._numba_setup import _get_ptx_file
+from cudf.utils._setup_numba import _get_ptx_file
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,

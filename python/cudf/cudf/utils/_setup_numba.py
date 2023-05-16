@@ -19,10 +19,6 @@ def _setup_numba():
     """
     _setup_numba_linker(CC_60_PTX_FILE)
 
-    # disable low occupancy warnings for internal usages of numba,
-    # such as in our iloc implementation
-    config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
-
 
 def _get_best_ptx_file(archs, max_compute_capability):
     """
@@ -155,3 +151,12 @@ def _get_cuda_version_from_ptx_file(path):
         )
 
     return cuda_ver
+
+
+class CUDFNumbaConfig:
+    def __enter__(self):
+        self.enter_val = config.CUDA_LOW_OCCUPANCY_WARNINGS
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        config.CUDA_LOW_OCCUPANCY_WARNINGS = self.enter_val

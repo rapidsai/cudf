@@ -8,6 +8,7 @@ from numba import cuda
 
 from cudf.core.dataframe import DataFrame
 from cudf.testing._utils import ALL_TYPES, assert_eq
+from cudf.utils._setup_numba import CUDFNumbaConfig
 
 """
 DataFrame copy expectations
@@ -159,8 +160,8 @@ def test_kernel_deep_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
-
-    add_one[1, len(sr)](sr._column.data_array_view(mode="write"))
+    with CUDFNumbaConfig():
+        add_one[1, len(sr)](sr._column.data_array_view(mode="write"))
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 
