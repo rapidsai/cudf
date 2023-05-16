@@ -1111,10 +1111,6 @@ struct packed_src_and_dst_pointers {
   uint8_t** d_dst_bufs;
 };
 
-};  // anonymous namespace
-
-namespace detail {
-
 /**
  * @brief Create an instance of `packed_src_and_dst_pointers` populating destination
  * partitition buffers (if any) from `out_buffers`. In the chunked_pack case
@@ -1308,6 +1304,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 
   return partition_buf_size_and_dst_buf_info;
 }
+
 /**
  * @brief Struct containing information about the actual batches we will send to the
  * `copy_partitions` kernel and the number of iterations we need to carry out this copy.
@@ -1637,6 +1634,10 @@ bool check_inputs(cudf::table_view const& input, std::vector<size_type> const& s
   return input.column(0).size() == 0;
 }
 
+};  // anonymous namespace
+
+namespace detail {
+
 /**
  * @brief A helper struct containing the state of contiguous_split, whether the caller
  * is using the single-pass contiguous_split or chunked_pack.
@@ -1887,7 +1888,7 @@ struct contiguous_split_state {
 
     auto& h_dst_buf_info  = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
     auto cur_dst_buf_info = h_dst_buf_info;
-    metadata_builder mb{input.num_columns()};
+    detail::metadata_builder mb{input.num_columns()};
 
     populate_metadata(input.begin(), input.end(), cur_dst_buf_info, mb);
 
@@ -1907,7 +1908,7 @@ struct contiguous_split_state {
     auto& h_dst_bufs     = src_and_dst_pointers->h_dst_bufs;
 
     auto cur_dst_buf_info = h_dst_buf_info;
-    metadata_builder mb(input.num_columns());
+    detail::metadata_builder mb(input.num_columns());
 
     for (std::size_t idx = 0; idx < num_partitions; idx++) {
       // traverse the buffers and build the columns.
@@ -1996,10 +1997,10 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
 chunked_pack::chunked_pack(cudf::table_view const& input,
                            std::size_t user_buffer_size,
-                           rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr)
 {
-  state = std::make_unique<detail::contiguous_split_state>(input, user_buffer_size, stream, mr);
+  state = std::make_unique<detail::contiguous_split_state>(
+    input, user_buffer_size, cudf::get_default_stream(), mr);
 }
 
 // required for the unique_ptr to work with a non-complete type (contiguous_split_state)

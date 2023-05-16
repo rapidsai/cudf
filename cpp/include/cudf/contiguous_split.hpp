@@ -144,15 +144,14 @@ struct contiguous_split_state;
  * The caller has two methods it can use to carry out the chunked_pack: has_next and next.
  * Here is an example:
  *
+ * @code{.pseudo}
  * // Create a table_view
  * cudf::table_view tv = ...;
  *
- * // Choose a memory resource. This memory resource is used for scratch/thrust temporary
+ * // Choose a memory resource (optional). This memory resource is used for scratch/thrust temporary
  * // data. In memory constrained cases, this can be used to set aside scratch memory
  * // for `chunked_pack` at the beginning of a program.
  * auto mr = rmm::mr::get_current_device_resource();
- *
- * auto stream = cudf::get_default_stream();
  *
  * // Define a buffer size for each chunk: the larger the buffer is, the more SMs can be
  * // occupied by this algorithm.
@@ -165,7 +164,7 @@ struct contiguous_split_state;
  * //
  * std::size_t user_buffer_size = 128*1024*1024;
  *
- * auto chunked_packer = cudf::chunked_pack::create(tv, user_buffer_size, stream, mr);
+ * auto chunked_packer = cudf::chunked_pack::create(tv, user_buffer_size, mr);
  *
  * std::size_t host_offset = 0;
  * auto host_buffer = ...; // obtain a host buffer you would like to copy to
@@ -187,6 +186,7 @@ struct contiguous_split_state;
  *
  *   host_offset += bytes_copied;
  * }
+ * @endcode
  */
 class chunked_pack {
  public:
@@ -196,13 +196,12 @@ class chunked_pack {
    * @param input source `table_view` to pack
    * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
    *                         at least 1MB
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr RMM memory resource to be used for temporary and scratch allocations only
+   * @param mr An optional memory resource to be used for temporary and scratch allocations only
    */
-  explicit chunked_pack(cudf::table_view const& input,
-                        std::size_t user_buffer_size,
-                        rmm::cuda_stream_view stream,
-                        rmm::mr::device_memory_resource* mr);
+  explicit chunked_pack(
+    cudf::table_view const& input,
+    std::size_t user_buffer_size,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor that will be implemented as default, required because
