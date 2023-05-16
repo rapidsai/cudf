@@ -679,7 +679,7 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
  *                           count information. The null count should be taken
  *                           from `src` because this case is restricted to a single partition
  *                           (no splits)
- * @returns a std::tuple<size_type, int64_t, int64_t, size_type> containing:
+ * @returns a std::tuple containing:
  *          column size, data offset, bitmask offset, and null count
  */
 template <typename BufInfo>
