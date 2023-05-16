@@ -43,6 +43,7 @@ class ASTOperator(Enum):
     NULL_LOGICAL_OR = libcudf_exp.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_exp.ast_operator.IDENTITY
+    IS_NULL = libcudf_exp.ast_operator.IS_NULL
     SIN = libcudf_exp.ast_operator.SIN
     COS = libcudf_exp.ast_operator.COS
     TAN = libcudf_exp.ast_operator.TAN

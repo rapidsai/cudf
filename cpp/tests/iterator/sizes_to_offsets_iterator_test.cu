@@ -63,8 +63,8 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<T>(expected_values.begin(), expected_values.end());
-  auto result_col =
-    cudf::column_view(cudf::data_type(cudf::type_to_id<T>()), d_view.size(), result.data());
+  auto result_col = cudf::column_view(
+    cudf::data_type(cudf::type_to_id<T>()), d_view.size(), result.data(), nullptr, 0);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_col, expected);
   EXPECT_EQ(last.value(stream), expected_reduce);
