@@ -216,7 +216,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   std::transform(columns.begin(), columns.end(), keys_views.begin(), [keys_type](auto cv) {
     auto dict_view = dictionary_column_view(cv);
     // empty column may not have keys so we create an empty column_view place-holder
-    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr};
+    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr, nullptr, 0};
     auto keys = dict_view.keys();
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
@@ -245,7 +245,9 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
-    if (dict_view.is_empty()) return column_view{data_type{type_id::UINT32}, 0, nullptr};
+    if (dict_view.is_empty()) {
+      return column_view{data_type{type_id::UINT32}, 0, nullptr, nullptr, 0};
+    }
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
   auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
