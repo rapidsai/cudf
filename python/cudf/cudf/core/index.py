@@ -15,7 +15,6 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -64,8 +63,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-
-T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
@@ -1048,7 +1045,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _binaryop(
         self,
-        other: T,
+        other: Frame,
         op: str,
         fill_value: Any = None,
         *args,

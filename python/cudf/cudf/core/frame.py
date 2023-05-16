@@ -16,7 +16,6 @@ from typing import (
     MutableMapping,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -24,6 +23,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -44,8 +44,6 @@ from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -146,8 +144,8 @@ class Frame(BinaryOperand, Scannable):
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     def _mimic_inplace(
-        self: T, result: T, inplace: bool = False
-    ) -> Optional[Frame]:
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -1069,7 +1067,6 @@ class Frame(BinaryOperand, Scannable):
         # Handle dict arrays
         cudf_category_frame = {}
         if len(dict_indices):
-
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
             indices_columns = libcudf.interop.from_arrow(dict_indices_table)
@@ -1191,11 +1188,11 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     def _copy_type_metadata(
-        self: T,
-        other: T,
+        self,
+        other: Self,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> T:
+    ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
