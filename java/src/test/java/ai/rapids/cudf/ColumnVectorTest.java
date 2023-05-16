@@ -6751,7 +6751,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   /**
-   * Test that the ColumnView with unknown null-counts still returns 
+   * Test that the ColumnView with unknown null-counts still returns
    * the correct null-count when queried.
    */
   @Test
