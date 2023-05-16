@@ -24,7 +24,8 @@
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 std::unique_ptr<table> stable_distinct(table_view const& input,
                                        std::vector<size_type> const& keys,
@@ -45,7 +46,13 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
 
-  // Markers to denote which rows to be copied to the output.
+  // The only difference between this implementation and the unstable version
+  // is that the stable implementation must retain the input order. The
+  // distinct indices are not sorted, so we cannot simply copy the rows in the
+  // order of the distinct indices and retain the input order. Instead, we use
+  // a boolean mask to indicate which rows to copy to the output. This avoids
+  // the need to sort the distinct indices, which is slower.
+
   auto const output_markers = [&] {
     auto markers = rmm::device_uvector<bool>(input.num_rows(), stream);
     thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
@@ -67,4 +74,18 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     mr);
 }
 
-}  // namespace cudf::detail
+}  // namespace detail
+
+std::unique_ptr<table> stable_distinct(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option keep,
+                                       null_equality nulls_equal,
+                                       nan_equality nans_equal,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::stable_distinct(
+    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+}
+
+}  // namespace cudf

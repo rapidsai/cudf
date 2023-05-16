@@ -289,7 +289,7 @@ std::unique_ptr<table> distinct(
  * If there are duplicate rows, which row to be copied depends on the specified value of the `keep`
  * parameter.
  *
- * This API produces exactly the same set of output rows as `cudf::distinct`.
+ * This API produces the same output rows as `cudf::distinct`, but with input order preserved.
  *
  * @param input The input table
  * @param keys Vector of indices indicating key columns in the `input` table
