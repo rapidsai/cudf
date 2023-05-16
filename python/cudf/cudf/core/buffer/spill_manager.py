@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -225,7 +225,7 @@ class SpillManager:
         self,
         *,
         spill_on_demand: bool = False,
-        device_memory_limit: int = None,
+        device_memory_limit: Optional[int] = None,
         statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
@@ -358,7 +358,7 @@ class SpillManager:
                     buf.lock.release()
         return spilled
 
-    def spill_to_device_limit(self, device_limit: int = None) -> int:
+    def spill_to_device_limit(self, device_limit: Optional[int] = None) -> int:
         """Try to spill device memory until device limit
 
         Notice, by default this is a no-op.

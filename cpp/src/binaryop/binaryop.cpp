@@ -217,6 +217,8 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
 
   auto out_view = out->mutable_view();
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  // TODO: consider having the binary_operation count nulls instead
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace compiled
@@ -373,6 +375,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace detail
