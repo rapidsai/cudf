@@ -2029,7 +2029,7 @@ std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input
 {
   CUDF_EXPECTS(user_buffer_size >= desired_batch_size,
                "The output buffer size must be at least 1MB in size");
-  return std::make_unique<chunked_pack>(input, user_buffer_size, cudf::get_default_stream(), mr);
+  return std::make_unique<chunked_pack>(input, user_buffer_size, mr);
 }
 
 };  // namespace cudf
