@@ -1029,7 +1029,7 @@ struct packed_partition_buf_size_and_dst_buf_info {
       // device-side
       d_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size, stream, mr),
       d_buf_sizes{reinterpret_cast<std::size_t*>(d_buf_sizes_and_dst_info.data())},
-      //// destination buffer info
+      // destination buffer info
       d_dst_buf_info{reinterpret_cast<dst_buf_info*>(
         static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size)}
   {
@@ -1838,18 +1838,13 @@ struct contiguous_split_state {
   std::vector<packed_table> make_empty_packed_table()
   {
     // sanitize the inputs (to handle corner cases like sliced tables)
-    std::vector<std::unique_ptr<column>> empty_columns;
-    empty_columns.reserve(input.num_columns());
-    std::transform(
-      input.begin(), input.end(), std::back_inserter(empty_columns), [](column_view const& col) {
-        return cudf::empty_like(col);
-      });
     std::vector<cudf::column_view> empty_column_views;
     empty_column_views.reserve(input.num_columns());
-    std::transform(empty_columns.begin(),
-                   empty_columns.end(),
+    std::transform(input.begin(),
+                   input.end(),
                    std::back_inserter(empty_column_views),
-                   [](std::unique_ptr<column> const& col) { return col->view(); });
+                   [](column_view const& col) { return cudf::empty_like(col)->view(); });
+
     table_view empty_inputs(empty_column_views);
 
     // build the empty results
