@@ -33,7 +33,7 @@ TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWi
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(7);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(7));
   cudf::scalar_type_t<TypeParam> s(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -71,7 +71,7 @@ TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetNull)
 TYPED_TEST(TypedScalarTest, CopyConstructor)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(8);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(8));
   cudf::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
