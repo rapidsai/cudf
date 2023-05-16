@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,7 +218,9 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
     auto const actual_counts_view =
       cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                         actual_counts->size(),
-                        actual_counts->data());
+                        actual_counts->data(),
+                        nullptr,
+                        0);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);
 
     auto result = this->join(
