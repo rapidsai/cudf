@@ -16,7 +16,6 @@
 #include "join_common_utils.cuh"
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/structs/utilities.hpp>

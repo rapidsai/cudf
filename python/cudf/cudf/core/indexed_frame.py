@@ -38,6 +38,7 @@ from cudf._typing import (
     Dtype,
     NotImplementedType,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -3914,12 +3915,15 @@ class IndexedFrame(Frame):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
         observed=True,
         dropna=True,
     ):
+        if sort is no_default:
+            sort = cudf.get_option("mode.pandas_compatible")
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
