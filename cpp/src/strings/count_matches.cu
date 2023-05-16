@@ -43,7 +43,7 @@ struct count_fn {
 
     auto itr = d_str.begin();
     while (itr.position() <= nchars) {
-      auto result = prog.find(thread_idx, d_str, itr, -1);
+      auto result = prog.find(thread_idx, d_str, itr);
       if (!result) { break; }
       ++count;
       // increment the iterator is faster than creating a new one

@@ -52,8 +52,6 @@ struct contains_fn {
 
     size_type end = beginning_only ? 1    // match only the beginning of the string;
                                    : -1;  // match anywhere in the string
-    // this no-op prefetches string data into L2 which helps improve performance
-    end = !d_str.empty() ? std::min(d_str.length(), end) : end;
     return prog.find(thread_idx, d_str, d_str.begin(), end).has_value();
   }
 };
