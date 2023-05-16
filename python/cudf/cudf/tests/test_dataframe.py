@@ -9865,6 +9865,15 @@ def test_dataframe_eval_errors(df_eval, expr):
         df_eval.eval(expr)
 
 
+def test_dataframe_eval_misc():
+    df = cudf.DataFrame({"a": [1, 2, 3, None, 5]})
+    got = df.eval("isnull(a)")
+    assert_eq(got, cudf.Series.isnull(df["a"]), check_names=False)
+
+    df.eval("c = isnull(1)", inplace=True)
+    assert_eq(df["c"], cudf.Series([False] * len(df), name="c"))
+
+
 @pytest.mark.parametrize(
     "gdf,subset",
     [

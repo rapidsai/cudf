@@ -25,6 +25,7 @@ from cudf._typing import (
     NotImplementedType,
     ScalarLike,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -79,7 +80,6 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-from cudf.api.extensions import no_default
 
 
 def _format_percentile_names(percentiles):
@@ -3204,7 +3204,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
         observed=True,
