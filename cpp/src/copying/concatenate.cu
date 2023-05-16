@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/concatenate.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -49,6 +49,7 @@
 
 namespace cudf {
 namespace detail {
+namespace {
 
 // From benchmark data, the fused kernel optimization appears to perform better
 // when there are more than a trivial number of columns, or when the null mask
@@ -100,22 +101,28 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
+ * @tparam block_size Block size for using with single_lane_block_sum_reduce
+ *
  * @param views Array of column_device_view
  * @param output_offsets Prefix sum of sizes of elements of `views`
  * @param number_of_views Size of `views` array
  * @param dest_mask The output buffer to copy null masks into
- * @param number_of_mask_bits The total number of null masks bits that are being
- * copied
+ * @param number_of_mask_bits The total number of null masks bits that are being copied
+ * @param out_valid_count To hold the total number of valid bits set
  */
+template <size_type block_size>
 __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_t const* output_offsets,
                                          size_type number_of_views,
                                          bitmask_type* dest_mask,
-                                         size_type number_of_mask_bits)
+                                         size_type number_of_mask_bits,
+                                         size_type* out_valid_count)
 {
   size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto active_mask = __ballot_sync(0xFFFF'FFFFu, mask_index < number_of_mask_bits);
+
+  size_type warp_valid_count = 0;
 
   while (mask_index < number_of_mask_bits) {
     size_type const source_view_index =
@@ -129,32 +136,44 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
     }
     bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
-    if (threadIdx.x % detail::warp_size == 0) { dest_mask[word_index(mask_index)] = new_word; }
+    if (threadIdx.x % detail::warp_size == 0) {
+      dest_mask[word_index(mask_index)] = new_word;
+      warp_valid_count += __popc(new_word);
+    }
 
     mask_index += blockDim.x * gridDim.x;
     active_mask = __ballot_sync(active_mask, mask_index < number_of_mask_bits);
   }
-}
 
-void concatenate_masks(device_span<column_device_view const> d_views,
-                       device_span<size_t const> d_offsets,
-                       bitmask_type* dest_mask,
-                       size_type output_size,
-                       rmm::cuda_stream_view stream)
+  using detail::single_lane_block_sum_reduce;
+  auto const block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+  if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
+}
+}  // namespace
+
+size_type concatenate_masks(device_span<column_device_view const> d_views,
+                            device_span<size_t const> d_offsets,
+                            bitmask_type* dest_mask,
+                            size_type output_size,
+                            rmm::cuda_stream_view stream)
 {
+  rmm::device_scalar<size_type> d_valid_count(0, stream);
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
-  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    d_views.data(),
-    d_offsets.data(),
-    static_cast<size_type>(d_views.size()),
-    dest_mask,
-    output_size);
+  concatenate_masks_kernel<block_size>
+    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      d_views.data(),
+      d_offsets.data(),
+      static_cast<size_type>(d_views.size()),
+      dest_mask,
+      output_size,
+      d_valid_count.data());
+  return output_size - d_valid_count.value(stream);
 }
 
-void concatenate_masks(host_span<column_view const> views,
-                       bitmask_type* dest_mask,
-                       rmm::cuda_stream_view stream)
+size_type concatenate_masks(host_span<column_view const> views,
+                            bitmask_type* dest_mask,
+                            rmm::cuda_stream_view stream)
 {
   // Preprocess and upload inputs to device memory
   auto const device_views = create_device_views(views, stream);
@@ -162,9 +181,10 @@ void concatenate_masks(host_span<column_view const> views,
   auto const& d_offsets   = std::get<2>(device_views);
   auto const output_size  = std::get<3>(device_views);
 
-  concatenate_masks(d_views, d_offsets, dest_mask, output_size, stream);
+  return concatenate_masks(d_views, d_offsets, dest_mask, output_size, stream);
 }
 
+namespace {
 template <typename T, size_type block_size, bool Nullable>
 __global__ void fused_concatenate_kernel(column_device_view const* input_views,
                                          size_t const* input_offsets,
@@ -287,7 +307,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
-    cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream);
+    col->set_null_count(
+      cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream));
   } else {
     col->set_null_count(0);  // prevent null count from being materialized
   }
@@ -339,8 +360,6 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
 {
   return cudf::structs::detail::concatenate(views, stream, mr);
 }
-
-namespace {
 
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream);
 

@@ -300,8 +300,8 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/lengths.cpp string/like.cpp
-  string/reverse.cpp
+  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/join_strings.cpp string/lengths.cpp
+  string/like.cpp string/reverse.cpp
 )
 
 # ##################################################################################################
