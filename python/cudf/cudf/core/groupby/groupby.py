@@ -25,7 +25,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_utils import jit_groupby_apply
+from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -1166,11 +1166,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
         # Nulls are not yet supported
-        for colname in self.grouping.values._data.keys():
-            if self.obj._data[colname].has_nulls():
-                raise ValueError(
-                    "Nulls not yet supported with groupby JIT engine"
-                )
+        if self.grouping._obj._has_nulls:
+            raise ValueError("Nulls not yet supported with groupby JIT engine")
 
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
@@ -1247,7 +1244,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @_cudf_nvtx_annotate
-    def apply(self, function, *args, engine="cudf"):
+    def apply(self, function, *args, engine="auto"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -1257,7 +1254,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           on the grouped chunk.
         args : tuple
             Optional positional arguments to pass to the function.
-        engine: {'cudf', 'jit'}, default 'cudf'
+        engine: 'auto', 'cudf', or 'jit', default 'auto'
           Selects the GroupBy.apply implementation. Use `jit` to
           select the numba JIT pipeline. Only certain operations are allowed
           within the function when using this option: min, max, sum, mean, var,
@@ -1266,6 +1263,11 @@ class GroupBy(Serializable, Reducible, Scannable):
           `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
           <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
+          Use `cudf` to select the iterative groupby apply algorithm which aims
+          to provide maximum flexibility at the expense of performance.
+          The default value `auto` will attempt to use the numba JIT pipeline
+          where possible and will fall back to the iterative algorithm if
+          necessary.
 
         Examples
         --------
@@ -1339,10 +1341,20 @@ class GroupBy(Serializable, Reducible, Scannable):
         1  2     1
         2  3     1
         """
+
+        if self.obj.empty:
+            return self.obj
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
+        if engine == "auto":
+            if (not grouped_values._has_nulls) and _can_be_jitted(
+                grouped_values, function, args
+            ):
+                engine = "jit"
+            else:
+                engine = "cudf"
         if engine == "jit":
             result = self._jit_groupby_apply(
                 function,
