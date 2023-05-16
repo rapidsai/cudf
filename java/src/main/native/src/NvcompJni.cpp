@@ -20,6 +20,7 @@
 
 #include "check_nvcomp_output_sizes.hpp"
 #include "cudf_jni_apis.hpp"
+#include "jni_utils.hpp"
 
 namespace {
 
