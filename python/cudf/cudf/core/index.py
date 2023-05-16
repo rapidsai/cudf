@@ -2257,7 +2257,7 @@ class TimedeltaIndex(Index):
         Number of days for each element.
         """
         return as_index(
-            arbitrary=self._values.days, name=self.name, dtype="int32"
+            arbitrary=self._values.days, name=self.name, dtype="int64"
         )
 
     @property  # type: ignore
