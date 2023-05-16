@@ -1915,8 +1915,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
         // data is the second child
 
         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-        cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
-        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+        cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets,
+                                         nullptr, 0);
+        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data,
+                                      nullptr, 0);
         return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size,
                                                   nullptr, valid, j_null_count, 0,
                                                   {offsets_column, data_column}));
@@ -1932,8 +1934,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
         offsets_size = size + 1;
         offsets = reinterpret_cast<cudf::size_type *>(j_offset);
       }
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size,
-                                       offsets);
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size, offsets,
+                                       nullptr, 0);
       return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr,
                                                 valid, j_null_count, 0,
                                                 {offsets_column, *children[0]}));

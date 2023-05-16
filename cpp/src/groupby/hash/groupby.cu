@@ -250,7 +250,9 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     column_view null_removed_map(
       data_type(type_to_id<size_type>()),
       arg_result->size(),
-      static_cast<void const*>(arg_result->view().template data<size_type>()));
+      static_cast<void const*>(arg_result->view().template data<size_type>()),
+      nullptr,
+      0);
     auto gather_argminmax =
       cudf::detail::gather(table_view({col}),
                            null_removed_map,
