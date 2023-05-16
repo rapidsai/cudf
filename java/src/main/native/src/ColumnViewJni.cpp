@@ -672,7 +672,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNI
       case cudf::type_id::LIST:
         return release_as_jlong(cudf::lists::reverse(cudf::lists_column_view{*input}));
       default:
-        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+        JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS,
                       "A column of type string or list is required for reverse()", 0);
     }
   }
@@ -690,8 +690,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     // This is because cudf operates on a different parameter (`max_split`) which is converted from
     // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
     // unlimited split.
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "limit == 0 and limit == 1 are not supported", 0);
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "limit == 0 and limit == 1 are not supported",
+                  0);
   }
 
   try {
@@ -717,8 +717,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRe(
     // This is because cudf operates on a different parameter (`max_split`) which is converted from
     // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
     // unlimited split.
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "limit == 0 and limit == 1 are not supported", 0);
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "limit == 0 and limit == 1 are not supported",
+                  0);
   }
 
   try {
@@ -748,8 +748,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
     // This is because cudf operates on a different parameter (`max_split`) which is converted from
     // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
     // unlimited split.
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "limit == 0 and limit == 1 are not supported", 0);
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "limit == 0 and limit == 1 are not supported",
+                  0);
   }
 
   try {
@@ -776,8 +776,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRe(
     // This is because cudf operates on a different parameter (`max_split`) which is converted from
     // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
     // unlimited split.
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "limit == 0 and limit == 1 are not supported", 0);
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "limit == 0 and limit == 1 are not supported",
+                  0);
   }
 
   try {
@@ -1104,7 +1104,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::DECIMAL64:
         case cudf::type_id::DECIMAL128:
           return release_as_jlong(cudf::strings::from_fixed_point(*column));
-        default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        default: JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
@@ -1125,7 +1125,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::DECIMAL64:
         case cudf::type_id::DECIMAL128:
           return release_as_jlong(cudf::strings::to_fixed_point(*column, n_data_type));
-        default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        default: JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "Invalid data type", 0);
       }
     } else if (cudf::is_timestamp(n_data_type) && cudf::is_numeric(column->type())) {
       // This is a temporary workaround to allow Java to cast from integral types into a timestamp
@@ -1133,12 +1133,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
       // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
       if (n_data_type.id() == cudf::type_id::TIMESTAMP_DAYS) {
         if (column->type().id() != cudf::type_id::INT32) {
-          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+          JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS,
                         "Numeric cast to TIMESTAMP_DAYS requires INT32", 0);
         }
       } else {
         if (column->type().id() != cudf::type_id::INT64) {
-          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+          JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS,
                         "Numeric cast to non-day timestamp requires INT64", 0);
         }
       }

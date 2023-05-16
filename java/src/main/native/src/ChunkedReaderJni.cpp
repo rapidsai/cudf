@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,17 +45,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
     JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", 0);
     read_buffer = false;
   } else if (inp_file_path != nullptr) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS,
                   "Cannot pass in both a buffer and an inp_file_path", 0);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inp_file_path);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inp_file_path cannot be empty", 0);
+      JNI_THROW_NEW(env, ILLEGAL_ARG_EXCEPTION_CLASS, "inp_file_path cannot be empty", 0);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
