@@ -17,12 +17,6 @@ cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
         column_view view
     ) except +
 
-    cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
-        const bitmask_type * mask,
-        size_type begin_bit,
-        size_type end_bit
-    ) except +
-
     cdef size_t bitmask_allocation_size_bytes (
         size_type number_of_bits,
         size_t padding_boundary
