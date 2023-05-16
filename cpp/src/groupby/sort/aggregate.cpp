@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,7 +167,9 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
       column_view null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
-        static_cast<void const*>(argmin_result.template data<size_type>()));
+        static_cast<void const*>(argmin_result.template data<size_type>()),
+        nullptr,
+        0);
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
@@ -207,7 +209,9 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
       column_view null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
-        static_cast<void const*>(argmax_result.template data<size_type>()));
+        static_cast<void const*>(argmax_result.template data<size_type>()),
+        nullptr,
+        0);
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
