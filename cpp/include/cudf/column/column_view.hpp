@@ -280,10 +280,10 @@ class column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
    */
   column_view_base(data_type type,
                    size_type size,
@@ -374,11 +374,11 @@ class column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   column_view(data_type type,
@@ -528,12 +528,12 @@ class mutable_column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    indicator
    * bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   mutable_column_view(data_type type,
