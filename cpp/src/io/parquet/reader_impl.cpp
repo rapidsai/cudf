@@ -45,7 +45,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // this step on device. This call is also somewhat redundant if size info has already been
   // calculated (nested schema, chunked reader).
   auto is_string_col = [](gpu::ColumnChunkDesc const& chunk) {
-    return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4;
+    return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4 &&
+           chunk.converted_type != DECIMAL;
   };
   auto const has_strings = std::any_of(chunks.begin(), chunks.end(), is_string_col);
 
