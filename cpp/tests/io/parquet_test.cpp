@@ -5230,7 +5230,6 @@ TEST_F(ParquetWriterTest, DictionaryPageSizeEst)
   auto const expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryPageSizeEst.parquet");
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)

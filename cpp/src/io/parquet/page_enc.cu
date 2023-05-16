@@ -1305,7 +1305,7 @@ __global__ void __launch_bounds__(128, 8)
     uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
     auto actual_data_size = static_cast<uint32_t>(s->cur - base);
     if (actual_data_size > s->page.max_data_size) {
-      CUDF_UNREACHABLE("detected possibla page data corruption");
+      CUDF_UNREACHABLE("detected possible page data corruption");
     }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
