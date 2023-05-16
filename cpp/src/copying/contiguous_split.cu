@@ -959,14 +959,14 @@ struct packed_split_indices_and_src_buf_info {
                                                  rmm::mr::device_memory_resource* mr)
     : indices_size(
         cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align)),
-      src_buf_info_size(cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align))
+      src_buf_info_size(
+        cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align)),
+      // host-side
+      h_indices_and_source_info(indices_size + src_buf_info_size),
+      h_indices{reinterpret_cast<size_type*>(h_indices_and_source_info.data())},
+      h_src_buf_info{
+        reinterpret_cast<src_buf_info*>(h_indices_and_source_info.data() + indices_size)}
   {
-    // host-side
-    h_indices_and_source_info = std::vector<uint8_t>(indices_size + src_buf_info_size);
-    h_indices                 = reinterpret_cast<size_type*>(h_indices_and_source_info.data());
-    h_src_buf_info =
-      reinterpret_cast<src_buf_info*>(h_indices_and_source_info.data() + indices_size);
-
     // compute splits -> indices.
     // these are row numbers per split
     h_indices[0]              = 0;
@@ -1000,8 +1000,8 @@ struct packed_split_indices_and_src_buf_info {
   std::vector<uint8_t> h_indices_and_source_info;
   rmm::device_buffer d_indices_and_source_info;
 
-  size_type* h_indices;
-  src_buf_info* h_src_buf_info;
+  size_type* const h_indices;
+  src_buf_info* const h_src_buf_info;
 
   int offset_stack_partition_size;
   size_type* d_indices;
@@ -1020,21 +1020,19 @@ struct packed_partition_buf_size_and_dst_buf_info {
                                              rmm::mr::device_memory_resource* mr)
     : stream(stream),
       buf_sizes_size{cudf::util::round_up_safe(num_partitions * sizeof(std::size_t), split_align)},
-      dst_buf_info_size{cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align)}
+      dst_buf_info_size{cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align)},
+      // host-side
+      h_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size),
+      h_buf_sizes{reinterpret_cast<std::size_t*>(h_buf_sizes_and_dst_info.data())},
+      h_dst_buf_info{
+        reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size)},
+      // device-side
+      d_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size, stream, mr),
+      d_buf_sizes{reinterpret_cast<std::size_t*>(d_buf_sizes_and_dst_info.data())},
+      //// destination buffer info
+      d_dst_buf_info{reinterpret_cast<dst_buf_info*>(
+        static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size)}
   {
-    // host-side
-    h_buf_sizes_and_dst_info = std::vector<uint8_t>(buf_sizes_size + dst_buf_info_size);
-    h_buf_sizes              = reinterpret_cast<std::size_t*>(h_buf_sizes_and_dst_info.data());
-    h_dst_buf_info =
-      reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size);
-
-    // device-side
-    d_buf_sizes_and_dst_info = rmm::device_buffer(buf_sizes_size + dst_buf_info_size, stream, mr);
-    d_buf_sizes              = reinterpret_cast<std::size_t*>(d_buf_sizes_and_dst_info.data());
-
-    //// destination buffer info
-    d_dst_buf_info = reinterpret_cast<dst_buf_info*>(
-      static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size);
   }
 
   void copy_to_host()
@@ -1054,12 +1052,12 @@ struct packed_partition_buf_size_and_dst_buf_info {
   std::size_t const dst_buf_info_size;
 
   std::vector<uint8_t> h_buf_sizes_and_dst_info;
-  std::size_t* h_buf_sizes;
-  dst_buf_info* h_dst_buf_info;
+  std::size_t* const h_buf_sizes;
+  dst_buf_info* const h_dst_buf_info;
 
   rmm::device_buffer d_buf_sizes_and_dst_info;
-  std::size_t* d_buf_sizes;
-  dst_buf_info* d_dst_buf_info;
+  std::size_t* const d_buf_sizes;
+  dst_buf_info* const d_dst_buf_info;
 };
 
 // Packed block of memory 3:
@@ -1073,19 +1071,17 @@ struct packed_src_and_dst_pointers {
                               rmm::mr::device_memory_resource* mr)
     : stream(stream),
       src_bufs_size{cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align)},
-      dst_bufs_size{cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align)}
+      dst_bufs_size{cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align)},
+      // host-side
+      h_src_and_dst_buffers(src_bufs_size + dst_bufs_size),
+      h_src_bufs{reinterpret_cast<uint8_t const**>(h_src_and_dst_buffers.data())},
+      h_dst_bufs{reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size)},
+      // device-side
+      d_src_and_dst_buffers{rmm::device_buffer(src_bufs_size + dst_bufs_size, stream, mr)},
+      d_src_bufs{reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data())},
+      d_dst_bufs{reinterpret_cast<uint8_t**>(
+        reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size)}
   {
-    // host-side
-    h_src_and_dst_buffers = std::vector<uint8_t>(src_bufs_size + dst_bufs_size);
-    h_src_bufs            = reinterpret_cast<uint8_t const**>(h_src_and_dst_buffers.data());
-    h_dst_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size);
-
-    // device-side
-    d_src_and_dst_buffers = rmm::device_buffer(src_bufs_size + dst_bufs_size, stream, mr);
-    d_src_bufs            = reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data());
-    d_dst_bufs            = reinterpret_cast<uint8_t**>(
-      reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
-
     // setup src buffers
     setup_src_buf_data(input.begin(), input.end(), h_src_bufs);
   }
@@ -1104,11 +1100,12 @@ struct packed_src_and_dst_pointers {
   std::size_t const dst_bufs_size;
 
   std::vector<uint8_t> h_src_and_dst_buffers;
+  uint8_t const** const h_src_bufs;
+  uint8_t** const h_dst_bufs;
+
   rmm::device_buffer d_src_and_dst_buffers;
-  uint8_t const** h_src_bufs;
-  uint8_t const** d_src_bufs;
-  uint8_t** h_dst_bufs;
-  uint8_t** d_dst_bufs;
+  uint8_t const** const d_src_bufs;
+  uint8_t** const d_dst_bufs;
 };
 
 /**
