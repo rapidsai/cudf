@@ -629,7 +629,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   page_state_buffers_s* const sb = &state_buffers;
   int const page_idx             = blockIdx.x;
   int const t                    = threadIdx.x;
-  int out_thread0;
 
   // set during string copy by lane 0
   int first_non_null = -1;
@@ -660,12 +659,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     return;
   }
 
-  if (s->dict_base) {
-    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
-  } else {
-    out_thread0 =
-      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
-  }
+  int out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
 
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
@@ -867,7 +861,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   page_state_buffers_s* const sb = &state_buffers;
   int const page_idx             = blockIdx.x;
   int const t                    = threadIdx.x;
-  int out_thread0;
 
   // set during string copy by lane 0
   int first_non_null = -1;
@@ -898,7 +891,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     return;
   }
 
-  out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
+  int out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
 
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
