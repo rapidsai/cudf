@@ -50,10 +50,9 @@ size_type state_null_count(mask_state state, size_type size)
 {
   switch (state) {
     case mask_state::UNALLOCATED: return 0;
-    case mask_state::UNINITIALIZED: return UNKNOWN_NULL_COUNT;
     case mask_state::ALL_NULL: return size;
     case mask_state::ALL_VALID: return 0;
-    default: CUDF_FAIL("Invalid null mask state.");
+    default: CUDF_FAIL("Invalid null mask state.", std::invalid_argument);
   }
 }
 

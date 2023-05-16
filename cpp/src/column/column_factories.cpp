@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,12 +81,13 @@ std::unique_ptr<column> make_numeric_column(data_type type,
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
-  return std::make_unique<column>(type,
-                                  size,
-                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  detail::create_null_mask(size, state, stream, mr),
-                                  state_null_count(state, size),
-                                  std::vector<std::unique_ptr<column>>{});
+  return std::make_unique<column>(
+    type,
+    size,
+    rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+    detail::create_null_mask(size, state, stream, mr),
+    state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
+    std::vector<std::unique_ptr<column>>{});
 }
 
 // Allocate storage for a specified number of numeric elements
@@ -100,12 +101,13 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
-  return std::make_unique<column>(type,
-                                  size,
-                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  detail::create_null_mask(size, state, stream, mr),
-                                  state_null_count(state, size),
-                                  std::vector<std::unique_ptr<column>>{});
+  return std::make_unique<column>(
+    type,
+    size,
+    rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+    detail::create_null_mask(size, state, stream, mr),
+    state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
+    std::vector<std::unique_ptr<column>>{});
 }
 
 // Allocate storage for a specified number of timestamp elements
@@ -119,12 +121,13 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
-  return std::make_unique<column>(type,
-                                  size,
-                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  detail::create_null_mask(size, state, stream, mr),
-                                  state_null_count(state, size),
-                                  std::vector<std::unique_ptr<column>>{});
+  return std::make_unique<column>(
+    type,
+    size,
+    rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+    detail::create_null_mask(size, state, stream, mr),
+    state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
+    std::vector<std::unique_ptr<column>>{});
 }
 
 // Allocate storage for a specified number of duration elements
@@ -138,12 +141,13 @@ std::unique_ptr<column> make_duration_column(data_type type,
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
-  return std::make_unique<column>(type,
-                                  size,
-                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  detail::create_null_mask(size, state, stream, mr),
-                                  state_null_count(state, size),
-                                  std::vector<std::unique_ptr<column>>{});
+  return std::make_unique<column>(
+    type,
+    size,
+    rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+    detail::create_null_mask(size, state, stream, mr),
+    state == mask_state::UNINITIALIZED ? 0 : state_null_count(state, size),
+    std::vector<std::unique_ptr<column>>{});
 }
 
 // Allocate storage for a specified number of fixed width elements

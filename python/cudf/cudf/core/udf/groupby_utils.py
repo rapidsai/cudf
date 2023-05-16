@@ -4,6 +4,7 @@
 import cupy as cp
 import numpy as np
 from numba import cuda, types
+from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
@@ -201,3 +202,26 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     specialized[ngroups, tpb](*launch_args)
 
     return output
+
+
+def _can_be_jitted(frame, func, args):
+    """
+    Determine if this UDF is supported through the JIT engine
+    by attempting to compile just the function to PTX using the
+    target set of types
+    """
+    np_field_types = np.dtype(
+        list(
+            _supported_dtypes_from_frame(
+                frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
+            ).items()
+        )
+    )
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, frame.index.dtype
+    )
+    try:
+        _get_udf_return_type(dataframe_group_type, func, args)
+        return True
+    except TypingError:
+        return False

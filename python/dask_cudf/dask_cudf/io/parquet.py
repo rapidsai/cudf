@@ -30,28 +30,31 @@ from cudf.utils.ioutils import (
 
 
 class CudfEngine(ArrowDatasetEngine):
-    @staticmethod
-    def read_metadata(*args, **kwargs):
-        meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
-            *args, **kwargs
+    @classmethod
+    def _create_dd_meta(cls, dataset_info, **kwargs):
+        # Start with pandas-version of meta
+        meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
+
+        # Convert to cudf
+        meta_cudf = cudf.from_pandas(meta_pd)
+
+        # Re-set "object" dtypes to align with pa schema
+        kwargs = dataset_info.get("kwargs", {})
+        set_object_dtypes_from_pa_schema(
+            meta_cudf,
+            kwargs.get("schema", None),
         )
-        new_meta = cudf.from_pandas(meta)
-        if parts:
-            # Re-set "object" dtypes align with pa schema
-            set_object_dtypes_from_pa_schema(
-                new_meta,
-                parts[0].get("common_kwargs", {}).get("schema", None),
-            )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        for col in new_meta._data.names:
+        for col in meta_cudf._data.names:
             if (
-                isinstance(new_meta._data[col], cudf.core.column.StringColumn)
+                isinstance(meta_cudf._data[col], cudf.core.column.StringColumn)
                 and strings_to_cats
             ):
-                new_meta._data[col] = new_meta._data[col].astype("int32")
-        return (new_meta, stats, parts, index)
+                meta_cudf._data[col] = meta_cudf._data[col].astype("int32")
+
+        return meta_cudf
 
     @classmethod
     def multi_support(cls):
