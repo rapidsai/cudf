@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import pickle
 import warnings
 from functools import cached_property
@@ -15,7 +16,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    TypeVar,
     Union,
     cast,
 )
@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Self
 
 import rmm
 
@@ -96,11 +97,6 @@ if PANDAS_GE_150:
     from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 else:
     from pandas.core.arrays._arrow_utils import ArrowIntervalType
-
-T = TypeVar("T", bound="ColumnBase")
-# TODO: This workaround allows type hints for `slice`, since `slice` is a
-# method in ColumnBase.
-Slice = TypeVar("Slice", bound=slice)
 
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
@@ -203,7 +199,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def to_pandas(
         self, index: Optional[pd.Index] = None, **kwargs
-    ) -> "pd.Series":
+    ) -> pd.Series:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
@@ -246,11 +242,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return cupy.asarray(self.data_array_view(mode="write"))
 
     def find_and_replace(
-        self: T,
+        self,
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> T:
+    ) -> Self:
         raise NotImplementedError
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
@@ -399,7 +395,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> Optional[ColumnBase]:
+    ) -> Optional[Self]:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -439,15 +435,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view(mode="read")
 
-    def force_deep_copy(self: T) -> T:
+    def force_deep_copy(self) -> Self:
         """
         A method to create deep copy irrespective of whether
         `copy-on-write` is enabled.
         """
         result = libcudf.copying.copy_column(self)
-        return cast(T, result._with_type_metadata(self.dtype))
+        return result._with_type_metadata(self.dtype)
 
-    def copy(self: T, deep: bool = True) -> T:
+    def copy(self, deep: bool = True) -> Self:
         """
         Makes a copy of the Column.
 
@@ -469,7 +465,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.force_deep_copy()
         else:
             return cast(
-                T,
+                Self,
                 build_column(
                     data=self.base_data
                     if self.base_data is None
@@ -611,8 +607,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
-        self, key: Slice, value: Union[cudf.core.scalar.Scalar, ColumnBase]
-    ) -> Optional[ColumnBase]:
+        self,
+        key: builtins.slice,
+        value: Union[cudf.core.scalar.Scalar, ColumnBase],
+    ) -> Optional[Self]:
         """If this function returns None, it's either a no-op (slice is empty),
         or the inplace replacement is already performed (fill-in-place).
         """
@@ -650,7 +648,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         key: cudf.core.column.NumericalColumn,
         value: Union[cudf.core.scalar.Scalar, ColumnBase],
-    ) -> ColumnBase:
+    ) -> Self:
         if is_bool_dtype(key.dtype):
             # `key` is boolean mask
             if len(key) != len(self):
@@ -701,11 +699,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 raise ValueError(msg)
 
     def fillna(
-        self: T,
+        self,
         value: Any = None,
         method: Optional[str] = None,
         dtype: Optional[Dtype] = None,
-    ) -> T:
+    ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
@@ -773,8 +771,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def take(
-        self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
-    ) -> T:
+        self, indices: ColumnBase, nullify: bool = False, check_bounds=True
+    ) -> Self:
         """Return Column by taking values from the corresponding *indices*.
 
         Skip bounds checking if check_bounds is False.
@@ -782,7 +780,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         # Handle zero size
         if indices.size == 0:
-            return cast(T, column_empty_like(self, newsize=0))
+            return cast(Self, column_empty_like(self, newsize=0))
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
@@ -1411,8 +1409,10 @@ def column_empty_like(
         and is_categorical_dtype(column.dtype)
         and dtype == column.dtype
     ):
-        column = cast("cudf.core.column.CategoricalColumn", column)
-        codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
+        catcolumn = cast("cudf.core.column.CategoricalColumn", column)
+        codes = column_empty_like(
+            catcolumn.codes, masked=masked, newsize=newsize
+        )
         return build_column(
             data=None,
             dtype=dtype,

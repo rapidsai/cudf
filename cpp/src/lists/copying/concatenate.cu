@@ -19,8 +19,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
+#include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -124,14 +126,9 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask = create_null_mask(
     total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
-  cudf::size_type null_count{0};
-  if (has_nulls) {
-    cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
-    null_count =
-      std::transform_reduce(columns.begin(), columns.end(), 0, std::plus{}, [](auto const& col) {
-        return col.null_count();
-      });
-  }
+  auto null_mask_data = static_cast<bitmask_type*>(null_mask.data());
+  auto const null_count =
+    has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};
 
   // assemble into outgoing list column
   return make_lists_column(total_list_count,
