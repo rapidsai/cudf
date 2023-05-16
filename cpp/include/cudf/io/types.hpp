@@ -192,10 +192,10 @@ class writer_compression_statistics {
   }
 
  private:
-  size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
-  size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
-  size_t _num_skipped_bytes    = 0;  ///< The number of bytes that were skipped during compression
-  size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
+  std::size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
+  std::size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
+  std::size_t _num_skipped_bytes = 0;  ///< The number of bytes that were skipped during compression
+  std::size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
 };
 
 /**
