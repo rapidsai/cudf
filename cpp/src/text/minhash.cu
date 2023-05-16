@@ -74,20 +74,20 @@ struct minhash_fn {
     }
     __syncwarp();
 
-    auto const begin = d_str.begin() + lane_idx;
-    auto const end   = [d_str, width = width] {
-      auto const length = d_str.length();
-      if (length > width) { return (d_str.end() - (width - 1)); }
-      return d_str.begin() + static_cast<cudf::size_type>(length > 0);
-    }();
+    auto const begin = d_str.data() + lane_idx;
+    auto const end   = d_str.data() + d_str.size_bytes();
 
-    // each lane hashes substrings of the given width
+    // each lane hashes 'width'  substrings of d_str
     for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
-      auto const offset = itr.byte_offset();
-      auto const hash_str =
-        cudf::string_view(d_str.data() + offset, (itr + width).byte_offset() - offset);
+      if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
+      auto const check_str =  // used for counting 'width' characters
+        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+      auto const [bytes, left] =
+        cudf::strings::detail::bytes_to_character_position(check_str, width);
+      if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
 
-      // hashing each seed on the same section of string is 10x faster than
+      auto const hash_str = cudf::string_view(itr, bytes);
+      // hashing with each seed on the same section of the string is 10x faster than
       // computing the substrings for each seed
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
         auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};

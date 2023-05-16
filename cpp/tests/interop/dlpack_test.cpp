@@ -375,7 +375,8 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
   // Verify that data matches input column
   constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
-  cudf::column_view const result_view(type, tensor.shape[0], tensor.data, col_view.null_mask());
+  cudf::column_view const result_view(
+    type, tensor.shape[0], tensor.data, col_view.null_mask(), col_view.null_count());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, result_view);
 }
 

@@ -69,7 +69,9 @@ std::unique_ptr<table> gather(table_view const& source_table,
                std::overflow_error);
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(gather_map.size()),
-                             gather_map.data());
+                             gather_map.data(),
+                             nullptr,
+                             0);
   return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
 }
 
