@@ -105,7 +105,7 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
  * @param t Thread index
- * @return pair containg start and end value indexes
+ * @return pair containing start and end value indexes
  */
 template <int lvl_buf_size, typename level_t>
 __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
@@ -932,7 +932,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     }
     __syncthreads();
 
-    // target_pos for value deconding
+    // target_pos for value decoding
     target_pos = min(s->nz_count, target_pos);
 
     // if this is the first page, then the first non-null entry will have an offset of 0.
