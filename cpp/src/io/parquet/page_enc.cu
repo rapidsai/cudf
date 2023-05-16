@@ -115,8 +115,10 @@ constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_value
 {
   if (value_bit_width == 0) return 0;
 
-  // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
-  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 256);
+  // Run length = 4, max(rle/bitpack header) = 5. bitpacking worst case is one byte every 8 values
+  // (because bitpacked runs are a multiple of 8). Don't need to round up the last term since that
+  // overhead is accounted for in the '5'.
+  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 8);
 }
 
 // subtract b from a, but return 0 if this would underflow
@@ -1302,6 +1304,9 @@ __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
     auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    if (actual_data_size > s->page.max_data_size) {
+      CUDF_UNREACHABLE("detected possibla page data corruption");
+    }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
