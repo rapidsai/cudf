@@ -5218,6 +5218,10 @@ TEST_F(ParquetWriterTest, DictionaryPageSizeEst)
   // this test is creating a pattern of repeating then non-repeating values to trigger
   // a "worst-case" for page size estimation in the presence of a dictionary. have confirmed
   // that this fails for values over 16 in the final term of `max_RLE_page_size()`.
+  // The output of the iterator will be 'CCCCCRRRRRCCCCCRRRRR...` where 'C' is a changing
+  // value, and 'R' repeats. The encoder will turn this into a literal run of 8 values
+  // (`CCCCCRRR`) followed by a repeated run of 2 (`RR`). This pattern then repeats, getting
+  // as close as possible to a condition of repeated 8 value literal runs.
   auto elements0  = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
     if ((i / 5) % 2 == 1) {
       return std::string("non-unique string");
