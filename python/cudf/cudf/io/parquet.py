@@ -574,31 +574,30 @@ def read_parquet(
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
     # Utility to normalize and validate the `filters`
     # argument to `read_parquet`
-    if filters:
-        msg = (
-            f"filters must be None, or non-empty List[Tuple] "
-            f"or List[List[Tuple]]. Got {filters}"
-        )
-        if not isinstance(filters, list):
-            raise TypeError(msg)
-
-        def _validate_predicate(item):
-            if not isinstance(item, tuple) or len(item) != 3:
-                raise TypeError(
-                    f"Predicate must be Tuple[str, str, Any], "
-                    f"got {predicate}."
-                )
-
-        filters = filters if isinstance(filters[0], list) else [filters]
-        for conjunction in filters:
-            if not conjunction or not isinstance(conjunction, list):
-                raise TypeError(msg)
-            for predicate in conjunction:
-                _validate_predicate(predicate)
-
-        return filters
-    else:
+    if not filters:
         return None
+
+    msg = (
+        f"filters must be None, or non-empty List[Tuple] "
+        f"or List[List[Tuple]]. Got {filters}"
+    )
+    if not isinstance(filters, list):
+        raise TypeError(msg)
+
+    def _validate_predicate(item):
+        if not isinstance(item, tuple) or len(item) != 3:
+            raise TypeError(
+                f"Predicate must be Tuple[str, str, Any], " f"got {predicate}."
+            )
+
+    filters = filters if isinstance(filters[0], list) else [filters]
+    for conjunction in filters:
+        if not conjunction or not isinstance(conjunction, list):
+            raise TypeError(msg)
+        for predicate in conjunction:
+            _validate_predicate(predicate)
+
+    return filters
 
 
 def _apply_post_filters(
