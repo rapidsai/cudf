@@ -12,7 +12,9 @@
 # the License.
 # =============================================================================
 
-set(cython_sources aggregation.pyx copying.pyx gpumemoryview.pyx groupby.pyx types.pyx utils.pyx)
+set(cython_sources aggregation.pyx column.pyx copying.pyx gpumemoryview.pyx groupby.pyx table.pyx
+                   types.pyx utils.pyx
+)
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
