@@ -207,7 +207,9 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
   auto scatter_source          = std::vector<std::reference_wrapper<const scalar>>{std::ref(lhs)};
   auto scatter_map_column_view = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                                    static_cast<cudf::size_type>(scatter_map_size),
-                                                   scatter_map.begin()};
+                                                   scatter_map.begin(),
+                                                   nullptr,
+                                                   0};
 
   auto result = cudf::detail::scatter(
     scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, stream, mr);
