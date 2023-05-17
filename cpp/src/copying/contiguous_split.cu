@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -1546,14 +1547,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
     // apply changed offset
     {
-      rmm::device_uvector<std::size_t> d_accum_size_per_iteration(
-        accum_size_per_iteration.size(), stream, temp_mr);
-
-      CUDF_CUDA_TRY(cudaMemcpyAsync(d_accum_size_per_iteration.data(),
-                                    accum_size_per_iteration.data(),
-                                    accum_size_per_iteration.size() * sizeof(std::size_t),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
+      auto d_accum_size_per_iteration =
+        cudf::detail::make_device_uvector_async(accum_size_per_iteration, stream, temp_mr);
 
       // we want to update the offset of batches for every iteration, except the first one (because
       // offsets in the first iteration are all 0 based)
