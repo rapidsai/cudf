@@ -124,7 +124,7 @@ struct dst_buf_info {
  * Copies a single partition of a source column buffer to a destination buffer. Shifts
  * element values by value_shift in the case of a buffer of offsets (value_shift will
  * only ever be > 0 in that case).  Shifts elements bitwise by bit_shift in the case of
- * a validity buffer (bif_shift will only ever be > 0 in that case).  This function assumes
+ * a validity buffer (bit_shift will only ever be > 0 in that case).  This function assumes
  * value_shift and bit_shift will never be > 0 at the same time.
  *
  * This function expects:
