@@ -1893,7 +1893,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
       j_null_count = 0;
     }
 
-    if (j_null_count == cudf::UNKNOWN_NULL_COUNT) {
+    if (j_null_count < 0) { // Check for unknown null count.
       // Calculate concrete null count.
       j_null_count = cudf::null_count(valid, 0, size);
     }
