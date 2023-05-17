@@ -2577,10 +2577,10 @@ class DatetimeIndex(GenericIndex):
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
         """
-        from cudf.core._internals.timezones import convert, localize
+        from cudf.core._internals.timezones import convert
 
         if tz is None:
-            result_col = localize(self._column._utc_time, None)
+            result_col = self._column._utc_time
         else:
             result_col = convert(self._column, tz)
         return DatetimeIndex._from_data({self.name: result_col})
