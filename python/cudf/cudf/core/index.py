@@ -2550,7 +2550,7 @@ class DatetimeIndex(GenericIndex):
 
         Parameters
         ----------
-        tz: str
+        tz : str
             Time zone for time. Corresponding timestamps would be converted
             to this time zone of the Datetime Array/Index.
             A `tz` of None will convert to UTC and remove the timezone

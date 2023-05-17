@@ -207,7 +207,7 @@ def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
         raise TypeError(
             "Cannot convert from timezone-naive timestamps to "
             "timezone-aware timestamps. For that, "
-            "use `tz_localize instead."
+            "use `tz_localize`."
         )
     if zone_name == str(data.dtype.tz):
         return data.copy()
