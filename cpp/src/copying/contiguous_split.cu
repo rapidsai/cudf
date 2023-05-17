@@ -1883,7 +1883,7 @@ struct contiguous_split_state {
                      return packed_table{
                        empty_inputs,
                        packed_columns{std::make_unique<std::vector<uint8_t>>(pack_metadata(
-                                        empty_inputs, static_cast<uint8_t const*>(nullptr), 0)),
+                                        empty_inputs, nullptr, 0)),
                                       std::make_unique<rmm::device_buffer>()}};
                    });
 
@@ -1899,7 +1899,7 @@ struct contiguous_split_state {
     if (is_empty) {
       // this is a bit ugly, but it was done to re-use make_empty_packed_table between the
       // regular contiguous_split and chunked_pack cases.
-      auto empty_packed_tables = std::move(make_empty_packed_table()[0]);
+      auto empty_packed_tables = std::move(make_empty_packed_table().front());
       return std::move(empty_packed_tables.data.metadata);
     }
 
