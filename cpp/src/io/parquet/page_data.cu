@@ -659,7 +659,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
   rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
@@ -832,9 +832,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int t                          = threadIdx.x;
   int out_thread0;
 
-  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
