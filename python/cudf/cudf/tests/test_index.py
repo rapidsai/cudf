@@ -379,7 +379,7 @@ def test_index_copy_category(name, deep=True):
     "idx",
     [
         cudf.DatetimeIndex(["2001", "2002", "2003"]),
-        cudf.StringIndex(["a", "b", "c"]),
+        cudf.Index(["a", "b", "c"]),
         cudf.Index([1, 2, 3]),
         cudf.Index([1.0, 2.0, 3.0]),
         cudf.CategoricalIndex([1, 2, 3]),
@@ -433,7 +433,7 @@ def test_rangeindex_slice_attr_name():
 def test_from_pandas_str():
     idx = ["a", "b", "c"]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.StringIndex(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)

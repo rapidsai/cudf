@@ -3001,6 +3001,9 @@ class IntervalIndex(GenericIndex):
 class StringIndex(GenericIndex):
     """String defined indices into another Column
 
+    .. deprecated:: 23.06
+        `StringIndex` is deprecated, use `Index` instead.
+
     Attributes
     ----------
     _values: A StringColumn object or NDArray of strings
@@ -3009,6 +3012,12 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
