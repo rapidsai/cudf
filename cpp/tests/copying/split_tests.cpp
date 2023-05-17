@@ -28,7 +28,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/filling.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_buffer.hpp>
 
