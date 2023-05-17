@@ -4,9 +4,9 @@ from libcpp cimport bool as cbool
 
 from cudf._lib.cpp cimport copying as cpp_copying
 
-from .libcudf_types.column_view cimport ColumnView
-from .libcudf_types.table cimport Table
-from .libcudf_types.table_view cimport TableView
+from . cimport libcudf_types
+from .column cimport Column
+from .table cimport Table
 
 ctypedef cbool underlying_type_t_out_of_bounds_policy
 cpdef enum OutOfBoundsPolicy:
@@ -21,8 +21,8 @@ cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
 ) nogil
 
 
-cpdef Table gather(
-    TableView source_table,
-    ColumnView gather_map,
+cpdef libcudf_types.Table gather(
+    Table source_table,
+    Column gather_map,
     OutOfBoundsPolicy bounds_policy
 )

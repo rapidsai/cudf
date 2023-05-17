@@ -8,11 +8,13 @@
 from .pylibcudf cimport copying, libcudf_types
 from .pylibcudf.column cimport Column
 from .pylibcudf.gpumemoryview cimport gpumemoryview
+from .pylibcudf.table cimport Table
 from .pylibcudf.types cimport DataType, TypeId
 
 __all__ = [
     "Column",
     "DataType",
+    "Table",
     "TypeId",
     "copying",
     "gpumemoryview",

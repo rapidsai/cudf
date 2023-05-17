@@ -444,7 +444,7 @@ cdef class Column:
     # TODO: For now the function name reflects the CapsCase of the pylibcudf
     # class to differentiate from libcudf's snake_case column_view, but we will
     # want to change that once cudf stops interfacing directly with libcudf.
-    cpdef pylibcudf.libcudf_types.ColumnView to_ColumnView(self):
+    cpdef pylibcudf.Column to_pylibcudf(self):
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
         # categoricals due to the ordering question.
@@ -469,9 +469,9 @@ cdef class Column:
         children = []
         if col.base_children:
             for child_column in col.base_children:
-                children.append(child_column.to_ColumnView())
+                children.append(child_column.to_pylibcudf())
 
-        return pylibcudf.libcudf_types.ColumnView(
+        return pylibcudf.Column(
             dtype,
             self.size,
             data,
