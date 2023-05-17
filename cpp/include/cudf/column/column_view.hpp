@@ -280,17 +280,17 @@ class column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
    */
   column_view_base(data_type type,
                    size_type size,
                    void const* data,
-                   bitmask_type const* null_mask = nullptr,
-                   size_type null_count          = UNKNOWN_NULL_COUNT,
-                   size_type offset              = 0);
+                   bitmask_type const* null_mask,
+                   size_type null_count,
+                   size_type offset = 0);
 };
 
 class mutable_column_view_base : public column_view_base {
@@ -374,18 +374,18 @@ class column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   column_view(data_type type,
               size_type size,
               void const* data,
-              bitmask_type const* null_mask            = nullptr,
-              size_type null_count                     = UNKNOWN_NULL_COUNT,
+              bitmask_type const* null_mask,
+              size_type null_count,
               size_type offset                         = 0,
               std::vector<column_view> const& children = {});
 
@@ -528,19 +528,19 @@ class mutable_column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    indicator
    * bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   mutable_column_view(data_type type,
                       size_type size,
                       void* data,
-                      bitmask_type* null_mask                          = nullptr,
-                      size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
+                      bitmask_type* null_mask,
+                      size_type null_count,
                       size_type offset                                 = 0,
                       std::vector<mutable_column_view> const& children = {});
 

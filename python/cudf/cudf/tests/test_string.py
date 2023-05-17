@@ -1075,7 +1075,8 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    with pytest.warns(FutureWarning):
+        stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -2755,7 +2756,7 @@ def test_string_str_subscriptable(data, index):
     assert_eq(psr.str[index], gsr.str[index])
 
     psi = pd.Index(data)
-    gsi = StringIndex(data)
+    gsi = cudf.Index(data)
 
     assert_eq(psi.str[index], gsi.str[index])
 
