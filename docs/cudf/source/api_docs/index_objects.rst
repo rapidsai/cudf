@@ -149,9 +149,6 @@ Numeric Index
    :template: autosummary/class_without_autosummary.rst
 
    RangeIndex
-   Int64Index
-   UInt64Index
-   Float64Index
 
 .. _api.categoricalindex:
 

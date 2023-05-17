@@ -1689,7 +1689,7 @@ def test_index_fillna(data, fill_value):
 
     assert_eq(
         pdi.fillna(fill_value), gdi.fillna(fill_value), exact=False
-    )  # Int64Index v/s Float64Index
+    )  # Int64 v/s Float64
 
 
 @pytest.mark.parametrize(
@@ -1727,7 +1727,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if PANDAS_GE_200:
+    if PANDAS_GE_200 and gdi.dtype == cudf.dtype("datetime64[s]"):
         # Arrow bug:
         # https://github.com/apache/arrow/issues/33321
         # arrow cannot convert non-nanosecond

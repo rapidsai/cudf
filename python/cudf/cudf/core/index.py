@@ -20,6 +20,7 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
+from typing_extensions import Self
 
 import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
@@ -212,8 +213,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         self._end = self._start + self._step * (len(self._range) - 1)
 
     def _copy_type_metadata(
-        self: RangeIndex, other: RangeIndex, *, override_dtypes=None
-    ) -> RangeIndex:
+        self, other: RangeIndex, *, override_dtypes=None
+    ) -> Self:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -1002,7 +1003,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(cls, data: MutableMapping, name: Any = None) -> Index:
+    def _from_data(cls, data: MutableMapping, name: Any = None) -> Self:
         out = super()._from_data(data=data)
         if name is not None:
             out.name = name
@@ -1041,8 +1042,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     # Override just to make mypy happy.
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
-        self: Index, other: Index, *, override_dtypes=None
-    ) -> Index:
+        self, other: Index, *, override_dtypes=None
+    ) -> Self:
         return super()._copy_type_metadata(
             other, override_dtypes=override_dtypes
         )

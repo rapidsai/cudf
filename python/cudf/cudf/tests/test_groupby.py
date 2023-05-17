@@ -2021,7 +2021,7 @@ def test_groupby_no_keys(pdf):
         pdf.groupby([]).max(),
         gdf.groupby([]).max(),
         check_dtype=False,
-        check_index_type=False,  # Int64Index v/s Float64Index
+        check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
 
@@ -2039,7 +2039,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([], group_keys=False).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
-        check_index_type=False,  # Int64Index v/s Float64Index
+        check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
 
