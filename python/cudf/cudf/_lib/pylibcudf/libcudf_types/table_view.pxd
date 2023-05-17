@@ -10,5 +10,6 @@ cdef class TableView:
     cdef unique_ptr[table_view] c_obj
     cdef list columns
     cdef table_view * get(self) nogil
+
     cpdef size_type num_columns(self)
     cpdef size_type num_rows(self)

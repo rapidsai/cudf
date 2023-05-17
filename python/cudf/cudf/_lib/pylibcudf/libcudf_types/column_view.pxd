@@ -9,6 +9,7 @@ from cudf._lib.cpp.types cimport size_type
 cdef class ColumnView:
     cdef unique_ptr[column_view] c_obj
     cdef column_view * get(self) nogil
+
     cpdef size_type size(self)
     cpdef size_type null_count(self)
 

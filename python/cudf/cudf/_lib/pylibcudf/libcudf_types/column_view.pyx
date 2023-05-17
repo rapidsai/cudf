@@ -34,8 +34,9 @@ cdef class ColumnView:
     # maintain a reference to the owner so that it isn't destroyed to avoid
     # this problem (probably should just have it use __cuda_array_interface__).
     def __init__(
-        self, DataType dtype not None, size_type size, gpumemoryview data_buf,
-        gpumemoryview mask_buf, size_type null_count, size_type offset,
+        self, DataType data_type not None, size_type size,
+        gpumemoryview data_buf, gpumemoryview mask_buf, size_type null_count,
+        size_type offset,
         # TODO: Not sure what the best input is for children, for now just
         # using a List[ColumnView]
         object children
@@ -59,7 +60,7 @@ cdef class ColumnView:
 
         self.c_obj.reset(
             new column_view(
-                dtype.c_obj, size, data, null_mask, null_count, offset,
+                data_type.c_obj, size, data, null_mask, null_count, offset,
                 c_children
             )
         )
