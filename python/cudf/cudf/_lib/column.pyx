@@ -17,6 +17,7 @@ from cudf.core.buffer import (
     as_buffer,
 )
 from cudf.utils.dtypes import _get_base_dtype
+
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
@@ -37,6 +38,7 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.null_mask cimport null_count as c_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -308,7 +310,15 @@ cdef class Column:
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
         with acquire_spill_lock():
-            return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
+            if not self.nullable:
+                return 0
+            return c_null_count(
+                <libcudf_types.bitmask_type*><uintptr_t>(
+                    self.base_mask.get_ptr(mode="read")
+                ),
+                self.offset,
+                self.offset + self.size
+            )
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -349,7 +359,7 @@ cdef class Column:
         null_count = self._null_count
 
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
 
         self._mask = None
@@ -369,7 +379,7 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
