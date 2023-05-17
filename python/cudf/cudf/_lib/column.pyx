@@ -156,9 +156,7 @@ cdef class Column:
 
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
-            required_size = bitmask_allocation_size_bytes(
-                self._size + self._offset
-            )
+            required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
@@ -524,8 +522,7 @@ cdef class Column:
         if data_ptr:
             if data_owner is None:
                 data = as_buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size+offset) * dtype_itemsize)
+                    rmm.DeviceBuffer(ptr=data_ptr, size=base_nbytes)
                 )
             elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
                 # TODO: In future, see if we can just pass on the
@@ -602,13 +599,13 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(size+offset)
+                            size=bitmask_allocation_size_bytes(base_size)
                         )
                     )
             else:
                 mask = as_buffer(
                     data=mask_ptr,
-                    size=bitmask_allocation_size_bytes(size+offset),
+                    size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner,
                     exposed=True
                 )
