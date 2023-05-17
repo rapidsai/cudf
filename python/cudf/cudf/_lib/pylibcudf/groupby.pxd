@@ -5,7 +5,7 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.aggregation cimport aggregation, groupby_aggregation
 from cudf._lib.cpp.groupby cimport aggregation_request, groupby
 
-from .libcudf_types.column_view cimport ColumnView
+from .libcudf_classes.column_view cimport ColumnView
 
 
 cdef class AggregationRequest:

@@ -2,7 +2,7 @@
 
 from cudf._lib.cpp.types cimport offset_type, size_type
 
-from . cimport libcudf_types
+from . cimport libcudf_classes
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 
@@ -26,9 +26,9 @@ cdef class Column:
 
         self._underlying = None
 
-    cpdef libcudf_types.ColumnView get_underlying(self):
+    cpdef libcudf_classes.ColumnView get_underlying(self):
         if self._underlying is None:
-            self._underlying = libcudf_types.ColumnView(
+            self._underlying = libcudf_classes.ColumnView(
                 self.data_type,
                 self.size,
                 self.data,

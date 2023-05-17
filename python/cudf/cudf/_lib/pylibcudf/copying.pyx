@@ -11,7 +11,7 @@ from libcpp.utility cimport move
 from cudf._lib.cpp cimport copying as cpp_copying
 from cudf._lib.cpp.table.table cimport table
 
-from . cimport libcudf_types
+from . cimport libcudf_classes
 from .column cimport Column
 from .table cimport Table
 
@@ -28,14 +28,14 @@ cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
     )
 
 
-cpdef libcudf_types.Table gather(
+cpdef libcudf_classes.Table gather(
     Table source_table,
     Column gather_map,
     OutOfBoundsPolicy bounds_policy
 ):
     cdef unique_ptr[table] c_result
-    cdef libcudf_types.TableView c_tbl = source_table.get_underlying()
-    cdef libcudf_types.ColumnView c_col = gather_map.get_underlying()
+    cdef libcudf_classes.TableView c_tbl = source_table.get_underlying()
+    cdef libcudf_classes.ColumnView c_col = gather_map.get_underlying()
     with nogil:
         c_result = move(
             cpp_copying.gather(
@@ -44,4 +44,4 @@ cpdef libcudf_types.Table gather(
                 py_policy_to_c_policy(bounds_policy)
             )
         )
-    return libcudf_types.Table.from_table(move(c_result))
+    return libcudf_classes.Table.from_table(move(c_result))

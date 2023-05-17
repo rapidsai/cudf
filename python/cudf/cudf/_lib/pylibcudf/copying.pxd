@@ -4,7 +4,7 @@ from libcpp cimport bool as cbool
 
 from cudf._lib.cpp cimport copying as cpp_copying
 
-from . cimport libcudf_types
+from . cimport libcudf_classes
 from .column cimport Column
 from .table cimport Table
 
@@ -21,7 +21,7 @@ cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
 ) nogil
 
 
-cpdef libcudf_types.Table gather(
+cpdef libcudf_classes.Table gather(
     Table source_table,
     Column gather_map,
     OutOfBoundsPolicy bounds_policy

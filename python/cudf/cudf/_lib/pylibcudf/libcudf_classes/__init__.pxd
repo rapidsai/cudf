@@ -5,14 +5,14 @@
 # https://github.com/cython/cython/issues/3442
 # that is fixed in Cython 3
 # https://github.com/cython/cython/pull/4552
-from .libcudf_types.column cimport (
+from .libcudf_classes.column cimport (
     Column,
     Column_from_ColumnView,
     ColumnContents,
 )
-from .libcudf_types.column_view cimport ColumnView
-from .libcudf_types.table cimport Table
-from .libcudf_types.table_view cimport TableView
+from .libcudf_classes.column_view cimport ColumnView
+from .libcudf_classes.table cimport Table
+from .libcudf_classes.table_view cimport TableView
 
 __all__ = [
     "Column",

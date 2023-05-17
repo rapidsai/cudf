@@ -12,10 +12,10 @@ from cudf._lib.cpp.groupby cimport aggregation_request, aggregation_result
 from cudf._lib.cpp.table.table cimport table
 
 from .aggregation cimport GroupbyAggregation
-from .libcudf_types.column cimport Column
-from .libcudf_types.column_view cimport ColumnView
-from .libcudf_types.table cimport Table
-from .libcudf_types.table_view cimport TableView
+from .libcudf_classes.column cimport Column
+from .libcudf_classes.column_view cimport ColumnView
+from .libcudf_classes.table cimport Table
+from .libcudf_classes.table_view cimport TableView
 
 ctypedef groupby_aggregation * gba_ptr
 

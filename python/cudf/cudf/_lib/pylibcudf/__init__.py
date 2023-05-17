@@ -1,6 +1,6 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from . import copying, libcudf_types
+from . import copying, libcudf_classes
 from .aggregation import GroupbyAggregation
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -15,7 +15,7 @@ __all__ = [
     "TypeId",
     "copying",
     "gpumemoryview",
-    "libcudf_types",
+    "libcudf_classes",
     "GroupBy",
     "AggregationRequest",
     "GroupbyAggregation",

@@ -2,7 +2,7 @@
 
 from cudf._lib.cpp.types cimport offset_type, size_type
 
-from . cimport libcudf_types
+from . cimport libcudf_classes
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 
@@ -21,6 +21,6 @@ cdef class Column:
         object children
 
         # Internals
-        libcudf_types.ColumnView _underlying
+        libcudf_classes.ColumnView _underlying
 
-    cpdef libcudf_types.ColumnView get_underlying(self)
+    cpdef libcudf_classes.ColumnView get_underlying(self)

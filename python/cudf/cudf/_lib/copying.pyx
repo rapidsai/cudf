@@ -79,19 +79,19 @@ def copy_column(Column input_column):
     Deep copied column
     """
     cdef pylibcudf.Column plc
-    cdef pylibcudf.libcudf_types.Column c
+    cdef pylibcudf.libcudf_classes.Column c
     cdef column_view input_column_view
     cdef unique_ptr[column] c_result
 
     if cudf.get_option("_use_pylibcudf") == 2:
         plc = input_column.to_pylibcudf()
-        c = pylibcudf.libcudf_types.Column_from_ColumnView(
+        c = pylibcudf.libcudf_classes.Column_from_ColumnView(
             plc.get_underlying()
         )
         return Column.from_Column(c)
     elif cudf.get_option("_use_pylibcudf") == 1:
         plc_ = input_column.to_pylibcudf()
-        c_ = pylibcudf.libcudf_types.Column_from_ColumnView(
+        c_ = pylibcudf.libcudf_classes.Column_from_ColumnView(
             plc_.get_underlying()
         )
         return Column.from_Column(c_)
@@ -197,7 +197,7 @@ def gather(
     cdef column_view gather_map_view
     cdef cpp_copying.out_of_bounds_policy policy
 
-    cdef pylibcudf.libcudf_types.Table tbl
+    cdef pylibcudf.libcudf_classes.Table tbl
 
     if cudf.get_option("_use_pylibcudf") > 0:
         tbl = pylibcudf.copying.gather(
