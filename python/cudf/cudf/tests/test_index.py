@@ -337,8 +337,7 @@ def test_index_copy_datetime(name, dtype, deep=True):
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", ["category", "object"])
 def test_index_copy_string(name, dtype, deep=True):
-    with pytest.warns(FutureWarning):
-        cidx = cudf.StringIndex(["a", "b", "c"])
+    cidx = cudf.Index(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
     with pytest.warns(FutureWarning):
@@ -456,8 +455,7 @@ def test_rangeindex_slice_attr_name():
 def test_from_pandas_str():
     idx = ["a", "b", "c"]
     pidx = pd.Index(idx, name="idx")
-    with pytest.warns(FutureWarning):
-        gidx_1 = cudf.StringIndex(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
