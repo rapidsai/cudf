@@ -522,7 +522,8 @@ cdef class Column:
         if data_ptr:
             if data_owner is None:
                 data = as_buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr, size=base_nbytes)
+                    rmm.DeviceBuffer(ptr=data_ptr,
+                                     size=(size+offset) * dtype_itemsize)
                 )
             elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
                 # TODO: In future, see if we can just pass on the
