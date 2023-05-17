@@ -15,7 +15,6 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -64,8 +63,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-
-T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
@@ -1048,7 +1045,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _binaryop(
         self,
-        other: T,
+        other: Frame,
         op: str,
         fill_value: Any = None,
         *args,
@@ -3067,6 +3064,9 @@ class IntervalIndex(GenericIndex):
 class StringIndex(GenericIndex):
     """String defined indices into another Column
 
+    .. deprecated:: 23.06
+        `StringIndex` is deprecated, use `Index` instead.
+
     Attributes
     ----------
     _values: A StringColumn object or NDArray of strings
@@ -3075,6 +3075,12 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)

@@ -29,10 +29,10 @@ class StructColumn(ColumnBase):
 
     @property
     def base_size(self):
-        if not self.base_children:
-            return 0
-        else:
+        if self.base_children:
             return len(self.base_children[0])
+        else:
+            return self.size + self.offset
 
     def to_arrow(self):
         children = [
@@ -60,7 +60,7 @@ class StructColumn(ColumnBase):
 
     def to_pandas(
         self, index: Optional[pd.Index] = None, **kwargs
-    ) -> "pd.Series":
+    ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
 

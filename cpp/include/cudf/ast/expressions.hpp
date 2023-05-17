@@ -112,6 +112,7 @@ enum class ast_operator : int32_t {
                      ///< LOGICAL_OR(valid, valid)
   // Unary operators
   IDENTITY,        ///< Identity function
+  IS_NULL,         ///< Check if operand is null
   SIN,             ///< Trigonometric sine
   COS,             ///< Trigonometric cosine
   TAN,             ///< Trigonometric tangent

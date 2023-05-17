@@ -283,7 +283,9 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
 
 
 @_cudf_nvtx_annotate
-def _compile_or_get(frame, func, args, kernel_getter=None):
+def _compile_or_get(
+    frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
+):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -308,7 +310,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
         raise TypeError("only scalar valued args are supported by apply")
 
     # check to see if we already compiled this function
-    cache_key = _generate_cache_key(frame, func, args)
+    cache_key = _generate_cache_key(frame, func, args, suffix=suffix)
     if precompiled.get(cache_key) is not None:
         kernel, masked_or_scalar = precompiled[cache_key]
         return kernel, masked_or_scalar
