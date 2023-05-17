@@ -6,10 +6,12 @@
 # that is fixed in Cython 3
 # https://github.com/cython/cython/pull/4552
 from .pylibcudf cimport copying, libcudf_types
+from .pylibcudf.column cimport Column
 from .pylibcudf.gpumemoryview cimport gpumemoryview
 from .pylibcudf.types cimport DataType, TypeId
 
 __all__ = [
+    "Column",
     "DataType",
     "TypeId",
     "copying",
