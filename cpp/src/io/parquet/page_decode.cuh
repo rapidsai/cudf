@@ -789,13 +789,10 @@ __device__ void gpuDecodeLevels(page_state_s* s,
  *
  * @return The length of the section
  */
-template <typename level_t>
 __device__ uint32_t InitLevelSection(page_state_s* s,
                                      const uint8_t* cur,
                                      const uint8_t* end,
-                                     level_type lvl,
-                                     bool is_decode_step,
-                                     rle_stream<level_t>* decoders)
+                                     level_type lvl)
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];
@@ -865,14 +862,12 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * Currently only used by gpuComputePageSizes step)
  */
-template <typename level_t>
 __device__ bool setupLocalPageInfo(page_state_s* const s,
                                    PageInfo const* p,
                                    device_span<ColumnChunkDesc const> chunks,
                                    size_t min_row,
                                    size_t num_rows,
-                                   bool is_decode_step,
-                                   rle_stream<level_t>* decoders = nullptr)
+                                   bool is_decode_step)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1098,9 +1093,9 @@ __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->first_output_value = 0;
 
       // Find the compressed size of repetition levels
-      cur += InitLevelSection(s, cur, end, level_type::REPETITION, is_decode_step, decoders);
+      cur += InitLevelSection(s, cur, end, level_type::REPETITION);
       // Find the compressed size of definition levels
-      cur += InitLevelSection(s, cur, end, level_type::DEFINITION, is_decode_step, decoders);
+      cur += InitLevelSection(s, cur, end, level_type::DEFINITION);
 
       s->dict_bits = 0;
       s->dict_base = nullptr;

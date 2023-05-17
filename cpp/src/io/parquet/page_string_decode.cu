@@ -532,7 +532,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
 
   if (!t) {
     s->page.num_nulls = 0;
@@ -633,9 +633,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   // set during string copy by lane 0
   int first_non_null = -1;
 
-  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -865,9 +863,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   // set during string copy by lane 0
   int first_non_null = -1;
 
-  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
