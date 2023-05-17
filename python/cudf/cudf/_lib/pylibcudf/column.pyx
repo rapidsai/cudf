@@ -28,7 +28,7 @@ cdef class Column:
 
     cpdef libcudf_types.ColumnView get_underlying(self):
         if self._underlying is None:
-            return libcudf_types.ColumnView(
+            self._underlying = libcudf_types.ColumnView(
                 self.data_type,
                 self.size,
                 self.data,
