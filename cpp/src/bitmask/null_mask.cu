@@ -530,4 +530,10 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   return detail::bitmask_or(view, cudf::get_default_stream(), mr);
 }
 
+// Count non-zero bits in the specified range
+cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop)
+{
+  return detail::null_count(bitmask, start, stop, cudf::get_default_stream());
+}
+
 }  // namespace cudf
