@@ -253,6 +253,16 @@ def _compile_or_get(
     we then obtain the return type from that separate compilation and
     use it to allocate an output column of the right dtype.
     """
+    # runtime check for CEC mode which is disabled for CUDA 12 for now
+    if cuda.cudadrv.driver.get_version() == (
+        12,
+        0,
+    ) and cuda.cudadrv.runtime.get_version() > (12, 0):
+        raise ValueError(
+            "Minor version compatibility not yet supported for "
+            "CUDA driver versions newer than 12.0"
+        )
+
     if not all(is_scalar(arg) for arg in args):
         raise TypeError("only scalar valued args are supported by apply")
 

@@ -4,6 +4,7 @@ import glob
 import os
 
 from numba import config
+from numba.cuda.cudadrv.driver import Linker
 
 CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
@@ -78,6 +79,7 @@ def _setup_numba_linker(path):
         # By default, ptxcompiler will not be installed with CUDA 12
         # packages. This is ok, because in this situation putting
         # numba in enhanced compatibility mode is not necessary.
+        from cubinlinker.patch import _numba_version_ok, new_patched_linker
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ImportError:
         return
@@ -89,22 +91,15 @@ def _setup_numba_linker(path):
         # in their environment anyways, perhaps installed separately
         if driver_version < (12, 0):
             ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
-            maybe_patch_numba_linker(
-                driver_version, runtime_version, ptx_toolkit_version
-            )
-
-
-def maybe_patch_numba_linker(
-    driver_version, runtime_version, ptx_toolkit_version
-):
-    # Numba thinks cubinlinker is only needed if the driver is older than
-    # the CUDA runtime, but when PTX files are present, it might also need
-    # to patch because those PTX files may be compiled by a CUDA version
-    # that is newer than the driver as well
-    if (driver_version < ptx_toolkit_version) or (
-        driver_version < runtime_version
-    ):
-        config.NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+            # Numba thinks cubinlinker is only needed if the driver is older
+            # than the CUDA runtime, but when PTX files are present, it might
+            # also need to patch because those PTX files may be compiled by
+            # a CUDA version that is newer than the driver as well
+            if (driver_version < ptx_toolkit_version) or (
+                driver_version < runtime_version
+            ):
+                if _numba_version_ok:
+                    Linker.new = new_patched_linker
 
 
 def _get_cuda_version_from_ptx_file(path):
