@@ -955,6 +955,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
 
     @_cudf_nvtx_annotate
+    def __init__(self, data, **kwargs):
+        kwargs = _setdefault_name(data, **kwargs)
+        name = kwargs.get("name")
+        super().__init__({name: data})
+
+    @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
@@ -989,17 +995,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return out[0] if ufunc.nout == 1 else tuple(out)
 
         return NotImplemented
-
-    @copy_docstring(StringMethods)  # type: ignore
-    @property
-    @_cudf_nvtx_annotate
-    def str(self):
-        if isinstance(self._values, cudf.core.column.StringColumn):
-            return StringMethods(parent=self)
-        else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -1042,7 +1037,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     # Override just to make mypy happy.
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
-        self, other: Index, *, override_dtypes=None
+        self, other: Self, *, override_dtypes=None
     ) -> Self:
         return super()._copy_type_metadata(
             other, override_dtypes=override_dtypes
@@ -1554,6 +1549,17 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return self._values.isin(values).values
 
+    @copy_docstring(StringMethods)  # type: ignore
+    @property
+    @_cudf_nvtx_annotate
+    def str(self):
+        if isinstance(self._values, cudf.core.column.StringColumn):
+            return StringMethods(parent=self)
+        else:
+            raise AttributeError(
+                "Can only use .str accessor with string values!"
+            )
+
 
 class DatetimeIndex(Index):
     """
@@ -1645,8 +1651,7 @@ class DatetimeIndex(Index):
 
         if copy:
             data = data.copy()
-        name = kwargs.pop("name", None)
-        super().__init__({name: data}, **kwargs)
+        super().__init__(data, **kwargs)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2240,8 +2245,7 @@ class TimedeltaIndex(Index):
 
         if copy:
             data = data.copy()
-        name = kwargs.pop("name", None)
-        super().__init__({name: data}, **kwargs)
+        super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
@@ -2411,8 +2415,7 @@ class CategoricalIndex(Index):
             data = data.as_ordered()
         elif ordered is False and data.ordered is True:
             data = data.as_unordered()
-        name = kwargs.pop("name", None)
-        super().__init__({name: data}, **kwargs)
+        super().__init__(data, **kwargs)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2636,8 +2639,7 @@ class IntervalIndex(Index):
             data.dtype.closed = closed
 
         self.closed = closed
-        name = kwargs.pop("name", None)
-        super().__init__({name: data}, **kwargs)
+        super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
