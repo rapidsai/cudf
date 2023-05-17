@@ -11,9 +11,9 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
-from cudf.api.extensions import no_default
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 

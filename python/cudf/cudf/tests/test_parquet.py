@@ -541,9 +541,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
     assert_eq(
         filtered_df,
-        cudf.DataFrame(
-            {"x": [2, 3, 2, 3], "y": list("bbcc")}, index=[2, 3, 2, 3]
-        ),
+        cudf.DataFrame({"x": [2, 2], "y": list("bc")}, index=[2, 2]),
     )
 
 
@@ -554,13 +552,16 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
-        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([[("x", "==", 0)], [("z", "==", 0)]], 2),
         ([("x", "==", 0), ("z", "==", 0)], 0),
-        ([("x", "==", 0), ("z", "!=", 0)], 2),
-        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("x", "==", 0), ("z", "!=", 0)], 1),
         ([("y", "==", "c"), ("x", ">", 8)], 0),
-        ([("y", "==", "c"), ("x", ">=", 5)], 2),
-        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+        ([("y", "==", "c"), ("x", ">=", 5)], 1),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 5),
+        ([[("x", "not in", (0, 9)), ("z", "not in", (4, 5))]], 6),
+        ([[("y", "==", "c")], [("x", "in", (0, 9)), ("z", "in", (0, 9))]], 4),
+        ([[("x", "==", 0)], [("x", "==", 1)], [("x", "==", 2)]], 3),
+        ([[("x", "==", 0), ("z", "==", 9), ("y", "==", "a")]], 1),
     ],
 )
 def test_parquet_read_filtered_complex_predicate(
@@ -569,7 +570,11 @@ def test_parquet_read_filtered_complex_predicate(
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
     df = pd.DataFrame(
-        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "z": reversed(range(10)),
+        }
     )
     df.to_parquet(fname, row_group_size=2)
 
@@ -1983,26 +1988,16 @@ def test_read_parquet_partitioned_filtered(
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 
-    # Filter on non-partitioned column.
-    # Cannot compare to pandas, since the pyarrow
-    # backend will filter by row (and cudf can
-    # only filter by column, for now)
+    # Filter on non-partitioned column
     filters = [("a", "==", 10)]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and 10 in got["a"]
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and (1 in got["c"] and 10 in got["a"])
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
+    assert_eq(expect, got)
 
 
 def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
