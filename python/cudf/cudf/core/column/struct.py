@@ -29,10 +29,10 @@ class StructColumn(ColumnBase):
 
     @property
     def base_size(self):
-        if not self.base_children:
-            return 0
-        else:
+        if self.base_children:
             return len(self.base_children[0])
+        else:
+            return self.size + self.offset
 
     def to_arrow(self):
         children = [
