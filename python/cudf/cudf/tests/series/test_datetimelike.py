@@ -150,11 +150,11 @@ def test_convert_from_naive():
         (["2023-05-16 23:30:00"], "America/New_York", "Asia/Kolkata"),
         # timezone with half-hour offset:
         (["2023-05-17 12:00:00"], "Asia/Kolkata", "Australia/Adelaide"),
-        # timezone conversion with a timestamp in the future
+        # timezone conversion with a timestamp in the future:
         (["2025-01-01 00:00:00"], "America/New_York", "Europe/London"),
-        # timezone conversion with a timestamp in the past
+        # timezone conversion with a timestamp in the past:
         (["2000-01-01 12:00:00"], "Europe/Paris", "America/Los_Angeles"),
-        # timezone conversion with a timestamp at midnight
+        # timezone conversion with a timestamp at midnight:
         (["2023-05-17 00:00:00"], "Asia/Tokyo", "Europe/Paris"),
     ],
 )
