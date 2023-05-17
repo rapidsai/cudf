@@ -68,7 +68,7 @@ def test_generic_index(testlist):
 )
 def test_string_index(testlist):
 
-    index = Index(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
