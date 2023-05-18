@@ -9,6 +9,8 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.types cimport size_type
 
+# TODO: Don't really like this circular import
+from ..types cimport DataType
 from .column_view cimport ColumnView
 
 
@@ -25,6 +27,7 @@ cdef class Column:
     cpdef size_type size(self) except -1
     cpdef size_type null_count(self) except -1
     cpdef cbool has_nulls(self) except *
+    cpdef DataType type(self)
     cpdef ColumnView view(self)
     cpdef ColumnContents release(self)
     cdef int _raise_if_released(self) except 1

@@ -19,6 +19,7 @@ cdef class Table:
         """Get the underlying table object."""
         return self.c_obj.get()
 
+    # TODO: Rename to from_libcudf?
     @staticmethod
     cdef from_table(unique_ptr[table] tbl):
         cdef Table ret = Table.__new__(Table)

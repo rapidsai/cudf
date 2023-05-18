@@ -10,6 +10,8 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport size_type
 
+# TODO: Don't really like this circular import
+from ..types cimport DataType
 from .column_view cimport ColumnView
 
 
@@ -35,6 +37,10 @@ cdef class Column:
     cpdef cbool has_nulls(self) except *:
         self._raise_if_released()
         return self.get().has_nulls()
+
+    cpdef DataType type(self):
+        self._raise_if_released()
+        return DataType.from_data_type(self.get().type())
 
     cpdef ColumnView view(self):
         return ColumnView.from_column_view(self.get().view())

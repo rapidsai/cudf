@@ -1,5 +1,8 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+from libcpp.memory cimport unique_ptr
+
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.types cimport offset_type, size_type
 
 from . cimport libcudf_classes
@@ -24,3 +27,6 @@ cdef class Column:
         libcudf_classes.ColumnView _underlying
 
     cpdef libcudf_classes.ColumnView get_underlying(self)
+
+    @staticmethod
+    cdef Column from_libcudf(unique_ptr[column] libcudf_col)

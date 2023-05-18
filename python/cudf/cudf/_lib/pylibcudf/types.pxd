@@ -55,8 +55,12 @@ cdef type_id py_type_to_c_type(TypeId py_type_id) nogil
 
 cdef class DataType:
     cdef data_type c_obj
+
     cpdef TypeId id(self)
     cpdef int32_t scale(self)
+
+    @staticmethod
+    cdef DataType from_data_type(data_type dt)
 
 
 ctypedef cbool underlying_type_t_null_policy

@@ -23,3 +23,9 @@ cdef class DataType:
 
     cpdef int32_t scale(self):
         return self.c_obj.scale()
+
+    @staticmethod
+    cdef DataType from_data_type(data_type dt):
+        cdef DataType ret = DataType.__new__(DataType)
+        ret.c_obj = dt
+        return ret

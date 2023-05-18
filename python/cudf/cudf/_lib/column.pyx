@@ -573,6 +573,8 @@ cdef class Column:
         cdef size_type size = view.size()
         cdef size_type null_count = view.null_count()
 
+        # Note: The EMPTY case below exists because pyarrow supports Null
+        # arrays with a length, and those are represented as empty
         # TODO: Not sure why the below special cases exist, and this definitely
         # doesn't seem like the best way to handle it in any case. Will revisit
         # later.
