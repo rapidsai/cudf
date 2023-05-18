@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf.core.dataframe import DataFrame
-from cudf.testing._utils import ALL_TYPES, assert_eq
+from cudf.testing._utils import ALL_TYPES, assert_eq, assert_neq
 
 """
 DataFrame copy expectations
