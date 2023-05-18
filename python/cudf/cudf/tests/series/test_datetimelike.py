@@ -111,3 +111,60 @@ def test_delocalize(unit, tz):
     expect = psr.dt.tz_localize(tz).dt.tz_localize(None)
     got = sr.dt.tz_localize(tz).dt.tz_localize(None)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "from_tz", ["Europe/London", "America/Chicago", "UTC"]
+)
+@pytest.mark.parametrize(
+    "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
+)
+def test_convert(from_tz, to_tz):
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="H"))
+    gs = cudf.from_pandas(ps)
+    ps = ps.dt.tz_localize(from_tz)
+    gs = gs.dt.tz_localize(from_tz)
+    expect = ps.dt.tz_convert(to_tz)
+    got = gs.dt.tz_convert(to_tz)
+    assert_eq(expect, got)
+
+
+def test_convert_from_naive():
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="H"))
+    with pytest.raises(TypeError):
+        gs.dt.tz_convert("America/New_York")
+
+
+@pytest.mark.parametrize(
+    "data,original_timezone,target_timezone",
+    [
+        # DST transition:
+        (["2023-03-12 01:30:00"], "America/New_York", "America/Los_Angeles"),
+        # crossing the international date line:
+        (["2023-05-17 23:30:00"], "Pacific/Auckland", "America/Los_Angeles"),
+        # timezone with non-integer offset:
+        (["2023-05-17 12:00:00"], "Asia/Kolkata", "Australia/Eucla"),
+        # timezone with negative offset:
+        (["2023-05-17 09:00:00"], "America/Los_Angeles", "Pacific/Auckland"),
+        # conversion across multiple days:
+        (["2023-05-16 23:30:00"], "America/New_York", "Asia/Kolkata"),
+        # timezone with half-hour offset:
+        (["2023-05-17 12:00:00"], "Asia/Kolkata", "Australia/Adelaide"),
+        # timezone conversion with a timestamp in the future:
+        (["2025-01-01 00:00:00"], "America/New_York", "Europe/London"),
+        # timezone conversion with a timestamp in the past:
+        (["2000-01-01 12:00:00"], "Europe/Paris", "America/Los_Angeles"),
+        # timezone conversion with a timestamp at midnight:
+        (["2023-05-17 00:00:00"], "Asia/Tokyo", "Europe/Paris"),
+    ],
+)
+def test_convert_edge_cases(data, original_timezone, target_timezone):
+    ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
+    gs = cudf.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
+    expect = ps.dt.tz_convert(target_timezone)
+    got = gs.dt.tz_convert(target_timezone)
+    assert_eq(expect, got)
