@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
-
 #include "row_operator_tests_utilities.hpp"
 
 #include <cudf_test/base_fixture.hpp>
