@@ -67,7 +67,7 @@ public abstract class TableWriter implements AutoCloseable {
 
   /**
    * Get the write statistics for the writer up to the last write call.
-   * The data returned from native methods is encoded as an array of doubles.
+   * The data returned from native method is encoded as an array of doubles.
    * @param writerHandle The handle to the writer.
    * @return The write statistics.
    */
