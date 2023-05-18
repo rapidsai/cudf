@@ -952,12 +952,12 @@ struct out_to_in_index_function {
 
 // packed block of memory 1: split indices and src_buf_info structs
 struct packed_split_indices_and_src_buf_info {
-  explicit packed_split_indices_and_src_buf_info(cudf::table_view const& input,
-                                                 std::vector<size_type> const& splits,
-                                                 std::size_t num_partitions,
-                                                 cudf::size_type num_src_bufs,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* temp_mr)
+  packed_split_indices_and_src_buf_info(cudf::table_view const& input,
+                                        std::vector<size_type> const& splits,
+                                        std::size_t num_partitions,
+                                        cudf::size_type num_src_bufs,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* temp_mr)
     : indices_size(
         cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align)),
       src_buf_info_size(
