@@ -2544,6 +2544,47 @@ class DatetimeIndex(GenericIndex):
             result_col = localize(self._column, tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data({self.name: result_col})
 
+    def tz_convert(self, tz):
+        """
+        Convert tz-aware datetimes from one time zone to another.
+
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the timezone
+            information.
+
+        Returns
+        -------
+        DatetimeIndex containing timestamps corresponding to the timezone
+        `tz`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> dti = dti.tz_localize("America/New_York")
+        >>> dti
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+        >>> dti.tz_convert("Europe/London")
+        DatetimeIndex(['2018-03-01 14:00:00+00:00',
+                       '2018-03-02 14:00:00+00:00',
+                       '2018-03-03 14:00:00+00:00'],
+                      dtype='datetime64[ns, Europe/London]')
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self._column._utc_time
+        else:
+            result_col = convert(self._column, tz)
+        return DatetimeIndex._from_data({self.name: result_col})
+
 
 class TimedeltaIndex(GenericIndex):
     """
