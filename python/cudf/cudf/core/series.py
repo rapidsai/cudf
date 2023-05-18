@@ -4610,6 +4610,27 @@ class DatetimeProperties:
             index=self.series._index,
         )
 
+    @copy_docstring(DatetimeIndex.tz_convert)
+    def tz_convert(self, tz):
+        """
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the
+            timezone information.
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self.series._column._utc_time
+        else:
+            result_col = convert(self.series._column, tz)
+        return Series._from_data(
+            {self.series.name: result_col}, index=self.series._index
+        )
+
 
 class TimedeltaProperties:
     """

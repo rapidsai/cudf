@@ -2257,11 +2257,12 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     for (int i = 0; i < static_cast<int>(schema.size()); ++i) {
       if (schema[i].id() == type_id::STRING) {
         // stuff real string column
+        auto const null_count = string_row_offset_columns[string_idx]->null_count();
         auto string_data = string_row_offset_columns[string_idx].release()->release();
-        output_columns[i] = make_strings_column(num_rows, std::move(string_col_offsets[string_idx]),
-                                                std::move(string_data_cols[string_idx]),
-                                                std::move(*string_data.null_mask.release()),
-                                                cudf::UNKNOWN_NULL_COUNT);
+        output_columns[i] =
+            make_strings_column(num_rows, std::move(string_col_offsets[string_idx]),
+                                std::move(string_data_cols[string_idx]),
+                                std::move(*string_data.null_mask.release()), null_count);
         string_idx++;
       }
     }
