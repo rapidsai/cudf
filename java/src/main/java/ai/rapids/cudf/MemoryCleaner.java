@@ -202,7 +202,7 @@ public final class MemoryCleaner {
           all.remove(next);
         } else {
           long currentTime = System.currentTimeMillis();
-          if(currentTime - lastRemoveCleanedObjectsTime > 10 * 1000L) { // every 10 seconds
+          if (currentTime - lastRemoveCleanedObjectsTime > 10 * 1000L) { // every 10 seconds
             all.removeIf(e -> e.cleaner.isClean());
             lastRemoveCleanedObjectsTime = System.currentTimeMillis();
           }
