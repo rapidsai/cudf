@@ -126,6 +126,7 @@ add_library(
   cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
+  src/ChunkedPackJni.cpp
   src/ChunkedReaderJni.cpp
   src/CudfJni.cpp
   src/CudaJni.cpp
@@ -139,6 +140,7 @@ add_library(
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
   src/NvtxUniqueRangeJni.cpp
+  src/PackedColumnMetadataJni.cpp
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp

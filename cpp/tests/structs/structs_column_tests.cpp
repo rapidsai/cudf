@@ -626,8 +626,8 @@ TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
   // because EMPTY columns cannot have a null mask. This test ensures that
   // we can construct a structs column with a parent null mask and an EMPTY
   // child and then view it.
-  auto empty_col =
-    std::make_unique<cudf::column>(cudf::data_type(cudf::type_id::EMPTY), 3, rmm::device_buffer{});
+  auto empty_col = std::make_unique<cudf::column>(
+    cudf::data_type(cudf::type_id::EMPTY), 3, rmm::device_buffer{}, rmm::device_buffer{}, 0);
   int num_rows{empty_col->size()};
   vector_of_columns cols;
   cols.push_back(std::move(empty_col));
