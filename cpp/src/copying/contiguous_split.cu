@@ -1378,16 +1378,18 @@ struct chunk_iteration_state {
    */
   bool has_more_copies() const { return current_iteration < num_iterations; }
 
-  rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info;
-  rmm::device_uvector<offset_type> const d_batch_offsets;
-  std::size_t const total_size;
-  int const num_iterations;
-  int current_iteration;
+  rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info;  ///< dst_buf_info per 1MB batch
+  rmm::device_uvector<offset_type> const
+    d_batch_offsets;             ///< Offset within a batch per dst_buf_info
+  std::size_t const total_size;  ///< The aggregate size of all iterations
+  int const num_iterations;      ///< The total number of iterations
+  int current_iteration;         ///< Marks the current iteration being worked on
 
  private:
-  std::size_t starting_batch;
-  std::vector<std::size_t> const h_num_buffs_per_iteration;
-  std::vector<std::size_t> const h_size_of_buffs_per_iteration;
+  std::size_t starting_batch;  ///< Starting batch index for the current iteration
+  std::vector<std::size_t> const h_num_buffs_per_iteration;  ///< The count of batches per iteration
+  std::vector<std::size_t> const
+    h_size_of_buffs_per_iteration;                           ///< The size in bytes per iteration
 };
 
 std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
@@ -1977,26 +1979,30 @@ struct contiguous_split_state {
     return result;
   }
 
-  cudf::table_view const input;
-  std::size_t const user_buffer_size;
+  cudf::table_view const input;        ///< The input table_view to operate on
+  std::size_t const user_buffer_size;  ///< The size of the user buffer for the chunked_pack case
   rmm::cuda_stream_view const stream;
-  rmm::mr::device_memory_resource* const mr;
-  rmm::mr::device_memory_resource* const temp_mr;
+  rmm::mr::device_memory_resource* const mr;  ///< The memory resource for any data returned
+
+  // this resource defaults to `mr` for the contiguous_split case, but it can be useful for the
+  // `chunked_pack` case to allocate scratch/temp memory in a pool
+  rmm::mr::device_memory_resource* const temp_mr;  ///< The memory resource for scratch/temp space
 
   // whether the table was empty to begin with (0 rows or 0 columns) and should be metadata-only
-  bool const is_empty;
+  bool const is_empty;  ///< True if the source table has 0 rows or 0 columns
 
-  std::size_t const num_partitions;
+  // This can be 1 if `contiguous_split` is just packing and not splitting
+  std::size_t const num_partitions;  ///< The number of partitions to produce
 
-  // number of source buffers including children
-  size_type const num_src_bufs;
+  size_type const num_src_bufs;      ///< Number of source buffers including children
 
-  // number of source buffers including children * number of splits
-  std::size_t const num_bufs;
+  std::size_t const num_bufs;  ///< Number of source buffers including children * number of splits
 
-  std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> partition_buf_size_and_dst_buf_info;
+  std::unique_ptr<packed_partition_buf_size_and_dst_buf_info>
+    partition_buf_size_and_dst_buf_info;  ///< Per-partition buffer size and destination buffer info
 
-  std::unique_ptr<packed_src_and_dst_pointers> src_and_dst_pointers;
+  std::unique_ptr<packed_src_and_dst_pointers>
+    src_and_dst_pointers;  ///< Src. and dst. pointers for `copy_partition`
 
   //
   // State around the chunked pattern
@@ -2004,7 +2010,8 @@ struct contiguous_split_state {
 
   // chunked_pack will have 1 or more "chunks" to iterate on, defined in chunk_iter_state
   // contiguous_split will have a single "chunk" in chunk_iter_state, so no iteration.
-  std::unique_ptr<chunk_iteration_state> chunk_iter_state;
+  std::unique_ptr<chunk_iteration_state>
+    chunk_iter_state;  ///< State object for chunk iteration state
 
   // Two API usages are allowed:
   //  - `chunked_pack`: for this mode, the user will provide a buffer that must be at least 1MB.
@@ -2016,7 +2023,8 @@ struct contiguous_split_state {
   //    `contiguous_split` will allocate a buffer per partition and will place contiguous results in
   //    each buffer.
   //
-  std::vector<rmm::device_buffer> out_buffers;
+  std::vector<rmm::device_buffer>
+    out_buffers;  ///< Buffers allocated for a regular `contiguous_split`
 };
 
 std::vector<packed_table> contiguous_split(cudf::table_view const& input,
