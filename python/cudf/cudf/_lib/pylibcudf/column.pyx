@@ -43,6 +43,8 @@ cdef class Column:
             )
         return self._underlying
 
+    # TODO: This function should maybe be rewritten to accept a
+    # libcudf_classes.Column instead?
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
         # TODO: The move here seems a bit surprising to a Cython user. But it's
