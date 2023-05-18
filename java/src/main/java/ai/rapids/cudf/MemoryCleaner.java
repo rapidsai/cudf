@@ -182,6 +182,7 @@ public final class MemoryCleaner {
   private static final Thread t = new Thread(() -> {
     try {
       int currentGpuId = -1;
+      long lastRemoveCleanedObjectsTime = System.currentTimeMillis();
       while (true) {
         CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
         if (next != null) {
@@ -199,6 +200,12 @@ public final class MemoryCleaner {
             log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
           }
           all.remove(next);
+        } else {
+          long currentTime = System.currentTimeMillis();
+          if(currentTime - lastRemoveCleanedObjectsTime > 10 * 1000L) { // every 10 seconds
+            all.removeIf(e -> e.cleaner.isClean());
+            lastRemoveCleanedObjectsTime = System.currentTimeMillis();
+          }
         }
       }
     } catch (InterruptedException e) {
