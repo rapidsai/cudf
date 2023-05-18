@@ -15,14 +15,14 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
 
-#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 template <typename Type>
-static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_list<Type>)
+static void bench_distinct_count(nvbench::state& state, nvbench::type_list<Type>)
 {
   auto const dtype            = cudf::type_to_id<Type>();
   auto const size             = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -40,16 +40,19 @@ static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_
   auto const& data_column = data_table->get_column(0);
   auto const input_table  = cudf::table_view{{data_column, data_column, data_column}};
 
+  auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream{launch.get_stream()};
-    cudf::detail::distinct_count(input_table, cudf::null_equality::EQUAL, stream);
+    cudf::distinct_count(input_table, cudf::null_equality::EQUAL);
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 using data_type = nvbench::type_list<int32_t, int64_t, float, double>;
 
-NVBENCH_BENCH_TYPES(bench_reduction_distinct_count, NVBENCH_TYPE_AXES(data_type))
-  .set_name("reduction_distinct_count")
+NVBENCH_BENCH_TYPES(bench_distinct_count, NVBENCH_TYPE_AXES(data_type))
+  .set_name("distinct_count")
   .add_int64_axis("num_rows",
                   {
                     10000,      // 10k
