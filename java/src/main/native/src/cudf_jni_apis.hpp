@@ -51,6 +51,7 @@ convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_resul
 //
 
 bool cache_contiguous_table_jni(JNIEnv *env);
+
 void release_contiguous_table_jni(JNIEnv *env);
 
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count);
