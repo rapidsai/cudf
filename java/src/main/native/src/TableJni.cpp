@@ -58,6 +58,13 @@
 namespace cudf {
 namespace jni {
 
+/**
+ * @brief The base class for table writer.
+ *
+ * By storing a pointer to this base class instead of pointer to specific writer class, we can
+ * retrieve common data like `sink` and `stats` for any derived writer class without the need of
+ * casting or knowing its type.
+ */
 struct jni_table_writer_handle_base {
   explicit jni_table_writer_handle_base(
       std::unique_ptr<jni_writer_data_sink> &&sink_,
