@@ -16,20 +16,20 @@
 
 #include <cudf/detail/utilities/stacktrace.hpp>
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && defined(CUDF_BUILD_STACKTRACE_DEBUG)
 #include <cxxabi.h>
 #include <execinfo.h>
 
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
-#endif  // __GNUC__
+#endif  // defined(__GNUC__) && defined(CUDF_BUILD_STACKTRACE_DEBUG)
 
 namespace cudf::detail {
 
 std::string get_stacktrace(capture_last_stackframe capture_last_frame)
 {
-#ifdef __GNUC__
+#if defined(__GNUC__) && defined(CUDF_BUILD_STACKTRACE_DEBUG)
   constexpr int max_stack_depth = 64;
   void* stack[max_stack_depth];
 
@@ -77,7 +77,11 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
 
   return ss.str();
 #else
+#ifdef CUDF_BUILD_STACKTRACE_DEBUG
   return "Stacktrace is only supported when built with a GNU compiler.";
+#else
+  return "libcudf was not build with stacktrace support.";
+#endif  // CUDF_BUILD_STACKTRACE_DEBUG
 #endif  // __GNUC__
 }
 

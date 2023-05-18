@@ -676,6 +676,7 @@ if(CUDF_BUILD_STACKTRACE_DEBUG)
   )
 
   add_library(cudf_backtrace INTERFACE)
+  target_compile_definitions(cudf_backtrace INTERFACE CUDF_BUILD_STACKTRACE_DEBUG)
   target_compile_options(
     cudf_backtrace INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-Og>"
                              "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Og>"
