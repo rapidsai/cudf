@@ -398,7 +398,7 @@ def test_index_copy_deep(idx, deep, copy_on_write):
         or (cudf.get_option("copy_on_write") and not deep)
     ):
         # StringColumn is immutable hence, deep copies of a
-        # StringIndex will share the same StringColumn.
+        # Index with string dtype will share the same StringColumn.
 
         # When `copy_on_write` is turned on, Index objects will
         # have unique column object but they all point to same
