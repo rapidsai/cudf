@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 import java.nio.ByteBuffer;
 
 /**
- * Metadata for a table that is backed by a single contiguous device buffer. 
+ * Metadata for a table that is backed by a single contiguous device buffer.
  */
 public final class PackedColumnMetadata implements AutoCloseable {
   private long metadataHandle = 0;

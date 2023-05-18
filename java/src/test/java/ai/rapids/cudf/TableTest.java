@@ -3121,7 +3121,7 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
-  
+
   @Test
   void testChunkedPackTwoPasses() {
     // this test packes ~2MB worth of long into a 1MB bounce buffer

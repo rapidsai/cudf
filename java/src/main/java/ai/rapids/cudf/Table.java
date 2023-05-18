@@ -182,7 +182,7 @@ public final class Table implements AutoCloseable {
 
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
-  private static native long makeChunkedPack(long inputTable, long bounceBufferSize, long memoryResource);
+  private static native long makeChunkedPack(long inputTable, long bounceBufferSize, long tempMemoryResource);
 
   private static native long[] partition(long inputTable, long partitionView,
       int numberOfPartitions, int[] outputOffsets);
@@ -2169,35 +2169,35 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Create an instance of `ChunkedPack` which can be used to pack this table 
+   * Create an instance of `ChunkedPack` which can be used to pack this table
    * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
-   * 
+   *
    * This version of `makeChunkedPack` takes a `RmmDviceMemoryResource`, which can be used
    * to pre-allocate all scratch and temporary space required for the state of `cudf::chunked_pack`.
-   * 
+   *
    * The caller is responsible for calling close on the returned `ChunkedPack` object.
-   * 
+   *
    * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
-   * @param deviceMemoryResource A memory resource that is used to satisfy allocations for 
-   *                             temporary and thrust scratch space.
+   * @param tempMemoryResource A memory resource that is used to satisfy allocations for
+   *                           temporary and thrust scratch space.
    * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
    */
   public ChunkedPack makeChunkedPack(
-      long bounceBufferSize, RmmDeviceMemoryResource deviceMemoryResource) {
-    long memoryResourceNativeHandle = deviceMemoryResource.getHandle();
+      long bounceBufferSize, RmmDeviceMemoryResource tempMemoryResource) {
+    long tempMemoryResourceHandle = tempMemoryResource.getHandle();
     return new ChunkedPack(
-      makeChunkedPack(nativeHandle, bounceBufferSize, memoryResourceNativeHandle));
+      makeChunkedPack(nativeHandle, bounceBufferSize, tempMemoryResourceHandle));
   }
 
   /**
-   * Create an instance of `ChunkedPack` which can be used to pack this table 
+   * Create an instance of `ChunkedPack` which can be used to pack this table
    * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
-   * 
-   * This version of `makeChunkedPack` makes use of the default per-device memory resource, 
+   *
+   * This version of `makeChunkedPack` makes use of the default per-device memory resource,
    * for scratch and temporary space required for the state of `cudf::chunked_pack`.
-   * 
+   *
    * The caller is responsible for calling close on the returned `ChunkedPack` object.
-   * 
+   *
    * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
    * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
    */

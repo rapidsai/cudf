@@ -17,8 +17,8 @@
 #include "cudf_jni_apis.hpp"
 
 extern "C" {
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackDelete(
-    JNIEnv *env, jclass, jlong chunked_pack) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackDelete(JNIEnv *env, jclass,
+                                                                         jlong chunked_pack) {
   try {
     cudf::jni::auto_set_device(env);
     auto cs = reinterpret_cast<cudf::chunked_pack *>(chunked_pack);
@@ -37,8 +37,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackGetTotalConti
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackHasNext(
-    JNIEnv *env, jclass, jlong chunked_pack) {
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackHasNext(JNIEnv *env, jclass,
+                                                                              jlong chunked_pack) {
   try {
     cudf::jni::auto_set_device(env);
     auto cs = reinterpret_cast<cudf::chunked_pack *>(chunked_pack);
@@ -47,8 +47,10 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackHasNext(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackNext(
-    JNIEnv *env, jclass, jlong chunked_pack, jlong user_ptr, jlong user_ptr_size) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackNext(JNIEnv *env, jclass,
+                                                                        jlong chunked_pack,
+                                                                        jlong user_ptr,
+                                                                        jlong user_ptr_size) {
   try {
     cudf::jni::auto_set_device(env);
     auto cs = reinterpret_cast<cudf::chunked_pack *>(chunked_pack);
@@ -59,8 +61,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackNext(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ChunkedPack_chunkedPackBuildMetadata(
-    JNIEnv *env, jclass, jlong chunked_pack) {
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_ChunkedPack_chunkedPackBuildMetadata(JNIEnv *env, jclass, jlong chunked_pack) {
   try {
     cudf::jni::auto_set_device(env);
     auto cs = reinterpret_cast<cudf::chunked_pack *>(chunked_pack);
