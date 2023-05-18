@@ -771,11 +771,9 @@ class ListMethods(ColumnMethods):
                 method = "bfill"
         result = self._column.copy(deep=True)
         current = result
-        while len(current._base_children) != 0:
-            new_children = [child for child in current._base_children[:-1]]
-            new_children.append(
-                current._base_children[-1].fillna(value, method)
-            )
-            current.set_base_children(tuple(new_children))
-            current = current._base_children[-1]
+        while current._base_children:
+            offsets, child = current._base_children
+            child = child.fillna(value, method)
+            current.set_base_children((offsets, child))
+            current = child
         return self._return_or_inplace(result)
