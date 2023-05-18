@@ -205,16 +205,16 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-  static long initViewHandle(DType type, int rows, int nc,
-                                       BaseDeviceMemoryBuffer dataBuffer,
-                                       BaseDeviceMemoryBuffer validityBuffer,
-                                       BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  static long initViewHandle(DType type, int numRows, int nullCount,
+                             BaseDeviceMemoryBuffer dataBuffer,
+                             BaseDeviceMemoryBuffer validityBuffer,
+                             BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
     long vd = validityBuffer == null ? 0 : validityBuffer.address;
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-        od, vd, nc, rows, childHandles);
+        od, vd, nullCount, numRows, childHandles);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
