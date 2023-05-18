@@ -131,7 +131,7 @@ def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     assert not copy_df.to_string().split() == df.to_string().split()
 
 
-def test_kernel_deep_copy():
+def test_deep_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
@@ -139,8 +139,10 @@ def test_kernel_deep_copy():
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
 
+    # Write a value in-place on the deep copy.
+    # This should only affect the copy and not the original.
     cp.asarray(sr._column)[1] = 42
-    assert not gdf.to_string().split() == cdf.to_string().split()
+    assert_neq(gdf, cdf)
 
 
 def test_kernel_shallow_copy():
@@ -150,6 +152,8 @@ def test_kernel_shallow_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
+    # Write a value in-place on the shallow copy.
+    # This should change the copy and original.
     cp.asarray(sr._column)[1] = 42
 
     assert_eq(gdf, cdf)
