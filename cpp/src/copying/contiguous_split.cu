@@ -2006,16 +2006,14 @@ struct contiguous_split_state {
   // contiguous_split will have a single "chunk" in chunk_iter_state, so no iteration.
   std::unique_ptr<chunk_iteration_state> chunk_iter_state;
 
-  // Two modes are allowed:
-  //  - user provided buffer: as the name implies, the user has provided a buffer that must be at
-  //  least 1MB.
-  //    contiguous_split will behave in a "chunked" mode in this scenario, as it will contiguously
-  //    copy up until the user's buffer size limit, exposing a next() call for the user to invoke.
-  //    Note that in this mode, contig split is not partitioning the original table, it is instead
-  //    only placing cuDF buffers contiguously in the user's buffer.
+  // Two API usages are allowed:
+  //  - `chunked_pack`: for this mode, the user will provide a buffer that must be at least 1MB.
+  //    The behavior is "chunked" in that it will contiguously copy up until the user specified
+  //    `user_buffer_size` limit, exposing a next() call for the user to invoke. Note that in this
+  //    mode, no partitioning occurs, hence the name "pack".
   //
-  //  - single shot contiguous_split (default): when the user doesn't provide their own buffer,
-  //    contiguous_split will allocate a buffer per partition and will place contiguous results in
+  //  - `contiguous_split` (default): when the user doesn't provide their own buffer,
+  //    `contiguous_split` will allocate a buffer per partition and will place contiguous results in
   //    each buffer.
   //
   std::vector<rmm::device_buffer> out_buffers;
