@@ -67,6 +67,7 @@ import static ai.rapids.cudf.Table.removeNullMasksIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -7891,16 +7892,34 @@ public class TableTest extends CudfTestBase {
     columns.add(Columns.STRUCT.name);
     WriteUtils.buildWriterOptions(optBuilder, columns);
     ParquetWriterOptions options = optBuilder.build();
+    ParquetWriterOptions optionsNoCompress = optBuilder.withCompressionType(CompressionType.NONE).build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertNotEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertNotEquals(Double.NaN, statistics.compressionRatio);
       }
       try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+      try (TableWriter writer = Table.writeParquetChunked(optionsNoCompress, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertEquals(Double.NaN, statistics.compressionRatio);
       }
     }
   }
@@ -8260,14 +8279,32 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(builder, selectedColumns);
       ORCWriterOptions opts = builder.build();
+      ORCWriterOptions optsNoCompress = builder.withCompressionType(CompressionType.NONE).build();
       try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertNotEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertNotEquals(Double.NaN, statistics.compressionRatio);
       }
       try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+      try (TableWriter writer = Table.writeORCChunked(optsNoCompress, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertEquals(Double.NaN, statistics.compressionRatio);
       }
     }
   }
