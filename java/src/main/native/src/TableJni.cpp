@@ -3169,9 +3169,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     auto mr = memoryResourceHandle != 0 ? 
       reinterpret_cast<rmm::mr::device_memory_resource *>(memoryResourceHandle) : 
       rmm::mr::get_current_device_resource();
-    auto chunked_contig_split =
-        cudf::make_chunked_pack(*n_table, bounce_buffer_size, mr);
-    return reinterpret_cast<jlong>(chunked_contig_split.release());
+    auto chunked_pack =
+        cudf::chunked_pack::create(*n_table, bounce_buffer_size, mr);
+    return reinterpret_cast<jlong>(chunked_pack.release());
   }
   CATCH_STD(env, 0);
 }
