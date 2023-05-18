@@ -55,8 +55,9 @@ public abstract class TableWriter implements AutoCloseable {
   }
 
   /**
-   * Get the write statistics for the last write call. Currently, only ORC writer and Parquet
-   * writers support write statistics. Calling this on other writers will return null.
+   * Get the write statistics for the writer up to the last write call.
+   * Currently, only ORC and Parquet writers support write statistics.
+   * Calling this method on other writers will return null.
    * @return The write statistics for the last write call.
    */
   public WriteStatistics getWriteStatistics() {
