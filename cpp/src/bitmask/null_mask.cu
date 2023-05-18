@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,10 +50,9 @@ size_type state_null_count(mask_state state, size_type size)
 {
   switch (state) {
     case mask_state::UNALLOCATED: return 0;
-    case mask_state::UNINITIALIZED: return UNKNOWN_NULL_COUNT;
     case mask_state::ALL_NULL: return size;
     case mask_state::ALL_VALID: return 0;
-    default: CUDF_FAIL("Invalid null mask state.");
+    default: CUDF_FAIL("Invalid null mask state.", std::invalid_argument);
   }
 }
 
@@ -529,6 +528,12 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::mr::device_memory_resource* mr)
 {
   return detail::bitmask_or(view, cudf::get_default_stream(), mr);
+}
+
+// Count non-zero bits in the specified range
+cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop)
+{
+  return detail::null_count(bitmask, start, stop, cudf::get_default_stream());
 }
 
 }  // namespace cudf

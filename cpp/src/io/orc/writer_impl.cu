@@ -376,7 +376,7 @@ __global__ void copy_string_data(char* string_pool,
 
 void persisted_statistics::persist(int num_table_rows,
                                    single_write_mode write_mode,
-                                   intermediate_statistics& intermediate_stats,
+                                   intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
   if (write_mode == single_write_mode::NO) {
@@ -1543,7 +1543,7 @@ void write_index_stream(int32_t stripe_id,
                         host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                         host_2dspan<gpu::StripeStream const> strm_desc,
                         host_span<compression_result const> comp_res,
-                        std::vector<ColStatsBlob> const& rg_stats,
+                        host_span<ColStatsBlob const> rg_stats,
                         StripeInformation* stripe,
                         orc_streams* streams,
                         CompressionKind compression_kind,
@@ -2187,6 +2187,7 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
  * @param compression_kind The compression kind
  * @param compression_blocksize The block size used for compression
  * @param stats_freq Column statistics granularity type for parquet/orc writers
+ * @param collect_compression_stats Flag to indicate if compression statistics should be collected
  * @param write_mode Flag to indicate if there is only a single table write
  * @param out_sink Sink for writing data
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -2200,6 +2201,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                CompressionKind compression_kind,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
+                               bool collect_compression_stats,
                                single_write_mode write_mode,
                                data_sink const& out_sink,
                                rmm::cuda_stream_view stream)
@@ -2280,6 +2282,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{stream},
+                      std::optional<writer_compression_statistics>{},
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dict),
@@ -2324,22 +2327,24 @@ auto convert_table_to_orc_data(table_view const& input,
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
   hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
+  std::optional<writer_compression_statistics> compression_stats;
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),
                comp_results.d_end(),
                compression_result{0, compression_status::FAILURE});
   if (compression_kind != NONE) {
     strm_descs.host_to_device(stream);
-    gpu::CompressOrcDataStreams(compressed_data.data(),
-                                num_compressed_blocks,
-                                compression_kind,
-                                compression_blocksize,
-                                max_compressed_block_size,
-                                compressed_block_align,
-                                strm_descs,
-                                enc_data.streams,
-                                comp_results,
-                                stream);
+    compression_stats = gpu::CompressOrcDataStreams(compressed_data,
+                                                    num_compressed_blocks,
+                                                    compression_kind,
+                                                    compression_blocksize,
+                                                    max_compressed_block_size,
+                                                    compressed_block_align,
+                                                    collect_compression_stats,
+                                                    strm_descs,
+                                                    enc_data.streams,
+                                                    comp_results,
+                                                    stream);
 
     // deallocate encoded data as it is not needed anymore
     enc_data.data.clear();
@@ -2357,6 +2362,7 @@ auto convert_table_to_orc_data(table_view const& input,
                     std::move(comp_results),
                     std::move(strm_descs),
                     std::move(intermediate_stats),
+                    std::move(compression_stats),
                     std::move(streams),
                     std::move(stripes),
                     std::move(stripe_dict),
@@ -2374,6 +2380,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _row_index_stride{options.get_row_index_stride()},
     _compression_kind(to_orc_compression(options.get_compression())),
     _compression_blocksize(compression_block_size(_compression_kind)),
+    _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
@@ -2394,6 +2401,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _row_index_stride{options.get_row_index_stride()},
     _compression_kind(to_orc_compression(options.get_compression())),
     _compression_blocksize(compression_block_size(_compression_kind)),
+    _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
@@ -2431,6 +2439,7 @@ void writer::impl::write(table_view const& input)
                          comp_results,
                          strm_descs,
                          intermediate_stats,
+                         compression_stats,
                          streams,
                          stripes,
                          stripe_dict, /* unused, but its data will be accessed via pointer later */
@@ -2444,6 +2453,7 @@ void writer::impl::write(table_view const& input)
                                        _compression_kind,
                                        _compression_blocksize,
                                        _stats_freq,
+                                       _compression_statistics != nullptr,
                                        _single_write_mode,
                                        *_out_sink,
                                        _stream);
@@ -2462,13 +2472,31 @@ void writer::impl::write(table_view const& input)
                          compressed_data,
                          comp_results,
                          strm_descs,
-                         intermediate_stats,
+                         intermediate_stats.rowgroup_blobs,
                          streams,
                          stripes,
                          bounce_buffer);
 
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
+
+  // Update file-level and compression statistics
+  update_statistics(orc_table.num_rows(), std::move(intermediate_stats), compression_stats);
+}
+
+void writer::impl::update_statistics(
+  size_type num_rows,
+  intermediate_statistics&& intermediate_stats,
+  std::optional<writer_compression_statistics> const& compression_stats)
+{
+  if (intermediate_stats.stripe_stat_chunks.size() > 0) {
+    _persisted_stripe_statistics.persist(
+      num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
+  }
+
+  if (compression_stats.has_value() and _compression_statistics != nullptr) {
+    *_compression_statistics += compression_stats.value();
+  }
 }
 
 void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
@@ -2477,17 +2505,12 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                                           device_span<uint8_t const> compressed_data,
                                           host_span<compression_result const> comp_results,
                                           host_2dspan<gpu::StripeStream const> strm_descs,
-                                          intermediate_statistics& intermediate_stats,
+                                          host_span<ColStatsBlob const> rg_stats,
                                           orc_streams& streams,
                                           host_span<StripeInformation> stripes,
                                           host_span<uint8_t> bounce_buffer)
 {
   if (orc_table.num_rows() == 0) { return; }
-
-  if (intermediate_stats.stripe_stat_chunks.size() > 0) {
-    _persisted_stripe_statistics.persist(
-      orc_table.num_rows(), _single_write_mode, intermediate_stats, _stream);
-  }
 
   // Write stripes
   std::vector<std::future<void>> write_tasks;
@@ -2506,7 +2529,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                          enc_data.streams,
                          strm_descs,
                          comp_results,
-                         intermediate_stats.rowgroup_blobs,
+                         rg_stats,
                          &stripe,
                          &streams,
                          _compression_kind,
