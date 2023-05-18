@@ -142,16 +142,18 @@ def test_deep_copy_write_in_place():
     # Write a value in-place on the deep copy.
     # This should only affect the copy and not the original.
     cp.asarray(sr._column)[1] = 42
+
     assert_neq(gdf, cdf)
 
 
-def test_kernel_shallow_copy():
+def test_shallow_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
+
     # Write a value in-place on the shallow copy.
     # This should change the copy and original.
     cp.asarray(sr._column)[1] = 42
