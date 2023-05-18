@@ -6749,4 +6749,21 @@ public class ColumnVectorTest extends CudfTestBase {
     }
     assertEquals(0, onClosedWasCalled.get());
   }
+
+  /**
+   * Test that the ColumnView with unknown null-counts still returns
+   * the correct null-count when queried.
+   */
+  @Test
+  public void testColumnViewNullCount() {
+    try (ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, null, 3, null, 4, null, 5, null, 6);
+         ColumnView view = new ColumnView(DType.INT32,
+                                          vector.getRowCount(),
+                                          Optional.empty(), // Unknown null count.
+                                          vector.getDeviceBufferFor(BufferType.DATA),
+                                          vector.getDeviceBufferFor(BufferType.VALIDITY),
+                                          vector.getDeviceBufferFor(BufferType.OFFSET))) {
+      assertEquals(vector.getNullCount(), view.getNullCount());
+    }
+  }
 }
