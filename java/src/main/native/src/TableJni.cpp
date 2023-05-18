@@ -1922,10 +1922,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
   CATCH_STD(env, )
 }
 
-// `00024` is the unicode translation for `$` because we need to write native method for
-// nested class `TableWriter$WriteStatistics`.
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_TableWriter_00024WriteStatistics_getWriteStatistics(
-    JNIEnv *env, jclass, jlong j_state) {
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv *env, jclass,
+                                                                             jlong j_state) {
   JNI_NULL_CHECK(env, j_state, "null state", nullptr);
 
   using namespace cudf::io;

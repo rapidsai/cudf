@@ -50,8 +50,6 @@ public abstract class TableWriter implements AutoCloseable {
       this.numSkippedBytes = numSkippedBytes;
       this.compressionRatio = compressionRatio;
     }
-
-    private static native WriteStatistics getWriteStatistics(long writerHandle);
   }
 
   /**
@@ -61,6 +59,8 @@ public abstract class TableWriter implements AutoCloseable {
    * @return The write statistics for the last write call.
    */
   public WriteStatistics getWriteStatistics() {
-    return WriteStatistics.getWriteStatistics(writerHandle);
+    return getWriteStatistics(writerHandle);
   }
+
+  private static native WriteStatistics getWriteStatistics(long writerHandle);
 }
