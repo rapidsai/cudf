@@ -45,6 +45,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 #include <thrust/iterator/counting_iterator.h>
 
 #include "csv_chunked_writer.hpp"
@@ -3208,6 +3209,26 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
     return n_result.wrapped();
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv *env, jclass,
+                                                                  jlong input_table,
+                                                                  jlong bounce_buffer_size,
+                                                                  jlong memoryResourceHandle) {
+  JNI_NULL_CHECK(env, input_table, "native handle is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_table = reinterpret_cast<cudf::table_view *>(input_table);
+    // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
+    // and scratch memory only.
+    auto temp_mr = memoryResourceHandle != 0 ?
+                       reinterpret_cast<rmm::mr::device_memory_resource *>(memoryResourceHandle) :
+                       rmm::mr::get_current_device_resource();
+    auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
+    return reinterpret_cast<jlong>(chunked_pack.release());
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
