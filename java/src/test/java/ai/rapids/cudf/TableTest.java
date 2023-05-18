@@ -8264,6 +8264,11 @@ public class TableTest extends CudfTestBase {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        System.err.println("numCompressedBytes: " + statistics.numCompressedBytes);
+        System.err.println("numFailedBytes: " + statistics.numFailedBytes);
+        System.err.println("numSkippedBytes: " + statistics.numSkippedBytes);
+        System.err.println("compressionRatio: " + statistics.compressionRatio);
       }
       try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {

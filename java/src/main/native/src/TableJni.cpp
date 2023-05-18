@@ -58,17 +58,27 @@
 namespace cudf {
 namespace jni {
 
-template <typename Writer> struct jni_table_writer_handle final {
+struct jni_table_writer_handle_base {
+  explicit jni_table_writer_handle_base(
+      std::unique_ptr<jni_writer_data_sink> &&sink_,
+      std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
+      : sink{std::move(sink_)}, stats{std::move(stats_)} {}
+
+  std::unique_ptr<jni_writer_data_sink> sink;
+  std::shared_ptr<cudf::io::writer_compression_statistics> stats;
+};
+
+template <typename Writer>
+struct jni_table_writer_handle final : public jni_table_writer_handle_base {
   explicit jni_table_writer_handle(std::unique_ptr<Writer> &&writer_)
-      : writer{std::move(writer_)}, sink{nullptr}, stats{nullptr} {}
+      : jni_table_writer_handle_base(nullptr, nullptr), writer{std::move(writer_)} {}
   explicit jni_table_writer_handle(
       std::unique_ptr<Writer> &&writer_, std::unique_ptr<jni_writer_data_sink> &&sink_,
       std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
-      : writer{std::move(writer_)}, sink{std::move(sink_)}, stats{std::move(stats_)} {}
+      : jni_table_writer_handle_base(std::move(sink_), std::move(stats_)),
+        writer{std::move(writer_)} {}
 
   std::unique_ptr<Writer> writer;
-  std::unique_ptr<jni_writer_data_sink> sink;
-  std::shared_ptr<cudf::io::writer_compression_statistics> stats;
 };
 
 typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
@@ -1910,6 +1920,39 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
     state->writer->close();
   }
   CATCH_STD(env, )
+}
+
+// `00024` is the unicode translation for `$` because we need to write native method for
+// nested class `TableWriter$WriteStatistics`.
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_TableWriter_00024WriteStatistics_getWriteStatistics(
+    JNIEnv *env, jclass, jlong j_state) {
+  JNI_NULL_CHECK(env, j_state, "null state", nullptr);
+
+  using namespace cudf::io;
+  auto const state = reinterpret_cast<cudf::jni::jni_table_writer_handle_base *>(j_state);
+  try {
+    cudf::jni::auto_set_device(env);
+    if (!state->stats) {
+      return nullptr;
+    }
+
+    auto const jclass = env->FindClass("ai/rapids/cudf/TableWriter$WriteStatistics");
+    if (jclass == nullptr) {
+      return nullptr;
+    }
+
+    auto const ctor_id = env->GetMethodID(jclass, "<init>", "(JJJD)V");
+    if (ctor_id == nullptr) {
+      return nullptr;
+    }
+
+    auto const &stats = *state->stats;
+    return env->NewObject(jclass, ctor_id, static_cast<jlong>(stats.num_compressed_bytes()),
+                          static_cast<jlong>(stats.num_failed_bytes()),
+                          static_cast<jlong>(stats.num_skipped_bytes()),
+                          static_cast<jdouble>(stats.compression_ratio()));
+  }
+  CATCH_STD(env, nullptr)
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
