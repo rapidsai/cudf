@@ -251,6 +251,11 @@ class chunked_pack {
    * "input", where a buffer of `user_buffer_size` is filled with chunks of the
    * overall operation. This operation can be used in cases where GPU memory is constrained.
    *
+   * The memory resource (`temp_mr`) could be a special memory resource to be used in 
+   * situations when GPU memory is low and we want scratch and temporary allocations to
+   * happen from a small reserved pool of memory. Note that it defaults to the regular cuDF
+   * per-device resource.
+   *
    * @throws cudf::logic_error When user_buffer_size is less than 1MB
    *
    * @param input source `table_view` to pack
@@ -262,7 +267,7 @@ class chunked_pack {
   [[nodiscard]] static std::unique_ptr<chunked_pack> create(
     cudf::table_view const& input,
     std::size_t user_buffer_size,
-    rmm::mr::device_memory_resource* temp_mr);
+    rmm::mr::device_memory_resource* temp_mr = rmm::mr::get_current_device_resource());
 
  private:
   // internal state of contiguous split
