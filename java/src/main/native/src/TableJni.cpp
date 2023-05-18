@@ -1929,33 +1929,27 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
   CATCH_STD(env, )
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv *env, jclass,
-                                                                             jlong j_state) {
+JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv *env,
+                                                                                  jclass,
+                                                                                  jlong j_state) {
   JNI_NULL_CHECK(env, j_state, "null state", nullptr);
 
   using namespace cudf::io;
-  auto const state = reinterpret_cast<cudf::jni::jni_table_writer_handle_base *>(j_state);
+  auto const state = reinterpret_cast<cudf::jni::jni_table_writer_handle_base const *>(j_state);
   try {
     cudf::jni::auto_set_device(env);
     if (!state->stats) {
       return nullptr;
     }
 
-    auto const jclass = env->FindClass("ai/rapids/cudf/TableWriter$WriteStatistics");
-    if (jclass == nullptr) {
-      return nullptr;
-    }
-
-    auto const ctor_id = env->GetMethodID(jclass, "<init>", "(JJJD)V");
-    if (ctor_id == nullptr) {
-      return nullptr;
-    }
-
     auto const &stats = *state->stats;
-    return env->NewObject(jclass, ctor_id, static_cast<jlong>(stats.num_compressed_bytes()),
-                          static_cast<jlong>(stats.num_failed_bytes()),
-                          static_cast<jlong>(stats.num_skipped_bytes()),
-                          static_cast<jdouble>(stats.compression_ratio()));
+    auto output = cudf::jni::native_jdoubleArray(env, 4);
+    output[0] = static_cast<jdouble>(stats.num_compressed_bytes());
+    output[1] = static_cast<jdouble>(stats.num_failed_bytes());
+    output[2] = static_cast<jdouble>(stats.num_skipped_bytes());
+    output[3] = static_cast<jdouble>(stats.compression_ratio());
+
+    return output.get_jArray();
   }
   CATCH_STD(env, nullptr)
 }

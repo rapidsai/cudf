@@ -56,11 +56,20 @@ public abstract class TableWriter implements AutoCloseable {
    * Get the write statistics for the writer up to the last write call.
    * Currently, only ORC and Parquet writers support write statistics.
    * Calling this method on other writers will return null.
-   * @return The write statistics for the last write call.
+   * @return The write statistics.
    */
   public WriteStatistics getWriteStatistics() {
-    return getWriteStatistics(writerHandle);
+    double[] statsData = getWriteStatistics(writerHandle);
+    assert statsData.length == 4 : "Unexpected write statistics data length";
+    return new WriteStatistics((long) statsData[0], (long) statsData[1], (long) statsData[2],
+        statsData[3]);
   }
 
-  private static native WriteStatistics getWriteStatistics(long writerHandle);
+  /**
+   * Get the write statistics for the writer up to the last write call.
+   * The data returned from native methods is encoded as an array of doubles.
+   * @param writerHandle The handle to the writer.
+   * @return The write statistics.
+   */
+  private static native double[] getWriteStatistics(long writerHandle);
 }
