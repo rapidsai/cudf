@@ -107,6 +107,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/detail/concatenate_masks.hpp
         - test -f $PREFIX/include/cudf/detail/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
@@ -396,6 +397,8 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
         - libcurand {{ libcurand_run_version }}
     about:
       home: https://rapids.ai/

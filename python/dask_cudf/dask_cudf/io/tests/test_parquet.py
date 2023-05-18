@@ -254,6 +254,41 @@ def test_filters(tmpdir):
     assert not len(c)
 
 
+@pytest.mark.parametrize("numeric", [True, False])
+@pytest.mark.parametrize("null", [np.nan, None])
+def test_isna_filters(tmpdir, null, numeric):
+
+    tmp_path = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "i": [0] * 4 + [np.nan] * 2 + [0] * 4,
+            "j": [""] * 4 + [None] * 2 + [""] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert ddf.npartitions == 5
+    ddf.to_parquet(tmp_path, engine="pyarrow")
+
+    # Test "is"
+    col = "i" if numeric else "j"
+    filters = [(col, "is", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 2
+    assert list(out.x.compute().values) == [4, 5]
+
+    # Test "is not"
+    filters = [(col, "is not", null)]
+    out = dask_cudf.read_parquet(
+        tmp_path, filters=filters, split_row_groups=True
+    )
+    assert len(out) == 8
+    assert list(out.x.compute().values) == [0, 1, 2, 3, 6, 7, 8, 9]
+
+
 def test_filters_at_row_group_level(tmpdir):
 
     tmp_path = str(tmpdir)
@@ -267,7 +302,7 @@ def test_filters_at_row_group_level(tmpdir):
         tmp_path, filters=[("x", "==", 1)], split_row_groups=True
     )
     assert a.npartitions == 1
-    assert (a.shape[0] == 2).compute()
+    assert (a.shape[0] == 1).compute()
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
 

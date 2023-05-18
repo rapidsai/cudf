@@ -1136,7 +1136,7 @@ __global__ void __launch_bounds__(256)
                            device_span<device_span<uint8_t const>> inputs,
                            device_span<device_span<uint8_t>> outputs,
                            device_span<compression_result> results,
-                           uint8_t* compressed_bfr,
+                           device_span<uint8_t> compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size,
                            uint32_t comp_block_align)
@@ -1159,7 +1159,7 @@ __global__ void __launch_bounds__(256)
   }
   __syncthreads();
   src        = uncomp_base_g;
-  dst        = compressed_bfr + ss.bfr_offset;
+  dst        = compressed_bfr.data() + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
@@ -1190,7 +1190,7 @@ __global__ void __launch_bounds__(1024)
                              device_span<device_span<uint8_t const> const> inputs,
                              device_span<device_span<uint8_t> const> outputs,
                              device_span<compression_result> results,
-                             uint8_t* compressed_bfr,
+                             device_span<uint8_t> compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
 {
@@ -1209,7 +1209,7 @@ __global__ void __launch_bounds__(1024)
   __syncthreads();
 
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 0;
-  dst        = compressed_bfr + ss.bfr_offset;
+  dst        = compressed_bfr.data() + ss.bfr_offset;
   b          = 0;
   do {
     if (t == 0) {
@@ -1255,7 +1255,7 @@ __global__ void __launch_bounds__(1024)
   // Update stripe stream with the compressed size
   if (t == 0) {
     strm_desc[stripe_id][stream_id].stream_size =
-      static_cast<uint32_t>(dst - (compressed_bfr + ss.bfr_offset));
+      static_cast<uint32_t>(dst - (compressed_bfr.data() + ss.bfr_offset));
   }
 }
 
@@ -1291,16 +1291,18 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
 }
 
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream)
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  device_span<uint8_t> compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
@@ -1356,6 +1358,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
+
+  if (collect_statistics) {
+    return cudf::io::collect_compression_statistics(comp_in, comp_res, stream);
+  } else {
+    return std::nullopt;
+  }
 }
 
 }  // namespace gpu

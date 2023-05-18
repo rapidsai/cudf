@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
@@ -11,6 +12,7 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 
@@ -609,7 +611,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype="uint8",
+    dtype=no_default,
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -699,6 +701,15 @@ def get_dummies(
 
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
+
+    if dtype is no_default:
+        warnings.warn(
+            "Default `dtype` value will be changed to 'bool' in a future "
+            "release, please update `dtype='bool'` to adapt for "
+            "future behavior.",
+            FutureWarning,
+        )
+        dtype = "uint8"
 
     if isinstance(df, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
