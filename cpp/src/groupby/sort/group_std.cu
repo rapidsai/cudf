@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -143,6 +144,8 @@ struct var_functor {
                            d_result.set_valid(i);
                        });
 
+    result->set_null_count(
+      cudf::detail::null_count(result->view().null_mask(), 0, result->size(), stream));
     return result;
   }
 
