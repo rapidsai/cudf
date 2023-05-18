@@ -167,7 +167,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                "stride must be less than or equal to max_sequence_length");
   CUDF_EXPECTS(
     max_sequence_length <=
-      (static_cast<uint64_t>(std::numeric_limits<cudf::size_type>::max()) / max_rows_tensor),
+      (static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()) / max_rows_tensor),
     "max_sequence_length times max_rows_tensor exceeds the column size limit",
     std::overflow_error);
   auto const strings_count = strings.size();

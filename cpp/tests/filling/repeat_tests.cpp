@@ -277,7 +277,8 @@ TEST_F(RepeatErrorTestFixture, Overflow)
   auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
   cudf::table_view input_table{{input}};
-  // TODO explain why div 2
+  // set the count such that (count * num_rows) > max(size_type);
+  // the extra divide by 2 ensures the max is exceeded despite truncation in integer division
   auto count = std::numeric_limits<cudf::size_type>::max() / (input_table.num_rows() / 2);
   EXPECT_THROW(cudf::repeat(input_table, count), std::overflow_error);
 }
