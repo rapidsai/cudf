@@ -291,6 +291,11 @@ std::unique_ptr<table> distinct(
  *
  * This API produces the same output rows as `cudf::distinct`, but with input order preserved.
  *
+ * Note that when `keep` is `KEEP_ANY`, the choice of which duplicate row to keep is arbitrary, but
+ * the returned table will be stably ordered. That is, if the key column contained `1, 2, 1` with
+ * another values column `3, 4, 5`, the result could contain values `3, 4` or `4, 5` but not `4, 3`
+ * or `5, 4`.
+ *
  * @param input The input table
  * @param keys Vector of indices indicating key columns in the `input` table
  * @param keep Copy any, first, last, or none of the found duplicates
