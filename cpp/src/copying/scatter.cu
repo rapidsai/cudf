@@ -324,7 +324,9 @@ std::unique_ptr<table> scatter(table_view const& source,
                "invalid scatter map size");
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(scatter_map.size()),
-                             scatter_map.data());
+                             scatter_map.data(),
+                             nullptr,
+                             0);
   return scatter(source, map_col, target, stream, mr);
 }
 

@@ -859,8 +859,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
+   * The result will be sanitized to not contain any non-empty nulls in case of nested types
    *
-   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
