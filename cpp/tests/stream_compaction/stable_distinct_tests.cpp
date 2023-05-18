@@ -60,8 +60,8 @@ struct StableDistinctKeepFirstLastNone : public cudf::test::BaseFixture {};
 
 TEST_F(StableDistinctKeepAny, StringKeyColumn)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
   auto const col = int32s_col{{5, null, null, 5, 5, 8, 1}, nulls_at({1, 2})};
   auto const keys =
     strings_col{{"all", "new", "new", "all", "" /*NULL*/, "the", "strings"}, null_at(4)};
@@ -87,8 +87,8 @@ TEST_F(StableDistinctKeepFirstLastNone, StringKeyColumn)
 
   // KEEP_FIRST
   {
-    auto const exp_col  = int32s_col{{4, 0, null, 6, 5}, null_at(2)};
-    auto const exp_keys = strings_col{{"" /*NULL*/, "all", "new", "strings", "the"}, null_at(0)};
+    auto const exp_col  = int32s_col{{0, null, 4, 5, 6}, null_at(1)};
+    auto const exp_keys = strings_col{{"all", "new", "" /*NULL*/, "the", "strings"}, null_at(2)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_FIRST);
@@ -97,8 +97,8 @@ TEST_F(StableDistinctKeepFirstLastNone, StringKeyColumn)
 
   // KEEP_LAST
   {
-    auto const exp_col  = int32s_col{{4, 3, 2, 6, 5}, no_nulls()};
-    auto const exp_keys = strings_col{{"" /*NULL*/, "all", "new", "strings", "the"}, null_at(0)};
+    auto const exp_col  = int32s_col{{2, 3, 4, 5, 6}, no_nulls()};
+    auto const exp_keys = strings_col{{"new", "all", "" /*NULL*/, "the", "strings"}, null_at(2)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST);
@@ -107,8 +107,8 @@ TEST_F(StableDistinctKeepFirstLastNone, StringKeyColumn)
 
   // KEEP_NONE
   {
-    auto const exp_col  = int32s_col{{4, 6, 5}, no_nulls()};
-    auto const exp_keys = strings_col{{"" /*NULL*/, "strings", "the"}, null_at(0)};
+    auto const exp_col  = int32s_col{{4, 5, 6}, no_nulls()};
+    auto const exp_keys = strings_col{{"" /*NULL*/, "the", "strings"}, null_at(0)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_NONE);
@@ -148,8 +148,8 @@ TEST_F(StableDistinctKeepAny, EmptyKeys)
 
 TEST_F(StableDistinctKeepAny, NoNullsTable)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
   auto const col1  = int32s_col{6, 6, 6, 3, 5, 8, 5};
   auto const col2  = floats_col{6, 6, 6, 3, 4, 9, 4};
   auto const keys1 = int32s_col{20, 20, 20, 20, 19, 21, 9};
@@ -158,10 +158,10 @@ TEST_F(StableDistinctKeepAny, NoNullsTable)
   auto const input   = cudf::table_view{{col1, col2, keys1, keys2}};
   auto const key_idx = std::vector<cudf::size_type>{2, 3};
 
-  auto const exp_col1  = int32s_col{5, 5, 6, 3, 8};
-  auto const exp_col2  = floats_col{4, 4, 6, 3, 9};
-  auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-  auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+  auto const exp_col1  = int32s_col{6, 3, 5, 8, 5};
+  auto const exp_col2  = floats_col{6, 3, 4, 9, 4};
+  auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+  auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
   auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
   auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY);
@@ -170,7 +170,8 @@ TEST_F(StableDistinctKeepAny, NoNullsTable)
 
 TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
   auto const col1  = int32s_col{6, 6, 6, 1, 1, 1, 3, 5, 8, 5};
   auto const col2  = floats_col{6, 6, 6, 1, 1, 1, 3, 4, 9, 4};
   auto const keys1 = int32s_col{20, 20, 20, 15, 15, 15, 20, 19, 21, 9};
@@ -181,10 +182,10 @@ TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
 
   // NaNs are unequal.
   {
-    auto const exp_col1  = int32s_col{5, 1, 1, 1, 5, 6, 3, 8};
-    auto const exp_col2  = floats_col{4, 1, 1, 1, 4, 6, 3, 9};
-    auto const exp_keys1 = int32s_col{9, 15, 15, 15, 19, 20, 20, 21};
-    auto const exp_keys2 = floats_col{21., NaN, NaN, NaN, 20., 19., 20., 9.};
+    auto const exp_col1  = int32s_col{6, 1, 1, 1, 3, 5, 8, 5};
+    auto const exp_col2  = floats_col{6, 1, 1, 1, 3, 4, 9, 4};
+    auto const exp_keys1 = int32s_col{20, 15, 15, 15, 20, 19, 21, 9};
+    auto const exp_keys2 = floats_col{19., NaN, NaN, NaN, 20., 20., 9., 21.};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL);
@@ -193,10 +194,10 @@ TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
 
   // NaNs are equal.
   {
-    auto const exp_col1  = int32s_col{5, 1, 5, 6, 3, 8};
-    auto const exp_col2  = floats_col{4, 1, 4, 6, 3, 9};
-    auto const exp_keys1 = int32s_col{9, 15, 19, 20, 20, 21};
-    auto const exp_keys2 = floats_col{21., NaN, 20., 19., 20., 9.};
+    auto const exp_col1  = int32s_col{6, 1, 3, 5, 8, 5};
+    auto const exp_col2  = floats_col{6, 1, 3, 4, 9, 4};
+    auto const exp_keys1 = int32s_col{20, 15, 20, 19, 21, 9};
+    auto const exp_keys2 = floats_col{19., NaN, 20., 20., 9., 21.};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL);
@@ -217,10 +218,10 @@ TEST_F(StableDistinctKeepFirstLastNone, NoNullsTable)
 
   // KEEP_FIRST
   {
-    auto const exp_col1  = int32s_col{6, 4, 0, 3, 5};
-    auto const exp_col2  = floats_col{16, 14, 10, 13, 15};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+    auto const exp_col1  = int32s_col{0, 3, 4, 5, 6};
+    auto const exp_col2  = floats_col{10, 13, 14, 15, 16};
+    auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_FIRST);
@@ -229,10 +230,10 @@ TEST_F(StableDistinctKeepFirstLastNone, NoNullsTable)
 
   // KEEP_LAST
   {
-    auto const exp_col1  = int32s_col{6, 4, 2, 3, 5};
-    auto const exp_col2  = floats_col{16, 14, 12, 13, 15};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+    auto const exp_col1  = int32s_col{2, 3, 4, 5, 6};
+    auto const exp_col2  = floats_col{12, 13, 14, 15, 16};
+    auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST);
@@ -241,10 +242,10 @@ TEST_F(StableDistinctKeepFirstLastNone, NoNullsTable)
 
   // KEEP_NONE
   {
-    auto const exp_col1  = int32s_col{6, 4, 3, 5};
-    auto const exp_col2  = floats_col{16, 14, 13, 15};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 20, 9};
+    auto const exp_col1  = int32s_col{3, 4, 5, 6};
+    auto const exp_col2  = floats_col{13, 14, 15, 16};
+    auto const exp_keys1 = int32s_col{20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_NONE);
@@ -256,8 +257,8 @@ TEST_F(StableDistinctKeepAny, SlicedNoNullsTable)
 {
   auto constexpr dont_care = int32_t{0};
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
   auto const col1  = int32s_col{dont_care, dont_care, 6, 6, 6, 3, 5, 8, 5, dont_care};
   auto const col2  = floats_col{dont_care, dont_care, 6, 6, 6, 3, 4, 9, 4, dont_care};
   auto const keys1 = int32s_col{dont_care, dont_care, 20, 20, 20, 20, 19, 21, 9, dont_care};
@@ -267,10 +268,10 @@ TEST_F(StableDistinctKeepAny, SlicedNoNullsTable)
   auto const input          = cudf::slice(input_original, {2, 9})[0];
   auto const key_idx        = std::vector<cudf::size_type>{2, 3};
 
-  auto const exp_col1  = int32s_col{5, 5, 6, 3, 8};
-  auto const exp_col2  = floats_col{4, 4, 6, 3, 9};
-  auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-  auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+  auto const exp_col1  = int32s_col{6, 3, 5, 8, 5};
+  auto const exp_col2  = floats_col{6, 3, 4, 9, 4};
+  auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+  auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
   auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
   auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY);
@@ -298,10 +299,10 @@ TEST_F(StableDistinctKeepFirstLastNone, SlicedNoNullsTable)
 
   // KEEP_FIRST
   {
-    auto const exp_col1  = int32s_col{9, 7, 3, 6, 8};
-    auto const exp_col2  = floats_col{19, 17, 13, 16, 18};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+    auto const exp_col1  = int32s_col{3, 6, 7, 8, 9};
+    auto const exp_col2  = floats_col{13, 16, 17, 18, 19};
+    auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_FIRST);
@@ -310,10 +311,10 @@ TEST_F(StableDistinctKeepFirstLastNone, SlicedNoNullsTable)
 
   // KEEP_LAST
   {
-    auto const exp_col1  = int32s_col{9, 7, 5, 6, 8};
-    auto const exp_col2  = floats_col{19, 17, 15, 16, 18};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 19, 20, 9};
+    auto const exp_col1  = int32s_col{5, 6, 7, 8, 9};
+    auto const exp_col2  = floats_col{15, 16, 17, 18, 19};
+    auto const exp_keys1 = int32s_col{20, 20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{19, 20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST);
@@ -322,10 +323,10 @@ TEST_F(StableDistinctKeepFirstLastNone, SlicedNoNullsTable)
 
   // KEEP_NONE
   {
-    auto const exp_col1  = int32s_col{9, 7, 6, 8};
-    auto const exp_col2  = floats_col{19, 17, 16, 18};
-    auto const exp_keys1 = int32s_col{9, 19, 20, 21};
-    auto const exp_keys2 = int32s_col{21, 20, 20, 9};
+    auto const exp_col1  = int32s_col{6, 7, 8, 9};
+    auto const exp_col2  = floats_col{16, 17, 18, 19};
+    auto const exp_keys1 = int32s_col{20, 19, 21, 9};
+    auto const exp_keys2 = int32s_col{20, 20, 9, 21};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_NONE);
@@ -335,17 +336,17 @@ TEST_F(StableDistinctKeepFirstLastNone, SlicedNoNullsTable)
 
 TEST_F(StableDistinctKeepAny, InputWithNulls)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
-  auto const col     = int32s_col{5, 4, 4, 1, 8, 1};
-  auto const keys    = int32s_col{{20, null, null, 19, 21, 19}, nulls_at({1, 2})};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+  auto const col     = int32s_col{5, 4, 4, 1, 1, 8};
+  auto const keys    = int32s_col{{20, null, null, 19, 19, 21}, nulls_at({1, 2})};
   auto const input   = cudf::table_view{{col, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // Nulls are equal.
   {
-    auto const exp_col  = int32s_col{4, 1, 5, 8};
-    auto const exp_keys = int32s_col{{null, 19, 20, 21}, null_at(0)};
+    auto const exp_col  = int32s_col{5, 4, 1, 8};
+    auto const exp_keys = int32s_col{{20, null, 19, 21}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY);
@@ -354,8 +355,8 @@ TEST_F(StableDistinctKeepAny, InputWithNulls)
 
   // Nulls are unequal.
   {
-    auto const exp_col  = int32s_col{4, 4, 1, 5, 8};
-    auto const exp_keys = int32s_col{{null, null, 19, 20, 21}, nulls_at({0, 1})};
+    auto const exp_col  = int32s_col{5, 4, 4, 1, 8};
+    auto const exp_keys = int32s_col{{20, null, null, 19, 21}, nulls_at({1, 2})};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
@@ -367,17 +368,17 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
 {
   auto constexpr null{0.0};  // shadow the global `null` variable of type int
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
-  auto const col   = int32s_col{5, 4, 1, 1, 1, 4, 1, 8, 1};
-  auto const keys  = floats_col{{20., null, NaN, NaN, NaN, null, 19., 21., 19.}, nulls_at({1, 5})};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+  auto const col   = int32s_col{5, 4, 4, 1, 1, 1, 8, 8, 1};
+  auto const keys  = floats_col{{20., null, null, NaN, NaN, NaN, 19., 19., 21.}, nulls_at({1, 2})};
   auto const input = cudf::table_view{{col, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // Nulls are equal, NaNs are unequal.
   {
-    auto const exp_col  = int32s_col{4, 1, 5, 8, 1, 1, 1};
-    auto const exp_keys = floats_col{{null, 19., 20., 21., NaN, NaN, NaN}, null_at(0)};
+    auto const exp_col  = int32s_col{5, 4, 1, 1, 1, 8, 1};
+    auto const exp_keys = floats_col{{20., null, NaN, NaN, NaN, 19., 21.}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL);
@@ -386,8 +387,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
 
   // Nulls are equal, NaNs are equal.
   {
-    auto const exp_col  = int32s_col{4, 1, 5, 8, 1};
-    auto const exp_keys = floats_col{{null, 19., 20., 21., NaN}, null_at(0)};
+    auto const exp_col  = int32s_col{5, 4, 1, 8, 1};
+    auto const exp_keys = floats_col{{20., null, NaN, 19., 21.}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL);
@@ -396,8 +397,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
 
   // Nulls are unequal, NaNs are unequal.
   {
-    auto const exp_col  = int32s_col{4, 4, 1, 5, 8, 1, 1, 1};
-    auto const exp_keys = floats_col{{null, null, 19., 20., 21., NaN, NaN, NaN}, nulls_at({0, 1})};
+    auto const exp_col  = int32s_col{5, 4, 4, 1, 1, 1, 8, 1};
+    auto const exp_keys = floats_col{{20., null, null, NaN, NaN, NaN, 19., 21.}, nulls_at({1, 2})};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_UNEQUAL);
@@ -406,8 +407,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
 
   // Nulls are unequal, NaNs are equal.
   {
-    auto const exp_col  = int32s_col{4, 4, 1, 5, 8, 1};
-    auto const exp_keys = floats_col{{null, null, 19., 20., 21., NaN}, nulls_at({0, 1})};
+    auto const exp_col  = int32s_col{5, 4, 4, 1, 8, 1};
+    auto const exp_keys = floats_col{{20., null, null, NaN, 19., 21.}, nulls_at({1, 2})};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_EQUAL);
@@ -425,8 +426,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNullsEqual)
 
   // KEEP_FIRST
   {
-    auto const exp_col  = int32s_col{1, 3, 0, 4, 6};
-    auto const exp_keys = int32s_col{{null, 19, 20, 21, 22}, null_at(0)};
+    auto const exp_col  = int32s_col{0, 1, 3, 4, 6};
+    auto const exp_keys = int32s_col{{20, null, 19, 21, 22}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_FIRST, NULL_EQUAL);
@@ -435,8 +436,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNullsEqual)
 
   // KEEP_LAST
   {
-    auto const exp_col  = int32s_col{2, 5, 0, 4, 6};
-    auto const exp_keys = int32s_col{{null, 19, 20, 21, 22}, null_at(0)};
+    auto const exp_col  = int32s_col{0, 2, 4, 5, 6};
+    auto const exp_keys = int32s_col{{20, null, 21, 19, 22}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST, NULL_EQUAL);
@@ -574,11 +575,11 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
 
 TEST_F(StableDistinctKeepAny, BasicLists)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
   // clang-format off
-  auto const idx = int32s_col{ 0,  0,   1,      2,   1,      3,      4,  5,   5,      6,      4,       4};
-  auto const keys = lists_col{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  auto const idx = int32s_col{ 0,  0,   1,   1,      2,      3,      4,      4,      4,   5,   5,      6};
+  auto const keys = lists_col{{}, {}, {1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
   // clang-format on
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
@@ -636,11 +637,11 @@ TEST_F(StableDistinctKeepAny, SlicedBasicLists)
 {
   auto constexpr dont_care = int32_t{0};
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
-  auto const idx  = int32s_col{dont_care, dont_care, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, dont_care};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+  auto const idx  = int32s_col{dont_care, dont_care, 1, 1, 2, 3, 4, 4, 4, 5, 5, 6, dont_care};
   auto const keys = lists_col{
-    {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
+    {0, 0}, {0, 0}, {1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}, {5, 5}};
   auto const input_original = cudf::table_view{{idx, keys}};
   auto const input          = cudf::slice(input_original, {2, 12})[0];
   auto const key_idx        = std::vector<cudf::size_type>{1};
@@ -655,18 +656,18 @@ TEST_F(StableDistinctKeepAny, SlicedBasicLists)
 
 TEST_F(StableDistinctKeepAny, NullableLists)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
-  auto const idx = int32s_col{0, 0, 1, 1, 4, 5, 5, 6, 4, 4, 6};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+  auto const idx = int32s_col{0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4};
   auto const keys =
-    lists_col{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {} /*NULL*/, {2, 2}, {2, 2}, {} /*NULL*/},
-              nulls_at({7, 10})};
+    lists_col{{{}, {}, {1}, {1}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {} /*NULL*/, {} /*NULL*/},
+              nulls_at({9, 10})};
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // Nulls are equal.
   {
-    auto const exp_idx  = int32s_col{0, 1, 4, 5, 6};
+    auto const exp_idx  = int32s_col{0, 1, 2, 3, 4};
     auto const exp_keys = lists_col{{{}, {1}, {2, 2}, {2}, {} /*NULL*/}, null_at(4)};
     auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
@@ -676,7 +677,7 @@ TEST_F(StableDistinctKeepAny, NullableLists)
 
   // Nulls are unequal.
   {
-    auto const exp_idx = int32s_col{0, 1, 4, 5, 6, 6};
+    auto const exp_idx = int32s_col{0, 1, 2, 3, 4, 4};
     auto const exp_keys =
       lists_col{{{}, {1}, {2, 2}, {2}, {} /*NULL*/, {} /*NULL*/}, nulls_at({4, 5})};
     auto const expected = cudf::table_view{{exp_idx, exp_keys}};
@@ -1038,6 +1039,9 @@ TEST_F(StableDistinctKeepAny, SlicedListsOfStructs)
 
 TEST_F(StableDistinctKeepAny, ListsOfEmptyStructs)
 {
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
   // 0.  []             ==
   // 1.  []             !=
   // 2.  Null           ==
@@ -1100,6 +1104,9 @@ TEST_F(StableDistinctKeepAny, ListsOfEmptyStructs)
 
 TEST_F(StableDistinctKeepAny, EmptyDeepList)
 {
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
   // List<List<int>>, where all lists are empty:
   //
   // 0. []
@@ -1135,39 +1142,42 @@ TEST_F(StableDistinctKeepAny, EmptyDeepList)
 
 TEST_F(StableDistinctKeepAny, StructsOfStructs)
 {
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
   //  +-----------------+
   //  |  s1{s2{a,b}, c} |
   //  +-----------------+
   // 0 |  { {1, 1}, 5}  |
-  // 1 |  { {1, 2}, 4}  |
-  // 2 |  { Null,   6}  |
-  // 3 |  { Null,   4}  |
-  // 4 |  Null          |
-  // 5 |  Null          |  // Same as 4
-  // 6 |  { {1, 1}, 5}  |  // Same as 0
-  // 7 |  { Null,   4}  |  // Same as 3
+  // 1 |  { {1, 1}, 5}  |  // Same as 0
+  // 2 |  { {1, 2}, 4}  |
+  // 3 |  { Null,   6}  |
+  // 4 |  { Null,   4}  |
+  // 5 |  { Null,   4}  |  // Same as 4
+  // 6 |  Null          |
+  // 7 |  Null          |  // Same as 6
   // 8 |  { {2, 1}, 5}  |
 
   auto s1 = [&] {
-    auto a  = int32s_col{1, 1, XXX, XXX, 2, 1, 1, XXX, 2};
-    auto b  = int32s_col{1, 2, XXX, XXX, 2, 1, 1, XXX, 1};
-    auto s2 = structs_col{{a, b}, nulls_at({2, 3, 7})};
+    auto a  = int32s_col{1, 1, 1, XXX, XXX, XXX, XXX, XXX, 2};
+    auto b  = int32s_col{1, 1, 2, XXX, XXX, XXX, XXX, XXX, 1};
+    auto s2 = structs_col{{a, b}, nulls_at({3, 4, 5})};
 
-    auto c = int32s_col{5, 4, 6, 4, 3, 3, 5, 4, 5};
+    auto c = int32s_col{5, 5, 4, 6, 4, 4, XXX, XXX, 5};
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
-    auto const null_it = nulls_at({4, 5});
+    auto const null_it = nulls_at({6, 7});
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
   }();
 
-  auto const idx     = int32s_col{0, 1, 2, 3, 4, 4, 0, 3, 8};
+  auto const idx     = int32s_col{0, 0, 2, 3, 4, 4, 6, 6, 8};
   auto const input   = cudf::table_view{{idx, s1}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // Nulls are equal.
   {
-    auto const expect_map   = int32s_col{0, 1, 2, 3, 4, 8};
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 6, 8};
     auto const expect_table = cudf::gather(input, expect_map);
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY);
@@ -1176,7 +1186,7 @@ TEST_F(StableDistinctKeepAny, StructsOfStructs)
 
   // Nulls are unequal.
   {
-    auto const expect_map   = int32s_col{0, 1, 2, 3, 7, 4, 5, 8};
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 4, 6, 6, 8};
     auto const expect_table = cudf::gather(input, expect_map);
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
@@ -1186,40 +1196,43 @@ TEST_F(StableDistinctKeepAny, StructsOfStructs)
 
 TEST_F(StableDistinctKeepAny, SlicedStructsOfStructs)
 {
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
   //  +-----------------+
   //  |  s1{s2{a,b}, c} |
   //  +-----------------+
   // 0 |  { {1, 1}, 5}  |
-  // 1 |  { {1, 2}, 4}  |
-  // 2 |  { Null,   6}  |
-  // 3 |  { Null,   4}  |
-  // 4 |  Null          |
-  // 5 |  Null          |  // Same as 4
-  // 6 |  { {1, 1}, 5}  |  // Same as 0
-  // 7 |  { Null,   4}  |  // Same as 3
+  // 1 |  { {1, 1}, 5}  |  // Same as 0
+  // 2 |  { {1, 2}, 4}  |
+  // 3 |  { Null,   6}  |
+  // 4 |  { Null,   4}  |
+  // 5 |  { Null,   4}  |  // Same as 4
+  // 6 |  Null          |
+  // 7 |  Null          |  // Same as 6
   // 8 |  { {2, 1}, 5}  |
 
   auto s1 = [&] {
-    auto a  = int32s_col{1, 1, 2, 2, 2, 1, 1, 1, 2};
-    auto b  = int32s_col{1, 2, 1, 2, 2, 1, 1, 1, 1};
-    auto s2 = structs_col{{a, b}, nulls_at({2, 3, 7})};
+    auto a  = int32s_col{1, 1, XXX, XXX, XXX, XXX, 1, XXX, 2};
+    auto b  = int32s_col{1, 2, XXX, XXX, XXX, XXX, 1, XXX, 1};
+    auto s2 = structs_col{{a, b}, nulls_at({3, 4, 5})};
 
-    auto c = int32s_col{5, 4, 6, 4, 3, 3, 5, 4, 5};
+    auto c = int32s_col{5, 4, 6, 4, XXX, XXX, 5, 4, 5};
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
-    auto const null_it = nulls_at({4, 5});
+    auto const null_it = nulls_at({6, 7});
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
   }();
 
-  auto const idx            = int32s_col{0, 1, 2, 3, 4, 4, 0, 3, 8};
+  auto const idx            = int32s_col{0, 0, 2, 3, 4, 4, 6, 6, 8};
   auto const input_original = cudf::table_view{{idx, s1}};
   auto const input          = cudf::slice(input_original, {1, 7})[0];
   auto const key_idx        = std::vector<cudf::size_type>{1};
 
   // Nulls are equal.
   {
-    auto const expect_map   = int32s_col{6, 1, 2, 3, 4};
+    auto const expect_map   = int32s_col{1, 2, 3, 4, 6};
     auto const expect_table = cudf::gather(input_original, expect_map);
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY);
@@ -1228,7 +1241,7 @@ TEST_F(StableDistinctKeepAny, SlicedStructsOfStructs)
 
   // Nulls are unequal.
   {
-    auto const expect_map   = int32s_col{6, 1, 2, 3, 4, 5};
+    auto const expect_map   = int32s_col{1, 2, 3, 4, 4, 6};
     auto const expect_table = cudf::gather(input_original, expect_map);
 
     auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
@@ -1238,12 +1251,15 @@ TEST_F(StableDistinctKeepAny, SlicedStructsOfStructs)
 
 TEST_F(StableDistinctKeepAny, StructsOfLists)
 {
-  auto const idx  = int32s_col{1, 2, 1, 3, 4, 5, 5, 6, 4, 4};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
+  auto const idx  = int32s_col{1, 1, 2, 3, 4, 4, 4, 5, 5, 6};
   auto const keys = [] {
     // All child columns are identical.
-    auto child1 = lists_col{{1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
-    auto child2 = lists_col{{1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
-    auto child3 = lists_col{{1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+    auto child1 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child2 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child3 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
     return structs_col{{child1, child2, child3}};
   }();
 
@@ -1307,15 +1323,20 @@ TEST_F(StableDistinctKeepFirstLastNone, StructsOfLists)
 
 TEST_F(StableDistinctKeepAny, SlicedStructsOfLists)
 {
-  auto const idx  = int32s_col{0, 0, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, 70};
+  // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
+  // groups for equivalent keys because KEEP_ANY is nondeterministic.
+
+  auto constexpr dont_care = int32_t{0};
+
+  auto const idx  = int32s_col{dont_care, dont_care, 1, 1, 2, 3, 4, 4, 4, 5, 5, 6, dont_care};
   auto const keys = [] {
     // All child columns are identical.
     auto child1 = lists_col{
-      {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
+      {0, 0}, {0, 0}, {1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}, {5, 5}};
     auto child2 = lists_col{
-      {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
+      {0, 0}, {0, 0}, {1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}, {5, 5}};
     auto child3 = lists_col{
-      {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
+      {0, 0}, {0, 0}, {1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}, {5, 5}};
     return structs_col{{child1, child2, child3}};
   }();
 
