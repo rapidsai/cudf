@@ -48,7 +48,7 @@ public class ChunkedPack implements AutoCloseable {
    * Get the final contiguous size of the table we are packing. This is
    * the size that the final buffer should be, just like if the user called
    * `cudf::pack` instead.
-   * @return the total number of bytes for the table in contigous layout
+   * @return the total number of bytes for the table in contiguous layout
    */
   public long getTotalContiguousSize() {
     return chunkedPackGetTotalContiguousSize(nativePtr);
@@ -66,7 +66,7 @@ public class ChunkedPack implements AutoCloseable {
   }
 
   /**
-   * Place the next contigous chunk of our table into `userPtr`.
+   * Place the next contiguous chunk of our table into `userPtr`.
    *
    * This method throws if `hasNext` is false.
    * @param userPtr the bounce buffer to use for this iteration
