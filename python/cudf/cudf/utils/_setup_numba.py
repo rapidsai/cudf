@@ -9,14 +9,6 @@ from numba.cuda.cudadrv.driver import Linker
 CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
 
-def _setup_numba():
-    """
-    Perform any numba patching or configuration desired upon
-    cuDF import.
-    """
-    _setup_numba_linker(CC_60_PTX_FILE)
-
-
 def _get_best_ptx_file(archs, max_compute_capability):
     """
     Determine of the available PTX files which one is
@@ -70,7 +62,7 @@ def _get_ptx_file(path, prefix):
         return regular_result[1]
 
 
-def _setup_numba_linker(path):
+def _setup_numba():
     """
     Configure the numba linker for use with cuDF. This consists of
     potentially putting numba into enhanced compatibility mode
@@ -93,7 +85,9 @@ def _setup_numba_linker(path):
         # case where a user has a CUDA 12 package and ptxcompiler
         # in their environment anyways, perhaps installed separately
         if driver_version < (12, 0):
-            ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
+            ptx_toolkit_version = _get_cuda_version_from_ptx_file(
+                CC_60_PTX_FILE
+            )
             # Numba thinks cubinlinker is only needed if the driver is older
             # than the CUDA runtime, but when PTX files are present, it might
             # also need to patch because those PTX files may be compiled by
@@ -103,6 +97,8 @@ def _setup_numba_linker(path):
             ):
                 if _numba_version_ok:
                     Linker.new = new_patched_linker
+                else:
+                    config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
 
 
 def _get_cuda_version_from_ptx_file(path):
