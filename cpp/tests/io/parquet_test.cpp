@@ -5210,6 +5210,43 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   EXPECT_TRUE(used_dict(1));
 }
 
+TEST_F(ParquetWriterTest, DictionaryPageSizeEst)
+{
+  // one page
+  constexpr unsigned int nrows = 20'000U;
+
+  // this test is creating a pattern of repeating then non-repeating values to trigger
+  // a "worst-case" for page size estimation in the presence of a dictionary. have confirmed
+  // that this fails for values over 16 in the final term of `max_RLE_page_size()`.
+  // The output of the iterator will be 'CCCCCRRRRRCCCCCRRRRR...` where 'C' is a changing
+  // value, and 'R' repeats. The encoder will turn this into a literal run of 8 values
+  // (`CCCCCRRR`) followed by a repeated run of 2 (`RR`). This pattern then repeats, getting
+  // as close as possible to a condition of repeated 8 value literal runs.
+  auto elements0  = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    if ((i / 5) % 2 == 1) {
+      return std::string("non-unique string");
+    } else {
+      return "a unique string value suffixed with " + std::to_string(i);
+    }
+  });
+  auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryPageSizeEst.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 TEST_P(ParquetSizedTest, DictionaryTest)
 {
   const unsigned int cardinality = (1 << (GetParam() - 1)) + 1;
