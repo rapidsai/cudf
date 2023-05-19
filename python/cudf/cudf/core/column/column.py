@@ -1021,17 +1021,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 ordered=dtype.ordered,
             )
 
-        cats = self.unique().astype(self.dtype)
+        # Categories must be unique and sorted in ascending order.
+        cats = self.unique().sort_by_values()[0].astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
         )
-
         # columns include null index in factorization; remove:
         if self.has_nulls():
             cats = cats.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
-            labels = labels - 1
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 

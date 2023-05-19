@@ -124,10 +124,10 @@ def test_get_dummies_with_nan():
     )
     expected = cudf.DataFrame(
         {
-            "a_null": [0, 0, 0, 1],
             "a_1.0": [1, 0, 0, 0],
             "a_2.0": [0, 1, 0, 0],
             "a_nan": [0, 0, 1, 0],
+            "a_null": [0, 0, 0, 1],
         },
         dtype="uint8",
     )
@@ -168,11 +168,11 @@ def test_get_dummies_array_like_with_nan():
     ser = cudf.Series([0.1, 2, 3, None, np.nan], nan_as_null=False)
     expected = cudf.DataFrame(
         {
-            "a_null": [0, 0, 0, 1, 0],
             "a_0.1": [1, 0, 0, 0, 0],
             "a_2.0": [0, 1, 0, 0, 0],
             "a_3.0": [0, 0, 1, 0, 0],
             "a_nan": [0, 0, 0, 0, 1],
+            "a_null": [0, 0, 0, 1, 0],
         },
         dtype="uint8",
     )
