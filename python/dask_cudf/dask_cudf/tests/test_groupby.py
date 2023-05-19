@@ -76,7 +76,18 @@ def test_groupby_basic(series, aggregation, pdf):
 
 # TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
-@pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
+@pytest.mark.parametrize(
+    "aggregation",
+    [
+        "cumsum",
+        pytest.param(
+            "cumcount",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13390"
+            ),
+        ),
+    ],
+)
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
