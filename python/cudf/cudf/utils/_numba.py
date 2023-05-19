@@ -106,7 +106,7 @@ def _setup_numba():
         # packages. This is ok, because in this situation putting
         # numba in enhanced compatibility mode is not necessary.
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
-    except ImportError:
+    except ModuleNotFoundError:
         versions = _get_versions()
         if versions != NO_DRIVER:
             driver_version, runtime_version = versions
