@@ -64,7 +64,6 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
-
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype

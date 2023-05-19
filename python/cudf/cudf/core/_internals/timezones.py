@@ -193,13 +193,36 @@ def localize(
     return cast(
         DatetimeTZColumn,
         build_column(
-            data=gmt_data.data,
+            data=gmt_data.base_data,
             dtype=dtype,
-            mask=localized.mask,
+            mask=localized.base_mask,
             size=gmt_data.size,
             offset=gmt_data.offset,
         ),
     )
+
+
+def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
+    if not isinstance(data, DatetimeTZColumn):
+        raise TypeError(
+            "Cannot convert from timezone-naive timestamps to "
+            "timezone-aware timestamps. For that, "
+            "use `tz_localize`."
+        )
+    if zone_name == str(data.dtype.tz):
+        return data.copy()
+    utc_time = data._utc_time
+    out = cast(
+        DatetimeTZColumn,
+        build_column(
+            data=utc_time.base_data,
+            dtype=pd.DatetimeTZDtype(data._time_unit, zone_name),
+            mask=utc_time.base_mask,
+            size=utc_time.size,
+            offset=utc_time.offset,
+        ),
+    )
+    return out
 
 
 def utc_to_local(data: DatetimeColumn, zone_name: str) -> DatetimeColumn:
