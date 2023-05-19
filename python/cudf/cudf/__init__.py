@@ -80,7 +80,7 @@ from cudf.io import (
     read_text,
 )
 from cudf.options import describe_option, get_option, set_option
-from cudf.utils._setup_numba import _setup_numba
+from cudf.utils._numba import _setup_numba
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
 
