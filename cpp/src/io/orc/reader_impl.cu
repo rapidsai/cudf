@@ -102,21 +102,6 @@ constexpr type_id to_type_id(orc::TypeKind kind,
   return type_id::EMPTY;
 }
 
-gpu::StreamIndexType get_stream_index_type(orc::StreamKind kind)
-{
-  switch (kind) {
-    case orc::DATA: return gpu::CI_DATA;
-    case orc::LENGTH:
-    case orc::SECONDARY: return gpu::CI_DATA2;
-    case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
-    case orc::PRESENT: return gpu::CI_PRESENT;
-    case orc::ROW_INDEX: return gpu::CI_INDEX;
-    default:
-      // Skip this stream as it's not strictly required
-      return gpu::CI_NUM_STREAMS;
-  }
-}
-
 /**
  * @brief struct to store buffer data and size of list buffer
  */
@@ -174,6 +159,21 @@ size_t gather_stream_info(const size_t stripe_index,
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
+
+  auto const get_stream_index_type = [](orc::StreamKind kind) {
+    switch (kind) {
+      case orc::DATA: return gpu::CI_DATA;
+      case orc::LENGTH:
+      case orc::SECONDARY: return gpu::CI_DATA2;
+      case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
+      case orc::PRESENT: return gpu::CI_PRESENT;
+      case orc::ROW_INDEX: return gpu::CI_INDEX;
+      default:
+        // Skip this stream as it's not strictly required
+        return gpu::CI_NUM_STREAMS;
+    }
+  };
+
   for (const auto& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       dst_offset += stream.length;
