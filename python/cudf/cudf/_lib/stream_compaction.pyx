@@ -15,6 +15,7 @@ from cudf._lib.cpp.stream_compaction cimport (
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    stable_distinct as cpp_stable_distinct,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -106,7 +107,7 @@ def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
                     bool nulls_are_equal=True,
-                    bool preserve_order=False):
+                    bool preserve_order=True):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
@@ -127,17 +128,15 @@ def drop_duplicates(list columns,
         keys if keys is not None else range(len(columns))
     )
     cdef duplicate_keep_option cpp_keep_option
-    if preserve_order is True:
-        cpp_keep_option = duplicate_keep_option.KEEP_ANY
-    elif preserve_order is False:
-        if keep == 'first':
-            cpp_keep_option = duplicate_keep_option.KEEP_FIRST
-        elif keep == 'last':
-            cpp_keep_option = duplicate_keep_option.KEEP_LAST
-        elif keep is False:
-            cpp_keep_option = duplicate_keep_option.KEEP_NONE
-        else:
-            raise ValueError('keep must be either "first", "last" or False')
+
+    if keep == 'first':
+        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
+    elif keep == 'last':
+        cpp_keep_option = duplicate_keep_option.KEEP_LAST
+    elif keep is False:
+        cpp_keep_option = duplicate_keep_option.KEEP_NONE
+    else:
+        raise ValueError('keep must be either "first", "last" or False')
 
     # shifting the index number by number of index columns
     cdef null_equality cpp_nulls_equal = (
@@ -150,15 +149,26 @@ def drop_duplicates(list columns,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
-        c_result = move(
-            cpp_distinct(
-                source_table_view,
-                cpp_keys,
-                cpp_keep_option,
-                cpp_nulls_equal
+    if preserve_order:
+        with nogil:
+            c_result = move(
+                cpp_stable_distinct(
+                    source_table_view,
+                    cpp_keys,
+                    cpp_keep_option,
+                    cpp_nulls_equal
+                )
             )
-        )
+    else:
+        with nogil:
+            c_result = move(
+                cpp_distinct(
+                    source_table_view,
+                    cpp_keys,
+                    cpp_keep_option,
+                    cpp_nulls_equal
+                )
+            )
 
     return columns_from_unique_ptr(move(c_result))
 

@@ -1018,7 +1018,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 mask=self.mask,
                 ordered=dtype.ordered,
             )
-        breakpoint()
         cats = self.unique(preserve_order=True).astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(

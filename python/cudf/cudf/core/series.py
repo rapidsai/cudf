@@ -1717,20 +1717,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         to be sorted.
 
         >>> s.drop_duplicates()
-        3    beetle
-        1       cow
-        5     hippo
         0      lama
+        1       cow
+        3    beetle
+        5     hippo
         Name: animal, dtype: object
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
 
         >>> s.drop_duplicates(keep='last')
-        3    beetle
         1       cow
-        5     hippo
+        3    beetle
         4      lama
+        5     hippo
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
@@ -1739,8 +1739,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         >>> s.drop_duplicates(keep=False, inplace=True)
         >>> s
-        3    beetle
         1       cow
+        3    beetle
         5     hippo
         Name: animal, dtype: object
         """
