@@ -40,7 +40,7 @@ dynamic = ["entry-points"]
 [project.optional-dependencies]
 test = [
     "dask-cuda==23.6.*",
-    "numba>=0.56.4,<0.57",
+    "numba>=0.57",
     "pytest",
     "pytest-cov",
     "pytest-xdist",
