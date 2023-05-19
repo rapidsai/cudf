@@ -120,7 +120,7 @@ TEST_F(StableDistinctKeepAny, EmptyInputTable)
 {
   int32s_col col(std::initializer_list<int32_t>{});
   cudf::table_view input{{col}};
-  std::vector<cudf::size_type> key_idx{1, 2};
+  std::vector<cudf::size_type> key_idx{0};
 
   auto got = cudf::stable_distinct(input, key_idx, KEEP_ANY);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
