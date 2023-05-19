@@ -690,12 +690,10 @@ TEST_F(StableDistinctKeepAny, NullableLists)
 TEST_F(StableDistinctKeepFirstLastNone, ListsWithNullsEqual)
 {
   // Column(s) used to test needs to have different rows for the same keys.
-  // clang-format off
   auto const idx = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   auto const keys =
     lists_col{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {} /*NULL*/, {2, 2}, {2, 2}, {} /*NULL*/},
               nulls_at({7, 10})};
-  // clang-format on
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
@@ -733,12 +731,10 @@ TEST_F(StableDistinctKeepFirstLastNone, ListsWithNullsEqual)
 TEST_F(StableDistinctKeepFirstLastNone, ListsWithNullsUnequal)
 {
   // Column(s) used to test needs to have different rows for the same keys.
-  // clang-format off
   auto const idx = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   auto const keys =
     lists_col{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {} /*NULL*/, {2, 2}, {2, 2}, {} /*NULL*/},
               nulls_at({7, 10})};
-  // clang-format on
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
