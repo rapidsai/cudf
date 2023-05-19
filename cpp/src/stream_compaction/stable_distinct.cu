@@ -19,6 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
@@ -65,13 +66,8 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     return markers;
   }();
 
-  return cudf::detail::copy_if(
-    input,
-    [output_markers = output_markers.begin()] __device__(auto const idx) {
-      return *(output_markers + idx);
-    },
-    stream,
-    mr);
+  return cudf::detail::apply_boolean_mask(
+    input, cudf::device_span<bool const>(output_markers), stream, mr);
 }
 
 }  // namespace detail
