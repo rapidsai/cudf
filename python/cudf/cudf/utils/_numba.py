@@ -4,7 +4,6 @@ import glob
 import os
 
 from numba import config
-from numba.cuda.cudadrv.driver import Linker
 
 CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
 
@@ -74,7 +73,6 @@ def _setup_numba():
         # By default, ptxcompiler will not be installed with CUDA 12
         # packages. This is ok, because in this situation putting
         # numba in enhanced compatibility mode is not necessary.
-        from cubinlinker.patch import _numba_version_ok, new_patched_linker
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ImportError:
         return
@@ -95,10 +93,7 @@ def _setup_numba():
             if (driver_version < ptx_toolkit_version) or (
                 driver_version < runtime_version
             ):
-                if _numba_version_ok:
-                    Linker.new = new_patched_linker
-                else:
-                    config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
 
 
 def _get_cuda_version_from_ptx_file(path):
@@ -147,7 +142,7 @@ def _get_cuda_version_from_ptx_file(path):
     return cuda_ver
 
 
-class CUDFNumbaConfig:
+class _CUDFNumbaConfig:
     def __enter__(self):
         self.enter_val = config.CUDA_LOW_OCCUPANCY_WARNINGS
         config.CUDA_LOW_OCCUPANCY_WARNINGS = 0

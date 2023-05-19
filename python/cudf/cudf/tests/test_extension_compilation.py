@@ -12,7 +12,7 @@ from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.testing._utils import parametrize_numeric_dtypes_pairwise
-from cudf.utils._setup_numba import CUDFNumbaConfig
+from cudf.utils._numba import _CUDFNumbaConfig
 
 arith_ops = (
     operator.add,
@@ -107,7 +107,7 @@ def test_execute_masked_binary(op, ty):
             err[0] = 3
 
     err = cp.asarray([0], dtype="int8")
-    with CUDFNumbaConfig():
+    with _CUDFNumbaConfig():
         test_kernel[1, 1](1, 2, err)
     assert err[0] == 0
 
@@ -216,7 +216,7 @@ def test_is_na(fn):
             err[0] = 2
 
     err = cp.asarray([0], dtype="int8")
-    with CUDFNumbaConfig():
+    with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0
 
@@ -307,7 +307,7 @@ def test_na_masked_comparisons(fn, ty):
             err[0] = 2
 
     err = cp.asarray([0], dtype="int8")
-    with CUDFNumbaConfig():
+    with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0
 
@@ -330,6 +330,6 @@ def test_na_scalar_comparisons(fn, ty):
             err[0] = 1
 
     err = cp.asarray([0], dtype="int8")
-    with CUDFNumbaConfig():
+    with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0

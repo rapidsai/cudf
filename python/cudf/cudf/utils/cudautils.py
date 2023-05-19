@@ -8,7 +8,7 @@ from numba import cuda
 from numba.np import numpy_support
 
 import cudf
-from cudf.utils._setup_numba import CUDFNumbaConfig
+from cudf.utils._numba import _CUDFNumbaConfig
 
 #
 # Misc kernels
@@ -81,7 +81,7 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     """
     found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
-        with CUDFNumbaConfig():
+        with _CUDFNumbaConfig():
             if compare == "gt":
                 gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
             elif compare == "lt":
@@ -156,7 +156,7 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 def window_sizes_from_offset(arr, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        with CUDFNumbaConfig():
+        with _CUDFNumbaConfig():
             gpu_window_sizes_from_offset.forall(arr.size)(
                 arr, window_sizes, offset
             )
@@ -180,7 +180,7 @@ def gpu_grouped_window_sizes_from_offset(
 def grouped_window_sizes_from_offset(arr, group_starts, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        with CUDFNumbaConfig():
+        with _CUDFNumbaConfig():
             gpu_grouped_window_sizes_from_offset.forall(arr.size)(
                 arr, window_sizes, group_starts, offset
             )
