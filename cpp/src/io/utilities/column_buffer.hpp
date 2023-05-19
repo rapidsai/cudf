@@ -67,20 +67,8 @@ namespace utilities {
 struct column_buffer_base {
   column_buffer_base() = default;
 
-  // construct without a known size. call create() later to actually
-  // allocate memory
+  // construct without a known size. call create() later to actually allocate memory
   column_buffer_base(data_type _type, bool _is_nullable) : type(_type), is_nullable(_is_nullable) {}
-
-  // construct with a known size. allocates memory
-  column_buffer_base(data_type _type,
-                     size_type _size,
-                     bool _is_nullable,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
-    : column_buffer_base(_type, _is_nullable)
-  {
-    create(_size, stream, mr);
-  }
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
@@ -113,8 +101,7 @@ struct column_buffer_base {
 struct column_buffer_with_pointers : public column_buffer_base {
   column_buffer_with_pointers() = default;
 
-  // construct without a known size. call create() later to actually
-  // allocate memory
+  // construct without a known size. call create() later to actually allocate memory
   column_buffer_with_pointers(data_type _type, bool _is_nullable)
     : column_buffer_base(_type, _is_nullable)
   {
@@ -131,8 +118,7 @@ struct column_buffer_with_pointers : public column_buffer_base {
 struct column_buffer_with_strings : public column_buffer_base {
   column_buffer_with_strings() = default;
 
-  // construct without a known size. call create() later to actually
-  // allocate memory
+  // construct without a known size. call create() later to actually allocate memory
   column_buffer_with_strings(data_type _type, bool _is_nullable)
     : column_buffer_base(_type, _is_nullable)
   {
@@ -166,8 +152,7 @@ template <class column_buffer_type>
 struct column_buffer : column_buffer_type {
   column_buffer() = default;
 
-  // construct without a known size. call create() later to actually
-  // allocate memory
+  // construct without a known size. call create() later to actually allocate memory
   column_buffer(data_type _type, bool _is_nullable) : column_buffer_type(_type, _is_nullable) {}
 
   // construct with a known size. allocates memory
@@ -182,7 +167,7 @@ struct column_buffer : column_buffer_type {
   }
 
   // move constructor
-  column_buffer(column_buffer<column_buffer_type>&& col) = default;
+  column_buffer(column_buffer<column_buffer_type>&& col)                                = default;
   column_buffer<column_buffer_type>& operator=(column_buffer<column_buffer_type>&& col) = default;
 
   // copy constructor
