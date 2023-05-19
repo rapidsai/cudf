@@ -11,7 +11,6 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
-    distinct as cpp_distinct,
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
@@ -106,8 +105,7 @@ def apply_boolean_mask(list columns, Column boolean_mask):
 def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
-                    bool nulls_are_equal=True,
-                    bool preserve_order=True):
+                    bool nulls_are_equal=True):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
@@ -149,26 +147,15 @@ def drop_duplicates(list columns,
 
     cdef unique_ptr[table] c_result
 
-    if preserve_order:
-        with nogil:
-            c_result = move(
-                cpp_stable_distinct(
-                    source_table_view,
-                    cpp_keys,
-                    cpp_keep_option,
-                    cpp_nulls_equal
-                )
+    with nogil:
+        c_result = move(
+            cpp_stable_distinct(
+                source_table_view,
+                cpp_keys,
+                cpp_keep_option,
+                cpp_nulls_equal
             )
-    else:
-        with nogil:
-            c_result = move(
-                cpp_distinct(
-                    source_table_view,
-                    cpp_keys,
-                    cpp_keep_option,
-                    cpp_nulls_equal
-                )
-            )
+        )
 
     return columns_from_unique_ptr(move(c_result))
 
