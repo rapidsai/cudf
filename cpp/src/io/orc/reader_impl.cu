@@ -754,9 +754,12 @@ std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key"
  * @brief Create empty columns and respective schema information from the buffer.
  *
  * TODO
- * @param metadata
  * @param orc_col_id
  * @param schema_info Vector of schema information formed from column buffers.
+ * @param metadata
+ * @param decimal128_columns
+ * @param use_np_dtypes
+ * @param timestamp_type
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return An empty column equivalent to orc column type.
  */
@@ -770,38 +773,36 @@ std::unique_ptr<column> create_empty_column(
   rmm::cuda_stream_view stream)
 {
   schema_info.name = metadata.column_name(0, orc_col_id);
-  auto const type  = to_type_id(metadata.get_schema(orc_col_id).kind,
+  auto const kind  = metadata.get_col_type(orc_col_id).kind;
+  auto const type  = to_type_id(kind,
                                use_np_dtypes,
                                timestamp_type.id(),
                                decimal_column_type(decimal128_columns, metadata, orc_col_id));
-  int32_t scale    = 0;
-  std::vector<std::unique_ptr<column>> child_columns;
-  std::unique_ptr<column> out_col = nullptr;
-  auto kind                       = metadata.get_col_type(orc_col_id).kind;
 
   switch (kind) {
-    case orc::LIST:
+    case orc::LIST: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
-      out_col = make_lists_column(0,
-                                  make_empty_column(type_id::INT32),
-                                  create_empty_column(metadata.get_col_type(orc_col_id).subtypes[0],
-                                                      schema_info.children.back(),
-                                                      metadata,
-                                                      decimal128_columns,
-                                                      use_np_dtypes,
-                                                      timestamp_type,
-                                                      stream),
-                                  0,
-                                  rmm::device_buffer{0, stream},
-                                  stream);
-      break;
+      return make_lists_column(0,
+                               make_empty_column(type_id::INT32),
+                               create_empty_column(metadata.get_col_type(orc_col_id).subtypes[0],
+                                                   schema_info.children.back(),
+                                                   metadata,
+                                                   decimal128_columns,
+                                                   use_np_dtypes,
+                                                   timestamp_type,
+                                                   stream),
+                               0,
+                               rmm::device_buffer{0, stream},
+                               stream);
+    }
     case orc::MAP: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("struct");
       const auto child_column_ids = metadata.get_col_type(orc_col_id).subtypes;
+      auto& children_schema       = schema_info.children.back().children;
+      std::vector<std::unique_ptr<column>> child_columns;
       for (size_t idx = 0; idx < metadata.get_col_type(orc_col_id).subtypes.size(); idx++) {
-        auto& children_schema = schema_info.children.back().children;
         children_schema.emplace_back("");
         child_columns.push_back(create_empty_column(child_column_ids[idx],
                                                     schema_info.children.back().children.back(),
@@ -810,20 +811,19 @@ std::unique_ptr<column> create_empty_column(
                                                     use_np_dtypes,
                                                     timestamp_type,
                                                     stream));
-        auto name                 = get_map_child_col_name(idx);
-        children_schema[idx].name = name;
+        children_schema[idx].name = get_map_child_col_name(idx);
       }
-      auto struct_col =
-        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
-      out_col = make_lists_column(0,
-                                  make_empty_column(type_id::INT32),
-                                  std::move(struct_col),
-                                  0,
-                                  rmm::device_buffer{0, stream},
-                                  stream);
-    } break;
+      return make_lists_column(
+        0,
+        make_empty_column(type_id::INT32),
+        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream),
+        0,
+        rmm::device_buffer{0, stream},
+        stream);
+    }
 
-    case orc::STRUCT:
+    case orc::STRUCT: {
+      std::vector<std::unique_ptr<column>> child_columns;
       for (const auto col : metadata.get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
         child_columns.push_back(create_empty_column(col,
@@ -834,21 +834,20 @@ std::unique_ptr<column> create_empty_column(
                                                     timestamp_type,
                                                     stream));
       }
-      out_col =
-        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
-      break;
+      return make_structs_column(
+        0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
+    }
 
-    case orc::DECIMAL:
+    case orc::DECIMAL: {
+      int32_t scale = 0;
       if (type == type_id::DECIMAL32 or type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
         scale = -static_cast<int32_t>(metadata.get_types()[orc_col_id].scale.value_or(0));
       }
-      out_col = make_empty_column(data_type(type, scale));
-      break;
+      return make_empty_column(data_type(type, scale));
+    }
 
-    default: out_col = make_empty_column(type);
+    default: return make_empty_column(type);
   }
-
-  return out_col;
 }
 
 // Adds child column buffers to parent column
