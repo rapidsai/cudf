@@ -38,7 +38,7 @@ PROJECT_NAME           = "libcudf"
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = 23.06.00
+PROJECT_NUMBER         = 23.08.00
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewer a
@@ -2162,7 +2162,7 @@ SKIP_FUNCTION_MACROS   = YES
 # the path). If a tag file is not located in the directory in which doxygen is
 # run, you must also specify the path to the tagfile here.
 
-TAGFILES               = rmm.tag=https://docs.rapids.ai/api/librmm/23.06
+TAGFILES               = rmm.tag=https://docs.rapids.ai/api/librmm/23.08
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create a
 # tag file that is based on the input files it reads. See section "Linking to
