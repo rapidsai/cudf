@@ -84,6 +84,9 @@ from cudf.utils._setup_numba import _setup_numba
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
 
+# this must be called before numba.cuda is imported, because
+# it sets the numba config variable responsible for enabling
+# MVC. Setting it after importing cuda has no effect.
 _setup_numba()
 
 from numba import cuda
