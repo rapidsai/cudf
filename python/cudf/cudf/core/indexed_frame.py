@@ -1779,7 +1779,6 @@ class IndexedFrame(Frame):
         keep="first",
         nulls_are_equal=True,
         ignore_index=False,
-        preserve_order=False,
     ):
         """
         Drop duplicate rows in frame.
@@ -1802,32 +1801,18 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        if preserve_order:
-            return self._from_columns_like_self(
-                libcudf.stream_compaction.stable_distinct(
-                    list(self._columns)
-                    if ignore_index
-                    else list(self._index._columns + self._columns),
-                    keys=keys,
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                ),
-                self._column_names,
-                self._index.names if not ignore_index else None,
-            )
-        else:
-            return self._from_columns_like_self(
-                libcudf.stream_compaction.drop_duplicates(
-                    list(self._columns)
-                    if ignore_index
-                    else list(self._index._columns + self._columns),
-                    keys=keys,
-                    keep=keep,
-                    nulls_are_equal=nulls_are_equal,
-                ),
-                self._column_names,
-                self._index.names if not ignore_index else None,
-            )
+        return self._from_columns_like_self(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns)
+                if ignore_index
+                else list(self._index._columns + self._columns),
+                keys=keys,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+            self._index.names if not ignore_index else None,
+        )
 
     @_cudf_nvtx_annotate
     def duplicated(self, subset=None, keep="first"):

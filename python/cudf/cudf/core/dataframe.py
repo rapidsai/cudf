@@ -3170,7 +3170,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         keep="first",
         inplace=False,
         ignore_index=False,
-        preserve_order=False,
     ):
         """
         Return DataFrame with duplicate rows removed.
@@ -3248,7 +3247,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             subset=subset,
             keep=keep,
             ignore_index=ignore_index,
-            preserve_order=preserve_order,
         )
 
         return self._mimic_inplace(outdf, inplace=inplace)
@@ -3793,9 +3791,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if any(not is_categorical_dtype(c.dtype) for c in source_columns):
                 raise ValueError("Columns must all have the same dtype")
             cats = list(c.categories for c in source_columns)
-            cats = cudf.core.column.concat_columns(cats).unique(
-                preserve_order=True
-            )
+            cats = cudf.core.column.concat_columns(cats).unique()
             source_columns = [
                 col._set_categories(cats, is_unique=True).codes
                 for col in source_columns

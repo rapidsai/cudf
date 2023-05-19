@@ -1020,7 +1020,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 mask=self.mask,
                 ordered=dtype.ordered,
             )
-        cats = self.unique(preserve_order=True).astype(self.dtype)
+
+        cats = self.unique().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
