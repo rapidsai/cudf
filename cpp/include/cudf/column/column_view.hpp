@@ -162,7 +162,7 @@ class column_view_base {
    *
    * @return The count of null elements
    */
-  [[nodiscard]] size_type null_count() const;
+  [[nodiscard]] size_type null_count() const { return _null_count; }
 
   /**
    * @brief Returns the count of null elements in the range [begin, end)

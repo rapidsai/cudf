@@ -63,8 +63,6 @@ column_view_base::column_view_base(data_type type,
   }
 }
 
-size_type column_view_base::null_count() const { return _null_count; }
-
 size_type column_view_base::null_count(size_type begin, size_type end) const
 {
   CUDF_EXPECTS((begin >= 0) && (end <= size()) && (begin <= end), "Range is out of bounds.");
