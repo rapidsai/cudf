@@ -308,7 +308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  object  int64
         3  object  int64
         """
-        index = self.grouping.keys.unique().to_pandas()
+        index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
@@ -864,7 +864,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         5    0
         dtype: int64
         """
-        num_groups = len(index := self.grouping.keys.unique())
+        index = self.grouping.keys.unique().sort_values()
+        num_groups = len(index)
         _, has_null_group = bitmask_or([*index._columns])
 
         if ascending:

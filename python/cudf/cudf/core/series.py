@@ -2887,9 +2887,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         6       c
         dtype: object
         >>> series.unique()
-        0    <NA>
-        1       a
-        2       b
+        0       a
+        1       b
+        2    <NA>
         3       c
         dtype: object
         """

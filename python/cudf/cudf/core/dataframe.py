@@ -3225,8 +3225,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
              brand style  rating
         0  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
-        4  Indomie  pack     5.0
         3  Indomie  pack    15.0
+        4  Indomie  pack     5.0
 
         To remove duplicates on specific column(s), use ``subset``.
 
