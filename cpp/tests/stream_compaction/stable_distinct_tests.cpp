@@ -62,9 +62,9 @@ TEST_F(StableDistinctKeepAny, StringKeyColumn)
 {
   // Column(s) used to test KEEP_ANY needs to have same rows in contiguous
   // groups for equivalent keys because KEEP_ANY is nondeterministic.
-  auto const col = int32s_col{{5, null, null, 5, 5, 8, 1}, nulls_at({1, 2})};
+  auto const col = int32s_col{{5, 5, null, null, 5, 8, 1}, nulls_at({2, 3})};
   auto const keys =
-    strings_col{{"all", "new", "new", "all", "" /*NULL*/, "the", "strings"}, null_at(4)};
+    strings_col{{"all", "all", "new", "new", "" /*NULL*/, "the", "strings"}, null_at(4)};
   auto const input   = cudf::table_view{{col, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
 
