@@ -10,7 +10,7 @@ import warnings
 from numba import config
 
 CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
-NO_DRIVER = (math.inf, math.inf)
+_NO_DRIVER = (math.inf, math.inf)
 
 CMD = """\
 from ctypes import c_int, byref
@@ -31,7 +31,7 @@ def _get_versions():
     """
     cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
     if cp.returncode:
-        return NO_DRIVER
+        return _NO_DRIVER
 
     versions = [int(s) for s in cp.stdout.strip().split()]
     driver_version = tuple(versions[:2])
@@ -108,7 +108,7 @@ def _setup_numba():
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
         versions = _get_versions()
-        if versions != NO_DRIVER:
+        if versions != _NO_DRIVER:
             driver_version, runtime_version = versions
             if runtime_version > driver_version:
                 warnings.warn(
