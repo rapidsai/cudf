@@ -61,10 +61,10 @@ struct reader_column_meta {
 
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
-    num_child_rows_per_stripe;            // number of rows of child columns [stripe][column]
+    num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]
   struct row_group_meta {
-    uint32_t num_rows;                    // number of rows in a column in a row group
-    uint32_t start_row;                   // start row in a column in a row group
+    uint32_t num_rows;   // number of rows in a column in a row group
+    uint32_t start_row;  // start row in a column in a row group
   };
   // num_rowgroups * num_columns
   std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
@@ -193,19 +193,6 @@ class reader::impl {
                       rmm::cuda_stream_view stream);
 
   /**
-   * @brief Create empty columns and respective schema information from the buffer.
-   *
-   * @param col_buffers Column buffers for columns and children.
-   * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return An empty column equivalent to orc column type.
-   */
-  std::unique_ptr<column> create_empty_column(const size_type orc_col_id,
-                                              column_name_info& schema_info,
-                                              rmm::cuda_stream_view stream);
-
-  /**
    * @brief Setup table for converting timestamp columns from local to UTC time
    *
    * @return Timezone table with timestamp offsets
@@ -222,7 +209,7 @@ class reader::impl {
 
   bool _use_index{true};
   bool _use_np_dtypes{true};
-  std::vector<std::string> decimal128_columns;
+  std::vector<std::string> _decimal128_columns;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta{};
 };

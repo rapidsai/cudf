@@ -66,12 +66,12 @@ namespace {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  */
-constexpr type_id to_type_id(const orc::SchemaType& schema,
+constexpr type_id to_type_id(orc::TypeKind kind,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
                              type_id decimal_type_id)
 {
-  switch (schema.kind) {
+  switch (kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
     case orc::BYTE: return type_id::INT8;
     case orc::SHORT: return type_id::INT16;
@@ -750,42 +750,66 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
 std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
-std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_col_id,
-                                                          column_name_info& schema_info,
-                                                          rmm::cuda_stream_view stream)
+/**
+ * @brief Create empty columns and respective schema information from the buffer.
+ *
+ * TODO
+ * @param metadata
+ * @param orc_col_id
+ * @param schema_info Vector of schema information formed from column buffers.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return An empty column equivalent to orc column type.
+ */
+std::unique_ptr<column> create_empty_column(
+  size_type const orc_col_id,
+  column_name_info& schema_info,
+  cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+  std::vector<std::string> const& decimal128_columns,
+  bool use_np_dtypes,
+  data_type timestamp_type,
+  rmm::cuda_stream_view stream)
 {
-  schema_info.name = _metadata.column_name(0, orc_col_id);
-  auto const type  = to_type_id(_metadata.get_schema(orc_col_id),
-                               _use_np_dtypes,
-                               _timestamp_type.id(),
-                               decimal_column_type(decimal128_columns, _metadata, orc_col_id));
+  schema_info.name = metadata.column_name(0, orc_col_id);
+  auto const type  = to_type_id(metadata.get_schema(orc_col_id).kind,
+                               use_np_dtypes,
+                               timestamp_type.id(),
+                               decimal_column_type(decimal128_columns, metadata, orc_col_id));
   int32_t scale    = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
-  auto kind                       = _metadata.get_col_type(orc_col_id).kind;
+  auto kind                       = metadata.get_col_type(orc_col_id).kind;
 
   switch (kind) {
     case orc::LIST:
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
-      out_col = make_lists_column(
-        0,
-        make_empty_column(type_id::INT32),
-        create_empty_column(
-          _metadata.get_col_type(orc_col_id).subtypes[0], schema_info.children.back(), stream),
-        0,
-        rmm::device_buffer{0, stream},
-        stream);
+      out_col = make_lists_column(0,
+                                  make_empty_column(type_id::INT32),
+                                  create_empty_column(metadata.get_col_type(orc_col_id).subtypes[0],
+                                                      schema_info.children.back(),
+                                                      metadata,
+                                                      decimal128_columns,
+                                                      use_np_dtypes,
+                                                      timestamp_type,
+                                                      stream),
+                                  0,
+                                  rmm::device_buffer{0, stream},
+                                  stream);
       break;
     case orc::MAP: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("struct");
-      const auto child_column_ids = _metadata.get_col_type(orc_col_id).subtypes;
-      for (size_t idx = 0; idx < _metadata.get_col_type(orc_col_id).subtypes.size(); idx++) {
+      const auto child_column_ids = metadata.get_col_type(orc_col_id).subtypes;
+      for (size_t idx = 0; idx < metadata.get_col_type(orc_col_id).subtypes.size(); idx++) {
         auto& children_schema = schema_info.children.back().children;
         children_schema.emplace_back("");
-        child_columns.push_back(create_empty_column(
-          child_column_ids[idx], schema_info.children.back().children.back(), stream));
+        child_columns.push_back(create_empty_column(child_column_ids[idx],
+                                                    schema_info.children.back().children.back(),
+                                                    metadata,
+                                                    decimal128_columns,
+                                                    use_np_dtypes,
+                                                    timestamp_type,
+                                                    stream));
         auto name                 = get_map_child_col_name(idx);
         children_schema[idx].name = name;
       }
@@ -800,9 +824,15 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
     } break;
 
     case orc::STRUCT:
-      for (const auto col : _metadata.get_col_type(orc_col_id).subtypes) {
+      for (const auto col : metadata.get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
-        child_columns.push_back(create_empty_column(col, schema_info.children.back(), stream));
+        child_columns.push_back(create_empty_column(col,
+                                                    schema_info.children.back(),
+                                                    metadata,
+                                                    decimal128_columns,
+                                                    use_np_dtypes,
+                                                    timestamp_type,
+                                                    stream));
       }
       out_col =
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
@@ -810,7 +840,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
 
     case orc::DECIMAL:
       if (type == type_id::DECIMAL32 or type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
-        scale = -static_cast<int32_t>(_metadata.get_types()[orc_col_id].scale.value_or(0));
+        scale = -static_cast<int32_t>(metadata.get_types()[orc_col_id].scale.value_or(0));
       }
       out_col = make_empty_column(data_type(type, scale));
       break;
@@ -902,7 +932,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion
-  decimal128_columns = options.get_decimal128_columns();
+  _decimal128_columns = options.get_decimal128_columns();
 }
 
 std::unique_ptr<table> reader::impl::compute_timezone_table(
@@ -962,10 +992,10 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      auto col_type = to_type_id(_metadata.get_col_type(col.id),
+      auto col_type = to_type_id(_metadata.get_col_type(col.id).kind,
                                  _use_np_dtypes,
                                  _timestamp_type.id(),
-                                 decimal_column_type(decimal128_columns, _metadata, col.id));
+                                 decimal_column_type(_decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -991,7 +1021,13 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                      std::back_inserter(out_columns),
                      [&](auto const col_meta) {
                        schema_info.emplace_back("");
-                       return create_empty_column(col_meta.id, schema_info.back(), stream);
+                       return create_empty_column(col_meta.id,
+                                                  schema_info.back(),
+                                                  _metadata,
+                                                  _decimal128_columns,
+                                                  _use_np_dtypes,
+                                                  _timestamp_type,
+                                                  stream);
                      });
       break;
     } else {
