@@ -2261,6 +2261,7 @@ class TimedeltaIndex(Index):
         """
         Number of days for each element.
         """
+        # Need to specifically return `int64` to avoid overflow.
         return as_index(
             arbitrary=self._values.days, name=self.name, dtype="int64"
         )
