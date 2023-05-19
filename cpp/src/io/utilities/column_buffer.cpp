@@ -85,11 +85,9 @@ void column_buffer_with_strings::create(size_type _size,
   }
 }
 
-void column_buffer_with_strings::create_strings(size_type num_bytes,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* _mr)
+void column_buffer_with_strings::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
 {
-  _string_data = rmm::device_buffer(num_bytes, stream, _mr);
+  _string_data = rmm::device_buffer(num_bytes, stream, mr);
 }
 
 namespace {
@@ -269,7 +267,7 @@ using pointer_type = utilities::column_buffer_with_pointers;
 using string_type  = utilities::column_buffer_with_strings;
 
 using pointer_column_buffer = utilities::column_buffer<pointer_type>;
-using string_column_buffer = utilities::column_buffer<string_type>;
+using string_column_buffer  = utilities::column_buffer<string_type>;
 
 template <>
 std::unique_ptr<column> make_column<pointer_type>(pointer_column_buffer& buffer,

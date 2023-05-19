@@ -126,14 +126,7 @@ struct column_buffer_with_strings : public column_buffer_base {
 
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* _mr);
 
-  void create_strings(size_type _size,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr);
-
-  void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
-  {
-    this->create_strings(num_bytes, stream, mr);
-  }
+  void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
 
   void* string_data() { return _string_data.data(); }
   size_t string_size() const { return _string_data.size(); }
