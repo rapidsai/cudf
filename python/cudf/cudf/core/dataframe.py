@@ -7703,7 +7703,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Combine and de-dupe the categories
             categories[idx] = cudf.Series(
                 concat_columns([col.categories for col in cols])
-            )._column.unique(preserve_order=True)
+            )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
