@@ -496,7 +496,7 @@ class mutable_column_view : public detail::column_view_base {
 
   /**
    * @brief Construct a `mutable_column_view` from pointers to device memory for
-   *the elements and bitmask of the column.
+   * the elements and bitmask of the column.
 
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`

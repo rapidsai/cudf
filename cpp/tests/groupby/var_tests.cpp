@@ -195,6 +195,5 @@ TYPED_TEST(groupby_var_test, sort_vs_hash)
 
   auto result2 = gb_obj.aggregate(requests);
 
-  EXPECT_EQ(result1.second[0].results[0]->null_count(), result2.second[0].results[0]->null_count());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result1.second[0].results[0], *result2.second[0].results[0]);
 }
