@@ -57,7 +57,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
   // Since we are setting every row to the scalar, the fill() never needs to access
   // any of the children in the strings column which would otherwise cause an exception.
-  column_view sc{value.type(), size, nullptr};
+  column_view sc{value.type(), size, nullptr, nullptr, 0};
   auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
 
   // fill the column with the scalar

@@ -88,7 +88,7 @@ std::unique_ptr<table> distinct(table_view const& input,
 /**
  * @copydoc cudf::stable_distinct
  *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> stable_distinct(table_view const& input,
                                        std::vector<size_type> const& keys,

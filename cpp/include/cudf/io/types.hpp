@@ -101,6 +101,104 @@ enum statistics_freq {
 };
 
 /**
+ * @brief Statistics about compression performed by a writer.
+ */
+class writer_compression_statistics {
+ public:
+  /**
+   * @brief Default constructor
+   */
+  writer_compression_statistics() = default;
+
+  /**
+   * @brief Constructor with initial values.
+   *
+   * @param num_compressed_bytes The number of bytes that were successfully compressed
+   * @param num_failed_bytes The number of bytes that failed to compress
+   * @param num_skipped_bytes The number of bytes that were skipped during compression
+   * @param num_compressed_output_bytes The number of bytes in the compressed output
+   */
+  writer_compression_statistics(size_t num_compressed_bytes,
+                                size_t num_failed_bytes,
+                                size_t num_skipped_bytes,
+                                size_t num_compressed_output_bytes)
+    : _num_compressed_bytes(num_compressed_bytes),
+      _num_failed_bytes(num_failed_bytes),
+      _num_skipped_bytes(num_skipped_bytes),
+      _num_compressed_output_bytes(num_compressed_output_bytes)
+  {
+  }
+
+  /**
+   * @brief Adds the values from another `writer_compression_statistics` object.
+   *
+   * @param other The other writer_compression_statistics object
+   * @return writer_compression_statistics& Reference to this object
+   */
+  writer_compression_statistics& operator+=(const writer_compression_statistics& other) noexcept
+  {
+    _num_compressed_bytes += other._num_compressed_bytes;
+    _num_failed_bytes += other._num_failed_bytes;
+    _num_skipped_bytes += other._num_skipped_bytes;
+    _num_compressed_output_bytes += other._num_compressed_output_bytes;
+    return *this;
+  }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were successfully compressed.
+   *
+   * This is the number of bytes that were actually compressed, not the size of the compressed
+   * output.
+   *
+   * @return size_t The number of bytes that were successfully compressed
+   */
+  [[nodiscard]] auto num_compressed_bytes() const noexcept { return _num_compressed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that failed to compress.
+   *
+   * @return size_t The number of bytes that failed to compress
+   */
+  [[nodiscard]] auto num_failed_bytes() const noexcept { return _num_failed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were skipped during compression.
+   *
+   * @return size_t The number of bytes that were skipped during compression
+   */
+  [[nodiscard]] auto num_skipped_bytes() const noexcept { return _num_skipped_bytes; }
+
+  /**
+   * @brief Returns the total size of compression inputs.
+   *
+   * @return size_t The total size of compression inputs
+   */
+  [[nodiscard]] auto num_total_input_bytes() const noexcept
+  {
+    return num_compressed_bytes() + num_failed_bytes() + num_skipped_bytes();
+  }
+
+  /**
+   * @brief Returns the compression ratio for the successfully compressed blocks.
+   *
+   * Returns nan if there were no successfully compressed blocks.
+   *
+   * @return double The ratio between the size of the compression inputs and the size of the
+   * compressed output.
+   */
+  [[nodiscard]] auto compression_ratio() const noexcept
+  {
+    return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes;
+  }
+
+ private:
+  std::size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
+  std::size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
+  std::size_t _num_skipped_bytes = 0;  ///< The number of bytes that were skipped during compression
+  std::size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
+};
+
+/**
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {

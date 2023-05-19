@@ -4114,7 +4114,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = cudf.Series(cudf.StringIndex(["1", "18", "9"]), dtype="int")
+    gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -9794,6 +9794,7 @@ def df_eval(request):
         ("a / b", float),
         ("a * b", int),
         ("a > b", int),
+        ("a >= b", int),
         ("a > b > c", int),
         ("a > b < c", int),
         ("a & b", int),
@@ -9835,7 +9836,7 @@ def test_dataframe_eval(df_eval, expr, dtype):
     assert_eq(expect, got, check_names=False)
 
     # Test inplace
-    if re.search("[^=]=[^=]", expr) is not None:
+    if re.search("[^=><]=[^=]", expr) is not None:
         pdf_eval = df_eval.to_pandas()
         pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)
@@ -9855,6 +9856,15 @@ def test_dataframe_eval(df_eval, expr, dtype):
 def test_dataframe_eval_errors(df_eval, expr):
     with pytest.raises(ValueError):
         df_eval.eval(expr)
+
+
+def test_dataframe_eval_misc():
+    df = cudf.DataFrame({"a": [1, 2, 3, None, 5]})
+    got = df.eval("isnull(a)")
+    assert_eq(got, cudf.Series.isnull(df["a"]), check_names=False)
+
+    df.eval("c = isnull(1)", inplace=True)
+    assert_eq(df["c"], cudf.Series([False] * len(df), name="c"))
 
 
 @pytest.mark.parametrize(
