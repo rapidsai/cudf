@@ -678,7 +678,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
             _, (ordering,), _ = self._groupby.groups(
-                [arange(0, self.obj._data.nrows)]
+                [arange(0, len(self.obj))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
