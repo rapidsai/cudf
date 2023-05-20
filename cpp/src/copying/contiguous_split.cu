@@ -1012,10 +1012,7 @@ struct packed_split_indices_and_src_buf_info {
 
 // packed block of memory 2: partition buffer sizes and dst_buf_info structs
 struct packed_partition_buf_size_and_dst_buf_info {
-  packed_partition_buf_size_and_dst_buf_info(cudf::table_view const& input,
-                                             std::vector<size_type> const& splits,
-                                             std::size_t num_partitions,
-                                             cudf::size_type num_src_bufs,
+  packed_partition_buf_size_and_dst_buf_info(std::size_t num_partitions,
                                              std::size_t num_bufs,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* temp_mr)
@@ -1171,10 +1168,9 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 {
   auto partition_buf_size_and_dst_buf_info =
     std::make_unique<packed_partition_buf_size_and_dst_buf_info>(
-      input, splits, num_partitions, num_src_bufs, num_bufs, stream, temp_mr);
+      num_partitions, num_bufs, stream, temp_mr);
 
   auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info;
-  auto const h_buf_sizes    = partition_buf_size_and_dst_buf_info->h_buf_sizes;
   auto const d_buf_sizes    = partition_buf_size_and_dst_buf_info->d_buf_sizes;
 
   auto const split_indices_and_src_buf_info = packed_split_indices_and_src_buf_info(
