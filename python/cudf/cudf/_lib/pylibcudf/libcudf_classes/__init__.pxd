@@ -11,7 +11,6 @@ from .libcudf_classes.column cimport (
     ColumnContents,
 )
 from .libcudf_classes.column_view cimport ColumnView
-from .libcudf_classes.table cimport Table
 from .libcudf_classes.table_view cimport TableView
 
 __all__ = [
@@ -19,6 +18,5 @@ __all__ = [
     "ColumnContents",
     "ColumnView",
     "Column_from_ColumnView",
-    "Table",
     "TableView",
 ]
