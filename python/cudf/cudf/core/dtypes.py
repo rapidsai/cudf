@@ -42,7 +42,11 @@ def dtype(arbitrary):
     -------
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
-    # first, try interpreting arbitrary as a NumPy dtype that we support:
+    #  first, check if `arbitrary` is one of our extension types:
+    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+        return arbitrary
+
+    # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
         if np_dtype.kind in ("OU"):
@@ -53,10 +57,6 @@ def dtype(arbitrary):
         if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
-
-    #  next, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
-        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
@@ -71,6 +71,8 @@ def dtype(arbitrary):
             return np.dtype("object")
         elif isinstance(pd_dtype, pd.IntervalDtype):
             return cudf.IntervalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+            return pd_dtype
         else:
             raise TypeError(
                 f"Cannot interpret {arbitrary} as a valid cuDF dtype"
@@ -868,7 +870,6 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
-
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )

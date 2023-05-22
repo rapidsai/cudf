@@ -1678,11 +1678,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), {{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
-        return {std::move(col), {}};
+        return {std::move(col), std::vector<column_name_info>{}};
       }
       break;
     }
@@ -1718,13 +1718,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
         cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
-      auto offsets_column =
-        std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
+      auto offsets_column = std::make_unique<column>(
+        data_type{type_id::INT32}, num_rows, d_offsets.release(), rmm::device_buffer{}, 0);
       // Create children column
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
-                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+                      std::vector<column_name_info>>{std::make_unique<column>(),
+                                                     std::vector<column_name_info>{}}
           : json_column_to_cudf_column(json_col.child_columns.begin()->second,
                                        d_input,
                                        options,

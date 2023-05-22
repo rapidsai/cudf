@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
@@ -40,6 +40,7 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         LOGICAL_OR "cudf::ast::ast_operator::LOGICAL_OR"
         # Unary operators
         IDENTITY "cudf::ast::ast_operator::IDENTITY"
+        IS_NULL "cudf::ast::ast_operator::IS_NULL"
         SIN "cudf::ast::ast_operator::SIN"
         COS "cudf::ast::ast_operator::COS"
         TAN "cudf::ast::ast_operator::TAN"

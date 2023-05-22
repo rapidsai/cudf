@@ -11,6 +11,7 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
+from cudf._typing import DtypeObj
 from cudf.api.types import is_bool, is_float, is_integer
 from cudf.core.missing import NA
 
@@ -736,6 +737,16 @@ def _dtype_can_hold_element(dtype: np.dtype, element) -> bool:
         return False
 
     raise NotImplementedError(f"Unsupported dtype: {dtype}")
+
+
+def _get_base_dtype(dtype: DtypeObj) -> DtypeObj:
+    # TODO: replace the use of this function with just `dtype.base`
+    # when Pandas 2.1.0 is the minimum version we support:
+    # https://github.com/pandas-dev/pandas/pull/52706
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        return np.dtype(f"<M8[{dtype.unit}]")
+    else:
+        return dtype.base
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

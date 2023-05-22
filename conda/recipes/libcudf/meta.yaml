@@ -30,6 +30,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=libcudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   build:
@@ -41,10 +42,13 @@ requirements:
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm ={{ minor_version }}
+    - libkvikio ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
+    - libcufile {{ libcufile_host_version }}      # [linux64]
+    - libcufile-dev {{ libcufile_host_version }}  # [linux64]
     - libcurand {{ libcurand_host_version }}
     - libcurand-dev {{ libcurand_host_version }}
     - libarrow {{ libarrow_version }}
@@ -72,7 +76,10 @@ outputs:
       run:
         - cudatoolkit {{ cuda_spec }}
         - librmm ={{ minor_version }}
+        - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
+        - libcufile {{ libcufile_run_version }}      # [linux64]
+        - libcufile-dev {{ libcufile_run_version }}  # [linux64]
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
@@ -100,6 +107,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/detail/concatenate_masks.hpp
         - test -f $PREFIX/include/cudf/detail/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
@@ -389,6 +397,8 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         - cudatoolkit {{ cuda_spec }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
         - libcurand {{ libcurand_run_version }}
     about:
       home: https://rapids.ai/

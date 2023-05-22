@@ -127,6 +127,153 @@ std::vector<packed_table> contiguous_split(
   std::vector<size_type> const& splits,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+namespace detail {
+struct contiguous_split_state;
+};
+
+/**
+ * @brief Perform a chunked "pack" operation of the input `table_view` using a user provided
+ * buffer of size `user_buffer_size`.
+ *
+ * The intent of this operation is to be used in a streamed fashion at times of GPU
+ * out-of-memory, where we want to minimize the number of small cudaMemcpy calls and
+ * tracking of all the metadata associated with cudf tables. Because of the memory constraints,
+ * all thrust and scratch memory allocations are using the passed-in memory resource exclusively,
+ * not a per-device memory resource.
+ *
+ * This class defines two methods that must be used in concert to carry out the chunked_pack:
+ * has_next and next. Here is an example:
+ *
+ * @code{.pseudo}
+ * // Create a table_view
+ * cudf::table_view tv = ...;
+ *
+ * // Choose a memory resource (optional). This memory resource is used for scratch/thrust temporary
+ * // data. In memory constrained cases, this can be used to set aside scratch memory
+ * // for `chunked_pack` at the beginning of a program.
+ * auto mr = rmm::mr::get_current_device_resource();
+ *
+ * // Define a buffer size for each chunk: the larger the buffer is, the more SMs can be
+ * // occupied by this algorithm.
+ * //
+ * // Internally, the GPU unit of work is a 1MB batch. When we instantiate `cudf::chunked_pack`,
+ * // all the 1MB batches for the source table_view are computed up front. Additionally,
+ * // chunked_pack calculates the number of iterations that are required to go through all those
+ * // batches given a `user_buffer_size` buffer. The number of 1MB batches in each iteration (chunk)
+ * // equals the number of CUDA blocks that will be used for the main kernel launch.
+ * //
+ * std::size_t user_buffer_size = 128*1024*1024;
+ *
+ * auto chunked_packer = cudf::chunked_pack::create(tv, user_buffer_size, mr);
+ *
+ * std::size_t host_offset = 0;
+ * auto host_buffer = ...; // obtain a host buffer you would like to copy to
+ *
+ * while (chunked_packer->has_next()) {
+ *   // get a user buffer of size `user_buffer_size`
+ *   cudf::device_span<uint8_t> user_buffer = ...;
+ *   std::size_t bytes_copied = chunked_packer->next(user_buffer);
+ *
+ *   // buffer will hold the contents of at most `user_buffer_size` bytes
+ *   // of the contiguously packed input `table_view`. You are now free to copy
+ *   // this memory somewhere else, for example, to host.
+ *   cudaMemcpyAsync(
+ *     host_buffer.data() + host_offset,
+ *     user_buffer.data(),
+ *     bytes_copied,
+ *     cudaMemcpyDefault,
+ *     stream);
+ *
+ *   host_offset += bytes_copied;
+ * }
+ * @endcode
+ */
+class chunked_pack {
+ public:
+  /**
+   * @brief Construct a `chunked_pack` class.
+   *
+   * @param input source `table_view` to pack
+   * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
+   *                         at least 1MB
+   * @param temp_mr An optional memory resource to be used for temporary and scratch allocations
+   * only
+   */
+  explicit chunked_pack(
+    cudf::table_view const& input,
+    std::size_t user_buffer_size,
+    rmm::mr::device_memory_resource* temp_mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Destructor that will be implemented as default. Declared with definition here because
+   * contiguous_split_state is incomplete at this stage.
+   */
+  ~chunked_pack();
+
+  /**
+   * @brief Obtain the total size of the contiguously packed `table_view`.
+   *
+   * @return total size (in bytes) of all the chunks
+   */
+  [[nodiscard]] std::size_t get_total_contiguous_size() const;
+
+  /**
+   * @brief Function to check if there are chunks left to be copied.
+   *
+   * @return true if there are chunks left to be copied, and false otherwise
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @brief Packs the next chunk into `user_buffer`. This should be called as long as
+   * `has_next` returns true. If `next` is called when `has_next` is false, an exception
+   * is thrown.
+   *
+   * @throws cudf::logic_error If the size of `user_buffer` is different than `user_buffer_size`
+   * @throws cudf::logic_error If called after all chunks have been copied
+   *
+   * @param user_buffer device span target for the chunk. The size of this span must equal
+   *                    the `user_buffer_size` parameter passed at construction
+   * @return The number of bytes that were written to `user_buffer` (at most
+   *          `user_buffer_size`)
+   */
+  [[nodiscard]] std::size_t next(cudf::device_span<uint8_t> const& user_buffer);
+
+  /**
+   * @brief Build the opaque metadata for all added columns.
+   *
+   * @return A vector containing the serialized column metadata
+   */
+  [[nodiscard]] std::unique_ptr<std::vector<uint8_t>> build_metadata() const;
+
+  /**
+   * @brief Creates a `chunked_pack` instance to perform a "pack" of the `table_view`
+   * "input", where a buffer of `user_buffer_size` is filled with chunks of the
+   * overall operation. This operation can be used in cases where GPU memory is constrained.
+   *
+   * The memory resource (`temp_mr`) could be a special memory resource to be used in
+   * situations when GPU memory is low and we want scratch and temporary allocations to
+   * happen from a small reserved pool of memory. Note that it defaults to the regular cuDF
+   * per-device resource.
+   *
+   * @throws cudf::logic_error When user_buffer_size is less than 1MB
+   *
+   * @param input source `table_view` to pack
+   * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
+   *                         at least 1MB
+   * @param temp_mr RMM memory resource to be used for temporary and scratch allocations only
+   * @return a unique_ptr of chunked_pack
+   */
+  [[nodiscard]] static std::unique_ptr<chunked_pack> create(
+    cudf::table_view const& input,
+    std::size_t user_buffer_size,
+    rmm::mr::device_memory_resource* temp_mr = rmm::mr::get_current_device_resource());
+
+ private:
+  // internal state of contiguous split
+  std::unique_ptr<detail::contiguous_split_state> state;
+};
+
 /**
  * @brief Deep-copy a `table_view` into a serialized contiguous memory format.
  *

@@ -345,6 +345,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
+  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -396,7 +397,6 @@ add_library(
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/trie.cu
-  src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
   src/jit/util.cpp

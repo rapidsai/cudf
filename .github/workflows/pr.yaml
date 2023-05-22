@@ -26,34 +26,34 @@ jobs:
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.06
   checks:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@branch-23.06
     with:
       enable_check_generated_files: false
   conda-cpp-build:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.06
     with:
       build_type: pull-request
   conda-cpp-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.06
     with:
       build_type: pull-request
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@branch-23.06
     with:
       build_type: pull-request
   conda-python-cudf-tests:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.06
     with:
       build_type: pull-request
       test_script: "ci/test_python_cudf.sh"
@@ -61,14 +61,14 @@ jobs:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.06
     with:
       build_type: pull-request
       test_script: "ci/test_python_other.sh"
   conda-java-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -78,7 +78,7 @@ jobs:
   conda-notebook-tests:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -88,7 +88,7 @@ jobs:
   docs-build:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -98,7 +98,7 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.06
     with:
       build_type: pull-request
       package-name: cudf
@@ -107,30 +107,28 @@ jobs:
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.06
     with:
       build_type: pull-request
       package-name: cudf
-      # Install cupy-cuda11x for arm from a special index url
-      test-before-arm64: "python -m pip install 'cupy-cuda11x<12.0.0' -f https://pip.cupy.dev/aarch64"
       test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
       test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.06
     with:
       build_type: pull-request
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && python -m pip install --no-deps ./local-cudf/cudf*.whl"
+      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_${{ '${PIP_CU_VERSION}' }} rapids-download-wheels-from-s3 ./local-cudf && python -m pip install --no-deps ./local-cudf/cudf*.whl"
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@py-39
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.06
     with:
       build_type: pull-request
       package-name: dask_cudf
       # Install the cudf we just built, and also test against latest dask/distributed/dask-cuda.
-      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl && pip install git+https://github.com/dask/dask.git@2023.3.2 git+https://github.com/dask/distributed.git@2023.3.2.1 git+https://github.com/rapidsai/dask-cuda.git@branch-23.06"
+      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_${{ '${PIP_CU_VERSION}' }} rapids-download-wheels-from-s3 ./local-cudf-dep && python -m pip install --no-deps ./local-cudf-dep/cudf*.whl && python -m pip install git+https://github.com/dask/dask.git@2023.3.2 git+https://github.com/dask/distributed.git@2023.3.2.1 git+https://github.com/rapidsai/dask-cuda.git@branch-23.06"
       test-unittest: "python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests"
