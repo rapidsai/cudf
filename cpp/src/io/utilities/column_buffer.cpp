@@ -172,7 +172,7 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
   switch (buffer.type.id()) {
-    case type_id::STRING: {
+    case type_id::STRING:
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
@@ -211,7 +211,6 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
           null_count,
           std::move(*col_content.null_mask));
       }
-    } break;
 
     case type_id::LIST: {
       // make offsets column
