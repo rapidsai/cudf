@@ -112,6 +112,14 @@ struct column_buffer_with_pointers : public column_buffer_base {
   void* data() { return _strings ? _strings->data() : _data.data(); }
   size_t data_size() const { return _strings ? _strings->size() : _data.size(); }
 
+  void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("method not implemented for type");
+  }
+
+  void* string_data() { CUDF_FAIL("method not implemented for type"); }
+  size_t string_size() const { CUDF_FAIL("method not implemented for type"); }
+
   std::unique_ptr<column> make_column(rmm::cuda_stream_view stream);
 
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
@@ -131,7 +139,6 @@ struct column_buffer_with_strings : public column_buffer_base {
   void* data() { return _data.data(); }
   size_t data_size() const { return _data.size(); }
 
-  // additional methods for string data
   void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
 
   void* string_data() { return _string_data.data(); }
