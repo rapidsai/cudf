@@ -149,24 +149,4 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ContiguousTable_createMetadataDirectBuffer(
-    JNIEnv *env, jclass, jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", nullptr);
-  try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
-    return env->NewDirectByteBuffer(const_cast<uint8_t *>(metadata->data()), metadata->size());
-  }
-  CATCH_STD(env, nullptr);
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_ContiguousTable_closeMetadata(JNIEnv *env, jclass,
-                                                                         jlong j_metadata_ptr) {
-  JNI_NULL_CHECK(env, j_metadata_ptr, "metadata is null", );
-  try {
-    auto metadata = reinterpret_cast<std::vector<uint8_t> *>(j_metadata_ptr);
-    delete metadata;
-  }
-  CATCH_STD(env, );
-}
-
 } // extern "C"
