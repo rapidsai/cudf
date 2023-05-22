@@ -543,10 +543,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows);
 
   // if we're skipping this page anyway, no need to count it
-  if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) {
-    restore_decode_cache(s);  // TODO is this necessary?
-    return;
-  }
+  if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) { return; }
 
   // find start/end value indices
   auto const [start_value, end_value] =
@@ -597,8 +594,6 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
     // TODO check for overflow
     pp->str_bytes = str_bytes;
   }
-  // TODO: is this necessary?
-  restore_decode_cache(s);
 }
 
 /**
@@ -629,6 +624,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   page_state_buffers_s* const sb = &state_buffers;
   int const page_idx             = blockIdx.x;
   int const t                    = threadIdx.x;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   // set during string copy by lane 0
   int first_non_null = -1;
@@ -653,7 +649,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
-    restore_decode_cache(s);
     return;
   }
 
@@ -828,7 +823,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     }
     __syncthreads();
   }
-  restore_decode_cache(s);
 }
 
 /**
@@ -859,6 +853,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   page_state_buffers_s* const sb = &state_buffers;
   int const page_idx             = blockIdx.x;
   int const t                    = threadIdx.x;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   // set during string copy by lane 0
   int first_non_null = -1;
@@ -883,7 +878,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
-    restore_decode_cache(s);
     return;
   }
 
@@ -1049,7 +1043,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     }
     __syncthreads();
   }
-  restore_decode_cache(s);
 }
 
 }  // anonymous namespace

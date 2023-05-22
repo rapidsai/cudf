@@ -831,6 +831,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
@@ -848,7 +849,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                is_page_contained(s, min_row, num_rows)))) {
-    restore_decode_cache(s);
     return;
   }
 
@@ -987,7 +987,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
     }
     __syncthreads();
   }
-  restore_decode_cache(s);
 }
 
 }  // anonymous namespace
