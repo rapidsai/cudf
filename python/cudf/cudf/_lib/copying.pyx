@@ -79,29 +79,13 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-    cdef pylibcudf.Column plc
-    cdef pylibcudf.libcudf_classes.Column c
-    cdef column_view input_column_view
     cdef unique_ptr[column] c_result
 
-    if cudf.get_option("_use_pylibcudf") == 2:
-        plc = input_column.to_pylibcudf()
-        c = pylibcudf.libcudf_classes.Column_from_ColumnView(
-            plc.get_underlying()
-        )
-        return Column.from_Column(c)
-    elif cudf.get_option("_use_pylibcudf") == 1:
-        plc_ = input_column.to_pylibcudf()
-        c_ = pylibcudf.libcudf_classes.Column_from_ColumnView(
-            plc_.get_underlying()
-        )
-        return Column.from_Column(c_)
-    else:
-        input_column_view = input_column.view()
-        with nogil:
-            c_result = move(make_unique[column](input_column_view))
+    cdef column_view input_column_view = input_column.view()
+    with nogil:
+        c_result = move(make_unique[column](input_column_view))
 
-        return Column.from_unique_ptr(move(c_result))
+    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
@@ -192,39 +176,13 @@ def gather(
     Column gather_map,
     bool nullify=False
 ):
-    cdef unique_ptr[table] c_result
-
-    cdef table_view source_table_view
-    cdef column_view gather_map_view
-    cdef cpp_copying.out_of_bounds_policy policy
-
-    cdef pylibcudf.Table tbl
-
-    if cudf.get_option("_use_pylibcudf") > 0:
-        tbl = pylibcudf.copying.gather(
-            pylibcudf.Table([col.to_pylibcudf() for col in columns]),
-            gather_map.to_pylibcudf(),
-            pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
-            else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
-        )
-        return columns_from_pylibcudf_table(tbl)
-    else:
-        source_table_view = table_view_from_columns(columns)
-        gather_map_view = gather_map.view()
-        policy = (
-            cpp_copying.out_of_bounds_policy.NULLIFY if nullify
-            else cpp_copying.out_of_bounds_policy.DONT_CHECK
-        )
-
-        with nogil:
-            c_result = move(
-                cpp_copying.gather(
-                    source_table_view,
-                    gather_map_view,
-                    policy
-                )
-            )
-        return columns_from_unique_ptr(move(c_result))
+    cdef pylibcudf.Table tbl = pylibcudf.copying.gather(
+        pylibcudf.Table([col.to_pylibcudf() for col in columns]),
+        gather_map.to_pylibcudf(),
+        pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
+        else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
+    )
+    return columns_from_pylibcudf_table(tbl)
 
 
 cdef scatter_scalar(list source_device_slrs,
