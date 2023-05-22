@@ -21,7 +21,7 @@ cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
 ) nogil
 
 
-cpdef libcudf_classes.Table gather(
+cpdef Table gather(
     Table source_table,
     Column gather_map,
     OutOfBoundsPolicy bounds_policy

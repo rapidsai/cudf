@@ -38,6 +38,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
@@ -197,7 +198,7 @@ def gather(
     cdef column_view gather_map_view
     cdef cpp_copying.out_of_bounds_policy policy
 
-    cdef pylibcudf.libcudf_classes.Table tbl
+    cdef pylibcudf.Table tbl
 
     if cudf.get_option("_use_pylibcudf") > 0:
         tbl = pylibcudf.copying.gather(
@@ -206,7 +207,7 @@ def gather(
             pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
             else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
         )
-        return columns_from_unique_ptr(move(tbl.c_obj))
+        return columns_from_pylibcudf_table(tbl)
     else:
         source_table_view = table_view_from_columns(columns)
         gather_map_view = gather_map.view()

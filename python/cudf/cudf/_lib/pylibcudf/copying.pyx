@@ -28,7 +28,7 @@ cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
     )
 
 
-cpdef libcudf_classes.Table gather(
+cpdef Table gather(
     Table source_table,
     Column gather_map,
     OutOfBoundsPolicy bounds_policy
@@ -44,4 +44,4 @@ cpdef libcudf_classes.Table gather(
                 py_policy_to_c_policy(bounds_policy)
             )
         )
-    return libcudf_classes.Table.from_table(move(c_result))
+    return Table.from_libcudf(move(c_result))
