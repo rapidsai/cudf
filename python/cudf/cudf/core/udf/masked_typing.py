@@ -425,6 +425,9 @@ class MaskedScalarAbsoluteValue(AbstractTemplate):
 
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType):
+            if isinstance(args[0].value_type, (StringView, UDFString)):
+                # reject string types
+                return
             if isinstance(args[0], types.Boolean):
                 return nb_signature(MaskedType(types.int64), args[0])
             else:
