@@ -1067,7 +1067,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
-        group_names = grouped_keys.unique()
+        group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
