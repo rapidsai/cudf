@@ -269,29 +269,8 @@ cdef columns_from_pylibcudf_table(pylibcudf.Table table):
     """
     # TODO: This is using attributes I probably want to be internal, need to
     # rethink the interface of the Table/Column classes for access.
-    columns = []
     cdef pylibcudf.Column plc
-    # cdef libcudf_types.type_id tid
-    for plc in table.columns:
-        if plc.data.base is None or plc.mask.base is None:
-            raise ValueError(
-                "Cannot construct from a gpumemoryview without an owner!"
-            )
-
-        # TODO: Find a better approach to this.
-        dtype = dtype_from_column_view(dereference(plc.get_underlying().c_obj))
-
-        columns.append(Column(
-            Buffer(plc.data.base),
-            plc.size,
-            dtype,
-            Buffer(plc.mask.base),
-            plc.offset,
-            plc.null_count,
-            columns_from_pylibcudf_table(plc.children)
-        ))
-
-    return columns
+    return [Column.from_pylibcudf_column(plc) for plc in table.columns]
 
 
 cdef data_from_unique_ptr(

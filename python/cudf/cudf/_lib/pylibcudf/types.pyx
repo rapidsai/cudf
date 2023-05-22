@@ -26,6 +26,9 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_data_type(data_type dt):
-        cdef DataType ret = DataType.__new__(DataType)
+        # TODO: Spoofing empty for now, maybe means the constructor needs to be
+        # changed to init instead of cinit to allow optional? But that removes
+        # typing so need to think.
+        cdef DataType ret = DataType.__new__(DataType, TypeId.EMPTY)
         ret.c_obj = dt
         return ret

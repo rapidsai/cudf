@@ -23,6 +23,7 @@ cdef class Column:
         cdef object _data
         cdef object _mask
         cdef object _null_count
+        cdef object _distinct_count
 
     cdef column_view _view(self, size_type null_count) except *
     cdef column_view view(self) except *

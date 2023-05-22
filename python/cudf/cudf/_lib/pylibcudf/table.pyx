@@ -16,7 +16,7 @@ from .column cimport Column
 cdef class Table:
     """A set of columns of the same size."""
     def __init__(self, object columns):
-        self.column = columns
+        self.columns = columns
 
         self._underlying = None
 
