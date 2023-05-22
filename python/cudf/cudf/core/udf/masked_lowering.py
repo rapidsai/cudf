@@ -342,9 +342,6 @@ def masked_scalar_abs_impl(context, builder, sig, args):
 
     result.valid = input.valid
     with builder.if_then(input.valid):
-        # Let numba handle generating the extra IR needed to perform
-        # operations on mixed types, by compiling the final core op between
-        # the two primitive values as a separate function and calling it
         result.value = context.compile_internal(
             builder,
             lambda x: abs(x),
