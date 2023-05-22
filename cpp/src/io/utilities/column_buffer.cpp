@@ -133,24 +133,24 @@ namespace {
  * @param buff The old output buffer
  * @param new_buff The new output buffer
  */
-template <class column_buffer_type>
-void copy_buffer_data(column_buffer<column_buffer_type> const& buff,
-                      column_buffer<column_buffer_type>& new_buff)
+template <class string_policy>
+void copy_buffer_data(column_buffer<string_policy> const& buff,
+                      column_buffer<string_policy>& new_buff)
 {
   new_buff.name      = buff.name;
   new_buff.user_data = buff.user_data;
   for (auto const& child : buff.children) {
-    auto& new_child = new_buff.children.emplace_back(
-      column_buffer<column_buffer_type>(child.type, child.is_nullable));
+    auto& new_child =
+      new_buff.children.emplace_back(column_buffer<string_policy>(child.type, child.is_nullable));
     copy_buffer_data(child, new_child);
   }
 }
 
 }  // namespace
 
-template <class column_buffer_type>
-column_buffer<column_buffer_type> column_buffer<column_buffer_type>::empty_like(
-  column_buffer<column_buffer_type> const& input)
+template <class string_policy>
+column_buffer<string_policy> column_buffer<string_policy>::empty_like(
+  column_buffer<string_policy> const& input)
 {
   auto new_buff = column_buffer(input.type, input.is_nullable);
   copy_buffer_data(input, new_buff);
@@ -163,8 +163,8 @@ template class column_buffer<column_buffer_with_pointers>;
 
 }  // namespace utilities
 
-template <class column_buffer_type>
-std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>& buffer,
+template <class string_policy>
+std::unique_ptr<column> make_column(utilities::column_buffer<string_policy>& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
@@ -232,8 +232,7 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child =
-        make_column<column_buffer_type>(buffer.children[0], child_info, child_schema, stream);
+      auto child = make_column<string_policy>(buffer.children[0], child_info, child_schema, stream);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -263,7 +262,7 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
                                     : std::nullopt;
 
         output_children.emplace_back(
-          make_column<column_buffer_type>(buffer.children[i], child_info, child_schema, stream));
+          make_column<string_policy>(buffer.children[i], child_info, child_schema, stream));
       }
 
       return make_structs_column(buffer.size,
@@ -287,8 +286,8 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
 /**
  * @copydoc cudf::io::detail::empty_like
  */
-template <class column_buffer_type>
-std::unique_ptr<column> empty_like(utilities::column_buffer<column_buffer_type>& buffer,
+template <class string_policy>
+std::unique_ptr<column> empty_like(utilities::column_buffer<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
@@ -309,8 +308,8 @@ std::unique_ptr<column> empty_like(utilities::column_buffer<column_buffer_type>&
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = cudf::io::detail::empty_like<column_buffer_type>(
-        buffer.children[0], child_info, stream, mr);
+      auto child =
+        cudf::io::detail::empty_like<string_policy>(buffer.children[0], child_info, stream, mr);
 
       // make the final list column
       return make_lists_column(
@@ -329,7 +328,7 @@ std::unique_ptr<column> empty_like(utilities::column_buffer<column_buffer_type>&
                          schema_info->children.push_back(column_name_info{""});
                          child_info = &schema_info->children.back();
                        }
-                       return cudf::io::detail::empty_like<column_buffer_type>(
+                       return cudf::io::detail::empty_like<string_policy>(
                          col, child_info, stream, mr);
                      });
 

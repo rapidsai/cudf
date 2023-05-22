@@ -153,12 +153,12 @@ struct column_buffer_with_strings : public column_buffer_base {
  * @brief Class for holding device memory buffers to column data that eventually
  * will be used to create a column.
  */
-template <class column_buffer_type>
-struct column_buffer : column_buffer_type {
+template <class string_policy>
+struct column_buffer : string_policy {
   column_buffer() = default;
 
   // construct without a known size. call create() later to actually allocate memory
-  column_buffer(data_type _type, bool _is_nullable) : column_buffer_type(_type, _is_nullable) {}
+  column_buffer(data_type _type, bool _is_nullable) : string_policy(_type, _is_nullable) {}
 
   // construct with a known size. allocates memory
   column_buffer(data_type _type,
@@ -166,26 +166,24 @@ struct column_buffer : column_buffer_type {
                 bool _is_nullable,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
-    : column_buffer_type(_type, _is_nullable)
+    : string_policy(_type, _is_nullable)
   {
-    column_buffer_type::create(_size, stream, mr);
+    string_policy::create(_size, stream, mr);
   }
 
   // move constructor
-  column_buffer(column_buffer<column_buffer_type>&& col)                                = default;
-  column_buffer<column_buffer_type>& operator=(column_buffer<column_buffer_type>&& col) = default;
+  column_buffer(column_buffer<string_policy>&& col)                           = default;
+  column_buffer<string_policy>& operator=(column_buffer<string_policy>&& col) = default;
 
   // copy constructor
-  column_buffer(column_buffer<column_buffer_type> const& col) = delete;
-  column_buffer<column_buffer_type>& operator=(column_buffer<column_buffer_type> const& col) =
-    delete;
+  column_buffer(column_buffer<string_policy> const& col)                           = delete;
+  column_buffer<string_policy>& operator=(column_buffer<string_policy> const& col) = delete;
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
-  static column_buffer<column_buffer_type> empty_like(
-    column_buffer<column_buffer_type> const& input);
+  static column_buffer<string_policy> empty_like(column_buffer<string_policy> const& input);
 
-  std::vector<column_buffer<column_buffer_type>> children;
+  std::vector<column_buffer<string_policy>> children;
 };
 
 }  // namespace utilities
@@ -203,8 +201,8 @@ using column_buffer = utilities::column_buffer<utilities::column_buffer_with_poi
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-template <class column_buffer_type>
-std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>& buffer,
+template <class string_policy>
+std::unique_ptr<column> make_column(utilities::column_buffer<string_policy>& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream);
@@ -224,8 +222,8 @@ std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-template <class column_buffer_type>
-std::unique_ptr<column> empty_like(utilities::column_buffer<column_buffer_type>& buffer,
+template <class string_policy>
+std::unique_ptr<column> empty_like(utilities::column_buffer<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
