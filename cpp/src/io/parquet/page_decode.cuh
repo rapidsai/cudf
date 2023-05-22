@@ -127,17 +127,24 @@ constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc c
  * @param s The page to be checked
  * @param start_row The starting row index
  * @param num_rows The number of rows
+ * @param has_repetition True if the schema has nesting
  *
  * @return True if the page spans the beginning or the end of the row bounds
  */
-inline __device__ bool is_bounds_page(page_state_s* const s, size_t start_row, size_t num_rows)
+inline __device__ bool is_bounds_page(page_state_s* const s,
+                                      size_t start_row,
+                                      size_t num_rows,
+                                      bool has_repetition)
 {
   size_t const page_begin = s->col.start_row + s->page.chunk_row;
   size_t const page_end   = page_begin + s->page.num_rows;
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
-  return ((page_begin < begin && page_end > begin) || (page_begin < end && page_end > end));
+  // for non-nested schemas, rows cannot span pages, so use a more restrictive test
+  return has_repetition
+           ? ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end))
+           : ((page_begin < begin && page_end > begin) || (page_begin < end && page_end > end));
 }
 
 /**

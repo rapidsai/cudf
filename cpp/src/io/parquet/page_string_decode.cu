@@ -179,7 +179,8 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     auto const page_rows      = page_start_row + begin_row + max_page_rows <= max_row
                                   ? max_page_rows
                                   : max_row - (page_start_row + begin_row);
-    auto const end_row        = begin_row + page_rows;
+    auto end_row              = begin_row + page_rows;
+    int row_fudge             = -1;
 
     // short circuit for no nulls
     if (max_def == 0 && !has_repetition) { return {begin_row, end_row}; }
@@ -195,6 +196,17 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       if (has_repetition) {
         decoders[level_type::REPETITION].decode_next(t);
         __syncthreads();
+
+        // special case where page does not begin at a row boundary
+        if (processed == 0 && rep_decode[0] != 0) {
+          if (t == 0) {
+            skipped_values      = 0;
+            skipped_leaf_values = 0;
+          }
+          skipped_values_set = true;
+          end_row++;  // need to finish off the previous row
+          row_fudge = 0;
+        }
       }
 
       // the # of rep/def levels will always be the same size
@@ -223,7 +235,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         // if we have not set skipped values yet, see if we found the first in-bounds row
         if (!skipped_values_set && row_count + block_row_count > begin_row) {
           // if this thread is in row bounds
-          int const row_index = (thread_row_count + row_count) - 1;
+          int const row_index = thread_row_count + row_count - 1;
           int const in_row_bounds =
             idx_t < processed && (row_index >= begin_row) && (row_index < end_row);
 
@@ -247,8 +259,9 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
         // test if row_count will exceed end_row in this batch
         if (!end_value_set && row_count + block_row_count >= end_row) {
-          // if this thread exceeds row bounds
-          int const row_index          = (thread_row_count + row_count) - 1;
+          // if this thread exceeds row bounds. row_fudge change depending on whether we've faked
+          // the end row to account for starting a page in the middle of a row.
+          int const row_index          = thread_row_count + row_count + row_fudge;
           int const exceeds_row_bounds = row_index >= end_row;
 
           int local_count, global_count;
@@ -264,6 +277,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
               end_val_idx = leaf_count + (is_new_leaf ? thread_leaf_count - 1 : thread_leaf_count);
             }
             end_value_set = true;
+            break;
           }
         }
 
@@ -273,6 +287,7 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
         start_val += preprocess_block_size;
       }
       __syncthreads();
+      if (end_value_set) { break; }
     }
 
     start_value = skipped_values_set ? skipped_leaf_values : 0;
@@ -540,7 +555,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   }
   __syncthreads();
 
-  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows);
+  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
   // if we're skipping this page anyway, no need to count it
   if (!is_bounds_pg && !is_page_contained(s, min_row, num_rows)) { return; }
@@ -647,8 +662,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   //      row start           row end
   // P1 will contain 0 rows
   //
-  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
-                                               is_page_contained(s, min_row, num_rows)))) {
+  if (s->num_rows == 0 &&
+      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
+                           is_page_contained(s, min_row, num_rows)))) {
     return;
   }
 
@@ -876,8 +892,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   //      row start           row end
   // P1 will contain 0 rows
   //
-  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
-                                               is_page_contained(s, min_row, num_rows)))) {
+  if (s->num_rows == 0 &&
+      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
+                           is_page_contained(s, min_row, num_rows)))) {
     return;
   }
 

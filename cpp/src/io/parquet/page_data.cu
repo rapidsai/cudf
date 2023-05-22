@@ -722,7 +722,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
 
   // in the trim pass, for anything with lists, we only need to fully process bounding pages
   // (those at the beginning or the end of the row bounds)
-  if (!is_base_pass && !is_bounds_page(s, min_row, num_rows)) {
+  if (!is_base_pass && !is_bounds_page(s, min_row, num_rows, has_repetition)) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
       auto const thread_depth = depth + t;
@@ -847,8 +847,9 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   //      row start           row end
   // P1 will contain 0 rows
   //
-  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
-                                               is_page_contained(s, min_row, num_rows)))) {
+  if (s->num_rows == 0 &&
+      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
+                           is_page_contained(s, min_row, num_rows)))) {
     return;
   }
 
