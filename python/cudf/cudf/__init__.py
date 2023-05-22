@@ -1,11 +1,16 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+# this must be called before numba.cuda is imported, because
+# it sets the numba config variable responsible for enabling
+# MVC. Setting it after importing cuda has no effect.
+from cudf.utils._numba import _setup_numba
 from cudf.utils.gpu_utils import validate_setup
 
+_setup_numba()
 validate_setup()
 
 import cupy
-from numba import config as numba_config
+from numba import config as numba_config, cuda
 
 import rmm
 from rmm.allocators.cupy import rmm_cupy_allocator
@@ -80,16 +85,8 @@ from cudf.io import (
     read_text,
 )
 from cudf.options import describe_option, get_option, set_option
-from cudf.utils._numba import _setup_numba
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
-
-# this must be called before numba.cuda is imported, because
-# it sets the numba config variable responsible for enabling
-# MVC. Setting it after importing cuda has no effect.
-_setup_numba()
-
-from numba import cuda
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
