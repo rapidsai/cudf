@@ -64,7 +64,6 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
-
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -157,6 +156,7 @@ cdef class Column:
             )
 
         if value is not None:
+            # bitmask size must be relative to offset = 0 data.
             required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
@@ -609,7 +609,7 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(size+offset)
+                            size=bitmask_allocation_size_bytes(base_size)
                         )
                     )
             else:

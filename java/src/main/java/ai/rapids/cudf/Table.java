@@ -182,6 +182,8 @@ public final class Table implements AutoCloseable {
 
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long makeChunkedPack(long inputTable, long bounceBufferSize, long tempMemoryResource);
+
   private static native long[] partition(long inputTable, long partitionView,
       int numberOfPartitions, int[] outputOffsets);
 
@@ -894,20 +896,19 @@ public final class Table implements AutoCloseable {
 
   private static native void endWriteCSVToBuffer(long writerHandle);
 
-  private static class CSVTableWriter implements TableWriter {
-    private long writerHandle;
+  private static class CSVTableWriter extends TableWriter {
     private HostBufferConsumer consumer;
 
     private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
-      this.writerHandle = startWriteCSVToBuffer(options.getColumnNames(),
-                                                options.getIncludeHeader(),
-                                                options.getRowDelimiter(),
-                                                options.getFieldDelimiter(),
-                                                options.getNullValue(),
-                                                options.getTrueValue(),
-                                                options.getFalseValue(),
-                                                options.getQuoteStyle().nativeId,
-                                                consumer);
+      super(startWriteCSVToBuffer(options.getColumnNames(),
+          options.getIncludeHeader(),
+          options.getRowDelimiter(),
+          options.getFieldDelimiter(),
+          options.getNullValue(),
+          options.getTrueValue(),
+          options.getFalseValue(),
+          options.getQuoteStyle().nativeId,
+          consumer));
       this.consumer = consumer;
     }
 
@@ -1287,82 +1288,61 @@ public final class Table implements AutoCloseable {
         opts.getDecimal128Columns()));
   }
 
-  private static class ParquetTableWriter implements TableWriter {
-    private long handle;
+  private static class ParquetTableWriter extends TableWriter {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      boolean[] isMapValues = options.getFlatIsMap();
-      boolean[] isBinaryValues = options.getFlatIsBinary();
-      int[] precisions = options.getFlatPrecision();
-      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
-      int[] parquetFieldIds = options.getFlatParquetFieldId();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
-      this.consumer = null;
-      this.handle = writeParquetFileBegin(columnNames,
+      super(writeParquetFileBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
-          flatNumChildren,
-          columnNullabilities,
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
-          isMapValues,
-          isBinaryValues,
-          hasParquetFieldIds,
-          parquetFieldIds,
-          outputFile.getAbsolutePath());
+          options.getFlatIsTimeTypeInt96(),
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
+          options.getFlatIsBinary(),
+          options.getFlatHasParquetFieldId(),
+          options.getFlatParquetFieldId(),
+          outputFile.getAbsolutePath()));
+      this.consumer = null;
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      boolean[] isMapValues = options.getFlatIsMap();
-      boolean[] isBinaryValues = options.getFlatIsBinary();
-      int[] precisions = options.getFlatPrecision();
-      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
-      int[] parquetFieldIds = options.getFlatParquetFieldId();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
-      this.consumer = consumer;
-      this.handle = writeParquetBufferBegin(columnNames,
+      super(writeParquetBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
-          flatNumChildren,
-          columnNullabilities,
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
-          isMapValues,
-          isBinaryValues,
-          hasParquetFieldIds,
-          parquetFieldIds,
-          consumer);
+          options.getFlatIsTimeTypeInt96(),
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
+          options.getFlatIsBinary(),
+          options.getFlatHasParquetFieldId(),
+          options.getFlatParquetFieldId(),
+          consumer));
+      this.consumer = consumer;
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeParquetChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+      writeParquetChunk(writerHandle, table.nativeHandle, table.getDeviceMemorySize());
     }
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeParquetEnd(handle);
+      if (writerHandle != 0) {
+        writeParquetEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -1425,19 +1405,18 @@ public final class Table implements AutoCloseable {
         for (ColumnView cv : columnViews) {
           total += cv.getDeviceMemorySize();
         }
-        writeParquetChunk(writer.handle, nativeHandle, total);
+        writeParquetChunk(writer.writerHandle, nativeHandle, total);
       }
     } finally {
       deleteCudfTable(nativeHandle);
     }
   }
 
-  private static class ORCTableWriter implements TableWriter {
-    private long handle;
+  private static class ORCTableWriter extends TableWriter {
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+      super(writeORCFileBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
           options.getFlatIsNullable(),
@@ -1446,12 +1425,12 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          outputFile.getAbsolutePath());
+          outputFile.getAbsolutePath()));
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+      super(writeORCBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
           options.getFlatIsNullable(),
@@ -1460,24 +1439,24 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          consumer);
+          consumer));
       this.consumer = consumer;
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeORCChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+      writeORCChunk(writerHandle, table.nativeHandle, table.getDeviceMemorySize());
     }
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeORCEnd(handle);
+      if (writerHandle != 0) {
+        writeORCEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -1506,41 +1485,34 @@ public final class Table implements AutoCloseable {
     return new ORCTableWriter(options, consumer);
   }
 
-  private static class ArrowIPCTableWriter implements TableWriter {
+  private static class ArrowIPCTableWriter extends TableWriter {
     private final ArrowIPCWriterOptions.DoneOnGpu callback;
-    private long handle;
     private HostBufferConsumer consumer;
     private long maxChunkSize;
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
-                                File outputFile) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, File outputFile) {
+      super(writeArrowIPCFileBegin(options.getColumnNames(), outputFile.getAbsolutePath()));
       this.callback = options.getCallback();
       this.consumer = null;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCFileBegin(
-              options.getColumnNames(),
-              outputFile.getAbsolutePath());
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
-                                HostBufferConsumer consumer) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
+      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer));
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCBufferBegin(
-              options.getColumnNames(),
-              consumer);
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      long arrowHandle = convertCudfToArrowTable(handle, table.nativeHandle);
+      long arrowHandle = convertCudfToArrowTable(writerHandle, table.nativeHandle);
       try {
         callback.doneWithTheGpu(table);
-        writeArrowIPCArrowChunk(handle, arrowHandle, maxChunkSize);
+        writeArrowIPCArrowChunk(writerHandle, arrowHandle, maxChunkSize);
       } finally {
         closeArrowTable(arrowHandle);
       }
@@ -1548,10 +1520,10 @@ public final class Table implements AutoCloseable {
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeArrowIPCEnd(handle);
+      if (writerHandle != 0) {
+        writeArrowIPCEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -2164,6 +2136,44 @@ public final class Table implements AutoCloseable {
    */
   public ContiguousTable[] contiguousSplit(int... indices) {
     return contiguousSplit(nativeHandle, indices);
+  }
+
+  /**
+   * Create an instance of `ChunkedPack` which can be used to pack this table
+   * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
+   *
+   * This version of `makeChunkedPack` takes a `RmmDviceMemoryResource`, which can be used
+   * to pre-allocate all scratch and temporary space required for the state of `cudf::chunked_pack`.
+   *
+   * The caller is responsible for calling close on the returned `ChunkedPack` object.
+   *
+   * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
+   * @param tempMemoryResource A memory resource that is used to satisfy allocations for
+   *                           temporary and thrust scratch space.
+   * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
+   */
+  public ChunkedPack makeChunkedPack(
+      long bounceBufferSize, RmmDeviceMemoryResource tempMemoryResource) {
+    long tempMemoryResourceHandle = tempMemoryResource.getHandle();
+    return new ChunkedPack(
+      makeChunkedPack(nativeHandle, bounceBufferSize, tempMemoryResourceHandle));
+  }
+
+  /**
+   * Create an instance of `ChunkedPack` which can be used to pack this table
+   * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
+   *
+   * This version of `makeChunkedPack` makes use of the default per-device memory resource,
+   * for scratch and temporary space required for the state of `cudf::chunked_pack`.
+   *
+   * The caller is responsible for calling close on the returned `ChunkedPack` object.
+   *
+   * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
+   * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
+   */
+  public ChunkedPack makeChunkedPack(long bounceBufferSize) {
+    return new ChunkedPack(
+      makeChunkedPack(nativeHandle, bounceBufferSize, 0));
   }
 
   /**
