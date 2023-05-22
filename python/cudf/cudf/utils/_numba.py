@@ -120,6 +120,7 @@ def _setup_numba():
                     f"install CUDA toolkit version {driver_version} to "
                     "continue using cuDF."
                 )
+        return
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
