@@ -463,7 +463,9 @@ cdef class Column:
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            mask = pylibcudf.gpumemoryview(self.base_mask.get_ptr(mode="write"))
+            mask = pylibcudf.gpumemoryview(
+                self.base_mask.get_ptr(mode="write")
+            )
 
         cdef Column child_column
         children = []
@@ -562,8 +564,8 @@ cdef class Column:
     def from_pylibcudf_column(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
-        # TODO: This is using attributes I probably want to be internal, need to
-        # rethink the interface of the Table/Column classes for access.
+        # TODO: This is using attributes I probably want to be internal, need
+        # to rethink the interface of the Table/Column classes for access.
         if col.data.base is None or col.mask.base is None:
             raise ValueError(
                 "Cannot construct from a gpumemoryview without an owner!"
@@ -580,66 +582,10 @@ cdef class Column:
             cudf.core.buffer.as_buffer(col.mask.base),
             col.offset,
             col.null_count,
-            tuple([Column.from_pylibcudf_column(child) for child in col.children])
-        )
-
-    @staticmethod
-    def from_Column(
-        pylibcudf.libcudf_classes.Column col, bint data_ptr_exposed=False
-    ):
-        """Create a Column from a column
-
-        Typically, this is called on the result of a libcudf operation.
-        If the data of the libcudf result has been exposed, set
-        `data_ptr_exposed=True` to expose the memory of the returned Column
-        as well.
-        """
-        cdef pylibcudf.libcudf_classes.ColumnView view = col.view()
-        cdef size_type size = view.size()
-        cdef size_type null_count = view.null_count()
-
-        # Note: The EMPTY case below exists because pyarrow supports Null
-        # arrays with a length, and those are represented as empty
-        # TODO: Not sure why the below special cases exist, and this definitely
-        # doesn't seem like the best way to handle it in any case. Will revisit
-        # later.
-        # cdef libcudf_types.type_id tid = view.type().id()
-        # cdef libcudf_types.mask_state mask_state
-        # cdef libcudf_types.data_type c_dtype
-        # if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
-        #     c_dtype = libcudf_types.data_type(
-        #         libcudf_types.type_id.TIMESTAMP_SECONDS
-        #     )
-        #     with nogil:
-        #         c_col = move(libcudf_unary.cast(view, c_dtype))
-        # elif tid == libcudf_types.type_id.EMPTY:
-        #     c_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
-        #     mask_state = libcudf_types.mask_state.ALL_NULL
-        #     with nogil:
-        #         c_col = move(make_numeric_column(c_dtype, size, mask_state))
-
-        cdef pylibcudf.libcudf_classes.ColumnContents contents = col.release()
-
-        data = as_buffer(contents.data, exposed=data_ptr_exposed)
-
-        mask = None
-        if null_count > 0:
-            mask = as_buffer(contents.null_mask, exposed=data_ptr_exposed)
-
-        # Because of a bug in Cython, we cannot set the optional
-        # `data_ptr_exposed` argument within a comprehension.
-        children = []
-        cdef pylibcudf.libcudf_classes.Column child
-        for child in contents.children:
-            children.append(Column.from_Column(child, data_ptr_exposed))
-
-        return cudf.core.column.build_column(
-            data,
-            dtype=dtype_from_column_view(dereference(view.get())),
-            mask=mask,
-            size=size,
-            null_count=null_count,
-            children=tuple(children)
+            tuple([
+                Column.from_pylibcudf_column(child)
+                for child in col.children
+            ])
         )
 
     @staticmethod

@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources column.pyx column_view.pyx table_view.pyx)
+set(cython_sources column_view.pyx table_view.pyx)
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX

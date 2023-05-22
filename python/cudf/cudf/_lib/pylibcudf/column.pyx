@@ -3,7 +3,9 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
+from rmm._lib.device_buffer cimport DeviceBuffer
+
+from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport offset_type, size_type
 
 from . cimport libcudf_classes
@@ -43,39 +45,30 @@ cdef class Column:
             )
         return self._underlying
 
-    # TODO: This function should maybe be rewritten to accept a
-    # libcudf_classes.Column instead?
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
-        # TODO: The move here seems a bit surprising to a Cython user. But it's
-        # good C++ practice to show that we're taking ownership using
-        # `unique_ptr` in the signature, so maybe it's fine.
-        cdef libcudf_classes.Column col = libcudf_classes.Column.from_column(
-            move(libcudf_col)
-        )
+        cdef DataType dtype = DataType.from_data_type(libcudf_col.get().type())
+        cdef size_type size = libcudf_col.get().size()
+        cdef size_type null_count = libcudf_col.get().null_count()
 
-        cdef DataType dtype = col.type()
-        cdef size_type size = col.size()
-        cdef size_type null_count = col.null_count()
-
-        cdef libcudf_classes.ColumnContents contents = col.release()
+        cdef column_contents contents = move(libcudf_col.get().release())
 
         cdef gpumemoryview data = gpumemoryview_from_device_buffer(
-            contents.data
+            DeviceBuffer.c_from_unique_ptr(move(contents.data))
         )
+
         cdef gpumemoryview mask = None
         if null_count > 0:
-            mask = gpumemoryview_from_device_buffer(contents.null_mask)
+            mask = gpumemoryview_from_device_buffer(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+            )
 
         children = []
-        cdef libcudf_classes.Column child
-        for child in contents.children:
-            # TODO: I don't like that I'm accessing (and moving!) c_obj here.
-            # Will probably want to find a cleaner approach, but for now I'm OK
-            # with it since it should be easier to think about this once the
-            # rest of pylibcudf is switched over to using the new classes
-            # anyway.
-            children.append(Column.from_libcudf(move(child.c_obj)))
+        if contents.children.size() != 0:
+            for i in range(contents.children.size()):
+                children.append(
+                    Column.from_libcudf(move(contents.children[i]))
+                )
 
         return Column(
             dtype,
