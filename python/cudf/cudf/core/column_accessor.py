@@ -19,6 +19,7 @@ from typing import (
 
 import pandas as pd
 from packaging.version import Version
+from pandas.api.types import is_bool
 
 import cudf
 from cudf.core import column
@@ -359,7 +360,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        index : integer, integer slice, or list-like of integers
+        index : integer, integer slice, boolean mask,
+            or list-like of integers
             The column indexes.
 
         Returns
@@ -371,6 +373,14 @@ class ColumnAccessor(abc.MutableMapping):
             return self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
             return (self.names[index],)
+        elif index and all(map(is_bool, index)):
+            if len(index) != len(self.names):
+                raise IndexError("Invalid boolean mask for column selection")
+            if isinstance(index, (pd.Series, cudf.Series)):
+                # Don't allow iloc indexing with series
+                raise IndexError("Cannot use Series object for iloc indexing")
+            # TODO: Doesn't handle on-device columns
+            return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
             return tuple(self.names[i] for i in index)
 
@@ -381,7 +391,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        key : integer, integer slice, or list-like of integers
+        key : integer, integer slice, boolean mask,
+            or list-like of integers
 
         Returns
         -------
@@ -462,7 +473,17 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
-        data = {k: self._grouped_data[k] for k in key}
+        # Might be a generator
+        key = tuple(key)
+        # Special-casing for boolean mask
+        if key and all(map(is_bool, key)):
+            data = dict(
+                item
+                for item, keep in zip(self._grouped_data.items(), key)
+                if keep
+            )
+        else:
+            data = {k: self._grouped_data[k] for k in key}
         if self.multiindex:
             data = _to_flat_dict(data)
         return self.__class__(
