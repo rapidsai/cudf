@@ -80,16 +80,11 @@ class column {
    * @brief Construct a new column by taking ownership of the contents of a device_uvector.
    *
    * @param other The device_uvector whose contents will be moved into the new column.
-   * @param null_mask Optional, column's null value indicator bitmask. May
-   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
-   * @param null_count Optional, the count of null elements. If unknown, specify
-   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
-   * the first invocation of `null_count()`.
+   * @param null_mask Column's null value indicator bitmask. May be empty if `null_count` is 0.
+   * @param null_count The count of null elements.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
-  column(rmm::device_uvector<T>&& other,
-         rmm::device_buffer&& null_mask = {},
-         size_type null_count           = UNKNOWN_NULL_COUNT)
+  column(rmm::device_uvector<T>&& other, rmm::device_buffer&& null_mask, size_type null_count)
     : _type{cudf::data_type{cudf::type_to_id<T>()}},
       _size{[&]() {
         CUDF_EXPECTS(
@@ -111,22 +106,19 @@ class column {
    *
    * @throws cudf::logic_error if `size < 0`
    *
-   * @param[in] dtype The element type
-   * @param[in] size The number of elements in the column
-   * @param[in] data The column's data
-   * @param[in] null_mask Optional, column's null value indicator bitmask. May
-   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
-   * @param null_count Optional, the count of null elements. If unknown, specify
-   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
-   * the first invocation of `null_count()`.
+   * @param dtype The element type
+   * @param size The number of elements in the column
+   * @param data The column's data
+   * @param null_mask Column's null value indicator bitmask. May be empty if `null_count` is 0.
+   * @param null_count Optional, the count of null elements.
    * @param children Optional, vector of child columns
    */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype,
          size_type size,
          B1&& data,
-         B2&& null_mask                                  = {},
-         size_type null_count                            = UNKNOWN_NULL_COUNT,
+         B2&& null_mask,
+         size_type null_count,
          std::vector<std::unique_ptr<column>>&& children = {})
     : _type{dtype},
       _size{size},
@@ -169,11 +161,6 @@ class column {
   /**
    * @brief Returns the count of null elements.
    *
-   * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
-   * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
-   * first invocation of `null_count()` will compute and store the count of null
-   * elements indicated by the `null_mask` (if it exists).
-   *
    * @return The number of null elements
    */
   [[nodiscard]] size_type null_count() const;
@@ -186,13 +173,10 @@ class column {
    *
    * @param new_null_mask New null value indicator bitmask (rvalue overload &
    * moved) to set the column's null value indicator mask. May be empty if
-   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
-   * @param new_null_count Optional, the count of null elements. If unknown,
-   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
-   * computed on the first invocation of `null_count()`.
+   * `new_null_count` is 0.
+   * @param new_null_count The count of null elements.
    */
-  void set_null_mask(rmm::device_buffer&& new_null_mask,
-                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+  void set_null_mask(rmm::device_buffer&& new_null_mask, size_type new_null_count);
 
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
@@ -201,24 +185,17 @@ class column {
    * does not match the size of this column.
    *
    * @param new_null_mask New null value indicator bitmask (lvalue overload & copied) to set the
-   * column's null value indicator mask. May be empty if `new_null_count` is 0 or
-   * `UNKOWN_NULL_COUNT`.
-   * @param new_null_count Optional, the count of null elements. If unknown, specify
-   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
-   * of `null_count()`.
+   * column's null value indicator mask. May be empty if `new_null_count` is 0.
+   * @param new_null_count The count of null elements
    * @param stream The stream on which to perform the allocation and copy. Uses the default CUDF
    * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
-                     size_type new_null_count     = UNKNOWN_NULL_COUNT,
+                     size_type new_null_count,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Updates the count of null elements.
-   *
-   * @note `UNKNOWN_NULL_COUNT` can be specified as `new_null_count` to force
-   * the next invocation of `null_count()` to recompute the null count from the
-   * null mask.
    *
    * @throws cudf::logic_error if `new_null_count > 0 and nullable() == false`
    *
@@ -321,14 +298,8 @@ class column {
   operator column_view() const { return this->view(); };
 
   /**
-   * @brief Creates a mutable, non-owning view of the column's data and
-   * children.
-   *
-   * @note Creating a mutable view of a `column` invalidates the `column`'s
-   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. The user can
-   * either explicitly update the null count with `set_null_count()`, or
-   * if not, the null count will be recomputed on the next invocation of
-   *`null_count()`.
+   * @brief Creates a mutable, non-owning view of the column's data, null mask,
+   * and children
    *
    * @return The mutable, non-owning view
    */
@@ -338,13 +309,10 @@ class column {
    * @brief Implicit conversion operator to a `mutable_column_view`.
    *
    * This allows passing a `column` object into a function that accepts a
-   *`mutable_column_view`. The conversion is automatic.
-
-   * @note Creating a mutable view of a `column` invalidates the `column`'s
-   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. For best performance,
-   * the user should explicitly update the null count with `set_null_count()`.
-   * Otherwise, the null count will be recomputed on the next invocation of
-   * `null_count()`.
+   * `mutable_column_view`. The conversion is automatic.
+   *
+   * The caller is expected to update the null count appropriately if the null mask
+   * is modified.
    *
    * @return Mutable, non-owning `mutable_column_view`
    */
@@ -357,9 +325,9 @@ class column {
                                           ///< buffer containing the column elements
   rmm::device_buffer _null_mask{};        ///< Bitmask used to represent null values.
                                           ///< May be empty if `null_count() == 0`
-  mutable cudf::size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
-  std::vector<std::unique_ptr<column>> _children{};         ///< Depending on element type, child
-                                                            ///< columns may contain additional data
+  mutable cudf::size_type _null_count{};  ///< The number of null elements
+  std::vector<std::unique_ptr<column>> _children{};  ///< Depending on element type, child
+                                                     ///< columns may contain additional data
 };
 
 /** @} */  // end of group

@@ -163,13 +163,10 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  *
  * @return The length of the section
  */
-template <typename level_t>
 __device__ uint32_t InitLevelSection(page_state_s* s,
                                      const uint8_t* cur,
                                      const uint8_t* end,
-                                     level_type lvl,
-                                     bool is_decode_step,
-                                     rle_stream<level_t>* decoders)
+                                     level_type lvl)
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];
@@ -978,14 +975,12 @@ static __device__ void gpuOutputGeneric(
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * Currently only used by gpuComputePageSizes step)
  */
-template <typename level_t>
 static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
                                           size_t num_rows,
-                                          bool is_decode_step,
-                                          rle_stream<level_t>* decoders = nullptr)
+                                          bool is_decode_step)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1200,9 +1195,9 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->first_output_value = 0;
 
       // Find the compressed size of repetition levels
-      cur += InitLevelSection(s, cur, end, level_type::REPETITION, is_decode_step, decoders);
+      cur += InitLevelSection(s, cur, end, level_type::REPETITION);
       // Find the compressed size of definition levels
-      cur += InitLevelSection(s, cur, end, level_type::DEFINITION, is_decode_step, decoders);
+      cur += InitLevelSection(s, cur, end, level_type::DEFINITION);
 
       s->dict_bits = 0;
       s->dict_base = nullptr;
@@ -1822,7 +1817,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
   rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false, decoders)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
@@ -2013,9 +2008,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo<level_t>(s, &pages[page_idx], chunks, min_row, num_rows, true)) {
-    return;
-  }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
