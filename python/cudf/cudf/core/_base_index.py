@@ -1478,7 +1478,7 @@ class BaseIndex(Serializable):
             else:
                 result = cudf_func(*args, **kwargs)
                 if fname == "unique":
-                    # NumPy requires a sorted result for `unique`, which is not
+                    # NumPy expects a sorted result for `unique`, which is not
                     # guaranteed by cudf.Index.unique.
                     result = result.sort_values()
                 return result

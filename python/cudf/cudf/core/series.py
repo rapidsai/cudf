@@ -1153,7 +1153,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if cudf_func := getattr(Series, func.__name__, None):
                 result = cudf_func(*args, **kwargs)
                 if func.__name__ == "unique":
-                    # NumPy requires a sorted result for `unique`, which is not
+                    # NumPy expects a sorted result for `unique`, which is not
                     # guaranteed by cudf.Series.unique.
                     result = result.sort_values()
                 return result

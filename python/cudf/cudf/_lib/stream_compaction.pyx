@@ -142,9 +142,7 @@ def drop_duplicates(list columns,
         if nulls_are_equal
         else null_equality.UNEQUAL
     )
-
     cdef table_view source_table_view = table_view_from_columns(columns)
-
     cdef unique_ptr[table] c_result
 
     with nogil:
