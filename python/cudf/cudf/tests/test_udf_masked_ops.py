@@ -802,6 +802,18 @@ def test_masked_udf_casting(operator, data):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "data", [[1, -1, 0, cudf.NA], [1, 0, -1, cudf.NA], [True, False, cudf.NA]]
+)
+def test_masked_udf_abs(data):
+    data = cudf.Series(data)
+
+    def func(x):
+        return abs(x)
+
+    run_masked_udf_series(func, data, check_dtype=False)
+
+
 class TestStringUDFs:
     def test_string_udf_len(self, str_udf_data):
         def func(row):

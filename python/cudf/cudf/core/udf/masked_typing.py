@@ -411,6 +411,26 @@ class MaskedScalarIntCast(AbstractTemplate):
             return nb_signature(MaskedType(types.int64), args[0])
 
 
+@cuda_decl_registry.register_global(abs)
+class MaskedScalarAbsoluteValue(AbstractTemplate):
+    """
+    Typing for the builtin function abs. Returns the same
+    type as input except for boolean values which are converted
+    to integer.
+
+    This follows the expected result from the builtin abs function
+    which differs from numpy - np.abs returns a bool whereas abs
+    itself performs the cast.
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            if isinstance(args[0], types.Boolean):
+                return nb_signature(MaskedType(types.int64), args[0])
+            else:
+                return nb_signature(args[0], args[0])
+
+
 @cuda_decl_registry.register_global(api.pack_return)
 class UnpackReturnToMasked(AbstractTemplate):
     """

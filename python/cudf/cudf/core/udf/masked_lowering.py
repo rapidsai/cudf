@@ -333,6 +333,30 @@ def masked_scalar_cast_impl(context, builder, sig, args):
     return result._getvalue()
 
 
+@cuda_lower(abs, MaskedType)
+def masked_scalar_abs_impl(context, builder, sig, args):
+    input = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    result = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+
+    result.valid = input.valid
+    with builder.if_then(input.valid):
+        # Let numba handle generating the extra IR needed to perform
+        # operations on mixed types, by compiling the final core op between
+        # the two primitive values as a separate function and calling it
+        result.value = context.compile_internal(
+            builder,
+            lambda x: abs(x),
+            nb_signature(
+                sig.return_type.value_type,
+                sig.args[0].value_type,
+            ),
+            (input.value,),
+        )
+    return result._getvalue()
+
+
 # To handle the unification, we need to support casting from any type to a
 # masked type. The cast implementation takes the value passed in and returns
 # a masked type struct wrapping that value.
