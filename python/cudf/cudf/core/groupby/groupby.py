@@ -678,7 +678,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
             _, (ordering,), _ = self._groupby.groups(
-                [arange(0, self.obj._data.nrows)]
+                [arange(0, len(self.obj))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
@@ -2277,9 +2277,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, (ordering,), _ = self._groupby.groups(
-            [arange(0, self.obj._data.nrows)]
-        )
+        _, (ordering,), _ = self._groupby.groups([arange(0, len(self.obj))])
         if self._dropna and any(
             c.has_nulls(include_nan=True) > 0
             for c in self.grouping._key_columns
@@ -2287,7 +2285,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Scan aggregations with null/nan keys put nulls in the
             # corresponding output rows in pandas, to do that here
             # expand the result by reindexing.
-            ri = cudf.RangeIndex(0, self.obj._data.nrows)
+            ri = cudf.RangeIndex(0, len(self.obj))
             result.index = cudf.Index(ordering)
             # This reorders and expands
             result = result.reindex(ri)
