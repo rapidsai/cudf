@@ -74,6 +74,15 @@ void column_buffer_with_pointers::create(size_type _size,
   }
 }
 
+std::unique_ptr<column> column_buffer_with_pointers::make_column(rmm::cuda_stream_view stream)
+{
+  // make_strings_column allocates new memory, it does not simply move
+  // from the inputs, so we need to pass it the memory resource given to
+  // the buffer on construction so that the memory is allocated using the
+  // resource that the calling code expected.
+  return make_strings_column(*_strings, stream, mr);
+}
+
 void column_buffer_with_strings::create(size_type _size,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* _mr)
@@ -88,6 +97,32 @@ void column_buffer_with_strings::create(size_type _size,
 void column_buffer_with_strings::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
 {
   _string_data = rmm::device_buffer(num_bytes, stream, mr);
+}
+
+std::unique_ptr<column> column_buffer_with_strings::make_column(rmm::cuda_stream_view stream)
+{
+  // no need for copies, just transfer ownership of the data_buffers to the columns
+  auto const& mr   = _string_data.memory_resource();
+  auto const state = mask_state::UNALLOCATED;
+  auto str_col =
+    _string_data.size() == 0
+      ? make_empty_column(data_type{type_id::INT8})
+      : std::make_unique<column>(data_type{type_id::INT8},
+                                 string_size(),
+                                 std::move(_string_data),
+                                 cudf::detail::create_null_mask(size, state, stream, mr),
+                                 state_null_count(state, size),
+                                 std::vector<std::unique_ptr<column>>{});
+  auto offsets_col =
+    std::make_unique<column>(data_type{type_to_id<size_type>()},
+                             size + 1,
+                             std::move(_data),
+                             cudf::detail::create_null_mask(size + 1, state, stream, mr),
+                             state_null_count(state, size + 1),
+                             std::vector<std::unique_ptr<column>>{});
+
+  return make_strings_column(
+    size, std::move(offsets_col), std::move(str_col), null_count(), std::move(_null_mask));
 }
 
 namespace {
@@ -126,8 +161,10 @@ column_buffer<column_buffer_type> column_buffer<column_buffer_type>::empty_like(
 template class column_buffer<column_buffer_with_strings>;
 template class column_buffer<column_buffer_with_pointers>;
 
+}  // namespace utilities
+
 template <class column_buffer_type>
-std::unique_ptr<column> make_column(column_buffer<column_buffer_type>& buffer,
+std::unique_ptr<column> make_column(utilities::column_buffer<column_buffer_type>& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
@@ -135,6 +172,47 @@ std::unique_ptr<column> make_column(column_buffer<column_buffer_type>& buffer,
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
   switch (buffer.type.id()) {
+    case type_id::STRING: {
+      if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{"offsets"});
+          schema_info->children.push_back(column_name_info{"chars"});
+        }
+
+        // make_strings_column allocates new memory, it does not simply move
+        // from the inputs, so we need to pass it the memory resource given to
+        // the buffer on construction so that the memory is allocated using the
+        // resource that the calling code expected.
+        return buffer.make_column(stream);
+      } else {
+        // convert to binary
+        auto const string_col = buffer.make_column(stream);
+        auto const num_rows   = string_col->size();
+        auto const null_count = string_col->null_count();
+        auto col_content      = string_col->release();
+
+        // convert to uint8 column, strings are currently stored as int8
+        auto contents =
+          col_content.children[strings_column_view::chars_column_index].release()->release();
+        auto data = contents.data.release();
+
+        auto uint8_col = std::make_unique<column>(
+          data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
+
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{"offsets"});
+          schema_info->children.push_back(column_name_info{"binary"});
+        }
+
+        return make_lists_column(
+          num_rows,
+          std::move(col_content.children[strings_column_view::offsets_column_index]),
+          std::move(uint8_col),
+          null_count,
+          std::move(*col_content.null_mask));
+      }
+    } break;
+
     case type_id::LIST: {
       // make offsets column
       auto offsets = std::make_unique<column>(
@@ -155,8 +233,8 @@ std::unique_ptr<column> make_column(column_buffer<column_buffer_type>& buffer,
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = cudf::io::detail::make_column<column_buffer_type>(
-        buffer.children[0], child_info, child_schema, stream);
+      auto child =
+        make_column<column_buffer_type>(buffer.children[0], child_info, child_schema, stream);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -185,8 +263,8 @@ std::unique_ptr<column> make_column(column_buffer<column_buffer_type>& buffer,
                                     ? std::make_optional<reader_column_schema>(schema->child(i))
                                     : std::nullopt;
 
-        output_children.emplace_back(cudf::io::detail::make_column<column_buffer_type>(
-          buffer.children[i], child_info, child_schema, stream));
+        output_children.emplace_back(
+          make_column<column_buffer_type>(buffer.children[i], child_info, child_schema, stream));
       }
 
       return make_structs_column(buffer.size,
@@ -207,8 +285,11 @@ std::unique_ptr<column> make_column(column_buffer<column_buffer_type>& buffer,
   }
 }
 
+/**
+ * @copydoc cudf::io::detail::empty_like
+ */
 template <class column_buffer_type>
-std::unique_ptr<column> empty_like(column_buffer<column_buffer_type>& buffer,
+std::unique_ptr<column> empty_like(utilities::column_buffer<column_buffer_type>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
@@ -261,163 +342,32 @@ std::unique_ptr<column> empty_like(column_buffer<column_buffer_type>& buffer,
   }
 }
 
-}  // namespace utilities
-
 using pointer_type = utilities::column_buffer_with_pointers;
 using string_type  = utilities::column_buffer_with_strings;
 
 using pointer_column_buffer = utilities::column_buffer<pointer_type>;
 using string_column_buffer  = utilities::column_buffer<string_type>;
 
-template <>
-std::unique_ptr<column> make_column<pointer_type>(pointer_column_buffer& buffer,
-                                                  column_name_info* schema_info,
-                                                  std::optional<reader_column_schema> const& schema,
-                                                  rmm::cuda_stream_view stream)
-{
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+template std::unique_ptr<column> make_column<string_type>(
+  string_column_buffer& buffer,
+  column_name_info* schema_info,
+  std::optional<reader_column_schema> const& schema,
+  rmm::cuda_stream_view stream);
 
-  if (buffer.type.id() == type_id::STRING) {
-    if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"chars"});
-      }
+template std::unique_ptr<column> make_column<pointer_type>(
+  pointer_column_buffer& buffer,
+  column_name_info* schema_info,
+  std::optional<reader_column_schema> const& schema,
+  rmm::cuda_stream_view stream);
 
-      // make_strings_column allocates new memory, it does not simply move
-      // from the inputs, so we need to pass it the memory resource given to
-      // the buffer on construction so that the memory is allocated using the
-      // resource that the calling code expected.
-      return make_strings_column(*buffer._strings, stream, buffer.mr);
-    } else {
-      // convert to binary
-      auto const string_col = make_strings_column(*buffer._strings, stream, buffer.mr);
-      auto const num_rows   = string_col->size();
-      auto const null_count = string_col->null_count();
-      auto col_content      = string_col->release();
+template std::unique_ptr<column> empty_like<string_type>(string_column_buffer& buffer,
+                                                         column_name_info* schema_info,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::mr::device_memory_resource* mr);
 
-      // convert to uint8 column, strings are currently stored as int8
-      auto contents =
-        col_content.children[strings_column_view::chars_column_index].release()->release();
-      auto data = contents.data.release();
-
-      auto uint8_col = std::make_unique<column>(
-        data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
-
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"binary"});
-      }
-
-      return make_lists_column(
-        num_rows,
-        std::move(col_content.children[strings_column_view::offsets_column_index]),
-        std::move(uint8_col),
-        null_count,
-        std::move(*col_content.null_mask));
-    }
-  }
-
-  // not a string
-  return utilities::make_column(buffer, schema_info, schema, stream);
-}
-
-template <>
-std::unique_ptr<column> make_column<string_type>(string_column_buffer& buffer,
-                                                 column_name_info* schema_info,
-                                                 std::optional<reader_column_schema> const& schema,
-                                                 rmm::cuda_stream_view stream)
-{
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
-
-  if (buffer.type.id() == type_id::STRING) {
-    auto make_string_col = [stream](auto& buffer) {
-      // no need for copies, just transfer ownership of the data_buffers to the columns
-      auto const& mr   = buffer._string_data.memory_resource();
-      auto const state = mask_state::UNALLOCATED;
-      auto str_col =
-        buffer._string_data.size() == 0
-          ? make_empty_column(data_type{type_id::INT8})
-          : std::make_unique<column>(data_type{type_id::INT8},
-                                     buffer.string_size(),
-                                     std::move(buffer._string_data),
-                                     cudf::detail::create_null_mask(buffer.size, state, stream, mr),
-                                     state_null_count(state, buffer.size),
-                                     std::vector<std::unique_ptr<column>>{});
-      auto offsets_col =
-        std::make_unique<column>(data_type{type_to_id<size_type>()},
-                                 buffer.size + 1,
-                                 std::move(buffer._data),
-                                 cudf::detail::create_null_mask(buffer.size + 1, state, stream, mr),
-                                 state_null_count(state, buffer.size + 1),
-                                 std::vector<std::unique_ptr<column>>{});
-
-      return make_strings_column(buffer.size,
-                                 std::move(offsets_col),
-                                 std::move(str_col),
-                                 buffer.null_count(),
-                                 std::move(buffer._null_mask));
-    };
-
-    if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"chars"});
-      }
-
-      return make_string_col(buffer);
-    } else {
-      // convert to binary
-      auto const string_col = make_string_col(buffer);
-      auto const num_rows   = string_col->size();
-      auto const null_count = string_col->null_count();
-      auto col_content      = string_col->release();
-
-      // convert to uint8 column, strings are currently stored as int8
-      auto contents =
-        col_content.children[strings_column_view::chars_column_index].release()->release();
-      auto data = contents.data.release();
-
-      auto uint8_col = std::make_unique<column>(
-        data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
-
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"binary"});
-      }
-
-      return make_lists_column(
-        num_rows,
-        std::move(col_content.children[strings_column_view::offsets_column_index]),
-        std::move(uint8_col),
-        null_count,
-        std::move(*col_content.null_mask));
-    }
-  }
-
-  // not a string
-  return utilities::make_column(buffer, schema_info, schema, stream);
-}
-
-/**
- * @copydoc cudf::io::detail::empty_like
- */
-template <>
-std::unique_ptr<column> empty_like<string_type>(utilities::column_buffer<string_type>& buffer,
-                                                column_name_info* schema_info,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
-{
-  return utilities::empty_like(buffer, schema_info, stream, mr);
-}
-
-template <>
-std::unique_ptr<column> empty_like<pointer_type>(utilities::column_buffer<pointer_type>& buffer,
-                                                 column_name_info* schema_info,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
-{
-  return utilities::empty_like(buffer, schema_info, stream, mr);
-}
+template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer& buffer,
+                                                          column_name_info* schema_info,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace cudf::io::detail
