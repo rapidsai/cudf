@@ -564,9 +564,9 @@ cdef class Column:
     def from_pylibcudf_column(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
-        # TODO: This is using attributes I probably want to be internal, need
-        # to rethink the interface of the Table/Column classes for access.
-        if col.data.base is None or col.mask.base is None:
+        if (col.data is not None and col.data.base is None) or (
+            col.mask is not None and col.mask.base is None
+        ):
             raise ValueError(
                 "Cannot construct from a gpumemoryview without an owner!"
             )
@@ -575,14 +575,14 @@ cdef class Column:
         # column views if possible.
         dtype = dtype_from_column_view(dereference(col.get_underlying()))
 
-        return Column(
-            cudf.core.buffer.as_buffer(col.data.base),
-            col.size,
-            dtype,
-            cudf.core.buffer.as_buffer(col.mask.base),
-            col.offset,
-            col.null_count,
-            tuple([
+        return cudf.core.column.build_column(
+            data=as_buffer(col.data.base) if col.data is not None else None,
+            dtype=dtype,
+            size=col.size,
+            mask=as_buffer(col.mask.base) if col.mask is not None else None,
+            offset=col.offset,
+            null_count=col.null_count,
+            children=tuple([
                 Column.from_pylibcudf_column(child)
                 for child in col.children
             ])

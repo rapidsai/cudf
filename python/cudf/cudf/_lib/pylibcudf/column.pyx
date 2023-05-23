@@ -64,6 +64,10 @@ cdef class Column:
 
         cdef column_contents contents = move(libcudf_col.get().release())
 
+        # TODO: To maintain compatibility with the current cudf implementations
+        # of things like COW and spilling, am I going to have to wrap these
+        # DeviceBuffers in cudf.Buffers? Will need to figure out the right
+        # layer there.
         cdef gpumemoryview data = gpumemoryview_from_device_buffer(
             DeviceBuffer.c_from_unique_ptr(move(contents.data))
         )

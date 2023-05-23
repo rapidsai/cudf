@@ -6,22 +6,17 @@ import pyarrow as pa
 import cudf
 
 from cython.operator cimport dereference
-from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib cimport pylibcudf
-
-from cudf.core.buffer import Buffer
-
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.types cimport dtype_from_column_view
 
 try:
     import ujson as json
@@ -252,8 +247,6 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-# TODO: Figure this out.
-ctypedef int32_t underlying_type_t_type_id
 cdef columns_from_pylibcudf_table(pylibcudf.Table table):
     """Convert a pylibcudf table into list of columns.
 
@@ -267,8 +260,6 @@ cdef columns_from_pylibcudf_table(pylibcudf.Table table):
     list[Column]
         A list of columns.
     """
-    # TODO: This is using attributes I probably want to be internal, need to
-    # rethink the interface of the Table/Column classes for access.
     cdef pylibcudf.Column plc
     return [Column.from_pylibcudf_column(plc) for plc in table.columns]
 
