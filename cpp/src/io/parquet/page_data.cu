@@ -704,9 +704,9 @@ __global__ void __launch_bounds__(preprocess_block_size)
 
   // early out optimizations:
 
-  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't
-  // need to do the expensive work of traversing the level data to determine sizes.  we can just
-  // compute it directly.
+  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
+  // to do the expensive work of traversing the level data to determine sizes.  we can just compute
+  // it directly.
   if (!has_repetition && !compute_string_sizes) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
@@ -720,8 +720,8 @@ __global__ void __launch_bounds__(preprocess_block_size)
     return;
   }
 
-  // in the trim pass, for anything with lists, we only need to fully process bounding pages
-  // (those at the beginning or the end of the row bounds)
+  // in the trim pass, for anything with lists, we only need to fully process bounding pages (those
+  // at the beginning or the end of the row bounds)
   if (!is_base_pass && !is_bounds_page(s, min_row, num_rows, has_repetition)) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
@@ -919,13 +919,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
-      // (values before first_row) in the flat hierarchy case.
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
+      // before first_row) in the flat hierarchy case.
       if (src_pos < target_pos && dst_pos >= 0) {
         // src_pos represents the logical row position we want to read from. But in the case of
-        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
-        // position has to take into account the # of values we have to skip in the page to get to
-        // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read position
+        // has to take into account the # of values we have to skip in the page to get to the
+        // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
         uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
         // nesting level that is storing actual leaf values
