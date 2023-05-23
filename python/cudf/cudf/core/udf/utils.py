@@ -253,8 +253,6 @@ def _compile_or_get(
     we then obtain the return type from that separate compilation and
     use it to allocate an output column of the right dtype.
     """
-    # runtime check for CEC mode which is disabled for CUDA 12 for now
-
     if not all(is_scalar(arg) for arg in args):
         raise TypeError("only scalar valued args are supported by apply")
 
