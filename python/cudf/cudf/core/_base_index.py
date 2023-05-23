@@ -1464,7 +1464,12 @@ class BaseIndex(Serializable):
             if cudf_func is func:
                 return NotImplemented
             else:
-                return cudf_func(*args, **kwargs)
+                result = cudf_func(*args, **kwargs)
+                if fname == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Index.unique.
+                    result = result.sort_values()
+                return result
 
         else:
             return NotImplemented

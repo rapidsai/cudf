@@ -246,11 +246,14 @@ def test_csv_reader_datetime(parse_dates):
         parse_dates=parse_dates,
         dayfirst=True,
     )
+    # Need to used `date_format='mixed'`,
+    # https://github.com/pandas-dev/pandas/issues/53355
     pdf = pd.read_csv(
         StringIO(buffer),
         names=["date1", "date2", "bad"],
         parse_dates=parse_dates,
         dayfirst=True,
+        date_format="mixed",
     )
 
     assert_eq(gdf, pdf)
