@@ -70,10 +70,12 @@ def _setup_numba():
     version of the CUDA Toolkit used to build the PTX files shipped
     with the user cuDF package.
     """
+    # ptxcompiler is a requirement for cuda 11.x packages but not
+    # cuda 12.x packages. However its version checking machinery
+    # is still necessary. If a user happens to have ptxcompiler
+    # in a cuda 12 environment, it's use for the purposes of
+    # checking the driver and runtime versions is harmless
     try:
-        # By default, ptxcompiler will not be installed with CUDA 12
-        # packages. This is ok, because in this situation putting
-        # numba in enhanced compatibility mode is not necessary.
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
         # use vendored version
