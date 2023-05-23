@@ -3028,6 +3028,10 @@ class IntervalIndex(GenericIndex):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
+
+        if closed is None:
+            closed = "right"
+
         if isinstance(data, IntervalColumn):
             data = data
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
