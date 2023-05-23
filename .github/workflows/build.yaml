@@ -81,7 +81,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@branch-23.08
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@sccache-config
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
