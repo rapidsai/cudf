@@ -931,11 +931,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ascending: bool = True,
         na_position: str = "last",
     ) -> ColumnBase:
-        col_inds = self.as_frame()._get_sorted_inds(
-            ascending=ascending, na_position=na_position
-        )
-        col_keys = self.take(col_inds, check_bounds=False)
-        return col_keys
+        return libcudf.sort.sort(
+            [self], column_order=[ascending], null_precedence=[na_position]
+        )[0]
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
