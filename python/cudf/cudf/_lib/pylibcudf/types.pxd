@@ -61,28 +61,3 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_data_type(data_type dt)
-
-
-ctypedef cbool underlying_type_t_null_policy
-cpdef enum NullPolicy:
-    EXCLUDE = <underlying_type_t_null_policy> null_policy.EXCLUDE
-    INCLUDE = <underlying_type_t_null_policy> null_policy.INCLUDE
-
-
-ctypedef int32_t underlying_type_t_interpolation
-cpdef enum Interpolation:
-    LINEAR = (
-        <underlying_type_t_interpolation> interpolation.LINEAR
-    )
-    LOWER = (
-        <underlying_type_t_interpolation> interpolation.LOWER
-    )
-    HIGHER = (
-        <underlying_type_t_interpolation> interpolation.HIGHER
-    )
-    MIDPOINT = (
-        <underlying_type_t_interpolation> interpolation.MIDPOINT
-    )
-    NEAREST = (
-        <underlying_type_t_interpolation> interpolation.NEAREST
-    )
