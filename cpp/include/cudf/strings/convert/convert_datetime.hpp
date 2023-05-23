@@ -243,7 +243,7 @@ std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
   std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
   strings_column_view const& names    = strings_column_view(column_view{
-    data_type{type_id::STRING}, 0, nullptr}),
+    data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
