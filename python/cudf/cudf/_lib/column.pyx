@@ -457,15 +457,13 @@ cdef class Column:
 
         cdef pylibcudf.gpumemoryview data = None
         if col.base_data is not None:
-            data = pylibcudf.gpumemoryview(col.base_data.get_ptr(mode="write"))
+            data = pylibcudf.gpumemoryview(col.base_data)
 
         cdef pylibcudf.gpumemoryview mask = None
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            mask = pylibcudf.gpumemoryview(
-                self.base_mask.get_ptr(mode="write")
-            )
+            mask = pylibcudf.gpumemoryview(self.base_mask)
 
         cdef Column child_column
         children = []
@@ -564,13 +562,6 @@ cdef class Column:
     def from_pylibcudf_column(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
-        if (col.data is not None and col.data.base is None) or (
-            col.mask is not None and col.mask.base is None
-        ):
-            raise ValueError(
-                "Cannot construct from a gpumemoryview without an owner!"
-            )
-
         # TODO: Find a better approach to getting the dtype without using
         # column views if possible.
         dtype = dtype_from_column_view(dereference(col.get_underlying()))

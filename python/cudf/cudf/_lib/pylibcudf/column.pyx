@@ -10,7 +10,7 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport bitmask_type, offset_type, size_type
 
-from .gpumemoryview cimport gpumemoryview, gpumemoryview_from_device_buffer
+from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
@@ -68,13 +68,13 @@ cdef class Column:
         # of things like COW and spilling, am I going to have to wrap these
         # DeviceBuffers in cudf.Buffers? Will need to figure out the right
         # layer there.
-        cdef gpumemoryview data = gpumemoryview_from_device_buffer(
+        cdef gpumemoryview data = gpumemoryview(
             DeviceBuffer.c_from_unique_ptr(move(contents.data))
         )
 
         cdef gpumemoryview mask = None
         if null_count > 0:
-            mask = gpumemoryview_from_device_buffer(
+            mask = gpumemoryview(
                 DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
             )
 
