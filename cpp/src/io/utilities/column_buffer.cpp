@@ -74,7 +74,8 @@ void column_buffer_with_pointers::create(size_type _size,
   }
 }
 
-std::unique_ptr<column> column_buffer_with_pointers::make_column(rmm::cuda_stream_view stream)
+std::unique_ptr<column> column_buffer_with_pointers::make_string_column(
+  rmm::cuda_stream_view stream)
 {
   // make_strings_column allocates new memory, it does not simply move
   // from the inputs, so we need to pass it the memory resource given to
@@ -99,10 +100,9 @@ void column_buffer_with_strings::create_string_data(size_t num_bytes, rmm::cuda_
   _string_data = rmm::device_buffer(num_bytes, stream, mr);
 }
 
-std::unique_ptr<column> column_buffer_with_strings::make_column(rmm::cuda_stream_view stream)
+std::unique_ptr<column> column_buffer_with_strings::make_string_column(rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
-  auto const& mr   = _string_data.memory_resource();
   auto const state = mask_state::UNALLOCATED;
   auto str_col =
     _string_data.size() == 0
@@ -183,10 +183,10 @@ std::unique_ptr<column> make_column(utilities::column_buffer<string_policy>& buf
         // from the inputs, so we need to pass it the memory resource given to
         // the buffer on construction so that the memory is allocated using the
         // resource that the calling code expected.
-        return buffer.make_column(stream);
+        return buffer.make_string_column(stream);
       } else {
         // convert to binary
-        auto const string_col = buffer.make_column(stream);
+        auto const string_col = buffer.make_string_column(stream);
         auto const num_rows   = string_col->size();
         auto const null_count = string_col->null_count();
         auto col_content      = string_col->release();
