@@ -325,6 +325,73 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
 }
 
 /**
+ * @brief Performs RLE decoding of dictionary indexes, for when dict_size=1
+ *
+ * @param[in,out] s Page state input/output
+ * @param[out] sb Page state buffer output
+ * @param[in] target_pos Target write position
+ * @param[in] t Thread ID
+ *
+ * @return The new output position
+ */
+__device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
+                                    volatile page_state_buffers_s* sb,
+                                    int target_pos,
+                                    int t)
+{
+  const uint8_t* end = s->data_end;
+  int pos            = s->dict_pos;
+
+  while (pos < target_pos) {
+    int is_literal, batch_len;
+    if (!t) {
+      uint32_t run       = s->dict_run;
+      const uint8_t* cur = s->data_start;
+      if (run <= 1) {
+        run = (cur < end) ? get_vlq32(cur, end) : 0;
+        if (!(run & 1)) {
+          // Repeated value
+          s->dict_val = (cur < end) ? cur[0] & 1 : 0;
+          cur++;
+        }
+      }
+      if (run & 1) {
+        // Literal batch: must output a multiple of 8, except for the last batch
+        int batch_len_div8;
+        batch_len = max(min(32, (int)(run >> 1) * 8), 1);
+        if (batch_len >= 8) { batch_len &= ~7; }
+        batch_len_div8 = (batch_len + 7) >> 3;
+        run -= batch_len_div8 * 2;
+        cur += batch_len_div8;
+      } else {
+        batch_len = max(min(32, (int)(run >> 1)), 1);
+        run -= batch_len * 2;
+      }
+      s->dict_run   = run;
+      s->data_start = cur;
+      is_literal    = run & 1;
+      __threadfence_block();
+    }
+    __syncwarp();
+    is_literal = shuffle(is_literal);
+    batch_len  = shuffle(batch_len);
+    if (t < batch_len) {
+      int dict_idx;
+      if (is_literal) {
+        int32_t ofs      = t - ((batch_len + 7) & ~7);
+        const uint8_t* p = s->data_start + (ofs >> 3);
+        dict_idx         = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
+      } else {
+        dict_idx = s->dict_val;
+      }
+      sb->dict_idx[rolling_index(pos + t)] = dict_idx;
+    }
+    pos += batch_len;
+  }
+  return pos;
+}
+
+/**
  * @brief Parses the length and position of strings and returns total length of all strings
  * processed
  *
