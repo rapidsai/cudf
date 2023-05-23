@@ -348,8 +348,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['Date', 'Symbol'])
         >>> idx2 = idx1.copy(
-        ... levels=[['day1', 'day2'], ['com1', 'com2']],
-        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['col1', 'col2'])
 
         >>> df.index = idx1
@@ -363,13 +361,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         >>> df.index = idx2
         >>> df
-                     Close
-        col1 col2
-        day1 com1  3400.00
-             com2   226.58
-        day2 com1  3401.80
-             com2   228.91
-
+                           Close
+        col1       col2
+        2020-08-27 AMZN  3400.00
+                   MSFT   226.58
+        2020-08-28 AMZN  3401.80
+                   MSFT   228.91
         """
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
