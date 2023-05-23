@@ -14,7 +14,7 @@
 
 # This function finds thrust and sets any additional necessary environment variables.
 function(find_and_configure_libcudacxx)
-  # Make sure we install libcudacxx beside out patched version of thrust
+  # Make sure we install libcudacxx beside our patched version of thrust
   include(GNUInstallDirs)
   set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
   set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/lib")
