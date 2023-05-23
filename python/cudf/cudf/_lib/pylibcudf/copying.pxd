@@ -4,7 +4,6 @@ from libcpp cimport bool as cbool
 
 from cudf._lib.cpp cimport copying as cpp_copying
 
-from . cimport libcudf_classes
 from .column cimport Column
 from .table cimport Table
 

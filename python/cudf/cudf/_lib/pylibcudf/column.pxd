@@ -3,9 +3,9 @@
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport offset_type, size_type
 
-from . cimport libcudf_classes
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 
@@ -24,9 +24,9 @@ cdef class Column:
         object children
 
         # Internals
-        libcudf_classes.ColumnView _underlying
+        unique_ptr[column_view] _underlying
 
-    cpdef libcudf_classes.ColumnView get_underlying(self)
+    cdef column_view* get_underlying(self)
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)

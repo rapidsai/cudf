@@ -5,7 +5,7 @@
 # https://github.com/cython/cython/issues/3442
 # that is fixed in Cython 3
 # https://github.com/cython/cython/pull/4552
-from .pylibcudf cimport copying, libcudf_classes
+from .pylibcudf cimport copying
 from .pylibcudf.column cimport Column
 from .pylibcudf.gpumemoryview cimport gpumemoryview
 from .pylibcudf.table cimport Table
@@ -18,5 +18,4 @@ __all__ = [
     "TypeId",
     "copying",
     "gpumemoryview",
-    "libcudf_classes",
 ]

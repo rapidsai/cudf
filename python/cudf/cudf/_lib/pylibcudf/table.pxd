@@ -5,8 +5,6 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
-from . cimport libcudf_classes
-
 
 cdef class Table:
     # List[pylibcudf.Column]

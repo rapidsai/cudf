@@ -573,7 +573,7 @@ cdef class Column:
 
         # TODO: Find a better approach to getting the dtype without using
         # column views if possible.
-        dtype = dtype_from_column_view(dereference(col.get_underlying().c_obj))
+        dtype = dtype_from_column_view(dereference(col.get_underlying()))
 
         return Column(
             cudf.core.buffer.as_buffer(col.data.base),

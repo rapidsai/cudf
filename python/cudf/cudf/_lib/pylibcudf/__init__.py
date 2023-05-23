@@ -1,6 +1,6 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from . import copying, libcudf_classes
+from . import copying
 from .column import Column
 from .gpumemoryview import gpumemoryview
 from .table import Table
@@ -13,5 +13,4 @@ __all__ = [
     "TypeId",
     "copying",
     "gpumemoryview",
-    "libcudf_classes",
 ]

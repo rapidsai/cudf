@@ -1,16 +1,18 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.types cimport offset_type, size_type
+from cudf._lib.cpp.types cimport bitmask_type, offset_type, size_type
 
-from . cimport libcudf_classes
 from .gpumemoryview cimport gpumemoryview, gpumemoryview_from_device_buffer
 from .types cimport DataType
+from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
 cdef class Column:
@@ -30,20 +32,29 @@ cdef class Column:
         self.offset = offset
         self.children = children
 
-        self._underlying = None
+    cdef column_view* get_underlying(self):
+        cdef const void * data = NULL
+        cdef const bitmask_type * null_mask = NULL
+        cdef vector[column_view] c_children
+        cdef Column child
 
-    cpdef libcudf_classes.ColumnView get_underlying(self):
-        if self._underlying is None:
-            self._underlying = libcudf_classes.ColumnView(
-                self.data_type,
-                self.size,
-                self.data,
-                self.mask,
-                self.null_count,
-                self.offset,
-                self.children,
+        if not self._underlying:
+            if self.data is not None:
+                data = int_to_void_ptr(self.data.ptr)
+            if self.mask is not None:
+                null_mask = int_to_bitmask_ptr(self.mask.ptr)
+
+            if self.children is not None:
+                for child in self.children:
+                    c_children.push_back(dereference(child.get_underlying()))
+
+            self._underlying.reset(
+                new column_view(
+                    self.data_type.c_obj, self.size, data, null_mask,
+                    self.null_count, self.offset, c_children
+                )
             )
-        return self._underlying
+        return self._underlying.get()
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):

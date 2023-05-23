@@ -9,10 +9,10 @@ from libcpp.utility cimport move
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
 from cudf._lib.cpp cimport copying as cpp_copying
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
-from . cimport libcudf_classes
 from .column cimport Column
 from .table cimport Table
 
@@ -35,13 +35,13 @@ cpdef Table gather(
     OutOfBoundsPolicy bounds_policy
 ):
     cdef unique_ptr[table] c_result
-    cdef table_view* source_underlying = source_table.get_underlying()
-    cdef libcudf_classes.ColumnView c_col = gather_map.get_underlying()
+    cdef table_view* c_src = source_table.get_underlying()
+    cdef column_view* c_col = gather_map.get_underlying()
     with nogil:
         c_result = move(
             cpp_copying.gather(
-                dereference(source_underlying),
-                dereference(c_col.get()),
+                dereference(c_src),
+                dereference(c_col),
                 py_policy_to_c_policy(bounds_policy)
             )
         )

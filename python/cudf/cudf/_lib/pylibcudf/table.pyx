@@ -9,10 +9,8 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 
-from . cimport libcudf_classes
 from .column cimport Column
 
-# ctypedef _vec_cols vector[unique_ptr[column]]
 
 cdef class Table:
     """A set of columns of the same size."""
@@ -21,13 +19,11 @@ cdef class Table:
 
     cdef table_view* get_underlying(self):
         cdef vector[column_view] c_columns
-        cdef libcudf_classes.ColumnView underlying_col
         cdef Column col
 
         if not self._underlying:
             for col in self.columns:
-                underlying_col = col.get_underlying()
-                c_columns.push_back(dereference(underlying_col.get()))
+                c_columns.push_back(dereference(col.get_underlying()))
 
             self._underlying.reset(new table_view(c_columns))
 
