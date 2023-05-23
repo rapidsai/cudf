@@ -1,43 +1,12 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 import glob
-import math
 import os
-import subprocess
-import sys
 import warnings
 
 from numba import config
 
 CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
-_NO_DRIVER = (math.inf, math.inf)
-
-CMD = """\
-from ctypes import c_int, byref
-from numba import cuda
-dv = c_int(0)
-cuda.cudadrv.driver.driver.cuDriverGetVersion(byref(dv))
-drv_major = dv.value // 1000
-drv_minor = (dv.value - (drv_major * 1000)) // 10
-run_major, run_minor = cuda.runtime.get_version()
-print(f'{drv_major} {drv_minor} {run_major} {run_minor}')
-"""
-
-
-def _get_versions():
-    """
-    This function is mostly vendored from ptxcompiler and is used
-    to check the system CUDA driver and runtime versions in its absence.
-    """
-    cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-    if cp.returncode:
-        return _NO_DRIVER
-
-    versions = [int(s) for s in cp.stdout.strip().split()]
-    driver_version = tuple(versions[:2])
-    runtime_version = tuple(versions[2:])
-
-    return driver_version, runtime_version
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -107,27 +76,24 @@ def _setup_numba():
         # numba in enhanced compatibility mode is not necessary.
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
-        versions = _get_versions()
-        if versions != _NO_DRIVER:
-            driver_version, runtime_version = versions
-            if runtime_version > driver_version:
-                warnings.warn(
-                    f"Using CUDA toolkit version {runtime_version} with CUDA "
-                    f"driver version {driver_version} requires minor version "
-                    "compatibility, which is not yet supported for CUDA "
-                    "driver versions newer than 12.0. It is likely that many "
-                    "cuDF operations will not work in this state. Please "
-                    f"install CUDA toolkit version {driver_version} to "
-                    "continue using cuDF."
-                )
-        return
+        # use vendored version
+        from _ptxcompiler import NO_DRIVER, safe_get_versions
+
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        # Don't check if CEC is necessary in the possible edge
-        # case where a user has a CUDA 12 package and ptxcompiler
-        # in their environment anyways, perhaps installed separately
-        if driver_version < (12, 0):
+        if driver_version >= (12, 0) and runtime_version > driver_version:
+            warnings.warn(
+                f"Using CUDA toolkit version {runtime_version} with CUDA "
+                f"driver version {driver_version} requires minor version "
+                "compatibility, which is not yet supported for CUDA "
+                "driver versions newer than 12.0. It is likely that many "
+                "cuDF operations will not work in this state. Please "
+                f"install CUDA toolkit version {driver_version} to "
+                "continue using cuDF."
+            )
+        else:
+            # Support MVC for all CUDA versions in the 11.x range
             ptx_toolkit_version = _get_cuda_version_from_ptx_file(
                 CC_60_PTX_FILE
             )

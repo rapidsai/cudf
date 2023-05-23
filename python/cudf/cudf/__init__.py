@@ -1,5 +1,8 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
+from cuda import cuda, cudart
 
+cuda.cuDriverGetVersion()
+cudart.cudaRuntimeGetVersion()
 # this must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
 # MVC. Setting it after importing cuda has no effect.
