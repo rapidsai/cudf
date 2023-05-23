@@ -104,7 +104,6 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
  * @param is_bounds_pg True if this page is clipped
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
- * @param t Thread index
  * @return pair containing start and end value indexes
  */
 template <int lvl_buf_size, typename level_t>
@@ -346,7 +345,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
  * @param data_size Size of the page data in bytes
  * @param start_value Do not count values that occur before this index
  * @param end_value Do not count values that occur after this index
- * @param t Thread index
  */
 __device__ size_t countDictEntries(uint8_t const* data,
                                    uint8_t const* dict_base,
@@ -473,7 +471,6 @@ __device__ size_t countDictEntries(uint8_t const* data,
  * @param data_size Length of data
  * @param start_value Do not count values that occur before this index
  * @param end_value Do not count values that occur after this index
- * @param t Thread index
  */
 __device__ size_t countPlainEntries(uint8_t const* data,
                                     int data_size,
