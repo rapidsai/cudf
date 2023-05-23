@@ -926,16 +926,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             raise ValueError(f"Invalid value for side: {side}")
 
-    def sort_by_values(
+    def sort_values(
         self: ColumnBase,
         ascending: bool = True,
         na_position: str = "last",
-    ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
+    ) -> ColumnBase:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
-        col_keys = self.take(col_inds)
-        return col_keys, col_inds
+        col_keys = self.take(col_inds, check_bounds=False)
+        return col_keys
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1022,7 +1022,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_by_values()[0].astype(self.dtype)
+        cats = self.unique().sort_values().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
@@ -1380,7 +1380,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # values of `self`:
         order = arange(len(self))
         order = order.take(left_gather_map, check_bounds=False).argsort()
-        codes = codes.take(order)
+        codes = codes.take(order, check_bounds=False)
         return codes
 
 
