@@ -6,7 +6,9 @@ import warnings
 
 from numba import config
 
-CC_60_PTX_FILE = os.path.dirname(__file__) + "/../core/udf/shim_60.ptx"
+CC_60_PTX_FILE = os.path.join(
+    os.path.dirname(__file__), "../core/udf/shim_60.ptx"
+)
 
 
 def _get_best_ptx_file(archs, max_compute_capability):

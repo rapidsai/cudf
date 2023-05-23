@@ -20,7 +20,7 @@ import warnings
 
 NO_DRIVER = (math.inf, math.inf)
 
-CMD = """\
+NUMBA_CHECK_VERSION_CMD = """\
 from ctypes import c_int, byref
 from numba import cuda
 dv = c_int(0)
@@ -49,7 +49,9 @@ def check_disabled_in_env():
 
 
 def get_versions():
-    cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
+    cp = subprocess.run(
+        [sys.executable, "-c", NUMBA_CHECK_VERSION_CMD], capture_output=True
+    )
     if cp.returncode:
         msg = (
             f"Error getting driver and runtime versions:\n\nstdout:\n\n"
