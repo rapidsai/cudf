@@ -77,7 +77,7 @@ def _setup_numba():
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
         # use vendored version
-        from _ptxcompiler import NO_DRIVER, safe_get_versions
+        from cudf.utils._ptxcompiler import NO_DRIVER, safe_get_versions
 
     versions = safe_get_versions()
     if versions != NO_DRIVER:
