@@ -1013,17 +1013,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 ordered=dtype.ordered,
             )
 
-        cats = self.unique().astype(self.dtype)
+        # Categories must be unique and sorted in ascending order.
+        cats = self.unique().sort_by_values()[0].astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
         )
-
         # columns include null index in factorization; remove:
         if self.has_nulls():
             cats = cats.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
-            labels = labels - 1
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
 
@@ -1124,25 +1123,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self, preserve_order=False) -> ColumnBase:
+    def unique(self, preserve_order=True) -> ColumnBase:
         """
         Get unique values in the data
         """
-        # TODO: We could avoid performing `drop_duplicates` for
-        # columns with values that already are unique.
-        # Few things to note before we can do this optimization is
-        # the following issue resolved:
-        # https://github.com/rapidsai/cudf/issues/5286
-        if preserve_order:
-            ind = as_column(cupy.arange(0, len(self)))
-
-            # dedup based on the column of data only
-            ind, col = drop_duplicates([ind, self], keys=[1])
-
-            # sort col based on ind
-            map = ind.argsort()
-            return col.take(map)
-
+        if preserve_order is not True:
+            warnings.warn(
+                "The preserve_order argument is deprecated. It will be "
+                "removed in a future version. As of now, unique always "
+                "preserves order regardless of the argument's value.",
+                FutureWarning,
+            )
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:

@@ -1103,8 +1103,7 @@ def test_string_unique(item):
     gs = cudf.Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # cudf returns sorted unique with `None` placed before other strings
-    pres = pres.sort_values(na_position="first").reset_index(drop=True)
+    # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
 
