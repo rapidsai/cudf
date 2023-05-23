@@ -272,19 +272,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = _Grouping(obj, by, level)
 
     def __iter__(self):
-        if isinstance(self._by, list) and len(self._by) == 1:
-            warnings.warn(
-                "In a future version of cudf, a length 1 tuple will be "
-                "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. To avoid this warning, do not supply "
-                "a list with a single grouper.",
-                FutureWarning,
-            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (name,) if isinstance(self._by, list) and len(
+                self._by
+            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
 
     @property
     def dtypes(self):
