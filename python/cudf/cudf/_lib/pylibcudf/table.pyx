@@ -6,6 +6,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 
 from . cimport libcudf_classes
@@ -18,14 +19,19 @@ cdef class Table:
     def __init__(self, object columns):
         self.columns = columns
 
-        self._underlying = None
+    cdef table_view* get_underlying(self):
+        cdef vector[column_view] c_columns
+        cdef libcudf_classes.ColumnView underlying_col
+        cdef Column col
 
-    cpdef libcudf_classes.TableView get_underlying(self):
-        if self._underlying is None:
-            self._underlying = libcudf_classes.TableView(
-                [col.get_underlying() for col in self.columns]
-            )
-        return self._underlying
+        if not self._underlying:
+            for col in self.columns:
+                underlying_col = col.get_underlying()
+                c_columns.push_back(dereference(underlying_col.get()))
+
+            self._underlying.reset(new table_view(c_columns))
+
+        return self._underlying.get()
 
     # TODO: I'm currently inconsistent between Table and Column how much of the
     # corresponding libcudf_class is being used. I need to make some design
