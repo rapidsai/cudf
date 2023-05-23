@@ -137,13 +137,12 @@ def _get_cuda_version_from_ptx_file(path):
         else:
             raise ValueError("Could not read CUDA version from ptx file.")
     version = ver_line.strip("\n").split(" ")[1]
-    # from ptx_docs/release_notes above:
+    # This dictionary maps from supported versions of NVVM to the
+    # PTX version it produces. The lowest value should be the minimum
+    # CUDA version required to compile the library. Currently CUDA 11.5
+    # or higher is required to build cudf. New CUDA versions should
+    # be added to this dictionary when officially supported.
     ver_map = {
-        "7.0": (11, 0),
-        "7.1": (11, 1),
-        "7.2": (11, 2),
-        "7.3": (11, 3),
-        "7.4": (11, 4),
         "7.5": (11, 5),
         "7.6": (11, 6),
         "7.7": (11, 7),
