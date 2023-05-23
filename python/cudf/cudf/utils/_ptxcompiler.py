@@ -32,19 +32,6 @@ print(f'{drv_major} {drv_minor} {run_major} {run_minor}')
 """
 
 
-def patch_forced_by_user():
-    # The patch is needed if the user explicitly
-    # forced it with an environment variable.
-    apply = os.getenv("PTXCOMPILER_APPLY_NUMBA_CODEGEN_PATCH")
-    if apply is not None:
-        try:
-            apply = int(apply)
-        except ValueError:
-            apply = False
-
-    return bool(apply)
-
-
 def check_disabled_in_env():
     # We should avoid checking whether the patch is
     # needed if the user requested that we don't check
