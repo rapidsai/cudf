@@ -1,8 +1,8 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-# this must be called before numba.cuda is imported, because
+# _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
-# MVC. Setting it after importing cuda has no effect.
+# Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
 from cudf.utils._numba import _setup_numba
 from cudf.utils.gpu_utils import validate_setup
 

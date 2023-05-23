@@ -87,7 +87,7 @@ def _setup_numba():
                 f"Using CUDA toolkit version {runtime_version} with CUDA "
                 f"driver version {driver_version} requires minor version "
                 "compatibility, which is not yet supported for CUDA "
-                "driver versions newer than 12.0. It is likely that many "
+                "driver versions 12.0 and above. It is likely that many "
                 "cuDF operations will not work in this state. Please "
                 f"install CUDA toolkit version {driver_version} to "
                 "continue using cuDF."
