@@ -3260,3 +3260,19 @@ class TestHeadTail:
         else:
             actual = df.groupby("a").tail(n=n, preserve_order=preserve_order)
         assert_eq(actual, expected)
+
+
+def test_head_tail_empty():
+    # GH #13397
+
+    values = [1, 2, 3]
+    pdf = pd.DataFrame({}, index=values)
+    df = cudf.DataFrame({}, index=values)
+
+    expected = pdf.groupby(pd.Series(values)).head()
+    got = df.groupby(cudf.Series(values)).head()
+    assert_eq(expected, got)
+
+    expected = pdf.groupby(pd.Series(values)).tail()
+    got = df.groupby(cudf.Series(values)).tail()
+    assert_eq(expected, got)
