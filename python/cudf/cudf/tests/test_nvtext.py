@@ -354,7 +354,7 @@ def test_character_tokenize_series():
             None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
-                "en#eight^nine heŒŽ'•™œ$µ¾ŤƠé Ǆ"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
             ),
         ]
     )
@@ -432,7 +432,7 @@ def test_character_tokenize_series():
             "e",
             "Œ",
             "Ž",
-            "'",
+            "‘",
             "•",
             "™",
             "œ",
@@ -473,7 +473,7 @@ def test_character_tokenize_index():
             None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
-                "en#eight^nine heŒŽ'•™œ$µ¾ŤƠé Ǆ"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
             ),
         ]
     )
