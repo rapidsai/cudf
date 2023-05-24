@@ -308,7 +308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  object  int64
         3  object  int64
         """
-        index = self.grouping.keys.unique().to_pandas()
+        index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
@@ -864,25 +864,27 @@ class GroupBy(Serializable, Reducible, Scannable):
         5    0
         dtype: int64
         """
-        num_groups = len(index := self.grouping.keys.unique())
+        index = self.grouping.keys.unique().sort_values()
+        num_groups = len(index)
         _, has_null_group = bitmask_or([*index._columns])
 
         if ascending:
-            if has_null_group:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(-1, num_groups - 1)}
-                )
-            else:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(num_groups)}
-                )
+            # Count ascending from 0 to num_groups - 1
+            group_ids = cudf.Series._from_data({None: cp.arange(num_groups)})
+        elif has_null_group:
+            # Count descending from num_groups - 1 to 0, but subtract one more
+            # for the null group making it num_groups - 2 to -1.
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 2, -2, -1)}
+            )
         else:
+            # Count descending from num_groups - 1 to 0
             group_ids = cudf.Series._from_data(
                 {None: cp.arange(num_groups - 1, -1, -1)}
             )
 
         if has_null_group:
-            group_ids.iloc[0] = cudf.NA
+            group_ids.iloc[-1] = cudf.NA
 
         group_ids._index = index
         return self._broadcast(group_ids)
@@ -1065,7 +1067,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
-        group_names = grouped_keys.unique()
+        group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
