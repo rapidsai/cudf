@@ -2269,6 +2269,9 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     }
   }
 
+  for (auto &col : output_columns) {
+    col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
+  }
   return std::make_unique<table>(std::move(output_columns));
 }
 
@@ -2324,6 +2327,9 @@ std::unique_ptr<table> convert_from_rows_fixed_width_optimized(
         num_rows, num_columns, size_per_row, dev_column_start.data(), dev_column_size.data(),
         dev_output_data.data(), dev_output_nm.data(), child.data<int8_t>());
 
+    for (auto &col : output_columns) {
+      col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
+    }
     return std::make_unique<table>(std::move(output_columns));
   } else {
     CUDF_FAIL("Only fixed width types are currently supported");

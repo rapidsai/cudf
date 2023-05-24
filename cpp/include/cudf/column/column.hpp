@@ -163,7 +163,7 @@ class column {
    *
    * @return The number of null elements
    */
-  [[nodiscard]] size_type null_count() const;
+  [[nodiscard]] size_type null_count() const { return _null_count; }
 
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
