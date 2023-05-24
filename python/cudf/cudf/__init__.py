@@ -88,7 +88,6 @@ from cudf.options import describe_option, get_option, set_option
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
 
-
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
 
