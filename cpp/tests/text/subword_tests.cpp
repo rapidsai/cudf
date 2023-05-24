@@ -238,7 +238,7 @@ TEST(TextSubwordTest, ParameterErrors)
                                         true,  // do_lower_case
                                         true,  // do_truncate
                                         858993459),
-               cudf::logic_error);
+               std::overflow_error);
 }
 
 TEST(TextSubwordTest, EmptyStrings)
