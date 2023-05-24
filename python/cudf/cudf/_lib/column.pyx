@@ -556,10 +556,10 @@ cdef class Column:
         dtype = dtype_from_column_view(dereference(col.get_underlying()))
 
         return cudf.core.column.build_column(
-            data=as_buffer(col.data.base) if col.data is not None else None,
+            data=as_buffer(col.data.obj) if col.data is not None else None,
             dtype=dtype,
             size=col.size,
-            mask=as_buffer(col.mask.base) if col.mask is not None else None,
+            mask=as_buffer(col.mask.obj) if col.mask is not None else None,
             offset=col.offset,
             null_count=col.null_count,
             children=tuple([

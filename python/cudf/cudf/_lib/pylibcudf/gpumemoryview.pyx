@@ -11,10 +11,10 @@ cdef class gpumemoryview:
                 "gpumemoryview must be constructed from an object supporting "
                 "the CUDA array interface"
             )
-        self.base = obj
+        self.obj = obj
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
     @property
     def __cuda_array_interface__(self):
-        return self._base.__cuda_array_interface__
+        return self.obj.__cuda_array_interface__

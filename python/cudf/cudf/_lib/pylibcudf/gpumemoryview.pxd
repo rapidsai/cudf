@@ -3,4 +3,4 @@
 
 cdef class gpumemoryview:
     cdef readonly Py_ssize_t ptr
-    cdef object base
+    cdef object obj
