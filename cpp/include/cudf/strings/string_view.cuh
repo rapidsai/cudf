@@ -226,7 +226,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 __device__ inline string_view::const_iterator& string_view::const_iterator::move_to(
   size_type new_pos)
 {
-  *this += (new_pos - char_pos);
+  *this += (new_pos - char_pos);  // more efficient than recounting from the start
   return *this;
 }
 
