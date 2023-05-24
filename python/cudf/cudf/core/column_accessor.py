@@ -373,12 +373,16 @@ class ColumnAccessor(abc.MutableMapping):
             return self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
             return (self.names[index],)
-        elif index and all(map(is_bool, index)):
-            if len(index) != len(self.names):
-                raise IndexError("Invalid boolean mask for column selection")
+        elif (bn := len(index)) > 0 and all(map(is_bool, index)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
             if isinstance(index, (pd.Series, cudf.Series)):
                 # Don't allow iloc indexing with series
-                raise IndexError("Cannot use Series object for iloc indexing")
+                raise NotImplementedError(
+                    "Cannot use Series object for mask iloc indexing"
+                )
             # TODO: Doesn't handle on-device columns
             return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
@@ -476,7 +480,11 @@ class ColumnAccessor(abc.MutableMapping):
         # Might be a generator
         key = tuple(key)
         # Special-casing for boolean mask
-        if key and all(map(is_bool, key)):
+        if (bn := len(key)) > 0 and all(map(is_bool, key)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
             data = dict(
                 item
                 for item, keep in zip(self._grouped_data.items(), key)

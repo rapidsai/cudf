@@ -1708,8 +1708,36 @@ def test_boolean_mask_wrong_length(indexer, mask):
 def test_boolean_mask_columns(indexer):
     df = pd.DataFrame(np.zeros((3, 3)))
     cdf = cudf.from_pandas(df)
-
-    expect = getattr(df, indexer)[:, [True, False, True]]
-    got = getattr(cdf, indexer)[:, [True, False, True]]
+    mask = [True, False, True]
+    expect = getattr(df, indexer)[:, mask]
+    got = getattr(cdf, indexer)[:, mask]
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+@pytest.mark.parametrize(
+    "mask",
+    [[False, True], [False, False, True, True, True]],
+    ids=["too-short", "too-long"],
+)
+def test_boolean_mask_columns_wrong_length(indexer, mask):
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    with pytest.raises(IndexError):
+        getattr(df, indexer)[:, mask]
+    with pytest.raises(IndexError):
+        getattr(cdf, indexer)[:, mask]
+
+
+def test_boolean_mask_columns_iloc_series():
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    mask = pd.Series([True, False, True], dtype=bool)
+    with pytest.raises(NotImplementedError):
+        df.iloc[:, mask]
+
+    with pytest.raises(NotImplementedError):
+        cdf.iloc[:, mask]

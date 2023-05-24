@@ -405,7 +405,7 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_bool_dtype(arg.dtype):
                 if (bn := len(arg)) != (n := len(self)):
                     raise IndexError(
-                        f"Boolean index has wrong length: {bn} not {n}"
+                        f"Boolean mask has wrong length: {bn} not {n}"
                     )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
