@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-skip = True
+IS_CUDA_11 = False
 try:
     from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
@@ -12,11 +12,11 @@ try:
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
         if driver_version < (12, 0):
-            skip = False
+            IS_CUDA_11 = True
 except ModuleNotFoundError:
     pass
 
-test = """
+TEST_NUMBA_MVC_ENABLED = """
 import numba.cuda
 import cudf
 from cudf.utils._numba import _CUDFNumbaConfig, _patch_numba_mvc
@@ -32,13 +32,17 @@ def test_kernel(x):
     if id < len(x):
         x[id] += 1
 
-s = cudf.Series([1,2,3])
+s = cudf.Series([1, 2, 3])
 with _CUDFNumbaConfig():
     test_kernel.forall(len(s))(s)
 """
 
 
-@pytest.mark.skipif(False, reason="MVC Not Required")
-def test_numba_mvc_enabled():
-    cp = subprocess.run([sys.executable, "-c", test], capture_output=True)
+@pytest.mark.skipif(
+    not IS_CUDA_11, reason="Minor Version Compatibility test for CUDA 11"
+)
+def test_numba_mvc_enabled_cuda_11():
+    cp = subprocess.run(
+        [sys.executable, "-c", TEST_NUMBA_MVC_ENABLED], capture_output=True
+    )
     assert cp.returncode == 0

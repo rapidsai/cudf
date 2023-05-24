@@ -70,10 +70,11 @@ def _patch_numba_mvc():
     numba_config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
 
     if "numba.cuda" in sys.modules:
-        # Perform a monkey-patch of numba for version 0.57.0 MVC support, which
-        # must know the config value at import time. We cannot guarantee the
-        # order of imports between cudf and numba.cuda so we monkey-patch numba
-        # to ensure it has these names available.
+        # Patch numba for version 0.57.0 MVC support, which must know the
+        # config value at import time. We cannot guarantee the order of imports
+        # between cudf and numba.cuda so we patch numba to ensure it has these
+        # names available.
+        # See https://github.com/numba/numba/issues/8977 for details.
         import numba.cuda
         from cubinlinker import CubinLinker, CubinLinkerError
         from ptxcompiler import compile_ptx
