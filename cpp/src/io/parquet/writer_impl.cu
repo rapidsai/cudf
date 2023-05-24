@@ -1710,10 +1710,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   size_type const total_frags = [&]() {
     if (frags_per_column.size() > 0) {
       std::exclusive_scan(frags_per_column.data(),
-                          frags_per_column.data() + num_columns + 1,
+                          frags_per_column.data() + num_columns,
                           std::back_inserter(frag_offsets),
                           0);
-      return frag_offsets[num_columns];
+      return frag_offsets[num_columns - 1] + frags_per_column[num_columns - 1];
     } else {
       return 0;
     }
