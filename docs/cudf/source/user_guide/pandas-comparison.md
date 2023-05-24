@@ -114,8 +114,11 @@ obtained from Pandas and cuDF below:
  10  640.00
 ```
 
-If you require that results be returned in a predictable order, you
-must pass the `sort=True` option explicitly:
+In most cases, the rows of a DataFrame are accessed by index labels
+rather than by position, so the order in which rows are returned
+doesn't matter. However, if you require that results be returned in a
+predictable (sorted) order, you can pass the `sort=True` option
+explicitly:
 
 ```{code} python
 >>> df.groupby("a", sort=True).mean().head()
