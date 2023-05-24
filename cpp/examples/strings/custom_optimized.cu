@@ -155,7 +155,8 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
     *d_names, *d_visibilities, offsets.data(), chars.data());
 
   // create column from offsets and chars vectors (no copy is performed)
-  auto result = cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars));
+  auto result =
+    cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars), {}, 0);
 
   // wait for all of the above to finish
   stream.synchronize();

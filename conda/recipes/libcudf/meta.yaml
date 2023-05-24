@@ -30,6 +30,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=libcudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   build:
@@ -54,8 +55,11 @@ requirements:
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
+    - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
+    - libcufile {{ cuda11_libcufile_host_version }}
+    - libcufile-dev {{ cuda11_libcufile_host_version }}
     - libcurand {{ cuda11_libcurand_host_version }}
     - libcurand-dev {{ cuda11_libcurand_host_version }}
     - cuda-nvrtc ={{ cuda_version }}
@@ -66,8 +70,10 @@ requirements:
     - cuda-cudart
     - cuda-cudart-dev
     - cuda-cudart-static
-    - libcurand
-    - libcurand-dev
+    - libcufile {{ libcufile_host_version }}      # [linux64]
+    - libcufile-dev {{ libcufile_host_version }}  # [linux64]
+    - libcurand {{ libcurand_host_version }}
+    - libcurand-dev {{ libcurand_host_version }}
     - cuda-nvrtc
     - cuda-nvrtc-dev
     - cuda-nvtx
@@ -106,7 +112,10 @@ outputs:
         - cuda-nvrtc {{ cuda_spec }}
         {% endif %}
         - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
+        - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
+        - libcufile {{ libcufile_run_version }}      # [linux64]
+        - libcufile-dev {{ libcufile_run_version }}  # [linux64]
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
@@ -125,6 +134,7 @@ outputs:
         - test -f $PREFIX/include/cudf/column/column_factories.hpp
         - test -f $PREFIX/include/cudf/column/column_view.hpp
         - test -f $PREFIX/include/cudf/concatenate.hpp
+        - test -f $PREFIX/include/cudf/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/copying.hpp
         - test -f $PREFIX/include/cudf/datetime.hpp
         - test -f $PREFIX/include/cudf/timezone.hpp
@@ -133,6 +143,8 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/detail/concatenate_masks.hpp
+        - test -f $PREFIX/include/cudf/detail/contiguous_split.hpp
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
         - test -f $PREFIX/include/cudf/detail/fill.hpp
@@ -173,7 +185,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/logger.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/pinned_allocator.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/pinned_host_vector.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
         - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
@@ -446,18 +458,13 @@ outputs:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         {% if cuda_major == "11" %}
-        - cudatoolkit {{ cuda_spec }}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% else %}
-        - cuda-cudart {{ cuda_spec }}
-        - cuda-cudart-dev {{ cuda_spec }}
-        - cuda-cudart-static {{ cuda_spec }}
         - cuda-cupti {{ cuda_spec }}
-        - libcufile         # [linux64]
-        - libcufile-dev     # [linux64]
-        - libcufile-static  # [linux64]
         - libcurand {{ libcurand_run_version }}
         {% endif %}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
