@@ -89,7 +89,8 @@ class column {
       _size{[&]() {
         CUDF_EXPECTS(
           other.size() <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-          "The device_uvector size exceeds the maximum size_type.");
+          "The device_uvector size exceeds the column size limit",
+          std::overflow_error);
         return static_cast<size_type>(other.size());
       }()},
       _data{other.release()},

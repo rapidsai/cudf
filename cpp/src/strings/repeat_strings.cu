@@ -51,7 +51,8 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
   if (repeat_times == 1) { return std::make_unique<string_scalar>(input, stream, mr); }
 
   CUDF_EXPECTS(input.size() <= std::numeric_limits<size_type>::max() / repeat_times,
-               "The output string has size that exceeds the maximum allowed size.");
+               "The output size exceeds the column size limit",
+               std::overflow_error);
 
   auto const str_size = input.size();
   auto const iter     = thrust::make_counting_iterator(0);

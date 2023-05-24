@@ -157,7 +157,7 @@ TEST_F(StringsColumnTest, GatherTooBig)
     cudf::data_type{cudf::type_id::STRING}, 1, nullptr, nullptr, 0, 0, {offsets, chars});
   auto map = thrust::constant_iterator<int8_t>(0);
   cudf::test::fixed_width_column_wrapper<int8_t> gather_map(map, map + 1000);
-  EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), cudf::logic_error);
+  EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), std::overflow_error);
 }
 
 TEST_F(StringsColumnTest, Scatter)
