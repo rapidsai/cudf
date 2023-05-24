@@ -11,6 +11,7 @@ import cudf
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -247,6 +248,7 @@ def query_execute(df, expr, callenv):
     out = column_empty(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
-    kernel.forall(nrows)(*args)
+    with _CUDFNumbaConfig():
+        kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
     return out.set_mask(out_mask).fillna(False)
