@@ -551,7 +551,7 @@ def test_character_tokenize_index():
             "e",
             "Œ",
             "Ž",
-            "'",
+            "‘",
             "•",
             "™",
             "œ",
