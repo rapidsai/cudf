@@ -1075,7 +1075,8 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    with pytest.warns(FutureWarning):
+        stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -1102,8 +1103,7 @@ def test_string_unique(item):
     gs = cudf.Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # cudf returns sorted unique with `None` placed before other strings
-    pres = pres.sort_values(na_position="first").reset_index(drop=True)
+    # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
 
@@ -2755,7 +2755,7 @@ def test_string_str_subscriptable(data, index):
     assert_eq(psr.str[index], gsr.str[index])
 
     psi = pd.Index(data)
-    gsi = StringIndex(data)
+    gsi = cudf.Index(data)
 
     assert_eq(psi.str[index], gsi.str[index])
 

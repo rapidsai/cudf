@@ -1718,8 +1718,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
         cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
-      auto offsets_column =
-        std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
+      auto offsets_column = std::make_unique<column>(
+        data_type{type_id::INT32}, num_rows, d_offsets.release(), rmm::device_buffer{}, 0);
       // Create children column
       auto [child_column, names] =
         json_col.child_columns.empty()

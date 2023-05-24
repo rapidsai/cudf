@@ -308,7 +308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  object  int64
         3  object  int64
         """
-        index = self.grouping.keys.unique().to_pandas()
+        index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
@@ -678,7 +678,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
             _, (ordering,), _ = self._groupby.groups(
-                [arange(0, self.obj._data.nrows)]
+                [arange(0, len(self.obj))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
@@ -864,25 +864,27 @@ class GroupBy(Serializable, Reducible, Scannable):
         5    0
         dtype: int64
         """
-        num_groups = len(index := self.grouping.keys.unique())
+        index = self.grouping.keys.unique().sort_values()
+        num_groups = len(index)
         _, has_null_group = bitmask_or([*index._columns])
 
         if ascending:
-            if has_null_group:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(-1, num_groups - 1)}
-                )
-            else:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(num_groups)}
-                )
+            # Count ascending from 0 to num_groups - 1
+            group_ids = cudf.Series._from_data({None: cp.arange(num_groups)})
+        elif has_null_group:
+            # Count descending from num_groups - 1 to 0, but subtract one more
+            # for the null group making it num_groups - 2 to -1.
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 2, -2, -1)}
+            )
         else:
+            # Count descending from num_groups - 1 to 0
             group_ids = cudf.Series._from_data(
                 {None: cp.arange(num_groups - 1, -1, -1)}
             )
 
         if has_null_group:
-            group_ids.iloc[0] = cudf.NA
+            group_ids.iloc[-1] = cudf.NA
 
         group_ids._index = index
         return self._broadcast(group_ids)
@@ -1065,7 +1067,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
-        group_names = grouped_keys.unique()
+        group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
@@ -2270,11 +2272,29 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         # TODO: copy metadata after this method is a common pattern, should
         # merge in this method.
-        _, order_cols, _ = self._groupby.groups(
-            [arange(0, result._data.nrows)]
-        )
-        gather_map = order_cols[0].argsort()
-        result = result.take(gather_map)
+
+        # This function is used to reorder the results of scan-based
+        # groupbys which have the same output size as input size.
+        # However, if the grouping key has NAs and dropna=True, the
+        # result coming back from libcudf has null_count few rows than
+        # the input, so we must produce an ordering from the full
+        # input range.
+        _, (ordering,), _ = self._groupby.groups([arange(0, len(self.obj))])
+        if self._dropna and any(
+            c.has_nulls(include_nan=True) > 0
+            for c in self.grouping._key_columns
+        ):
+            # Scan aggregations with null/nan keys put nulls in the
+            # corresponding output rows in pandas, to do that here
+            # expand the result by reindexing.
+            ri = cudf.RangeIndex(0, len(self.obj))
+            result.index = cudf.Index(ordering)
+            # This reorders and expands
+            result = result.reindex(ri)
+        else:
+            # Just reorder according to the groupings
+            result = result.take(ordering.argsort())
+        # Now produce the actual index we first thought of
         result.index = self.obj.index
         return result
 

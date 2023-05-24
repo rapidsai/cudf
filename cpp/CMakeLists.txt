@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.06.00
+  VERSION 23.08.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -346,6 +346,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
+  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu

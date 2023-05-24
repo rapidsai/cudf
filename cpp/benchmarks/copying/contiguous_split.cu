@@ -25,12 +25,30 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-template <typename T>
+void contiguous_split(cudf::table_view const& src_table, std::vector<cudf::size_type> const& splits)
+{
+  auto result = cudf::contiguous_split(src_table, splits);
+}
+
+void chunked_pack(cudf::table_view const& src_table, std::vector<cudf::size_type> const&)
+{
+  auto const mr     = rmm::mr::get_current_device_resource();
+  auto const stream = cudf::get_default_stream();
+  auto user_buffer  = rmm::device_uvector<std::uint8_t>(100L * 1024 * 1024, stream, mr);
+  auto chunked_pack = cudf::chunked_pack::create(src_table, user_buffer.size(), mr);
+  while (chunked_pack->has_next()) {
+    auto iter_size = chunked_pack->next(user_buffer);
+  }
+  stream.synchronize();
+}
+
+template <typename T, typename ContigSplitImpl>
 void BM_contiguous_split_common(benchmark::State& state,
                                 std::vector<T>& src_cols,
                                 int64_t num_rows,
                                 int64_t num_splits,
-                                int64_t bytes_total)
+                                int64_t bytes_total,
+                                ContigSplitImpl& impl)
 {
   // generate splits
   std::vector<cudf::size_type> splits;
@@ -57,7 +75,7 @@ void BM_contiguous_split_common(benchmark::State& state,
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    auto result = cudf::contiguous_split(src_table, splits);
+    impl(src_table, splits);
   }
 
   // it's 2x bytes_total because we're both reading and writing.
@@ -65,8 +83,10 @@ void BM_contiguous_split_common(benchmark::State& state,
 }
 
 class ContiguousSplit : public cudf::benchmark {};
+class ChunkedPack : public cudf::benchmark {};
 
-void BM_contiguous_split(benchmark::State& state)
+template <typename ContiguousSplitImpl>
+void BM_contiguous_split(benchmark::State& state, ContiguousSplitImpl& impl)
 {
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
@@ -91,12 +111,14 @@ void BM_contiguous_split(benchmark::State& state)
     (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
                       : 0);
 
-  BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
+  BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes, impl);
 }
 
 class ContiguousSplitStrings : public cudf::benchmark {};
+class ChunkedPackStrings : public cudf::benchmark {};
 
-void BM_contiguous_split_strings(benchmark::State& state)
+template <typename ContiguousSplitImpl>
+void BM_contiguous_split_strings(benchmark::State& state, ContiguousSplitImpl& impl)
 {
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
@@ -133,13 +155,13 @@ void BM_contiguous_split_strings(benchmark::State& state)
     (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
                       : 0);
 
-  BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
+  BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes, impl);
 }
 
 #define CSBM_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
   BENCHMARK_DEFINE_F(ContiguousSplit, name)(::benchmark::State & state)      \
   {                                                                          \
-    BM_contiguous_split(state);                                              \
+    BM_contiguous_split(state, contiguous_split);                            \
   }                                                                          \
   BENCHMARK_REGISTER_F(ContiguousSplit, name)                                \
     ->Args({size, num_columns, num_splits, validity})                        \
@@ -168,7 +190,7 @@ CSBM_BENCHMARK_DEFINE(1Gb1ColValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 
 #define CSBM_STRINGS_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
   BENCHMARK_DEFINE_F(ContiguousSplitStrings, name)(::benchmark::State & state)       \
   {                                                                                  \
-    BM_contiguous_split_strings(state);                                              \
+    BM_contiguous_split_strings(state, contiguous_split);                            \
   }                                                                                  \
   BENCHMARK_REGISTER_F(ContiguousSplitStrings, name)                                 \
     ->Args({size, num_columns, num_splits, validity})                                \
@@ -189,3 +211,53 @@ CSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 10
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 1);
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb1ColNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 0);
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb1ColValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);
+
+#define CCSBM_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
+  BENCHMARK_DEFINE_F(ChunkedPack, name)(::benchmark::State & state)           \
+  {                                                                           \
+    BM_contiguous_split(state, chunked_pack);                                 \
+  }                                                                           \
+  BENCHMARK_REGISTER_F(ChunkedPack, name)                                     \
+    ->Args({size, num_columns, num_splits, validity})                         \
+    ->Unit(benchmark::kMillisecond)                                           \
+    ->UseManualTime()                                                         \
+    ->Iterations(8)
+CCSBM_BENCHMARK_DEFINE(6Gb512ColsNoValidity, (int64_t)6 * 1024 * 1024 * 1024, 512, 0, 0);
+CCSBM_BENCHMARK_DEFINE(6Gb512ColsValidity, (int64_t)6 * 1024 * 1024 * 1024, 512, 0, 1);
+CCSBM_BENCHMARK_DEFINE(6Gb10ColsNoValidity, (int64_t)6 * 1024 * 1024 * 1024, 10, 0, 0);
+CCSBM_BENCHMARK_DEFINE(6Gb10ColsValidity, (int64_t)6 * 1024 * 1024 * 1024, 10, 0, 1);
+
+CCSBM_BENCHMARK_DEFINE(4Gb512ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 0, 0);
+CCSBM_BENCHMARK_DEFINE(4Gb512ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 0, 1);
+CCSBM_BENCHMARK_DEFINE(4Gb10ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 0, 0);
+CCSBM_BENCHMARK_DEFINE(4Gb10ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 0, 1);
+CCSBM_BENCHMARK_DEFINE(4Gb4ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 1);
+
+CCSBM_BENCHMARK_DEFINE(1Gb512ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 0, 0);
+CCSBM_BENCHMARK_DEFINE(1Gb512ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 0, 1);
+CCSBM_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 0, 0);
+CCSBM_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 0, 1);
+CCSBM_BENCHMARK_DEFINE(1Gb1ColValidity, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);
+
+#define CCSBM_STRINGS_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
+  BENCHMARK_DEFINE_F(ChunkedPackStrings, name)(::benchmark::State & state)            \
+  {                                                                                   \
+    BM_contiguous_split_strings(state, chunked_pack);                                 \
+  }                                                                                   \
+  BENCHMARK_REGISTER_F(ChunkedPackStrings, name)                                      \
+    ->Args({size, num_columns, num_splits, validity})                                 \
+    ->Unit(benchmark::kMillisecond)                                                   \
+    ->UseManualTime()                                                                 \
+    ->Iterations(8)
+
+CCSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 0, 0);
+CCSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 0, 1);
+CCSBM_STRINGS_BENCHMARK_DEFINE(4Gb10ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 0, 0);
+CCSBM_STRINGS_BENCHMARK_DEFINE(4Gb10ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 0, 1);
+CCSBM_STRINGS_BENCHMARK_DEFINE(4Gb4ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 1);
+
+CCSBM_STRINGS_BENCHMARK_DEFINE(1Gb512ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 0, 0);
+CCSBM_STRINGS_BENCHMARK_DEFINE(1Gb512ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 0, 1);
+CCSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 0, 0);
+CCSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 0, 1);
+CCSBM_STRINGS_BENCHMARK_DEFINE(1Gb1ColValidity, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);
