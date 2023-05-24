@@ -209,6 +209,9 @@ def _can_be_jitted(frame, func, args):
     by attempting to compile just the function to PTX using the
     target set of types
     """
+    if not hasattr(func, "__code__"):
+        # numba requires bytecode to be present to proceed
+        return False
     np_field_types = np.dtype(
         list(
             _supported_dtypes_from_frame(
