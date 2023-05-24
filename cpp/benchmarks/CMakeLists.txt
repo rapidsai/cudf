@@ -272,12 +272,11 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.c
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(
-  TEXT_BENCH text/ngrams.cpp text/normalize.cpp text/normalize_spaces.cpp text/replace.cpp
-  text/subword.cpp text/tokenize.cpp
-)
+ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
-ConfigureNVBench(TEXT_NVBENCH text/minhash.cpp)
+ConfigureNVBench(
+  TEXT_NVBENCH text/minhash.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp
+)
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
