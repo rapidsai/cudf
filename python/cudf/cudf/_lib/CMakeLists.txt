@@ -63,11 +63,6 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
 
-# All modules need to include the header containing the exception handler.
-foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-endforeach()
-
 target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
