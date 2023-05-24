@@ -210,7 +210,8 @@ def _can_be_jitted(frame, func, args):
     target set of types
     """
     if not hasattr(func, "__code__"):
-        # numba requires bytecode to be present to proceed
+        # Numba requires bytecode to be present to proceed.
+        # See https://github.com/numba/numba/issues/4587
         return False
     np_field_types = np.dtype(
         list(
