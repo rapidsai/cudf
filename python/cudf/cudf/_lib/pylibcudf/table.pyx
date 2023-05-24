@@ -29,9 +29,6 @@ cdef class Table:
 
         return self._underlying.get()
 
-    # TODO: I'm currently inconsistent between Table and Column how much of the
-    # corresponding libcudf_class is being used. I need to make some design
-    # decisions about that eventually.
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):
         cdef vector[unique_ptr[column]] c_columns = move(
