@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "custreamz"
-version = "23.06.00"
+version = "23.08.00"
 description = "cuStreamz - GPU Accelerated Streaming"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
