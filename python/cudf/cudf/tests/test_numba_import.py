@@ -21,8 +21,6 @@ import numba.cuda
 import cudf
 from cudf.utils._numba import _CUDFNumbaConfig, _patch_numba_mvc
 
-from numba import config
-config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=1
 
 _patch_numba_mvc()
 
