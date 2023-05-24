@@ -438,12 +438,6 @@ cdef class Column:
             offset,
             children)
 
-    # TODO: Figure out appropriate exception handling
-    # TODO: Determine whether this should take a null count or if we can rely
-    # on lower-level null count caching from libcudf
-    # TODO: For now the function name reflects the CapsCase of the pylibcudf
-    # class to differentiate from libcudf's snake_case column_view, but we will
-    # want to change that once cudf stops interfacing directly with libcudf.
     cpdef pylibcudf.Column to_pylibcudf(self):
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
@@ -476,14 +470,10 @@ cdef class Column:
             self.size,
             data,
             mask,
-            # TODO: Determine whether there is a good reason why the `view`
-            # method above does extra handling to determine whether null_count
-            # is None. I think that in the past we were using `_null_count`
-            # directly rather than the property, and when it's set to None we
-            # would avoid computing the null count and instead pass
-            # UNKNOWN_NULL_COUNT to C++. We should probably stop doing that
-            # though since in the long run we plan to require null counts to be
-            # known on construction.
+            # TODO: We may need to do some extra work to ensure that
+            # self.null_count is not None. However, that would be out of scope
+            # for this PR and would probably need to be resolved as part of the
+            # UNKNOWN_NULL_COUNT removal.
             self.null_count,
             self.offset,
             children,
@@ -562,8 +552,7 @@ cdef class Column:
     def from_pylibcudf_column(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
-        # TODO: Find a better approach to getting the dtype without using
-        # column views if possible.
+        # TODO: Rewrite utility for dtype conversion to not need a column view.
         dtype = dtype_from_column_view(dereference(col.get_underlying()))
 
         return cudf.core.column.build_column(
