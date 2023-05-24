@@ -1713,7 +1713,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                           frags_per_column.data() + num_columns,
                           std::back_inserter(frag_offsets),
                           0);
-      return frag_offsets[num_columns - 1] + frags_per_column[num_columns - 1];
+      return frag_offsets.back() + frags_per_column.back();
     } else {
       return 0;
     }
