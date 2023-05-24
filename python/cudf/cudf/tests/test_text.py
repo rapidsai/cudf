@@ -52,6 +52,35 @@ def test_tokenize():
     assert_eq(expected, actual)
 
 
+def test_tokenize_delimiter():
+    strings = cudf.Series(
+        [
+            "the quick fox jumped over the lazy dog",
+            "the siamésé cat jumped under the sofa",
+            None,
+            "",
+        ]
+    )
+
+    expected_values = cudf.Series(
+        [
+            "the quick f",
+            "x jumped ",
+            "ver the lazy d",
+            "g",
+            "the siamésé cat jumped under the s",
+            "fa",
+        ]
+    )
+    expected_index = strings.index.repeat(strings.str.token_count("o"))
+    expected = cudf.Series(expected_values, index=expected_index)
+
+    actual = strings.str.tokenize(delimiter="o")
+
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 def test_detokenize():
     strings = cudf.Series(
         [
