@@ -110,6 +110,8 @@ std::unique_ptr<column> slice_strings(
 /**
  * @brief Slices a column of strings by using a delimiter as a slice point.
  *
+ * @deprecated Since 23.06
+ *
  * Returns a column of strings after searching for @p delimiter @p count number of
  * times in the source @p strings from left to right if @p count is positive or from
  * right to left if @p count is negative. If @p count is positive, it returns a substring
@@ -144,7 +146,7 @@ std::unique_ptr<column> slice_strings(
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
-std::unique_ptr<column> slice_strings(
+[[deprecated]] std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   string_scalar const& delimiter,
   size_type count,
@@ -152,6 +154,8 @@ std::unique_ptr<column> slice_strings(
 
 /**
  * @brief Slices a column of strings by using a delimiter column as slice points.
+ *
+ * @deprecated Since 23.06
  *
  * Returns a column of strings after searching the delimiter defined per row from
  * @p delimiter_strings @p count number of times in the source @p strings from left to right
@@ -194,7 +198,7 @@ std::unique_ptr<column> slice_strings(
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
-std::unique_ptr<column> slice_strings(
+[[deprecated]] std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   strings_column_view const& delimiter_strings,
   size_type count,
