@@ -4609,7 +4609,7 @@ class StringMethods(ColumnMethods):
             )
         if isinstance(self._parent, cudf.Series):
             result.index = self._parent.index.repeat(  # type: ignore
-                self.token_count()
+                self.token_count(delimiter=delimiter)
             )
         return result
 
@@ -5296,6 +5296,9 @@ class StringMethods(ColumnMethods):
 
 
 def _massage_string_arg(value, name, allow_col=False):
+    if isinstance(value, cudf.Scalar):
+        return value
+
     if isinstance(value, str):
         return cudf.Scalar(value, dtype="str")
 

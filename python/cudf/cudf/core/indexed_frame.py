@@ -68,6 +68,7 @@ from cudf.core.udf.utils import (
     _return_arr_from_dtype,
 )
 from cudf.utils import docutils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -2193,7 +2194,8 @@ class IndexedFrame(Frame):
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
         try:
-            kernel.forall(len(self))(*launch_args)
+            with _CUDFNumbaConfig():
+                kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
