@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,8 @@ struct count_accessor {
     auto count = p_count->value(stream);
     // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <= std::numeric_limits<cudf::size_type>::max(),
-                 "count should not exceed size_type's limit.");
+                 "count should not exceed the column size limit",
+                 std::overflow_error);
     return static_cast<cudf::size_type>(count);
   }
 
@@ -86,7 +87,8 @@ struct count_checker {
       auto max = thrust::reduce(
         rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
-                   "count should not have values larger than size_type maximum.");
+                   "count exceeds the column size limit",
+                   std::overflow_error);
     }
   }
 
@@ -136,9 +138,9 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(count >= 0, "count value should be non-negative");
-  CUDF_EXPECTS(
-    static_cast<int64_t>(input_table.num_rows()) * count <= std::numeric_limits<size_type>::max(),
-    "The resulting table has more rows than size_type's limit.");
+  CUDF_EXPECTS(input_table.num_rows() <= std::numeric_limits<size_type>::max() / count,
+               "The resulting table exceeds the column size limit",
+               std::overflow_error);
 
   if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
