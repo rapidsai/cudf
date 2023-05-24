@@ -5862,7 +5862,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
                 return Series(
-                    index=cudf.Index([], dtype="str")
+                    index=self._data.to_pandas_index()[:0]
                     if axis == 0
                     else source.index
                 )

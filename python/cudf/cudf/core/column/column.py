@@ -2314,7 +2314,16 @@ def as_column(
                         pa_type = np_to_pa_dtype(
                             _maybe_convert_to_default_type("float")
                         )
-
+                    if (
+                        pa_type is None
+                        and isinstance(arbitrary, pd.Index)
+                        and arbitrary.shape == (0,)
+                    ):
+                        # When an empty `pd.Index` is passed to `pa.array`,
+                        # a type of `null-type` is returned by pyarrow, hence
+                        # we need this workaround to preserve the dtype of
+                        # column being created.
+                        pa_type = np_to_pa_dtype(arbitrary.dtype)
                 data = as_column(
                     pa.array(
                         arbitrary,
