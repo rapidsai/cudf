@@ -534,12 +534,20 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
 
     while (pos < target_pos) {
       int len;
-      if (k + 4 <= dict_size) {
-        len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
-        k += 4;
-        if (k + len > dict_size) { len = 0; }
+      if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+        if (k < dict_size) {
+          len = s->dtype_len_in;
+        } else {
+          len = 0;
+        }
       } else {
-        len = 0;
+        if (k + 4 <= dict_size) {
+          len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
+          k += 4;
+          if (k + len > dict_size) { len = 0; }
+        } else {
+          len = 0;
+        }
       }
       if constexpr (!sizes_only) {
         sb->dict_idx[rolling_index(pos)] = k;
@@ -606,7 +614,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
                                        void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  if (s->dtype_len == 4) {
+  if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
@@ -1213,7 +1221,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::PLAIN_DICTIONARY:
         case Encoding::RLE_DICTIONARY:
           // RLE-packed dictionary indices, first byte indicates index length in bits
-          if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
+          if ((data_type == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<const uint8_t*>(s->col.str_dict_index);
             s->dict_size = s->col.page_info[0].num_input_values * sizeof(string_index_pair);
@@ -1230,7 +1238,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
-          if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
+          if (data_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: s->dict_run = 0; break;
         default:
@@ -2034,11 +2042,14 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
     return;
   }
 
+  auto const data_type = s->col.data_type & 7;
+
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
     out_thread0 =
-      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
+      (data_type == BOOLEAN || data_type == BYTE_ARRAY || data_type == FIXED_LEN_BYTE_ARRAY) ? 64
+                                                                                             : 32;
   }
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
@@ -2073,15 +2084,14 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
-      } else if ((s->col.data_type & 7) == BOOLEAN) {
+      } else if (data_type == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
+      } else if (data_type == BYTE_ARRAY or data_type == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      int dtype = s->col.data_type & 7;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -2112,10 +2122,10 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
         // nesting level that is storing actual leaf values
         int leaf_level_index = s->col.max_nesting_depth - 1;
 
-        uint32_t dtype_len = s->dtype_len;
+        auto const dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        if (dtype == BYTE_ARRAY) {
+        if (data_type == BYTE_ARRAY) {
           if (s->col.converted_type == DECIMAL) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
             auto const decimal_precision = s->col.decimal_precision;
@@ -2129,10 +2139,10 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
           } else {
             gpuOutputString(s, sb, val_src_pos, dst);
           }
-        } else if (dtype == BOOLEAN) {
+        } else if (data_type == BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (s->col.converted_type == DECIMAL) {
-          switch (dtype) {
+          switch (data_type) {
             case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
             case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
             default:
@@ -2145,7 +2155,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               }
               break;
           }
-        } else if (dtype == INT96) {
+        } else if (data_type == FIXED_LEN_BYTE_ARRAY) {
+          gpuOutputString(s,
+                          sb,
+                          val_src_pos,
+                          nesting_info_base[leaf_level_index].data_out +
+                            static_cast<size_t>(dst_pos) * sizeof(string_index_pair));
+        } else if (data_type == INT96) {
           gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
