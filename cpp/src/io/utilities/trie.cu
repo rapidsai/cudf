@@ -40,9 +40,9 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
 
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
-    using TrieNodePtr                 = std::unique_ptr<TreeTrieNode>;
-    std::vector<TrieNodePtr> children = std::vector<TrieNodePtr>(alphabet_size);
-    bool is_end_of_word               = false;
+    using TrieNodePtr = std::unique_ptr<TreeTrieNode>;
+    std::array<TrieNodePtr, alphabet_size> children;
+    bool is_end_of_word = false;
   };
 
   // Construct a tree-structured trie

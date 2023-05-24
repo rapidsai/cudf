@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -6674,6 +6675,100 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expectedCv = expectedStructCv.makeListFromOffsets(5, expectedOffsetsCv)
     ) {
       assertColumnsAreEqual(expectedCv, actualCv);
+    }
+  }
+
+  @Test
+  void testColumnViewWithNonEmptyNullsIsCleared() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> list2 = Arrays.asList(7, 8, 9);
+    List<Integer> list3 = null;
+    try (ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
+         BaseDeviceMemoryBuffer baseValidityBuffer = input.getDeviceBufferFor(BufferType.VALIDITY);
+         BaseDeviceMemoryBuffer baseOffsetBuffer = input.getDeviceBufferFor(BufferType.OFFSET);
+         HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4))) {
+
+      newValidity.copyFromDeviceBuffer(baseValidityBuffer);
+      // we are setting list1 with 3 elements to null. This will result in a non-empty null in the
+      // ColumnView at index 1
+      BitVectorHelper.setNullAt(newValidity, 1);
+      // validityBuffer will be closed by offHeapState later
+      DeviceMemoryBuffer validityBuffer = DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(4));
+      try {
+        // offsetBuffer will be closed by offHeapState later
+        DeviceMemoryBuffer offsetBuffer = DeviceMemoryBuffer.allocate(baseOffsetBuffer.getLength());
+        try {
+          validityBuffer.copyFromHostBuffer(newValidity);
+          offsetBuffer.copyFromMemoryBuffer(0, baseOffsetBuffer, 0,
+              baseOffsetBuffer.length, Cuda.DEFAULT_STREAM);
+
+          // The new offHeapState will have 2 nulls, one null at index 4 from the original ColumnVector
+          // the other at index 1 which is non-empty
+          ColumnVector.OffHeapState offHeapState = ColumnVector.makeOffHeap(input.type, input.rows, Optional.of(2L),
+              null, validityBuffer, offsetBuffer,
+              null, Arrays.stream(input.getChildColumnViews()).mapToLong((c) -> c.viewHandle).toArray());
+          try {
+            new ColumnView(offHeapState);
+          } catch (AssertionError ae) {
+            assert offHeapState.isClean();
+          }
+        } catch (Exception e) {
+          if (!offsetBuffer.closed) {
+            offsetBuffer.close();
+          }
+        }
+      } catch (Exception e) {
+        if (!validityBuffer.closed) {
+          validityBuffer.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  public void testEventHandlerIsCalledForEachClose() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler((col, refCount) -> {
+        assertEquals(cv, col);
+        onClosedWasCalled.incrementAndGet();
+      });
+    }
+    assertEquals(1, onClosedWasCalled.get());
+  }
+
+  @Test
+  public void testEventHandlerIsNotCalledIfNotSet() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      assertNull(cv.getEventHandler());
+    }
+    assertEquals(0, onClosedWasCalled.get());
+
+    try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
+      cv.setEventHandler((col, refCount) -> {
+        onClosedWasCalled.incrementAndGet();
+      });
+      cv.setEventHandler(null);
+    }
+    assertEquals(0, onClosedWasCalled.get());
+  }
+
+  /**
+   * Test that the ColumnView with unknown null-counts still returns
+   * the correct null-count when queried.
+   */
+  @Test
+  public void testColumnViewNullCount() {
+    try (ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, null, 3, null, 4, null, 5, null, 6);
+         ColumnView view = new ColumnView(DType.INT32,
+                                          vector.getRowCount(),
+                                          Optional.empty(), // Unknown null count.
+                                          vector.getDeviceBufferFor(BufferType.DATA),
+                                          vector.getDeviceBufferFor(BufferType.VALIDITY),
+                                          vector.getDeviceBufferFor(BufferType.OFFSET))) {
+      assertEquals(vector.getNullCount(), view.getNullCount());
     }
   }
 }

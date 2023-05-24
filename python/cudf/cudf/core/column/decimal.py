@@ -2,7 +2,7 @@
 
 import warnings
 from decimal import Decimal
-from typing import Any, Sequence, Union, cast
+from typing import Any, Optional, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -103,7 +103,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result
 
     def fillna(
-        self, value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ):
         """Fill null values with ``value``.
 
@@ -157,7 +160,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            return cudf.Scalar(Decimal(other), dtype=self.dtype)
+            other = Decimal(other)
+            metadata = other.as_tuple()
+            precision = max(len(metadata.digits), metadata.exponent)
+            scale = -metadata.exponent
+            return cudf.Scalar(
+                other, dtype=self.dtype.__class__(precision, scale)
+            )
         return NotImplemented
 
     def _decimal_quantile(
