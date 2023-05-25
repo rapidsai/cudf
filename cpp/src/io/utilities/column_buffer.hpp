@@ -73,6 +73,7 @@ class column_buffer_base;
  *
  * @param buffer Column buffer descriptors
  * @param schema_info Schema information for the column to write optionally.
+ * @param schema Optional schema used to control string to binary conversions.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
@@ -98,25 +99,17 @@ class column_buffer_base {
                      rmm::mr::device_memory_resource* mr)
     : column_buffer_base(_type, _is_nullable)
   {
-    create(_size, stream, mr, true);
   }
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size,
-              rmm::cuda_stream_view stream,
-              rmm::mr::device_memory_resource* mr,
-              bool is_ctor = false)
+  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   {
     size = _size;
     _mr  = mr;
 
     switch (type.id()) {
-      case type_id::STRING:
-        // if calling from constructor, then some members may not yet exist, so defer this to
-        // child constructor
-        if (not is_ctor) { static_cast<string_policy*>(this)->allocate_strings_data(stream); }
-        break;
+      case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
 
       // list columns store a buffer of int32's as offsets to represent
       // their individual rows
@@ -196,8 +189,7 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
                        rmm::mr::device_memory_resource* mr)
     : column_buffer_base<gather_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
-    // allocate strings data now
-    if (type.id() == type_id::STRING) { allocate_strings_data(stream); }
+    create(_size, stream, mr);
   }
 
   void allocate_strings_data(rmm::cuda_stream_view stream);
@@ -230,8 +222,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
                        rmm::mr::device_memory_resource* mr)
     : column_buffer_base<inline_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
-    // allocate strings data now
-    if (type.id() == type_id::STRING) { allocate_strings_data(stream); }
+    create(_size, stream, mr);
   }
 
   void allocate_strings_data(rmm::cuda_stream_view stream);
