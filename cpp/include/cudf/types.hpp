@@ -98,14 +98,6 @@ size_type distance(T f, T l)
 }
 
 /**
- * @brief Indicates an unknown null count.
- *
- * Use this value when constructing any column-like object to indicate that
- * the null count should be computed on the first invocation of `null_count()`.
- */
-static constexpr size_type UNKNOWN_NULL_COUNT{-1};
-
-/**
  * @brief Indicates the order in which elements should be sorted.
  */
 enum class order : bool {

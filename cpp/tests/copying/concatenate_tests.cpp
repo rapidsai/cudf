@@ -557,7 +557,7 @@ TEST_F(OverflowTest, Presliced)
       cudf::table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
-                   cudf::logic_error);
+                   std::overflow_error);
     }
   }
 
@@ -631,7 +631,7 @@ TEST_F(OverflowTest, Presliced)
       cudf::table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
-                   cudf::logic_error);
+                   std::overflow_error);
     }
   }
 

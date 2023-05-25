@@ -3165,34 +3165,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def drop_duplicates(
-        self, subset=None, keep="first", inplace=False, ignore_index=False
+        self,
+        subset=None,
+        keep="first",
+        inplace=False,
+        ignore_index=False,
     ):
         """
-        Return DataFrame with duplicate rows removed, optionally only
-        considering certain subset of columns.
+        Return DataFrame with duplicate rows removed.
+
+        Considering certain columns is optional. Indexes, including time
+        indexes are ignored.
 
         Parameters
         ----------
         subset : column label or sequence of labels, optional
             Only consider certain columns for identifying duplicates, by
             default use all of the columns.
-        keep : {'first', 'last', False}, default 'first'
+        keep : {'first', 'last', ``False``}, default 'first'
             Determines which duplicates (if any) to keep.
-            - ``first`` : Drop duplicates except for the first occurrence.
-            - ``last`` : Drop duplicates except for the last occurrence.
-            - False : Drop all duplicates.
-        inplace : bool, default False
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+        inplace : bool, default ``False``
             Whether to drop duplicates in place or to return a copy.
-        ignore_index : bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        ignore_index : bool, default ``False``
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
 
         Returns
         -------
         DataFrame or None
             DataFrame with duplicates removed or None if ``inplace=True``.
 
+        See Also
+        --------
+        DataFrame.value_counts: Count unique combinations of columns.
+
         Examples
         --------
+        Consider a dataset containing ramen ratings.
+
         >>> import cudf
         >>> df = cudf.DataFrame({
         ...     'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
@@ -3207,36 +3219,34 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  Indomie  pack    15.0
         4  Indomie  pack     5.0
 
-        By default, it removes duplicate rows based
-        on all columns. Note that order of
-        the rows being returned is not guaranteed
-        to be sorted.
+        By default, it removes duplicate rows based on all columns.
 
         >>> df.drop_duplicates()
              brand style  rating
-        2  Indomie   cup     3.5
-        4  Indomie  pack     5.0
-        3  Indomie  pack    15.0
         0  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
+        3  Indomie  pack    15.0
+        4  Indomie  pack     5.0
 
-        To remove duplicates on specific column(s),
-        use `subset`.
+        To remove duplicates on specific column(s), use ``subset``.
 
         >>> df.drop_duplicates(subset=['brand'])
              brand style  rating
-        2  Indomie   cup     3.5
         0  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
 
-        To remove duplicates and keep last occurrences, use `keep`.
+        To remove duplicates and keep last occurrences, use ``keep``.
 
         >>> df.drop_duplicates(subset=['brand', 'style'], keep='last')
              brand style  rating
+        1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        1  Yum Yum   cup     4.0
         """  # noqa: E501
         outdf = super().drop_duplicates(
-            subset=subset, keep=keep, ignore_index=ignore_index
+            subset=subset,
+            keep=keep,
+            ignore_index=ignore_index,
         )
 
         return self._mimic_inplace(outdf, inplace=inplace)
@@ -7693,7 +7703,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Combine and de-dupe the categories
             categories[idx] = cudf.Series(
                 concat_columns([col.categories for col in cols])
-            )._column.unique(preserve_order=True)
+            )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
