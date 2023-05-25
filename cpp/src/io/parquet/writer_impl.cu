@@ -1706,18 +1706,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // fragments with a (potentially) varying number of fragments per column.
 
   // first figure out the total number of fragments and calculate the start offset for each column
-  std::vector<size_type> frag_offsets;
-  size_type const total_frags = [&]() {
-    if (frags_per_column.size() > 0) {
-      std::exclusive_scan(frags_per_column.data(),
-                          frags_per_column.data() + num_columns + 1,
-                          std::back_inserter(frag_offsets),
-                          0);
-      return frag_offsets[num_columns];
-    } else {
-      return 0;
-    }
-  }();
+  std::vector<size_type> frag_offsets(num_columns, 0);
+  std::exclusive_scan(frags_per_column.begin(), frags_per_column.end(), frag_offsets.begin(), 0);
+  size_type const total_frags =
+    frags_per_column.empty() ? 0 : frag_offsets.back() + frags_per_column.back();
 
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
