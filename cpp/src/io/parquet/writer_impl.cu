@@ -1771,10 +1771,15 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
   }
 
+  // Batch processing is no longer supported.
+  // This line disables batch processing (so batch size will no longer be limited at 1GB as before).
+  // TODO: All the relevant code will be removed in the follow-up work:
+  // https://github.com/rapidsai/cudf/issues/13440
+  auto const max_bytes_in_batch = std::numeric_limits<size_t>::max();
+
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<size_type> batch_list;
   size_type num_pages          = 0;
-  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
   size_t max_uncomp_bfr_size   = 0;
   size_t max_comp_bfr_size     = 0;
   size_t max_chunk_bfr_size    = 0;
