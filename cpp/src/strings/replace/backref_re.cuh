@@ -60,9 +60,10 @@ struct backrefs_fn {
     auto nbytes       = d_str.size_bytes();  // number of bytes for the output string
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
     auto itr          = d_str.begin();
+    auto last_pos     = itr;
 
     // copy input to output replacing strings as we go
-    while (itr.position() < nchars)  // inits the begin/end vars
+    while (itr.position() <= nchars)  // inits the begin/end vars
     {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
@@ -72,8 +73,8 @@ struct backrefs_fn {
 
       // copy the string data before the matched section
       if (out_ptr) {
-        out_ptr =
-          copy_and_increment(out_ptr, in_ptr + itr.byte_offset(), start_pos - itr.byte_offset());
+        out_ptr = copy_and_increment(
+          out_ptr, in_ptr + last_pos.byte_offset(), start_pos - last_pos.byte_offset());
       }
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
@@ -88,7 +89,7 @@ struct backrefs_fn {
           }
           // extract the specific group's string for this backref's index
           auto extracted = prog.extract(prog_idx, d_str, itr, match->second, backref.first - 1);
-          if (!extracted || (extracted->second <= extracted->first)) {
+          if (!extracted || (extracted->second < extracted->first)) {
             return;  // no value for this backref number; that is ok
           }
           auto const d_str_ex = string_from_match(*extracted, d_str, itr);
@@ -103,7 +104,8 @@ struct backrefs_fn {
       }
 
       // setup to match the next section
-      itr += (match->second - itr.position());
+      last_pos += (match->second - last_pos.position());
+      itr = last_pos + (match->first == match->second);
     }
 
     // finally, copy remainder of input string
