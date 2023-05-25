@@ -61,7 +61,7 @@ struct backrefs_fn {
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
     size_type lpos    = 0;                   // last byte position processed in d_str
     size_type begin   = 0;                   // first character position matching regex
-    size_type end     = -1;                  // last character position (exclusive)
+    size_type end     = -1;                  // match through the end of the string
 
     // copy input to output replacing strings as we go
     while ((begin <= nchars) &&
