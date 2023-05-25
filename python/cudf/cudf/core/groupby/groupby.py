@@ -821,8 +821,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         col_idxs = [
             i for i, x in enumerate(self.obj._data.names) if x in grouping_cols
         ]
-        result = result.sort_index()
-        sizes = self.size().sort_index()
+        result = result
+        sizes = self.size().reindex(result.index)
 
         result = result[sizes > n]
         for idx, name, col in zip(
