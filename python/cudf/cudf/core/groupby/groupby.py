@@ -308,11 +308,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  object  int64
         3  object  int64
         """
+        warnings.warn(
+            f"{type(self).__name__}.dtypes is deprecated and will be "
+            "removed in a future version. Check the dtypes on the "
+            "base object instead",
+            FutureWarning,
+        )
         index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
-                for name in self.grouping.values._column_names
+                for name in self.obj._data.names
             },
             index=index,
         )

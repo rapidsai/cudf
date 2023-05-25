@@ -19,7 +19,12 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
+from cudf.core._compat import (
+    PANDAS_GE_150,
+    PANDAS_LT_140,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+)
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
@@ -3100,8 +3105,12 @@ def test_groupby_dtypes(groups):
         {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
     )
     pdf = df.to_pandas()
+    with expect_warning_if(PANDAS_GE_210):
+        expected = pdf.groupby(groups).dtypes
+    with pytest.warns(FutureWarning):
+        actual = df.groupby(groups).dtypes
 
-    assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
