@@ -168,18 +168,6 @@ class reader::impl {
                             const int32_t level);
 
   /**
-   * @brief Assemble the buffer with child columns.
-   *
-   * @param orc_col_id Column id in orc.
-   * @param col_buffers Column buffers for columns and children.
-   * @param level Current nesting level.
-   */
-  column_buffer&& assemble_buffer(const size_type orc_col_id,
-                                  std::vector<std::vector<column_buffer>>& col_buffers,
-                                  const size_t level,
-                                  rmm::cuda_stream_view stream);
-
-  /**
    * @brief Create columns and respective schema information from the buffer.
    *
    * @param col_buffers Column buffers for columns and children.

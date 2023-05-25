@@ -850,38 +850,52 @@ std::unique_ptr<column> create_empty_column(
   }
 }
 
-// Adds child column buffers to parent column
-column_buffer&& reader::impl::assemble_buffer(const size_type orc_col_id,
-                                              std::vector<std::vector<column_buffer>>& col_buffers,
-                                              const size_t level,
-                                              rmm::cuda_stream_view stream)
+/**
+ * @brief Assemble the buffer with child columns.
+ *
+ * @param orc_col_id Column id in orc.
+ * @param col_buffers Column buffers for columns and children.
+ * @param level Current nesting level.
+ */
+column_buffer assemble_buffer(size_type const orc_col_id,
+                              std::vector<std::vector<column_buffer>>& col_buffers,
+                              reader_column_meta const& col_meta,
+                              cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+                              cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                              size_t const level,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
-  auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
+  auto const col_id = col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
 
-  col_buffer.name = _metadata.column_name(0, orc_col_id);
-  auto kind       = _metadata.get_col_type(orc_col_id).kind;
+  col_buffer.name = metadata.column_name(0, orc_col_id);
+  auto kind       = metadata.get_col_type(orc_col_id).kind;
   switch (kind) {
     case orc::LIST:
-    case orc::STRUCT:
-      for (auto const& col : selected_columns.children[orc_col_id]) {
-        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
+    case orc::STRUCT: {
+      auto const& children_indices = selected_columns.children.at(orc_col_id);
+      for (auto const child_id : children_indices) {
+        col_buffer.children.emplace_back(assemble_buffer(
+          child_id, col_buffers, col_meta, metadata, selected_columns, level + 1, stream, mr));
       }
+    } break;
 
-      break;
     case orc::MAP: {
       std::vector<column_buffer> child_col_buffers;
       // Get child buffers
-      for (size_t idx = 0; idx < selected_columns.children[orc_col_id].size(); idx++) {
-        auto name = get_map_child_col_name(idx);
-        auto col  = selected_columns.children[orc_col_id][idx];
-        child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
-        child_col_buffers.back().name = name;
+      auto const& children_indices = selected_columns.children.at(orc_col_id);
+      for (size_t idx = 0; idx < children_indices.size(); idx++) {
+        auto name      = get_map_child_col_name(idx);
+        auto const col = children_indices[idx];
+        child_col_buffers.emplace_back(assemble_buffer(
+          col, col_buffers, col_meta, metadata, selected_columns, level + 1, stream, mr));
+        child_col_buffers.back().name = std::move(name);
       }
       // Create a struct buffer
       auto num_rows = child_col_buffers[0].size;
       auto struct_buffer =
-        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, _mr);
+        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, mr);
       struct_buffer.children = std::move(child_col_buffers);
       struct_buffer.name     = "struct";
 
@@ -900,14 +914,16 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                                   std::vector<column_name_info>& schema_info,
                                   rmm::cuda_stream_view stream)
 {
-  std::transform(selected_columns.levels[0].begin(),
-                 selected_columns.levels[0].end(),
-                 std::back_inserter(out_columns),
-                 [&](auto const col_meta) {
-                   schema_info.emplace_back("");
-                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
-                 });
+  std::transform(
+    selected_columns.levels[0].begin(),
+    selected_columns.levels[0].end(),
+    std::back_inserter(out_columns),
+    [&](auto const col_meta) {
+      schema_info.emplace_back("");
+      auto col_buffer = assemble_buffer(
+        col_meta.id, col_buffers, _col_meta, _metadata, selected_columns, 0, stream, _mr);
+      return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
+    });
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
