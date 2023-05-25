@@ -27,6 +27,7 @@ from cudf.core.udf.utils import (
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
 )
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 
@@ -196,7 +197,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     )
 
     # Launch kernel
-    specialized[ngroups, tpb](*launch_args)
+    with _CUDFNumbaConfig():
+        specialized[ngroups, tpb](*launch_args)
 
     return output
 

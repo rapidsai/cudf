@@ -375,8 +375,6 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
-  CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
-               "Build column size is too big for hash join");
 
   if (_is_empty) { return; }
 
@@ -557,8 +555,6 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                                      rmm::mr::device_memory_resource* mr) const
 {
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
-  CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
-               "Probe column size is too big for hash join");
 
   CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
                "Mismatch in number of columns to be joined on");

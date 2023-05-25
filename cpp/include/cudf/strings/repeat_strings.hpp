@@ -20,8 +20,6 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <optional>
-
 namespace cudf {
 namespace strings {
 /**
@@ -49,9 +47,8 @@ namespace strings {
  * out is '123XYZ-123XYZ-123XYZ-'
  * @endcode
  *
- * @throw cudf::logic_error if the size of the output string scalar exceeds the maximum value that
- *        can be stored by the index type:
- *        `input.size() * repeat_times > max of size_type`
+ * @throw std::overflow_error if the size of the output string scalar exceeds the maximum value that
+ *        can be stored by the scalar: `input.size() * repeat_times > max of size_type`
  *
  * @param input The scalar containing the string to repeat
  * @param repeat_times The number of times the input string is repeated

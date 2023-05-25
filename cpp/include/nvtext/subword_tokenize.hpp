@@ -130,8 +130,8 @@ struct tokenizer_result {
  * strings column as working memory.
  *
  * @throw cudf::logic_error if `stride > max_sequence_length`
- * @throw cudf::logic_error if `max_sequence_length * max_rows_tensor` is
- *        larger than the max value for cudf::size_type
+ * @throw std::overflow_error if `max_sequence_length * max_rows_tensor`
+ *        exceeds the column size limit
  *
  * @param strings The input strings to tokenize.
  * @param vocabulary_table The vocabulary table pre-loaded into this object.
