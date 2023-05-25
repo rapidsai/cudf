@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 
 pytestmark = pytest.mark.spilling
@@ -25,7 +24,7 @@ pytestmark = pytest.mark.spilling
 )
 @pytest.mark.parametrize("dtype", ["bool", "uint8"])
 def test_get_dummies(data, index, dtype):
-    gdf = DataFrame({"x": data}, index=index)
+    gdf = cudf.DataFrame({"x": data}, index=index)
     pdf = pd.DataFrame({"x": data}, index=index)
 
     encoded_expected = pd.get_dummies(pdf, prefix="test", dtype=dtype)
@@ -92,7 +91,7 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
         "third": ["ji", "ji", "ji"],
     }
 
-    gdf = DataFrame(data)
+    gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame(data)
 
     encoded_expected = pd.get_dummies(
@@ -109,15 +108,11 @@ def test_get_dummies_with_nan():
     df = cudf.DataFrame(
         {"a": cudf.Series([1, 2, np.nan, None], nan_as_null=False)}
     )
-    expected = cudf.DataFrame(
-        {
-            "a_1.0": [True, False, False, False],
-            "a_2.0": [False, True, False, False],
-            "a_nan": [False, False, True, False],
-            "a_<NA>": [False, False, False, True],
-        },
-        dtype="bool",
+
+    expected = pd.get_dummies(
+        df.to_pandas(nullable=True), dummy_na=True, columns=["a"]
     )
+
     actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
 
     assert_eq(expected, actual)
@@ -152,16 +147,11 @@ def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
 
 def test_get_dummies_array_like_with_nan():
     ser = cudf.Series([0.1, 2, 3, None, np.nan], nan_as_null=False)
-    expected = cudf.DataFrame(
-        {
-            "a_0.1": [True, False, False, False, False],
-            "a_2.0": [False, True, False, False, False],
-            "a_3.0": [False, False, True, False, False],
-            "a_nan": [False, False, False, False, True],
-            "a_<NA>": [False, False, False, True, False],
-        },
-        dtype="bool",
+
+    expected = pd.get_dummies(
+        ser.to_pandas(nullable=True), dummy_na=True, prefix="a", prefix_sep="_"
     )
+
     actual = cudf.get_dummies(ser, dummy_na=True, prefix="a", prefix_sep="_")
 
     assert_eq(expected, actual)
