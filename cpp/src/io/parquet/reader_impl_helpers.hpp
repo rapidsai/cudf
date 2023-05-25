@@ -29,8 +29,6 @@
 namespace cudf::io::detail::parquet {
 
 using namespace cudf::io::parquet;
-using string_type = cudf::io::detail::utilities::column_buffer_with_strings;
-using column_buffer = cudf::io::detail::utilities::column_buffer<string_type>;
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -189,12 +187,13 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
-    select_columns(std::optional<std::vector<std::string>> const& use_names,
-                   bool include_index,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id) const;
+  [[nodiscard]] std::tuple<std::vector<input_column_info>,
+                           std::vector<column_buffer_with_strings>,
+                           std::vector<size_type>>
+  select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 bool include_index,
+                 bool strings_to_categorical,
+                 type_id timestamp_type_id) const;
 };
 
 }  // namespace cudf::io::detail::parquet
