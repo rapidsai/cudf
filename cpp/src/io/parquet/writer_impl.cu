@@ -1833,23 +1833,17 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // Initialize data pointers in batch
   uint32_t const num_stats_bfr =
     (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  std::vector<rmm::device_buffer> uncomp_bfr;
-  std::vector<rmm::device_buffer> comp_bfr;
-  std::vector<rmm::device_buffer> col_idx_bfr;
-  for (std::size_t i = 0; i < batch_list.size(); ++i) {
-    uncomp_bfr.emplace_back(max_uncomp_bfr_size, stream);
-    comp_bfr.emplace_back(max_comp_bfr_size, stream);
-    col_idx_bfr.emplace_back(column_index_bfr_size, stream);
-  }
-
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
+  auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
-    auto bfr_i = static_cast<uint8_t*>(col_idx_bfr[b].data());
-    auto bfr   = static_cast<uint8_t*>(uncomp_bfr[b].data());
-    auto bfr_c = static_cast<uint8_t*>(comp_bfr[b].data());
+    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];
