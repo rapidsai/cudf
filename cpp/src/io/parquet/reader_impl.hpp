@@ -239,10 +239,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<column_buffer_with_strings> _output_buffers;
+  std::vector<inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<column_buffer_with_strings> _output_buffers_template;
+  std::vector<inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;

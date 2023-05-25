@@ -28,7 +28,7 @@
 
 namespace cudf::io::detail {
 
-void column_buffer_with_pointers::allocate_strings_data(rmm::cuda_stream_view stream)
+void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
 {
   if (type.id() == type_id::STRING) {
     // The contents of _strings will never be directly returned to the user.
@@ -43,31 +43,29 @@ void column_buffer_with_pointers::allocate_strings_data(rmm::cuda_stream_view st
   }
 }
 
-std::unique_ptr<column> column_buffer_with_pointers::make_string_column_impl(
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)
 {
   // make_strings_column allocates new memory, it does not simply move
   // from the inputs, so we need to pass it the memory resource given to
   // the buffer on construction so that the memory is allocated using the
   // resource that the calling code expected.
-  return make_strings_column(*_strings, stream, mr);
+  return make_strings_column(*_strings, stream, _mr);
 }
 
-void column_buffer_with_strings::allocate_strings_data(rmm::cuda_stream_view stream)
+void inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
 {
   if (type.id() == type_id::STRING) {
     // size + 1 for final offset. _string_data will be initialized later.
-    _data = create_data(data_type{type_id::INT32}, size + 1, stream, mr);
+    _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
   }
 }
 
-void column_buffer_with_strings::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
+void inline_column_buffer::create_string_data(size_t num_bytes, rmm::cuda_stream_view stream)
 {
-  _string_data = rmm::device_buffer(num_bytes, stream, mr);
+  _string_data = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
-std::unique_ptr<column> column_buffer_with_strings::make_string_column_impl(
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> inline_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
   auto const state = mask_state::UNALLOCATED;
@@ -77,14 +75,14 @@ std::unique_ptr<column> column_buffer_with_strings::make_string_column_impl(
       : std::make_unique<column>(data_type{type_id::INT8},
                                  string_size(),
                                  std::move(_string_data),
-                                 cudf::detail::create_null_mask(size, state, stream, mr),
+                                 cudf::detail::create_null_mask(size, state, stream, _mr),
                                  state_null_count(state, size),
                                  std::vector<std::unique_ptr<column>>{});
   auto offsets_col =
     std::make_unique<column>(data_type{type_to_id<size_type>()},
                              size + 1,
                              std::move(_data),
-                             cudf::detail::create_null_mask(size + 1, state, stream, mr),
+                             cudf::detail::create_null_mask(size + 1, state, stream, _mr),
                              state_null_count(state, size + 1),
                              std::vector<std::unique_ptr<column>>{});
 
@@ -200,7 +198,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                buffer._null_count,
                                std::move(buffer._null_mask),
                                stream,
-                               buffer.mr);
+                               buffer._mr);
     } break;
 
     case type_id::STRUCT: {
@@ -228,7 +226,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                  buffer._null_count,
                                  std::move(buffer._null_mask),
                                  stream,
-                                 buffer.mr);
+                                 buffer._mr);
     } break;
 
     default: {
@@ -298,8 +296,8 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
   }
 }
 
-using pointer_type = column_buffer_with_pointers;
-using string_type  = column_buffer_with_strings;
+using pointer_type = gather_column_buffer;
+using string_type  = inline_column_buffer;
 
 using pointer_column_buffer = column_buffer_base<pointer_type>;
 using string_column_buffer  = column_buffer_base<string_type>;

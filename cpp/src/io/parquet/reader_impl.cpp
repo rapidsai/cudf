@@ -284,7 +284,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // Don't need to do it if we read the file all at once.
   if (_chunk_read_limit > 0) {
     for (auto const& buff : _output_buffers) {
-      _output_buffers_template.emplace_back(column_buffer_with_strings::empty_like(buff));
+      _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
     }
   }
 }
@@ -402,7 +402,7 @@ table_with_metadata reader::impl::read_chunk()
   if (_chunk_read_limit > 0) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
-      _output_buffers.emplace_back(column_buffer_with_strings::empty_like(buff));
+      _output_buffers.emplace_back(inline_column_buffer::empty_like(buff));
     }
   }
 
