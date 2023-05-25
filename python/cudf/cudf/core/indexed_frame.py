@@ -2906,7 +2906,8 @@ class IndexedFrame(Frame):
         boolean_mask = cudf.core.column.as_column(boolean_mask)
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
-
+        if (bn := len(boolean_mask)) != (n := len(self)):
+            raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
         return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
                 list(self._index._columns + self._columns), boolean_mask
