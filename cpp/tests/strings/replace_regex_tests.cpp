@@ -354,6 +354,21 @@ TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexZeroIndexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+// https://github.com/rapidsai/cudf/issues/13404
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsWithEmptyCapture)
+{
+  cudf::test::strings_column_wrapper input({"one\ntwo", "three\n\n", "four\r\n"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern       = std::string("(\r\n|\r)?$");
+  auto repl_template = std::string("[\\1]");
+
+  cudf::test::strings_column_wrapper expected({"one\ntwo[]", "three\n[]\n[]", "four[\r\n][]"});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::replace_with_backrefs(sv, *prog, repl_template);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
 {
   cudf::test::strings_column_wrapper strings({"this string left intentionally blank"});
