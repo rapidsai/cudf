@@ -234,7 +234,7 @@ dependencies:
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==11.0.0.*
-          - numpy>=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
+          - numpy>=1.21
   build_python:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -342,7 +342,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
+          - numpy>=1.21
           - pandas>=1.3,<1.6.0dev0
   run_cudf:
     common:
