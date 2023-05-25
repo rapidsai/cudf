@@ -291,6 +291,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the dtypes in this group.
 
+        .. deprecated:: 23.08
+           Use `.dtypes` on base object instead.
+
         Returns
         -------
         pandas.DataFrame
@@ -302,11 +305,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
         ...                      'c':[10, 11, 12, 12]})
         >>> df.groupby("a").dtypes
-                b      c
+               a       b      c
         a
-        1  object  int64
-        2  object  int64
-        3  object  int64
+        1  int64  object  int64
+        2  int64  object  int64
+        3  int64  object  int64
         """
         warnings.warn(
             f"{type(self).__name__}.dtypes is deprecated and will be "
