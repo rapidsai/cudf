@@ -131,7 +131,8 @@ class aggregate_orc_metadata {
    * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::optional<std::vector<std::string>> const& column_paths);
+  column_hierarchy select_columns(
+    std::optional<std::vector<std::string>> const& column_paths) const;
 };
 
 }  // namespace cudf::io::orc::detail

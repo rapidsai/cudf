@@ -61,10 +61,10 @@ struct reader_column_meta {
 
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
-    num_child_rows_per_stripe;            // number of rows of child columns [stripe][column]
+    num_child_rows_per_stripe;  // number of rows of child columns [stripe][column]
   struct row_group_meta {
-    uint32_t num_rows;                    // number of rows in a column in a row group
-    uint32_t start_row;                   // start row in a column in a row group
+    uint32_t num_rows;   // number of rows in a column in a row group
+    uint32_t start_row;  // start row in a column in a row group
   };
   // num_rowgroups * num_columns
   std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
@@ -215,15 +215,15 @@ class reader::impl {
     rmm::cuda_stream_view stream);
 
  private:
-  rmm::mr::device_memory_resource* _mr = nullptr;
-  std::vector<std::unique_ptr<datasource>> _sources;
-  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
-  cudf::io::orc::detail::column_hierarchy selected_columns;
+  rmm::mr::device_memory_resource* const _mr;
+  std::vector<std::unique_ptr<datasource>> const _sources;
+  cudf::io::orc::detail::column_hierarchy const _selected_columns;
+  data_type const _timestamp_type{type_id::EMPTY};  /// Override output timestamp resolution
+  bool const _use_index;      /// Enable or disable attempt to use row index for parsing
+  bool const _use_np_dtypes;  /// Enable or disable the conversion to numpy-compatible dtypes
+  std::vector<std::string> const _decimal128_columns;  /// Control decimals conversion
 
-  bool _use_index{true};
-  bool _use_np_dtypes{true};
-  std::vector<std::string> decimal128_columns;
-  data_type _timestamp_type{type_id::EMPTY};
+  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
   reader_column_meta _col_meta{};
 };
 
