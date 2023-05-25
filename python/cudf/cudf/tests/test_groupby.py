@@ -598,7 +598,7 @@ def test_groupby_apply_no_bytecode_fallback():
     part = partial(f)
 
     expect = pdf.groupby("a").apply(part)
-    got = gdf.groupby("a").apply(part)
+    got = gdf.groupby("a").apply(part, engine="auto")
 
     assert_groupby_results_equal(expect, got)
 
