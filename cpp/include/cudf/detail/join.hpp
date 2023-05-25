@@ -86,7 +86,6 @@ struct hash_join {
    * @brief Constructor that internally builds the hash table based on the given `build` table.
    *
    * @throw cudf::logic_error if the number of columns in `build` table is 0.
-   * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
    *
    * @param build The build table, from which the hash table is built.
    * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
@@ -177,7 +176,6 @@ struct hash_join {
    * @copydoc cudf::detail::hash_join::probe_join_indices
    *
    * @throw cudf::logic_error if probe table is empty.
-   * @throw cudf::logic_error if the size of probe table exceeds `MAX_JOIN_SIZE`.
    * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
    * @throw cudf::logic_error if the column data types in build table and probe table do not match.
    */
