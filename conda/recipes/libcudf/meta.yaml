@@ -42,8 +42,6 @@ requirements:
     {% else %}
     - cuda-version {{ cuda_version }}
     - {{ compiler('cuda') }}
-    - cuda-cupti
-    - libcufile-dev  # [linux64]
     {% endif %}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
@@ -52,8 +50,8 @@ requirements:
     - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
-    - libcufile {{ cuda11_libcufile_host_version }}
-    - libcufile-dev {{ cuda11_libcufile_host_version }}
+    - libcufile {{ cuda11_libcufile_host_version }}  # [linux64]
+    - libcufile-dev {{ cuda11_libcufile_host_version }}  # [linux64]
     - libcurand {{ cuda11_libcurand_host_version }}
     - libcurand-dev {{ cuda11_libcurand_host_version }}
     - cuda-nvrtc ={{ cuda_version }}
@@ -61,10 +59,11 @@ requirements:
     - cuda-nvtx ={{ cuda_version }}
     {% else %}
     - cuda-version {{ cuda_version }}
-    - libcufile-dev  # [linux64]
-    - libcurand-dev
+    - cuda-cupti
     - cuda-nvrtc-dev
     - cuda-nvtx
+    - libcufile-dev  # [linux64]
+    - libcurand-dev
     {% endif %}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
