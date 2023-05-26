@@ -26,11 +26,10 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -115,7 +114,11 @@ public final class MemoryCleaner {
      * @return true if resources were cleaned up else false.
      */
     public final boolean clean(boolean logErrorIfNotClean) {
-      return cleanImpl(logErrorIfNotClean && !leakExpected);
+      boolean cleaned = cleanImpl(logErrorIfNotClean && !leakExpected);
+      if (cleaned) {
+        all.remove(id);
+      }
+      return cleaned;
     }
 
     /**
@@ -145,8 +148,8 @@ public final class MemoryCleaner {
   }
 
   static final AtomicLong leakCount = new AtomicLong();
-  private static final Set<CleanerWeakReference> all =
-      Collections.newSetFromMap(new ConcurrentHashMap()); // We want to be thread safe
+  private static final Map<Long, CleanerWeakReference> all =
+      new ConcurrentHashMap(); // We want to be thread safe
   private static final ReferenceQueue<?> collected = new ReferenceQueue<>();
 
   private static class CleanerWeakReference<T> extends WeakReference<T> {
@@ -182,7 +185,6 @@ public final class MemoryCleaner {
   private static final Thread t = new Thread(() -> {
     try {
       int currentGpuId = -1;
-      long lastRemoveCleanedObjectsTime = System.currentTimeMillis();
       while (true) {
         CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
         if (next != null) {
@@ -199,13 +201,7 @@ public final class MemoryCleaner {
           } catch (Throwable t) {
             log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
           }
-          all.remove(next);
-        } else {
-          long currentTime = System.currentTimeMillis();
-          if (currentTime - lastRemoveCleanedObjectsTime > 10 * 1000L) { // every 10 seconds
-            all.removeIf(e -> e.cleaner.isClean());
-            lastRemoveCleanedObjectsTime = System.currentTimeMillis();
-          }
+          all.remove(next.cleaner.id);
         }
       }
     } catch (InterruptedException e) {
@@ -232,7 +228,7 @@ public final class MemoryCleaner {
       Cuda.setDevice(defaultGpu);
     }
 
-    for (CleanerWeakReference cwr : all) {
+    for (CleanerWeakReference cwr : all.values()) {
       cwr.clean();
     }
   };
@@ -262,50 +258,50 @@ public final class MemoryCleaner {
 
   static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected, true));
+    all.put(cleaner.id, new CleanerWeakReference(vec, cleaner, collected, true));
   }
 
   static void register(HostColumnVectorCore vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(vec, cleaner, collected, false));
   }
 
   static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(buf, cleaner, collected, buf instanceof BaseDeviceMemoryBuffer));
+    all.put(cleaner.id, new CleanerWeakReference(buf, cleaner, collected, buf instanceof BaseDeviceMemoryBuffer));
   }
 
   static void register(Cuda.Stream stream, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(stream, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(stream, cleaner, collected, false));
   }
 
   static void register(Cuda.Event event, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(event, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(event, cleaner, collected, false));
   }
 
   static void register(CuFileDriver driver, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(driver, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(driver, cleaner, collected, false));
   }
 
   static void register(CuFileBuffer buffer, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(buffer, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(buffer, cleaner, collected, false));
   }
 
   static void register(CuFileHandle handle, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(handle, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(handle, cleaner, collected, false));
   }
 
   public static void register(CompiledExpression expr, Cleaner cleaner) {
-    all.add(new CleanerWeakReference(expr, cleaner, collected, false));
+    all.put(cleaner.id, new CleanerWeakReference(expr, cleaner, collected, false));
   }
 
   static void register(HashJoin hashJoin, Cleaner cleaner) {
-    all.add(new CleanerWeakReference(hashJoin, cleaner, collected, true));
+    all.put(cleaner.id, new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
 
   /**
@@ -314,7 +310,7 @@ public final class MemoryCleaner {
    * @return true if there are rmm blockers else false.
    */
   static boolean bestEffortHasRmmBlockers() {
-    return all.stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
+    return all.values().stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
   }
 
   /**
