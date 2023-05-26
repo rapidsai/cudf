@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,9 +365,11 @@ __global__ void __launch_bounds__(128)
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row = 0;
-      bs->page.num_rows  = 0;
-      bs->page.str_bytes = 0;
+      bs->page.chunk_row           = 0;
+      bs->page.num_rows            = 0;
+      bs->page.skipped_values      = -1;
+      bs->page.skipped_leaf_values = 0;
+      bs->page.str_bytes           = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;

@@ -4,6 +4,7 @@
 import cupy as cp
 import numpy as np
 from numba import cuda, types
+from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
@@ -19,14 +20,14 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.utils import (
     Row,
-    _generate_cache_key,
+    _compile_or_get,
     _get_extensionty_size,
     _get_kernel,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
-    precompiled,
 )
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 
@@ -145,20 +146,18 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     function : callable
         The user-defined function to execute
     """
+
+    kernel, return_type = _compile_or_get(
+        grouped_values,
+        function,
+        args,
+        kernel_getter=_get_groupby_apply_kernel,
+        suffix="__GROUPBY_APPLY_UDF",
+    )
+
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    cache_key = _generate_cache_key(
-        grouped_values, function, args, suffix="__GROUPBY_APPLY_UDF"
-    )
-
-    if cache_key not in precompiled:
-        precompiled[cache_key] = _get_groupby_apply_kernel(
-            grouped_values, function, args
-        )
-    kernel, return_type = precompiled[cache_key]
-
-    return_type = numpy_support.as_dtype(return_type)
     output = cudf.core.column.column_empty(ngroups, dtype=return_type)
 
     launch_args = [
@@ -198,6 +197,34 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     )
 
     # Launch kernel
-    specialized[ngroups, tpb](*launch_args)
+    with _CUDFNumbaConfig():
+        specialized[ngroups, tpb](*launch_args)
 
     return output
+
+
+def _can_be_jitted(frame, func, args):
+    """
+    Determine if this UDF is supported through the JIT engine
+    by attempting to compile just the function to PTX using the
+    target set of types
+    """
+    if not hasattr(func, "__code__"):
+        # Numba requires bytecode to be present to proceed.
+        # See https://github.com/numba/numba/issues/4587
+        return False
+    np_field_types = np.dtype(
+        list(
+            _supported_dtypes_from_frame(
+                frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
+            ).items()
+        )
+    )
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, frame.index.dtype
+    )
+    try:
+        _get_udf_return_type(dataframe_group_type, func, args)
+        return True
+    except TypingError:
+        return False

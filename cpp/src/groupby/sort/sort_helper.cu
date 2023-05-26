@@ -215,8 +215,11 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
   column_ptr temp_labels = make_numeric_column(
     data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
 
-  auto group_labels_view = cudf::column_view(
-    data_type(type_to_id<size_type>()), group_labels(stream).size(), group_labels(stream).data());
+  auto group_labels_view = cudf::column_view(data_type(type_to_id<size_type>()),
+                                             group_labels(stream).size(),
+                                             group_labels(stream).data(),
+                                             nullptr,
+                                             0);
 
   auto scatter_map = key_sort_order(stream);
 

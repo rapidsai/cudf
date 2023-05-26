@@ -167,3 +167,33 @@ TYPED_TEST(groupby_var_test, dictionary)
                   expect_vals,
                   cudf::make_variance_aggregation<cudf::groupby_aggregation>());
 }
+
+// This test ensures that the same results are produced by the sort-based and
+// hash-based implementations of groupby-variance.
+TYPED_TEST(groupby_var_test, sort_vs_hash)
+{
+  using K = int32_t;
+  using V = double;
+
+  cudf::test::fixed_width_column_wrapper<K> keys{50, 30, 90, 80};
+  cudf::test::fixed_width_column_wrapper<V> vals{380.0, 370.0, 24.0, 26.0};
+
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+
+  auto agg1 = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back();
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(std::move(agg1));
+
+  auto result1 = gb_obj.aggregate(requests);
+
+  // This agg forces a sort groupby.
+  auto agg2 = cudf::make_quantile_aggregation<cudf::groupby_aggregation>({0.25});
+  requests[0].aggregations.push_back(std::move(agg2));
+
+  auto result2 = gb_obj.aggregate(requests);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result1.second[0].results[0], *result2.second[0].results[0]);
+}

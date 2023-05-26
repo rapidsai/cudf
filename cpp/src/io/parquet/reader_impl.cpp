@@ -123,7 +123,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
 
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
@@ -248,11 +248,11 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   // if filter is not empty, then create output types as vector and pass for filtering.
   std::vector<data_type> output_types;
-  if(filter.has_value())
+  if (filter.has_value())
     std::transform(_output_buffers.begin(),
-                  _output_buffers.end(),
-                  std::back_inserter(output_types),
-                  [](auto const& col) { return col.type; });
+                   _output_buffers.end(),
+                   std::back_inserter(output_types),
+                   [](auto const& col) { return col.type; });
   const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
 

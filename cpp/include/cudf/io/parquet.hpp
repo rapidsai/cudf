@@ -526,6 +526,8 @@ class parquet_writer_options {
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
   std::optional<size_type> _max_page_fragment_size;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
 
   /**
    * @brief Constructor from sink and table.
@@ -701,6 +703,16 @@ class parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -807,6 +819,16 @@ class parquet_writer_options {
    * @param size_rows Maximum page fragment size, in rows.
    */
   void set_max_page_fragment_size(size_type size_rows);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
 };
 
 /**
@@ -1014,6 +1036,19 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& max_page_fragment_size(size_type val);
 
   /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps
@@ -1104,6 +1139,8 @@ class chunked_parquet_writer_options {
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
   std::optional<size_type> _max_page_fragment_size;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
 
   /**
    * @brief Constructor from sink.
@@ -1235,6 +1272,16 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
 
   /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1326,6 +1373,16 @@ class chunked_parquet_writer_options {
    * @param size_rows Maximum page fragment size, in rows.
    */
   void set_max_page_fragment_size(size_type size_rows);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1532,6 +1589,19 @@ class chunked_parquet_writer_options_builder {
    * @return this for chaining
    */
   chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
 
   /**
    * @brief move chunked_parquet_writer_options member once it's built.

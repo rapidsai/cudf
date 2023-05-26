@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,11 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/detail/concatenate.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <vector>
+#include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf {
 //! Inner interfaces and implementations
@@ -39,12 +36,13 @@ namespace detail {
  * @param dest_mask The output buffer to copy null masks into
  * @param output_size The total number of null masks bits that are being copied
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of nulls
  */
-void concatenate_masks(device_span<column_device_view const> d_views,
-                       device_span<size_t const> d_offsets,
-                       bitmask_type* dest_mask,
-                       size_type output_size,
-                       rmm::cuda_stream_view stream);
+size_type concatenate_masks(device_span<column_device_view const> d_views,
+                            device_span<size_t const> d_offsets,
+                            bitmask_type* dest_mask,
+                            size_type output_size,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Concatenates `views[i]`'s bitmask from the bits
@@ -54,10 +52,11 @@ void concatenate_masks(device_span<column_device_view const> d_views,
  * @param views Column views whose bitmasks will be concatenated
  * @param dest_mask The output buffer to copy null masks into
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of nulls
  */
-void concatenate_masks(host_span<column_view const> views,
-                       bitmask_type* dest_mask,
-                       rmm::cuda_stream_view stream);
+size_type concatenate_masks(host_span<column_view const> views,
+                            bitmask_type* dest_mask,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::concatenate_masks(host_span<column_view const>, rmm::mr::device_memory_resource*)

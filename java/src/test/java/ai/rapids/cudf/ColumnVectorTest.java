@@ -6730,7 +6730,10 @@ public class ColumnVectorTest extends CudfTestBase {
   public void testEventHandlerIsCalledForEachClose() {
     final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        assertEquals(cv, col);
+        onClosedWasCalled.incrementAndGet();
+      });
     }
     assertEquals(1, onClosedWasCalled.get());
   }
@@ -6744,9 +6747,28 @@ public class ColumnVectorTest extends CudfTestBase {
     assertEquals(0, onClosedWasCalled.get());
 
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        onClosedWasCalled.incrementAndGet();
+      });
       cv.setEventHandler(null);
     }
     assertEquals(0, onClosedWasCalled.get());
+  }
+
+  /**
+   * Test that the ColumnView with unknown null-counts still returns
+   * the correct null-count when queried.
+   */
+  @Test
+  public void testColumnViewNullCount() {
+    try (ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, null, 3, null, 4, null, 5, null, 6);
+         ColumnView view = new ColumnView(DType.INT32,
+                                          vector.getRowCount(),
+                                          Optional.empty(), // Unknown null count.
+                                          vector.getDeviceBufferFor(BufferType.DATA),
+                                          vector.getDeviceBufferFor(BufferType.VALIDITY),
+                                          vector.getDeviceBufferFor(BufferType.OFFSET))) {
+      assertEquals(vector.getNullCount(), view.getNullCount());
+    }
   }
 }
