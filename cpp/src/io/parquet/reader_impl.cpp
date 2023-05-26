@@ -53,21 +53,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   std::vector<size_type> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
-      pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
-
-    // TODO do the following on device with thrust/kernel to avoid the pages round trip
-    pages.device_to_host(_stream, true);
-    for (auto& page : pages) {
-      if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0) {
-        auto const& col = chunks[page.chunk_idx];
-        if (is_string_col(col)) {
-          size_type const offset       = col_sizes[col.src_col_index];
-          page.str_offset              = offset;
-          col_sizes[col.src_col_index] = offset + page.str_bytes;
-        }
-      }
-    }
-    pages.host_to_device(_stream);
+      pages, chunks, col_sizes, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
   }
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector

@@ -483,17 +483,19 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
  *
  * String columns need accurate data size information to preallocate memory in the column buffer to
  * store the char data. This calls a kernel to calculate information needed by the string decoding
- * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the PageInfo struct
- * are updated. This call ignores non-string columns.
+ * kernel. On exit, the `str_bytes`, `num_nulls`, `num_valids`, and `str_offset` fields of the
+ * PageInfo struct are updated. This call ignores non-string columns.
  *
- * @param pages All pages to be decoded
- * @param chunks All chunks to be decoded
- * @param min_rows crop all rows below min_row
- * @param num_rows Maximum number of rows to read
- * @param stream CUDA stream to use, default 0
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[out] col_sizes On output, contains total size of string data for each column
+ * @param[in] min_rows crop all rows below min_row
+ * @param[in] num_rows Maximum number of rows to read
+ * @param[in] stream CUDA stream to use, default 0
  */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
+                            std::vector<size_type>& col_sizes,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
