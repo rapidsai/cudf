@@ -83,7 +83,7 @@ using `.from_arrow()` or `.from_pandas()`.
 ## Result ordering
 
 In Pandas, `join` and `groupby` operations provide certain guarantees
-about the order of rows in the result returned.  In Pandas `join`, the
+about the order of rows in the result returned.  In a Pandas `join`, the
 order of join keys are either preserved or sorted lexicographically by
 default.  `groupby` sorts the group keys, and preserves the order of
 rows within each group. In some cases, disabling this option in Pandas
