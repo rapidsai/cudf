@@ -33,7 +33,6 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -982,8 +981,7 @@ def test_groupby_unsupported_columns():
     )
     pdf["b"] = pd_cat
     gdf = cudf.from_pandas(pdf)
-    with pytest.warns(FutureWarning):
-        pdg = pdf.groupby("x").sum()
+    pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
     gdg = gdf.groupby("x").sum()
@@ -1547,15 +1545,11 @@ def test_grouping(grouper):
     )
     gdf = cudf.from_pandas(pdf)
 
-    # There's no easy way to validate that the same warning is thrown by both
-    # cudf and pandas here because it's only thrown upon iteration, so we
-    # settle for catching warnings on the whole block.
-    with expect_warning_if(isinstance(grouper, list) and len(grouper) == 1):
-        for pdf_group, gdf_group in zip(
-            pdf.groupby(grouper), gdf.groupby(grouper)
-        ):
-            assert pdf_group[0] == gdf_group[0]
-            assert_eq(pdf_group[1], gdf_group[1])
+    for pdf_group, gdf_group in zip(
+        pdf.groupby(grouper), gdf.groupby(grouper)
+    ):
+        assert pdf_group[0] == gdf_group[0]
+        assert_eq(pdf_group[1], gdf_group[1])
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
@@ -3311,8 +3305,8 @@ def test_head_tail_empty():
 
     expected = pdf.groupby(pd.Series(values)).head()
     got = df.groupby(cudf.Series(values)).head()
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
 
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)

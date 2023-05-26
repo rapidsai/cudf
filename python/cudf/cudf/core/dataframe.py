@@ -5852,6 +5852,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
 
         source = self
+        axis = source._get_axis_from_axis_arg(axis)
         if numeric_only:
             numeric_cols = (
                 name
@@ -5860,9 +5861,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(index=self.index)
-
-        axis = source._get_axis_from_axis_arg(axis)
+                return Series(
+                    index=self._data.to_pandas_index()[:0]
+                    if axis == 0
+                    else source.index
+                )
 
         if axis == 0:
             try:
