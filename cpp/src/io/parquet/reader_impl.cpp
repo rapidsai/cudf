@@ -41,9 +41,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
   // doing a gather operation later on.
-  // TODO: The current implementation does a round trip for the page info. Need to explore doing
-  // this step on device. This call is also somewhat redundant if size info has already been
-  // calculated (nested schema, chunked reader).
+  // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
+  // chunked reader).
   auto is_string_col = [](gpu::ColumnChunkDesc const& chunk) {
     return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4 &&
            chunk.converted_type != DECIMAL;
@@ -152,8 +151,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // TODO: explore launching these concurrently with a stream pool
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
-  gpu::DecodeStringPageData(
-    pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
+  if (has_strings) {
+    gpu::DecodeStringPageData(
+      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
+  }
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
