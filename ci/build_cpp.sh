@@ -8,8 +8,8 @@ source rapids-env-update
 export CMAKE_GENERATOR=Ninja
 
 RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/3f73f32/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
-LIBKVIKIO_CHANNEL=$(rapids-get-artifact ci/kvikio/pull-request/224/c1c7025/kvikio_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/8704a75/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+LIBKVIKIO_CHANNEL=$(rapids-get-artifact ci/kvikio/pull-request/224/33d061b/kvikio_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
 
 rapids-print-env
 

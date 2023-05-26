@@ -19,8 +19,8 @@ conda activate test
 set -u
 
 RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/3f73f32/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
-LIBKVIKIO_CHANNEL=$(rapids-get-artifact ci/kvikio/pull-request/224/c1c7025/kvikio_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/8704a75/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
+LIBKVIKIO_CHANNEL=$(rapids-get-artifact ci/kvikio/pull-request/224/33d061b/kvikio_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
