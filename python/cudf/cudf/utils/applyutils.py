@@ -12,6 +12,7 @@ from cudf import _lib as libcudf
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
 from cudf.utils import utils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
@@ -195,7 +196,8 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
         return kernel
 
     def launch_kernel(self, df, args):
-        self.kernel.forall(len(df))(*args)
+        with _CUDFNumbaConfig():
+            self.kernel.forall(len(df))(*args)
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
@@ -209,12 +211,14 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def launch_kernel(self, df, args, chunks, blkct=None, tpb=None):
         chunks = self.normalize_chunks(len(df), chunks)
         if blkct is None and tpb is None:
-            self.kernel.forall(len(df))(len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel.forall(len(df))(len(df), chunks, *args)
         else:
             assert tpb is not None
             if blkct is None:
                 blkct = chunks.size
-            self.kernel[blkct, tpb](len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):

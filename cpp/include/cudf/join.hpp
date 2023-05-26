@@ -167,7 +167,7 @@ full_join(cudf::table_view const& left_keys,
           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a vector of row indices corresponding to a left semi join
+ * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
  * The returned vector contains the row indices from the left table
@@ -179,13 +179,9 @@ full_join(cudf::table_view const& left_keys,
  * Result: {1, 2}
  * @endcode
  *
- * @throw cudf::logic_error if number of columns in either
- * `left_keys` or `right_keys` table is 0 or exceeds MAX_JOIN_SIZE
- *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left_keys The left table
+ * @param right_keys The right table
+ * @param compare_nulls Controls whether null join-key values should match or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct

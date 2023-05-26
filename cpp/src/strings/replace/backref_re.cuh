@@ -61,14 +61,15 @@ struct backrefs_fn {
     auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
     size_type lpos    = 0;                   // last byte position processed in d_str
     size_type begin   = 0;                   // first character position matching regex
-    size_type end     = nchars;              // last character position (exclusive)
+    size_type end     = -1;                  // match through the end of the string
 
     // copy input to output replacing strings as we go
-    while (prog.find(prog_idx, d_str, begin, end) > 0)  // inits the begin/end vars
+    while ((begin <= nchars) &&
+           (prog.find(prog_idx, d_str, begin, end) > 0))  // inits the begin/end vars
     {
-      auto spos = d_str.byte_offset(begin);             // get offset for the
-      auto epos = d_str.byte_offset(end);               // character position values;
-      nbytes += d_repl.size_bytes() - (epos - spos);    // compute the output size
+      auto spos = d_str.byte_offset(begin);               // get offset for the
+      auto epos = d_str.byte_offset(end);                 // character position values;
+      nbytes += d_repl.size_bytes() - (epos - spos);      // compute the output size
 
       // copy the string data before the matched section
       if (out_ptr) { out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos); }
@@ -84,7 +85,7 @@ struct backrefs_fn {
           }
           // extract the specific group's string for this backref's index
           auto extracted = prog.extract(prog_idx, d_str, begin, end, backref.first - 1);
-          if (!extracted || (extracted.value().second <= extracted.value().first)) {
+          if (!extracted || (extracted.value().second < extracted.value().first)) {
             return;  // no value for this backref number; that is ok
           }
           auto spos_extract = d_str.byte_offset(extracted.value().first);   // convert
@@ -104,8 +105,8 @@ struct backrefs_fn {
 
       // setup to match the next section
       lpos  = epos;
-      begin = end;
-      end   = nchars;
+      begin = end + (begin == end);
+      end   = -1;
     }
 
     // finally, copy remainder of input string
