@@ -272,24 +272,21 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = _Grouping(obj, by, level)
 
     def __iter__(self):
-        if isinstance(self._by, list) and len(self._by) == 1:
-            warnings.warn(
-                "In a future version of cudf, a length 1 tuple will be "
-                "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. To avoid this warning, do not supply "
-                "a list with a single grouper.",
-                FutureWarning,
-            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (name,) if isinstance(self._by, list) and len(
+                self._by
+            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
 
     @property
     def dtypes(self):
         """
         Return the dtypes in this group.
+
+        .. deprecated:: 23.08
+           Use `.dtypes` on base object instead.
 
         Returns
         -------
@@ -302,17 +299,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
         ...                      'c':[10, 11, 12, 12]})
         >>> df.groupby("a").dtypes
-                b      c
+               a       b      c
         a
-        1  object  int64
-        2  object  int64
-        3  object  int64
+        1  int64  object  int64
+        2  int64  object  int64
+        3  int64  object  int64
         """
+        warnings.warn(
+            f"{type(self).__name__}.dtypes is deprecated and will be "
+            "removed in a future version. Check the dtypes on the "
+            "base object instead",
+            FutureWarning,
+        )
         index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
-                for name in self.grouping.values._column_names
+                for name in self.obj._data.names
             },
             index=index,
         )

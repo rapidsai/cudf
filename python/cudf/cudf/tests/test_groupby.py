@@ -19,7 +19,12 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
+from cudf.core._compat import (
+    PANDAS_GE_150,
+    PANDAS_LT_140,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+)
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
@@ -28,7 +33,6 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -977,8 +981,7 @@ def test_groupby_unsupported_columns():
     )
     pdf["b"] = pd_cat
     gdf = cudf.from_pandas(pdf)
-    with pytest.warns(FutureWarning):
-        pdg = pdf.groupby("x").sum()
+    pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
     gdg = gdf.groupby("x").sum()
@@ -1542,15 +1545,11 @@ def test_grouping(grouper):
     )
     gdf = cudf.from_pandas(pdf)
 
-    # There's no easy way to validate that the same warning is thrown by both
-    # cudf and pandas here because it's only thrown upon iteration, so we
-    # settle for catching warnings on the whole block.
-    with expect_warning_if(isinstance(grouper, list) and len(grouper) == 1):
-        for pdf_group, gdf_group in zip(
-            pdf.groupby(grouper), gdf.groupby(grouper)
-        ):
-            assert pdf_group[0] == gdf_group[0]
-            assert_eq(pdf_group[1], gdf_group[1])
+    for pdf_group, gdf_group in zip(
+        pdf.groupby(grouper), gdf.groupby(grouper)
+    ):
+        assert pdf_group[0] == gdf_group[0]
+        assert_eq(pdf_group[1], gdf_group[1])
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
@@ -3100,8 +3099,12 @@ def test_groupby_dtypes(groups):
         {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
     )
     pdf = df.to_pandas()
+    with expect_warning_if(PANDAS_GE_210):
+        expected = pdf.groupby(groups).dtypes
+    with pytest.warns(FutureWarning):
+        actual = df.groupby(groups).dtypes
 
-    assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
@@ -3302,8 +3305,8 @@ def test_head_tail_empty():
 
     expected = pdf.groupby(pd.Series(values)).head()
     got = df.groupby(cudf.Series(values)).head()
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
 
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)

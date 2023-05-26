@@ -308,7 +308,7 @@ def test_axes(data):
     actual = csr.axes
 
     for e, a in zip(expected, actual):
-        assert_eq(e, a)
+        assert_eq(e, a, exact=not PANDAS_GE_200)
 
 
 def test_dataframe_truncate_axis_0():
@@ -4938,7 +4938,12 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
         expected = getattr(pdf, op)(**kwargs)
         got = getattr(gdf, op)(**kwargs)
 
-        assert_eq(expected, got, check_dtype=False)
+        assert_eq(
+            expected,
+            got,
+            check_dtype=False,
+            check_index_type=False if len(got.index) == 0 else True,
+        )
 
 
 @pytest.mark.parametrize(
