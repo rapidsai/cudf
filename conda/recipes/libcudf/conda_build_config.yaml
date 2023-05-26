@@ -49,19 +49,3 @@ cuda11_libcurand_host_version:
 
 cuda11_libcurand_run_version:
   - ">=10.2.5.43,<10.3.1"
-
-# The CTK libraries below are needed for CUDA 12+. The "*_host_*" version
-# specifiers correspond to `12.0` packages and the "*_run_*" version specifiers
-# correspond to `12.x` packages.
-
-libcufile_host_version:
-  - "1.5.0.59"
-
-libcufile_run_version:
-  - ">=1.5.0.59"
-
-libcurand_host_version:
-  - "=10.3.1.50"
-
-libcurand_run_version:
-  - ">=10.3.1.50"
