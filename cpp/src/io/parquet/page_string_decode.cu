@@ -95,17 +95,18 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
 /**
  * @brief Perform exclusive scan for offsets array. Called for each page.
  */
+template <int block_size>
 __device__ void block_excl_sum(size_type* arr, size_type length, size_type initial_value)
 {
-  using block_scan = cub::BlockScan<size_type, decode_block_size>;
+  using block_scan = cub::BlockScan<size_type, block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
   int const t = threadIdx.x;
 
   // do a series of block sums, storing results in arr as we go
-  size_type block_sum;
-  for (int pos = 0; pos < length; pos += decode_block_size) {
-    int tidx       = pos + t;
+  for (int pos = 0; pos < length; pos += block_size) {
+    int const tidx = pos + t;
     size_type tval = tidx < length ? arr[tidx] : 0;
+    size_type block_sum;
     block_scan(scan_storage).ExclusiveScan(tval, tval, initial_value, cub::Sum(), block_sum);
     if (tidx < length) { arr[tidx] = tval; }
     initial_value += block_sum;
@@ -817,8 +818,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   // values until we reach first_row. account for that here.
   if (!has_repetition) { value_count -= s->first_row; }
 
-  auto offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum(offptr, value_count, s->page.str_offset);
+  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
 }
 
 /**
