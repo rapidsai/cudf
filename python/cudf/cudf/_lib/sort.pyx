@@ -193,6 +193,7 @@ def sort(
     return columns_from_unique_ptr(move(result))
 
 
+@acquire_spill_lock()
 def segmented_sort_by_key(
     list values,
     list keys,
