@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -216,7 +216,6 @@ class SubwordTokenizer:
             stride=stride,
             do_lower=self.do_lower_case,
             do_truncate=truncation,
-            max_rows_tensor=max_num_rows,
         )
 
         tokenizer_output = {
