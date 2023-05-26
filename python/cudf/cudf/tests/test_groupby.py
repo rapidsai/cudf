@@ -33,6 +33,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
 
