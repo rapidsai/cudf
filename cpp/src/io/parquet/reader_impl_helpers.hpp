@@ -19,6 +19,7 @@
 #include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
@@ -166,6 +167,8 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
+   * @param output_dtypes List of output column datatypes
+   * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    *
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
    *         starting row
@@ -173,7 +176,9 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
-    std::optional<size_type> const& row_count) const;
+    std::optional<size_type> const& row_count,
+    host_span<data_type const> output_dtypes,
+    std::optional<std::reference_wrapper<ast::expression const>> filter) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns

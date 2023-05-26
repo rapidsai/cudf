@@ -342,7 +342,9 @@ std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
-  std::optional<size_type> const& num_rows_opt) const
+  std::optional<size_type> const& num_rows_opt,
+  host_span<data_type const> output_dtypes,
+  std::optional<std::reference_wrapper<ast::expression const>> filter) const
 {
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
