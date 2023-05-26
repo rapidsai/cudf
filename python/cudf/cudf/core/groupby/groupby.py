@@ -800,40 +800,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         Return the nth row from each group.
         """
 
-        new_df = self.obj.copy(deep=False)
-        new_df["__groupbynth_order__"] = range(0, len(self.obj))
-        gb = new_df.groupby(
-            by=self._by,
-            level=self._level,
-            sort=self._sort,
-            as_index=self._as_index,
-            dropna=self._dropna,
-            group_keys=self._group_keys,
-        )
-        result = gb.agg(lambda x: x.nth(n))
-        grouping_cols = (
-            self._by
-            if isinstance(self._by, tuple)
-            else tuple(
-                self._by,
-            )
-        )
-        col_idxs = [
-            i for i, x in enumerate(self.obj._data.names) if x in grouping_cols
-        ]
-        result = result
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
+        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
         sizes = self.size().reindex(result.index)
 
         result = result[sizes > n]
-        for idx, name, col in zip(
-            col_idxs, result._index._data.names, result._index._data.columns
-        ):
-            result._data.insert(name, col, loc=idx)
 
         result._index = self.obj.index.take(
             result._data["__groupbynth_order__"]
         )
         del result._data["__groupbynth_order__"]
+        del self.obj._data["__groupbynth_order__"]
         return result
 
     @_cudf_nvtx_annotate
