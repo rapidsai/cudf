@@ -93,6 +93,26 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
 }
 
 /**
+ * @brief Perform exclusive scan for offsets array. Called for each page.
+ */
+__device__ void block_excl_sum(size_type* arr, size_type length, size_type initial_value)
+{
+  using block_scan = cub::BlockScan<size_type, decode_block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+  int const t = threadIdx.x;
+
+  // do a series of block sums, storing results in arr as we go
+  size_type block_sum;
+  for (int pos = 0; pos < length; pos += decode_block_size) {
+    int tidx       = pos + t;
+    size_type tval = tidx < length ? arr[tidx] : 0;
+    block_scan(scan_storage).ExclusiveScan(tval, tval, initial_value, cub::Sum(), block_sum);
+    if (tidx < length) { arr[tidx] = tval; }
+    initial_value += block_sum;
+  }
+}
+
+/**
  * @brief Compute the start and end page value bounds for this page
  *
  * This uses definition and repetition level info to determine the number of valid and null
@@ -639,9 +659,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   int const t                    = threadIdx.x;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // set during string copy by lane 0
-  int first_non_null = -1;
-
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
@@ -666,8 +683,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     return;
   }
 
-  int out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
-
+  int const out_thread0                          = s->dict_base && s->dict_bits == 0 ? 32 : 64;
+  int const leaf_level_index                     = s->col.max_nesting_depth - 1;
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
@@ -707,20 +724,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     } else {
       int const me = t - out_thread0;
 
-      // if this is the first page, then the first non-null entry will have an offset of 0.
-      // pages that start with a run of nulls will have repeated 0 values, so for the fixing
-      // of null offsets done at the end, we need to know the last index that should be 0.
-      if (me == 0 && s->page.str_offset == 0 && first_non_null == -1) {
-        for (int i = src_pos; i < target_pos; i++) {
-          int dst_pos = sb->nz_idx[rolling_index(i)];
-          if (!has_repetition) { dst_pos -= s->first_row; }
-          if (dst_pos >= 0) {
-            first_non_null = dst_pos;
-            break;
-          }
-        }
-      }
-
       // WARP1..WARP3: Decode values
       src_pos += t - out_thread0;
 
@@ -745,7 +748,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
       using cudf::detail::warp_size;
       auto const use_char_ll =
         s->page.num_valids > 0 && (s->page.str_bytes / s->page.num_valids) >= warp_size;
-      int const leaf_level_index = s->col.max_nesting_depth - 1;
 
       if (me < warp_size) {
         for (int i = 0; i < decode_block_size - out_thread0; i += warp_size) {
@@ -778,7 +780,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
                 auto offptr =
                   reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
                   dsts[ss];
-                *offptr = offsets[ss];
+                *offptr = lengths[ss];
                 auto str_ptr =
                   nesting_info_base[leaf_level_index].string_out + offsets[ss] - s->page.str_offset;
                 ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
@@ -789,7 +791,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
             if (src_pos + i < target_pos && dst_pos >= 0) {
               auto offptr =
                 reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
-              *offptr = offset;
+              *offptr = len;
               auto str_ptr =
                 nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
               memcpy(str_ptr, ptr, len);
@@ -808,39 +810,15 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
     __syncthreads();
   }
 
-  // if there are nulls clean up the offsets array.
-  if (s->page.num_nulls != 0) {
-    int const leaf_level_index = s->col.max_nesting_depth - 1;
-    int value_count            = nesting_info_base[leaf_level_index].value_count;
+  // now turn array of lengths into offsets
+  int value_count = nesting_info_base[leaf_level_index].value_count;
 
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if (!has_repetition) { value_count -= s->first_row; }
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (!has_repetition) { value_count -= s->first_row; }
 
-    auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
-
-    if (nesting_info_base[leaf_level_index].null_count > 0) {
-      // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
-      if (s->nz_count == 0) {
-        for (int i = t; i < value_count; i += decode_block_size) {
-          offptr[i] = s->page.str_offset;
-        }
-      }
-      // just some nulls, do this serially for now
-      else if (t == out_thread0) {
-        if (first_non_null == -1) { first_non_null = 0; }
-
-        if (offptr[value_count - 1] == 0 && value_count - 1 != first_non_null) {
-          offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
-        }
-        for (int i = value_count - 2; i > first_non_null; i--) {
-          if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
-        }
-        offptr[0] = s->page.str_offset;
-      }
-    }
-    __syncthreads();
-  }
+  auto offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+  block_excl_sum(offptr, value_count, s->page.str_offset);
 }
 
 /**
