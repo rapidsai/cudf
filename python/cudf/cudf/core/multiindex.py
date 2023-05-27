@@ -426,7 +426,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         dtype = object if dtype is None else dtype
-        if not pd.core.dtypes.common.is_object_dtype(dtype):
+        if not pd.api.types.is_object_dtype(dtype):
             raise TypeError("Dtype for MultiIndex only supports object type.")
 
         # ._data needs to be rebuilt
