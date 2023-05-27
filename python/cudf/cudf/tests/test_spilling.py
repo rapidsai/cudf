@@ -659,3 +659,37 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+def test_spilling_of_range_index(manager: SpillManager):
+    # Create a non-materialized RangeIndex
+    idx = single_column_df(target="gpu").index
+    assert isinstance(idx, cudf.RangeIndex)
+    assert spilled_and_unspilled(manager) == (0, 0)
+
+    # Materialize the index
+    val = idx._values
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
+    assert len(manager.buffers()) == 1
+    assert len(manager._spill_handlers) == 1
+
+    # Since we have a ref to `val`, the materialized index is spilled
+    assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
+    assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)
+    assert len(manager.buffers()) == 1
+    assert len(manager._spill_handlers) == 1
+
+    # Let's unspill and delete our ref to `val`. We still have the
+    # materialized index and its spill handler
+    val.base_data.spill(target="gpu")
+    del val
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
+    assert len(manager.buffers()) == 1
+    assert len(manager._spill_handlers) == 1
+
+    # However, now that we have removed the ref to `val`, spilling the
+    # materialized index, will clear the cache.
+    assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
+    assert spilled_and_unspilled(manager) == (0, 0)
+    assert len(manager.buffers()) == 0
+    assert len(manager._spill_handlers) == 0

@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -38,6 +37,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core.buffer.utils import cached_property
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -245,7 +245,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _num_rows(self):
         return len(self)
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
