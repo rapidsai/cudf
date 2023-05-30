@@ -137,12 +137,12 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
+
   CUDF_EXPECTS(count >= 0, "count value should be non-negative");
   CUDF_EXPECTS(input_table.num_rows() <= std::numeric_limits<size_type>::max() / count,
                "The resulting table exceeds the column size limit",
                std::overflow_error);
-
-  if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
   auto output_size = input_table.num_rows() * count;
   auto map_begin   = cudf::detail::make_counting_transform_iterator(
