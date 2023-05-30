@@ -1,7 +1,12 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+# _setup_numba _must be called before numba.cuda is imported, because
+# it sets the numba config variable responsible for enabling
+# Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
+from cudf.utils._numba import _setup_numba
 from cudf.utils.gpu_utils import validate_setup
 
+_setup_numba()
 validate_setup()
 
 import cupy
@@ -83,31 +88,8 @@ from cudf.options import describe_option, get_option, set_option
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
 
-try:
-    from cubinlinker.patch import patch_numba_linker_if_needed
-except ImportError:
-    pass
-else:
-    # Patch Numba to support CUDA enhanced compatibility.
-    # cuDF requires a stronger set of conditions than what is
-    # checked by patch_numba_linker_if_needed due to the PTX
-    # files needed for JIT Groupby Apply and string UDFs
-    from cudf.core.udf.utils import _PTX_FILE, _setup_numba_linker
-
-    _setup_numba_linker(_PTX_FILE)
-
-    del patch_numba_linker_if_needed
-
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
-
-try:
-    # Numba 0.54: Disable low occupancy warnings
-    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
-except AttributeError:
-    # Numba < 0.54: No occupancy warnings
-    pass
-del numba_config
 
 
 rmm.register_reinitialize_hook(clear_cache)

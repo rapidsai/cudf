@@ -38,6 +38,8 @@ class file_sink : public data_sink {
 
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
+      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);
     }

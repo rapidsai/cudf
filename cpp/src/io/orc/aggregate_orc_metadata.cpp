@@ -250,7 +250,7 @@ aggregate_orc_metadata::select_stripes(
 }
 
 column_hierarchy aggregate_orc_metadata::select_columns(
-  std::optional<std::vector<std::string>> const& column_paths)
+  std::optional<std::vector<std::string>> const& column_paths) const
 {
   auto const& pfm = per_file_metadata[0];
 

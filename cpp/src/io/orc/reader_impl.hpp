@@ -190,15 +190,17 @@ class reader::impl {
     rmm::cuda_stream_view stream);
 
  private:
-  rmm::mr::device_memory_resource* _mr = nullptr;
-  std::vector<std::unique_ptr<datasource>> _sources;
-  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
-  cudf::io::orc::detail::column_hierarchy selected_columns;
+  rmm::mr::device_memory_resource* const _mr;
 
-  bool _use_index{true};
-  bool _use_np_dtypes{true};
-  std::vector<std::string> _decimal128_columns;
-  data_type _timestamp_type{type_id::EMPTY};
+  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for others
+  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
+  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+
+  data_type const _timestamp_type;  // Override output timestamp resolution
+  bool const _use_index;            // Enable or disable attempt to use row index for parsing
+  bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
+  std::vector<std::string> const _decimal128_columns;  // Control decimals conversion
+
   reader_column_meta _col_meta{};
 };
 
