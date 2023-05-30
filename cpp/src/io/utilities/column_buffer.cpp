@@ -112,6 +112,32 @@ void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 }  // namespace
 
 template <class string_policy>
+void column_buffer_base<string_policy>::create(size_type _size,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  size = _size;
+  _mr  = mr;
+
+  switch (type.id()) {
+    case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
+
+    // list columns store a buffer of int32's as offsets to represent
+    // their individual rows
+    case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr); break;
+
+    // struct columns store no data themselves.  just validity and children.
+    case type_id::STRUCT: break;
+
+    default: _data = create_data(type, size, stream, _mr); break;
+  }
+  if (is_nullable) {
+    _null_mask = cudf::detail::create_null_mask(
+      size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), _mr);
+  }
+}
+
+template <class string_policy>
 string_policy column_buffer_base<string_policy>::empty_like(string_policy const& input)
 {
   auto new_buff = string_policy(input.type, input.is_nullable);

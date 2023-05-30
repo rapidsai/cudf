@@ -103,28 +103,7 @@ class column_buffer_base {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
-  {
-    size = _size;
-    _mr  = mr;
-
-    switch (type.id()) {
-      case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
-
-      // list columns store a buffer of int32's as offsets to represent
-      // their individual rows
-      case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr); break;
-
-      // struct columns store no data themselves.  just validity and children.
-      case type_id::STRUCT: break;
-
-      default: _data = create_data(type, size, stream, _mr); break;
-    }
-    if (is_nullable) {
-      _null_mask = cudf::detail::create_null_mask(
-        size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), _mr);
-    }
-  }
+  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
