@@ -441,7 +441,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     dtype,
     num_rows,
     data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    profile.get_null_probability().has_value() ? null_count : 0);
 }
 
 struct valid_or_zero {
@@ -523,7 +524,8 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     num_rows,
     std::move(offsets),
     std::move(chars),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    null_count);
 }
 
 /**
@@ -720,8 +722,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    auto offsets_column = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
+    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                         num_rows + 1,
+                                                         offsets.release(),
+                                                         rmm::device_buffer{},
+                                                         0);
 
     auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
                                                           valids.end(),

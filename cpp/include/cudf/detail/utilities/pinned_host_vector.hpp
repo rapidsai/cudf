@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008-2022 NVIDIA Corporation
+ *  Copyright 2008-2023 NVIDIA Corporation
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <new>  // for bad_alloc
 
 #include <cudf/utilities/error.hpp>
+
+#include <thrust/host_vector.h>
 
 namespace cudf::detail {
 
@@ -199,4 +201,11 @@ class pinned_allocator {
     return !operator==(x);
   }
 };
+
+/**
+ * @brief A vector class with pinned host memory allocator
+ */
+template <typename T>
+using pinned_host_vector = thrust::host_vector<T, pinned_allocator<T>>;
+
 }  // namespace cudf::detail

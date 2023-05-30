@@ -20,6 +20,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
@@ -44,6 +45,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 #include <thrust/iterator/counting_iterator.h>
 
 #include "csv_chunked_writer.hpp"
@@ -57,16 +59,34 @@
 namespace cudf {
 namespace jni {
 
-template <typename WRITER> class jni_table_writer_handle final {
-public:
-  explicit jni_table_writer_handle(std::unique_ptr<WRITER> writer)
-      : writer(std::move(writer)), sink() {}
-  jni_table_writer_handle(std::unique_ptr<WRITER> writer,
-                          std::unique_ptr<jni_writer_data_sink> sink)
-      : writer(std::move(writer)), sink(std::move(sink)) {}
+/**
+ * @brief The base class for table writer.
+ *
+ * By storing a pointer to this base class instead of pointer to specific writer class, we can
+ * retrieve common data like `sink` and `stats` for any derived writer class without the need of
+ * casting or knowing its type.
+ */
+struct jni_table_writer_handle_base {
+  explicit jni_table_writer_handle_base(
+      std::unique_ptr<jni_writer_data_sink> &&sink_,
+      std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
+      : sink{std::move(sink_)}, stats{std::move(stats_)} {}
 
-  std::unique_ptr<WRITER> writer;
   std::unique_ptr<jni_writer_data_sink> sink;
+  std::shared_ptr<cudf::io::writer_compression_statistics> stats;
+};
+
+template <typename Writer>
+struct jni_table_writer_handle final : public jni_table_writer_handle_base {
+  explicit jni_table_writer_handle(std::unique_ptr<Writer> &&writer_)
+      : jni_table_writer_handle_base(nullptr, nullptr), writer{std::move(writer_)} {}
+  explicit jni_table_writer_handle(
+      std::unique_ptr<Writer> &&writer_, std::unique_ptr<jni_writer_data_sink> &&sink_,
+      std::shared_ptr<cudf::io::writer_compression_statistics> &&stats_)
+      : jni_table_writer_handle_base(std::move(sink_), std::move(stats_)),
+        writer{std::move(writer_)} {}
+
+  std::unique_ptr<Writer> writer;
 };
 
 typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
@@ -1619,16 +1639,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
                    std::inserter(kv_metadata, kv_metadata.end()),
                    [](auto const &key, auto const &value) { return std::make_pair(key, value); });
 
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
+            .compression_statistics(stats)
             .build();
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
-    cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
+    cudf::jni::native_parquet_writer_handle *ret = new cudf::jni::native_parquet_writer_handle(
+        std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1664,17 +1686,19 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
                    [](auto const &key, auto const &value) { return std::make_pair(key, value); });
 
     sink_info sink{output_path.get()};
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
+            .compression_statistics(stats)
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
-    cudf::jni::native_parquet_writer_handle *ret =
-        new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr));
+    cudf::jni::native_parquet_writer_handle *ret = new cudf::jni::native_parquet_writer_handle(
+        std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1802,15 +1826,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
+
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
                                           .metadata(&metadata)
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
+                                          .compression_statistics(stats)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
-    cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), std::move(data_sink));
+    cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(
+        std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1851,15 +1878,17 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
                    [](const std::string &k, const std::string &v) { return std::make_pair(k, v); });
 
     sink_info sink{output_path.get()};
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
                                           .metadata(&metadata)
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
+                                          .compression_statistics(stats)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
-        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr));
+        new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
@@ -1899,6 +1928,31 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv *env, jclass
     state->writer->close();
   }
   CATCH_STD(env, )
+}
+
+JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv *env,
+                                                                                  jclass,
+                                                                                  jlong j_state) {
+  JNI_NULL_CHECK(env, j_state, "null state", nullptr);
+
+  using namespace cudf::io;
+  auto const state = reinterpret_cast<cudf::jni::jni_table_writer_handle_base const *>(j_state);
+  try {
+    cudf::jni::auto_set_device(env);
+    if (!state->stats) {
+      return nullptr;
+    }
+
+    auto const &stats = *state->stats;
+    auto output = cudf::jni::native_jdoubleArray(env, 4);
+    output[0] = static_cast<jdouble>(stats.num_compressed_bytes());
+    output[1] = static_cast<jdouble>(stats.num_failed_bytes());
+    output[2] = static_cast<jdouble>(stats.num_skipped_bytes());
+    output[3] = static_cast<jdouble>(stats.compression_ratio());
+
+    return output.get_jArray();
+  }
+  CATCH_STD(env, nullptr)
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
@@ -3157,6 +3211,26 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv *env, jclass,
+                                                                  jlong input_table,
+                                                                  jlong bounce_buffer_size,
+                                                                  jlong memoryResourceHandle) {
+  JNI_NULL_CHECK(env, input_table, "native handle is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_table = reinterpret_cast<cudf::table_view *>(input_table);
+    // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
+    // and scratch memory only.
+    auto temp_mr = memoryResourceHandle != 0 ?
+                       reinterpret_cast<rmm::mr::device_memory_resource *>(memoryResourceHandle) :
+                       rmm::mr::get_current_device_resource();
+    auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
+    return reinterpret_cast<jlong>(chunked_pack.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jlongArray j_default_output,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
@@ -3221,8 +3295,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys, jintArray j_orderby_column_indices,
     jbooleanArray j_is_orderby_ascending, jintArray j_aggregate_column_indices,
     jlongArray j_agg_instances, jintArray j_min_periods, jlongArray j_preceding,
-    jlongArray j_following, jbooleanArray j_unbounded_preceding,
-    jbooleanArray j_unbounded_following, jboolean ignore_null_keys) {
+    jlongArray j_following, jintArray j_preceding_extent, jintArray j_following_extent,
+    jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
@@ -3246,8 +3320,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
-    cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
-    cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
+    cudf::jni::native_jintArray preceding_extent{env, j_preceding_extent};
+    cudf::jni::native_jintArray following_extent{env, j_following_extent};
     cudf::jni::native_jpointerArray<cudf::scalar> preceding(env, j_preceding);
     cudf::jni::native_jpointerArray<cudf::scalar> following(env, j_following);
 
@@ -3266,24 +3340,32 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
       int agg_column_index = values[i];
       cudf::column_view const &order_by_column = input_table->column(orderbys[i]);
       cudf::data_type order_by_type = order_by_column.type();
-      cudf::data_type unbounded_type = order_by_type;
+      cudf::data_type duration_type = order_by_type;
 
-      if (unbounded_preceding[i] || unbounded_following[i]) {
+      // Range extents are defined as:
+      // a) 0 == CURRENT ROW
+      // b) 1 == BOUNDED
+      // c) 2 == UNBOUNDED
+      // Must set unbounded_type for only the BOUNDED case.
+      auto constexpr CURRENT_ROW = 0;
+      auto constexpr BOUNDED = 1;
+      auto constexpr UNBOUNDED = 2;
+      if (preceding_extent[i] != BOUNDED || following_extent[i] != BOUNDED) {
         switch (order_by_type.id()) {
           case cudf::type_id::TIMESTAMP_DAYS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
             break;
           case cudf::type_id::TIMESTAMP_SECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
             break;
           case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
             break;
           case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
             break;
           case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+            duration_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
             break;
           default: break;
         }
@@ -3293,15 +3375,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
       JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation",
                     nullptr);
 
+      auto const make_window_bounds = [&](auto const &range_extent, auto const *p_scalar) {
+        if (range_extent == CURRENT_ROW) {
+          return cudf::range_window_bounds::current_row(duration_type);
+        } else if (range_extent == UNBOUNDED) {
+          return cudf::range_window_bounds::unbounded(duration_type);
+        } else {
+          return cudf::range_window_bounds::get(*p_scalar);
+        }
+      };
+
       result_columns.emplace_back(cudf::grouped_range_rolling_window(
           groupby_keys, order_by_column,
           orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index),
-          unbounded_preceding[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-                                   cudf::range_window_bounds::get(*preceding[i]),
-          unbounded_following[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-                                   cudf::range_window_bounds::get(*following[i]),
-          min_periods[i], *agg));
+          make_window_bounds(preceding_extent[i], preceding[i]),
+          make_window_bounds(following_extent[i], following[i]), min_periods[i], *agg));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
@@ -3464,8 +3553,8 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
       auto const vec = thrust::host_vector<cudf::size_type>(begin, end);
       auto buf = rmm::device_buffer{vec.data(), size * sizeof(cudf::size_type),
                                     cudf::get_default_stream()};
-      auto gather_map_col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                           size, std::move(buf));
+      auto gather_map_col = std::make_unique<cudf::column>(
+          cudf::data_type{cudf::type_id::INT32}, size, std::move(buf), rmm::device_buffer{}, 0);
 
       // gather the first key in each group to remove duplicated ones.
       group_by_result_table = cudf::gather(groups.keys->view(), gather_map_col->view());

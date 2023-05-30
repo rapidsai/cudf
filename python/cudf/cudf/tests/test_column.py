@@ -398,8 +398,8 @@ def test_column_view_string_slice(slc):
             cudf.core.column.as_column([], dtype="uint8"),
         ),
         (
-            cp.array([453], dtype="uint8"),
-            cudf.core.column.as_column([453], dtype="uint8"),
+            cp.array([255], dtype="uint8"),
+            cudf.core.column.as_column([255], dtype="uint8"),
         ),
     ],
 )

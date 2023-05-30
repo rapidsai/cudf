@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 """
 Tests related to is_unique and is_monotonic attributes
@@ -14,7 +14,6 @@ from cudf.core.index import (
     DatetimeIndex,
     GenericIndex,
     RangeIndex,
-    StringIndex,
 )
 from cudf.testing._utils import assert_eq, expect_warning_if
 
@@ -78,7 +77,7 @@ def test_generic_index(testlist):
 )
 def test_string_index(testlist):
 
-    index = StringIndex(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique

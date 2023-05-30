@@ -195,7 +195,7 @@ std::unique_ptr<column> rescale(column_view input,
       auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
       if (input.nullable()) {
         auto const null_mask = copy_bitmask(input, stream, mr);
-        output_column->set_null_mask(std::move(null_mask));
+        output_column->set_null_mask(std::move(null_mask), input.null_count());
       }
       return output_column;
     }

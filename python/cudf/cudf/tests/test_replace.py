@@ -944,8 +944,15 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = cudf.from_pandas(psr)
 
+    if sr.dtype.kind in "ui":
+        can_replace = np.array([replacement])[0].is_integer() and np.can_cast(
+            int(replacement), sr.dtype
+        )
+    else:
+        can_replace = np.can_cast(replacement, sr.dtype)
+
     # Both Scalar
-    if sr.dtype.type(replacement) != replacement:
+    if not can_replace:
         with pytest.raises(TypeError):
             sr.replace(1, replacement)
     else:
@@ -954,7 +961,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         assert_eq(expect, got)
 
     # to_replace is a list, replacement is a scalar
-    if sr.dtype.type(replacement) != replacement:
+    if not can_replace:
         with pytest.raises(TypeError):
 
             sr.replace([2, 3], replacement)
@@ -974,7 +981,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # Both lists of equal length
     if (
         np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
-    ) or (sr.dtype.type(replacement) != replacement):
+    ) or (not can_replace):
         with pytest.raises(TypeError):
             sr.replace([2, 3], [replacement, replacement])
     else:

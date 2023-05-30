@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,10 +65,13 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "invalid gather map size");
+               "gather map size exceeds the column size limit",
+               std::overflow_error);
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(gather_map.size()),
-                             gather_map.data());
+                             gather_map.data(),
+                             nullptr,
+                             0);
   return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
 }
 

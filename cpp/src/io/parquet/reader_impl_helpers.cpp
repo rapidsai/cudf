@@ -426,7 +426,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
       }
 
       // if we're at the root, this is a new output column
-      auto const col_type = schema_elem.is_one_level_list()
+      auto const col_type = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))
                               ? type_id::LIST
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
@@ -465,7 +465,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
           input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
         // set up child output column for one-level encoding list
-        if (schema_elem.is_one_level_list()) {
+        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
           // determine the element data type
           auto const element_type =
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
@@ -486,7 +486,9 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
         std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
 
         // pop off the extra nesting element.
-        if (schema_elem.is_one_level_list()) { nesting.pop_back(); }
+        if (schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx))) {
+          nesting.pop_back();
+        }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }
