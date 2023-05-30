@@ -135,6 +135,7 @@ Selecting
 .. autosummary::
    :toctree: api/
 
+   Index.get_indexer
    Index.get_level_values
    Index.get_loc
    Index.get_slice_bound
@@ -191,6 +192,7 @@ IntervalIndex components
 
    IntervalIndex.from_breaks
    IntervalIndex.values
+   IntervalIndex.get_indexer
    IntervalIndex.get_loc
 
 .. _api.multiindex:
@@ -236,6 +238,7 @@ MultiIndex selecting
 .. autosummary::
    :toctree: api/
 
+   MultiIndex.get_indexer
    MultiIndex.get_loc
    MultiIndex.get_level_values
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 import pickle
 import warnings
 from functools import cached_property
@@ -16,7 +17,6 @@ from typing import (
 )
 
 import cupy
-import operator
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -61,7 +62,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-from cudf.core._compat import PANDAS_GE_200
 
 
 class IndexMeta(type):
@@ -591,7 +591,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def get_indexer(self, target, method=None, tolerance=None):
+    def get_indexer(self, target, limit=None, method=None, tolerance=None):
         if method is None:
             if self.step > 0:
                 start, stop, step = self.start, self.stop, self.step
@@ -612,15 +612,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return locs
         else:
             return self._as_int_index().get_indexer(
-                target=target, method=method, tolerance=tolerance
+                target=target, limit=limit, method=method, tolerance=tolerance
             )
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
-        # Given an actual integer,
         if not is_scalar(key):
             raise TypeError("Should be a sequence")
-        # Given an actual integer,
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
         if idx > idx_int_upper_bound or idx < 0:
@@ -1134,45 +1132,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
-        """Get integer location, slice or boolean mask for requested label.
-
-        Parameters
-        ----------
-        target : label
-        method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
-            - default: exact matches only.
-            - pad / ffill: find the PREVIOUS index value if no exact match.
-            - backfill / bfill: use NEXT index value if no exact match.
-            - nearest: use the NEAREST index value if no exact match. Tied
-              distances are broken by preferring the larger index
-              value.
-        tolerance : int or float, optional
-            Maximum distance from index value for inexact matches. The value
-            of the index at the matching location must satisfy the equation
-            ``abs(index[loc] - target) <= tolerance``.
-
-        Returns
-        -------
-        int or slice or boolean mask
-            - If result is unique, return integer index
-            - If index is monotonic, loc is returned as a slice object
-            - Otherwise, a boolean mask is returned
-
-        Examples
-        --------
-        >>> unique_index = cudf.Index(list('abc'))
-        >>> unique_index.get_loc('b')
-        1
-        >>> monotonic_index = cudf.Index(list('abbc'))
-        >>> monotonic_index.get_loc('b')
-        slice(1, 3, None)
-        >>> non_monotonic_index = cudf.Index(list('abcb'))
-        >>> non_monotonic_index.get_loc('b')
-        array([False,  True, False,  True])
-        >>> numeric_unique_index = cudf.Index([1, 2, 3])
-        >>> numeric_unique_index.get_loc(3)
-        2
-        """
         if is_scalar(target):
             raise TypeError("Should be a sequence")
 
@@ -1243,34 +1202,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
-        """Get integer location, slice or boolean mask for requested label.
-
-        Parameters
-        ----------
-        key : label
-
-        Returns
-        -------
-        int or slice or boolean mask
-            - If result is unique, return integer index
-            - If index is monotonic, loc is returned as a slice object
-            - Otherwise, a boolean mask is returned
-
-        Examples
-        --------
-        >>> unique_index = cudf.Index(list('abc'))
-        >>> unique_index.get_loc('b')
-        1
-        >>> monotonic_index = cudf.Index(list('abbc'))
-        >>> monotonic_index.get_loc('b')
-        slice(1, 3, None)
-        >>> non_monotonic_index = cudf.Index(list('abcb'))
-        >>> non_monotonic_index.get_loc('b')
-        array([False,  True, False,  True])
-        >>> numeric_unique_index = cudf.Index([1, 2, 3])
-        >>> numeric_unique_index.get_loc(3)
-        2
-        """
         if is_scalar(key):
             target = [key]
         else:
