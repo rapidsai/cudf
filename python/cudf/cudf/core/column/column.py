@@ -1997,7 +1997,7 @@ def as_column(
                 arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
             ):
                 return as_column(arbitrary.array)
-            elif isinstance(arbitrary.dtype, pd.ArrowDtype):
+            elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
                 return as_column(pa.array(arbitrary.array, from_pandas=True))
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
