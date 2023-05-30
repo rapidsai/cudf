@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ class CompactProtocolWriter {
   size_t write(const KeyValue&);
   size_t write(const ColumnChunk&);
   size_t write(const ColumnChunkMetaData&);
+  size_t write(const Statistics&);
   size_t write(const PageLocation&);
   size_t write(const OffsetIndex&);
 
@@ -99,6 +100,8 @@ class CompactProtocolFieldWriter {
   inline size_t value();
 
   inline void field_struct_blob(int field, const std::vector<uint8_t>& val);
+
+  inline void field_binary(int field, const std::vector<uint8_t>& val);
 
   inline void field_string(int field, const std::string& val);
 
