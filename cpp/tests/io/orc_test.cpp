@@ -1788,4 +1788,22 @@ TEST_F(OrcChunkedWriterTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
+TEST_F(OrcWriterTest, EmptyRowGroup)
+{
+  std::vector<int> ints(10000 + 5, -1);
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i >= 10000; });
+  int32_col col{ints.begin(), ints.end(), mask};
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcEmptyRowGroup.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
