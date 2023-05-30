@@ -4419,7 +4419,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
   // hard coded schema indices.
   // TODO find a way to do this without magic
-  size_t colidxs[] = {1, 3, 4, 5, 8};
+  size_t const colidxs[] = {1, 3, 4, 5, 8};
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
@@ -5210,6 +5210,43 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   EXPECT_TRUE(used_dict(1));
 }
 
+TEST_F(ParquetWriterTest, DictionaryPageSizeEst)
+{
+  // one page
+  constexpr unsigned int nrows = 20'000U;
+
+  // this test is creating a pattern of repeating then non-repeating values to trigger
+  // a "worst-case" for page size estimation in the presence of a dictionary. have confirmed
+  // that this fails for values over 16 in the final term of `max_RLE_page_size()`.
+  // The output of the iterator will be 'CCCCCRRRRRCCCCCRRRRR...` where 'C' is a changing
+  // value, and 'R' repeats. The encoder will turn this into a literal run of 8 values
+  // (`CCCCCRRR`) followed by a repeated run of 2 (`RR`). This pattern then repeats, getting
+  // as close as possible to a condition of repeated 8 value literal runs.
+  auto elements0  = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    if ((i / 5) % 2 == 1) {
+      return std::string("non-unique string");
+    } else {
+      return "a unique string value suffixed with " + std::to_string(i);
+    }
+  });
+  auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryPageSizeEst.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 TEST_P(ParquetSizedTest, DictionaryTest)
 {
   const unsigned int cardinality = (1 << (GetParam() - 1)) + 1;
@@ -5374,6 +5411,150 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   write_opts.set_metadata(&expected_metadata);
   // Can't write a column with nulls as not nullable
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
+}
+
+TEST_F(ParquetReaderTest, SingleLevelLists)
+{
+  unsigned char list_bytes[] = {
+    0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0x28, 0x15, 0x28, 0x15, 0xa7, 0xce, 0x91, 0x8c, 0x06,
+    0x1c, 0x15, 0x04, 0x15, 0x00, 0x15, 0x06, 0x15, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03,
+    0x02, 0x02, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x15,
+    0x02, 0x19, 0x3c, 0x48, 0x0c, 0x73, 0x70, 0x61, 0x72, 0x6b, 0x5f, 0x73, 0x63, 0x68, 0x65, 0x6d,
+    0x61, 0x15, 0x02, 0x00, 0x35, 0x00, 0x18, 0x01, 0x66, 0x15, 0x02, 0x15, 0x06, 0x4c, 0x3c, 0x00,
+    0x00, 0x00, 0x15, 0x02, 0x25, 0x04, 0x18, 0x05, 0x61, 0x72, 0x72, 0x61, 0x79, 0x00, 0x16, 0x02,
+    0x19, 0x1c, 0x19, 0x1c, 0x26, 0x08, 0x1c, 0x15, 0x02, 0x19, 0x25, 0x00, 0x06, 0x19, 0x28, 0x01,
+    0x66, 0x05, 0x61, 0x72, 0x72, 0x61, 0x79, 0x15, 0x00, 0x16, 0x04, 0x16, 0x56, 0x16, 0x56, 0x26,
+    0x08, 0x3c, 0x18, 0x04, 0x01, 0x00, 0x00, 0x00, 0x18, 0x04, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00,
+    0x28, 0x04, 0x01, 0x00, 0x00, 0x00, 0x18, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x1c, 0x15,
+    0x00, 0x15, 0x00, 0x15, 0x02, 0x00, 0x00, 0x00, 0x16, 0x56, 0x16, 0x02, 0x26, 0x08, 0x16, 0x56,
+    0x14, 0x00, 0x00, 0x28, 0x13, 0x52, 0x41, 0x50, 0x49, 0x44, 0x53, 0x20, 0x53, 0x70, 0x61, 0x72,
+    0x6b, 0x20, 0x50, 0x6c, 0x75, 0x67, 0x69, 0x6e, 0x19, 0x1c, 0x1c, 0x00, 0x00, 0x00, 0x9f, 0x00,
+    0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
+
+  // read single level list reproducing parquet file
+  cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{reinterpret_cast<const char*>(list_bytes), sizeof(list_bytes)});
+  auto table = cudf::io::read_parquet(read_opts);
+
+  auto const c0 = table.tbl->get_column(0);
+  EXPECT_TRUE(c0.type().id() == cudf::type_id::LIST);
+
+  auto const lc    = cudf::lists_column_view(c0);
+  auto const child = lc.child();
+  EXPECT_TRUE(child.type().id() == cudf::type_id::INT32);
+}
+
+TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
+{
+  unsigned char list_bytes[] = {
+    0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0x28, 0x15, 0x28, 0x15, 0xa7, 0xce, 0x91, 0x8c, 0x06,
+    0x1c, 0x15, 0x04, 0x15, 0x00, 0x15, 0x06, 0x15, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03,
+    0x02, 0x02, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x15,
+    0x02, 0x19, 0x3c, 0x48, 0x0c, 0x73, 0x70, 0x61, 0x72, 0x6b, 0x5f, 0x73, 0x63, 0x68, 0x65, 0x6d,
+    0x61, 0x15, 0x02, 0x00, 0x35, 0x00, 0x18, 0x01, 0x66, 0x15, 0x02, 0x15, 0x06, 0x4c, 0x3c, 0x00,
+    0x00, 0x00, 0x15, 0x02, 0x25, 0x04, 0x18, 0x05, 0x61, 0x72, 0x72, 0x61, 0x79, 0x00, 0x16, 0x02,
+    0x19, 0x1c, 0x19, 0x1c, 0x26, 0x08, 0x1c, 0x15, 0x02, 0x19, 0x25, 0x00, 0x06, 0x19, 0x28, 0x01,
+    0x66, 0x05, 0x61, 0x72, 0x72, 0x61, 0x79, 0x15, 0x00, 0x16, 0x04, 0x16, 0x56, 0x16, 0x56, 0x26,
+    0x08, 0x3c, 0x18, 0x04, 0x01, 0x00, 0x00, 0x00, 0x18, 0x04, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00,
+    0x28, 0x04, 0x01, 0x00, 0x00, 0x00, 0x18, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x1c, 0x15,
+    0x00, 0x15, 0x00, 0x15, 0x02, 0x00, 0x00, 0x00, 0x16, 0x56, 0x16, 0x02, 0x26, 0x08, 0x16, 0x56,
+    0x14, 0x00, 0x00, 0x28, 0x13, 0x52, 0x41, 0x50, 0x49, 0x44, 0x53, 0x20, 0x53, 0x70, 0x61, 0x72,
+    0x6b, 0x20, 0x50, 0x6c, 0x75, 0x67, 0x69, 0x6e, 0x19, 0x1c, 0x1c, 0x00, 0x00, 0x00, 0x9f, 0x00,
+    0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
+
+  auto reader = cudf::io::chunked_parquet_reader(
+    1L << 31,
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{reinterpret_cast<const char*>(list_bytes), sizeof(list_bytes)}));
+  int iterations = 0;
+  while (reader.has_next() && iterations < 10) {
+    auto chunk = reader.read_chunk();
+  }
+  EXPECT_TRUE(iterations < 10);
+}
+
+TEST_F(ParquetWriterTest, CompStats)
+{
+  auto table = create_random_fixed_table<int>(1, 100000, true);
+
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
+  std::vector<char> unused_buffer;
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer}, table->view())
+      .compression_statistics(stats);
+  cudf::io::write_parquet(opts);
+
+  EXPECT_NE(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_FALSE(std::isnan(stats->compression_ratio()));
+}
+
+TEST_F(ParquetChunkedWriterTest, CompStats)
+{
+  auto table = create_random_fixed_table<int>(1, 100000, true);
+
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
+  std::vector<char> unused_buffer;
+  cudf::io::chunked_parquet_writer_options opts =
+    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer})
+      .compression_statistics(stats);
+  cudf::io::parquet_chunked_writer(opts).write(*table);
+
+  EXPECT_NE(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_FALSE(std::isnan(stats->compression_ratio()));
+
+  auto const single_table_comp_stats = *stats;
+  cudf::io::parquet_chunked_writer(opts).write(*table);
+
+  EXPECT_EQ(stats->compression_ratio(), single_table_comp_stats.compression_ratio());
+  EXPECT_EQ(stats->num_compressed_bytes(), 2 * single_table_comp_stats.num_compressed_bytes());
+
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+}
+
+void expect_compression_stats_empty(std::shared_ptr<cudf::io::writer_compression_statistics> stats)
+{
+  EXPECT_EQ(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_TRUE(std::isnan(stats->compression_ratio()));
+}
+
+TEST_F(ParquetWriterTest, CompStatsEmptyTable)
+{
+  auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
+
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
+  std::vector<char> unused_buffer;
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer},
+                                              table_no_rows->view())
+      .compression_statistics(stats);
+  cudf::io::write_parquet(opts);
+
+  expect_compression_stats_empty(stats);
+}
+
+TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
+{
+  auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
+
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
+  std::vector<char> unused_buffer;
+  cudf::io::chunked_parquet_writer_options opts =
+    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer})
+      .compression_statistics(stats);
+  cudf::io::parquet_chunked_writer(opts).write(*table_no_rows);
+
+  expect_compression_stats_empty(stats);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

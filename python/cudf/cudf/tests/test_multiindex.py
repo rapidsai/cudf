@@ -155,7 +155,7 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex
+    from cudf.core.index import Index
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -167,7 +167,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

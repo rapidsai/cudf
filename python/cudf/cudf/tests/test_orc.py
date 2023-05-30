@@ -1915,12 +1915,10 @@ def test_reader_empty_stripe(datadir, fname):
     assert_eq(expected, got)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/rapidsai/cudf/issues/11890", raises=RuntimeError
-)
-def test_reader_unsupported_offsets():
-    # needs enough data for more than one row group
-    expected = cudf.DataFrame({"str": ["*"] * 10001}, dtype="string")
+# needs enough data for multiple row groups
+@pytest.mark.parametrize("data", [["*"] * 10001, ["**", None] * 5001])
+def test_reader_row_index_order(data):
+    expected = cudf.DataFrame({"str": data}, dtype="string")
 
     buffer = BytesIO()
     expected.to_pandas().to_orc(buffer)

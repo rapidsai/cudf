@@ -22,7 +22,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -36,11 +35,13 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
+from typing_extensions import Self
 
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, Dtype, NotImplementedType
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -104,10 +105,6 @@ from cudf.utils.utils import (
     _external_only_api,
 )
 from cudf.core._compat import PANDAS_GE_200
-from cudf.api.extensions import no_default
-
-T = TypeVar("T", bound="DataFrame")
-
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -1307,7 +1304,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_cudf_nvtx_annotate
-    def _slice(self: T, arg: slice) -> T:
+    def _slice(self, arg: slice) -> Self:
         """
         _slice : slice the frame as per the arg
 
@@ -1676,7 +1673,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
         elif are_all_range_index and not ignore_index:
-            out._index = cudf.core.index.GenericIndex._concat(
+            out._index = cudf.core.index.Index._concat(
                 [o._index for o in objs]
             )
 
@@ -1698,20 +1695,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
                 )
-
-        # Reassign precision for decimal cols & type schema for struct cols
         for name, col in out._data.items():
-            if isinstance(
-                col,
-                (
-                    cudf.core.column.DecimalBaseColumn,
-                    cudf.core.column.StructColumn,
-                    cudf.core.column.ListColumn,
-                ),
-            ):
-                out._data[name] = col._with_type_metadata(
-                    tables[0]._data[name].dtype
-                )
+            out._data[name] = col._with_type_metadata(
+                tables[0]._data[name].dtype
+            )
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
@@ -2013,8 +2000,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cls,
         data: dict,
         orient: str = "columns",
-        dtype: Dtype = None,
-        columns: list = None,
+        dtype: Optional[Dtype] = None,
+        columns: Optional[list] = None,
     ) -> DataFrame:
         """
         Construct DataFrame from dict of array-like or dicts.
@@ -2269,6 +2256,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         A list of cudf.DataFrame objects.
+
+        Raises
+        ------
+        ValueError
+            If the map_index has invalid entries (not all in [0,
+            num_partitions)).
         """
         # map_index might be a column name or array,
         # make it a Column
@@ -3186,34 +3179,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def drop_duplicates(
-        self, subset=None, keep="first", inplace=False, ignore_index=False
+        self,
+        subset=None,
+        keep="first",
+        inplace=False,
+        ignore_index=False,
     ):
         """
-        Return DataFrame with duplicate rows removed, optionally only
-        considering certain subset of columns.
+        Return DataFrame with duplicate rows removed.
+
+        Considering certain columns is optional. Indexes, including time
+        indexes are ignored.
 
         Parameters
         ----------
         subset : column label or sequence of labels, optional
             Only consider certain columns for identifying duplicates, by
             default use all of the columns.
-        keep : {'first', 'last', False}, default 'first'
+        keep : {'first', 'last', ``False``}, default 'first'
             Determines which duplicates (if any) to keep.
-            - ``first`` : Drop duplicates except for the first occurrence.
-            - ``last`` : Drop duplicates except for the last occurrence.
-            - False : Drop all duplicates.
-        inplace : bool, default False
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+        inplace : bool, default ``False``
             Whether to drop duplicates in place or to return a copy.
-        ignore_index : bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        ignore_index : bool, default ``False``
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
 
         Returns
         -------
         DataFrame or None
             DataFrame with duplicates removed or None if ``inplace=True``.
 
+        See Also
+        --------
+        DataFrame.value_counts: Count unique combinations of columns.
+
         Examples
         --------
+        Consider a dataset containing ramen ratings.
+
         >>> import cudf
         >>> df = cudf.DataFrame({
         ...     'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
@@ -3228,36 +3233,34 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  Indomie  pack    15.0
         4  Indomie  pack     5.0
 
-        By default, it removes duplicate rows based
-        on all columns. Note that order of
-        the rows being returned is not guaranteed
-        to be sorted.
+        By default, it removes duplicate rows based on all columns.
 
         >>> df.drop_duplicates()
              brand style  rating
-        2  Indomie   cup     3.5
-        4  Indomie  pack     5.0
-        3  Indomie  pack    15.0
         0  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
+        3  Indomie  pack    15.0
+        4  Indomie  pack     5.0
 
-        To remove duplicates on specific column(s),
-        use `subset`.
+        To remove duplicates on specific column(s), use ``subset``.
 
         >>> df.drop_duplicates(subset=['brand'])
              brand style  rating
-        2  Indomie   cup     3.5
         0  Yum Yum   cup     4.0
+        2  Indomie   cup     3.5
 
-        To remove duplicates and keep last occurrences, use `keep`.
+        To remove duplicates and keep last occurrences, use ``keep``.
 
         >>> df.drop_duplicates(subset=['brand', 'style'], keep='last')
              brand style  rating
+        1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        1  Yum Yum   cup     4.0
         """  # noqa: E501
         outdf = super().drop_duplicates(
-            subset=subset, keep=keep, ignore_index=ignore_index
+            subset=subset,
+            keep=keep,
+            ignore_index=ignore_index,
         )
 
         return self._mimic_inplace(outdf, inplace=inplace)
@@ -3378,7 +3381,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(type(item) == str for item in index.values())
-                and type(self.index) != cudf.StringIndex
+                and type(self.index._values) != cudf.core.column.StringColumn
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -3820,10 +3823,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 for codes in result_columns
             ]
-        elif isinstance(
-            source_dtype,
-            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
-        ):
+        else:
             result_columns = [
                 result_column._with_type_metadata(source_dtype)
                 for result_column in result_columns
@@ -4091,10 +4091,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -5852,6 +5852,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
 
         source = self
+        axis = source._get_axis_from_axis_arg(axis)
         if numeric_only:
             numeric_cols = (
                 name
@@ -5860,9 +5861,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(index=self.index)
-
-        axis = source._get_axis_from_axis_arg(axis)
+                return Series(
+                    index=self._data.to_pandas_index()[:0]
+                    if axis == 0
+                    else source.index
+                )
 
         if axis == 0:
             try:
@@ -6603,7 +6606,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Columns: [0, 1, 2, 3]
         Index: []
         >>> df.keys()
-        Int64Index([0, 1, 2, 3], dtype='int64')
+        Index([0, 1, 2, 3], dtype='int64')
         """
         return self._data.to_pandas_index()
 
@@ -6918,7 +6921,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               Specifically, `&` must be used for bitwise operators on integers,
               not `and`, which is specifically for the logical and between
               booleans.
-            * Only numerical types are currently supported.
+            * Only numerical types currently support all operators.
+            * String types currently support comparison operators.
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.
@@ -6993,13 +6997,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Keyword arguments other than `inplace` are not supported"
             )
 
-        # Have to use a regex match to avoid capturing "=="
-        includes_assignment = re.search("[^=]=[^=]", expr) is not None
+        # Have to use a regex match to avoid capturing ==, >=, or <=
+        equals_sign_regex = "[^=><]=[^=]"
+        includes_assignment = re.search(equals_sign_regex, expr) is not None
 
         # Check if there were multiple statements. Filter out empty lines.
         statements = tuple(filter(None, expr.strip().split("\n")))
         if len(statements) > 1 and any(
-            re.search("[^=]=[^=]", st) is None for st in statements
+            re.search(equals_sign_regex, st) is None for st in statements
         ):
             raise ValueError(
                 "Multi-line expressions are only valid if all expressions "
@@ -7303,14 +7308,14 @@ def from_pandas(obj, nan_as_null=None):
 
     >>> pidx = pd.Index([1, 2, 10, 20])
     >>> pidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> gidx = cudf.from_pandas(pidx)
     >>> gidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> type(gidx)
-    <class 'cudf.core.index.Int64Index'>
+    <class 'cudf.core.index.Index'>
     >>> type(pidx)
-    <class 'pandas.core.indexes.numeric.Int64Index'>
+    <class 'pandas.core.indexes.base.Index'>
 
     Converting a Pandas MultiIndex to cuDF MultiIndex:
 
@@ -7489,7 +7494,7 @@ def _get_union_of_indices(indexes):
     if len(indexes) == 1:
         return indexes[0]
     else:
-        merged_index = cudf.core.index.GenericIndex._concat(indexes)
+        merged_index = cudf.core.index.Index._concat(indexes)
         merged_index = merged_index.drop_duplicates()
         _, inds = merged_index._values.sort_by_values()
         return merged_index.take(inds)
@@ -7555,7 +7560,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Combine and de-dupe the categories
             categories[idx] = cudf.Series(
                 concat_columns([col.categories for col in cols])
-            )._column.unique(preserve_order=True)
+            )._column.unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))

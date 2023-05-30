@@ -42,7 +42,11 @@ def dtype(arbitrary):
     -------
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
-    # first, try interpreting arbitrary as a NumPy dtype that we support:
+    #  first, check if `arbitrary` is one of our extension types:
+    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+        return arbitrary
+
+    # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
         if np_dtype.kind in ("OU"):
@@ -53,10 +57,6 @@ def dtype(arbitrary):
         if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
-
-    #  next, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
-        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
@@ -71,6 +71,8 @@ def dtype(arbitrary):
             return np.dtype("object")
         elif isinstance(pd_dtype, pd.IntervalDtype):
             return cudf.IntervalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+            return pd_dtype
         else:
             raise TypeError(
                 f"Cannot interpret {arbitrary} as a valid cuDF dtype"
@@ -160,7 +162,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.GenericIndex":
+    def categories(self) -> "cudf.core.index.Index":
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -169,7 +171,7 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype.categories
-        StringIndex(['b' 'a'], dtype='object')
+        Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
             return cudf.core.index.as_index(
@@ -236,9 +238,10 @@ class CategoricalDtype(_BaseDtype):
         if self._categories is None:
             categories = None
         else:
-            if isinstance(
-                self._categories, (cudf.Float32Index, cudf.Float64Index)
-            ):
+            if self._categories.dtype in {
+                cudf.dtype("float32"),
+                cudf.dtype("float64"),
+            }:
                 categories = self._categories.dropna().to_pandas()
             else:
                 categories = self._categories.to_pandas()
@@ -868,7 +871,6 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
-
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )

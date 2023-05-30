@@ -25,7 +25,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_utils import jit_groupby_apply
+from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -272,24 +272,21 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = _Grouping(obj, by, level)
 
     def __iter__(self):
-        if isinstance(self._by, list) and len(self._by) == 1:
-            warnings.warn(
-                "In a future version of cudf, a length 1 tuple will be "
-                "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. To avoid this warning, do not supply "
-                "a list with a single grouper.",
-                FutureWarning,
-            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (name,) if isinstance(self._by, list) and len(
+                self._by
+            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
 
     @property
     def dtypes(self):
         """
         Return the dtypes in this group.
+
+        .. deprecated:: 23.08
+           Use `.dtypes` on base object instead.
 
         Returns
         -------
@@ -302,17 +299,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
         ...                      'c':[10, 11, 12, 12]})
         >>> df.groupby("a").dtypes
-                b      c
+               a       b      c
         a
-        1  object  int64
-        2  object  int64
-        3  object  int64
+        1  int64  object  int64
+        2  int64  object  int64
+        3  int64  object  int64
         """
-        index = self.grouping.keys.unique().to_pandas()
+        warnings.warn(
+            f"{type(self).__name__}.dtypes is deprecated and will be "
+            "removed in a future version. Check the dtypes on the "
+            "base object instead",
+            FutureWarning,
+        )
+        index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
             {
                 name: [self.obj._dtypes[name]] * len(index)
-                for name in self.grouping.values._column_names
+                for name in self.obj._data.names
             },
             index=index,
         )
@@ -528,7 +531,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
-        # a Float64Index, while Pandas returns an Int64Index
+        # an Index with float64 dtype, while Pandas returns
+        # an Index with int64 dtype.
         # (GH: 6945)
         (
             result_columns,
@@ -678,7 +682,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
             _, (ordering,), _ = self._groupby.groups(
-                [arange(0, self.obj._data.nrows)]
+                [arange(0, len(self.obj))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
@@ -799,10 +803,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n)).sort_index()
-        sizes = self.size().sort_index()
 
-        return result[sizes > n]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
+        # We perform another groupby here to have the grouping columns
+        # be a part of dataframe columns.
+        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
+        sizes = self.size().reindex(result.index)
+
+        result = result[sizes > n]
+
+        result._index = self.obj.index.take(
+            result._data["__groupbynth_order__"]
+        )
+        del result._data["__groupbynth_order__"]
+        del self.obj._data["__groupbynth_order__"]
+        return result
 
     @_cudf_nvtx_annotate
     def ngroup(self, ascending=True):
@@ -864,25 +879,27 @@ class GroupBy(Serializable, Reducible, Scannable):
         5    0
         dtype: int64
         """
-        num_groups = len(index := self.grouping.keys.unique())
+        index = self.grouping.keys.unique().sort_values()
+        num_groups = len(index)
         _, has_null_group = bitmask_or([*index._columns])
 
         if ascending:
-            if has_null_group:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(-1, num_groups - 1)}
-                )
-            else:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(num_groups)}
-                )
+            # Count ascending from 0 to num_groups - 1
+            group_ids = cudf.Series._from_data({None: cp.arange(num_groups)})
+        elif has_null_group:
+            # Count descending from num_groups - 1 to 0, but subtract one more
+            # for the null group making it num_groups - 2 to -1.
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 2, -2, -1)}
+            )
         else:
+            # Count descending from num_groups - 1 to 0
             group_ids = cudf.Series._from_data(
                 {None: cp.arange(num_groups - 1, -1, -1)}
             )
 
         if has_null_group:
-            group_ids.iloc[0] = cudf.NA
+            group_ids.iloc[-1] = cudf.NA
 
         group_ids._index = index
         return self._broadcast(group_ids)
@@ -1065,7 +1082,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
-        group_names = grouped_keys.unique()
+        group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
@@ -1095,8 +1112,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns = values._columns
             aggs_per_column = (aggs,) * len(columns)
 
+        # is_list_like performs type narrowing but type-checkers don't
+        # know it. One could add a TypeGuard annotation to
+        # is_list_like (see PEP647), but that is less useful than it
+        # seems because unlike the builtin narrowings it only performs
+        # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
@@ -1161,11 +1183,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
         # Nulls are not yet supported
-        for colname in self.grouping.values._data.keys():
-            if self.obj._data[colname].has_nulls():
-                raise ValueError(
-                    "Nulls not yet supported with groupby JIT engine"
-                )
+        if self.grouping._obj._has_nulls:
+            raise ValueError("Nulls not yet supported with groupby JIT engine")
 
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
@@ -1242,7 +1261,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @_cudf_nvtx_annotate
-    def apply(self, function, *args, engine="cudf"):
+    def apply(self, function, *args, engine="auto"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -1252,7 +1271,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           on the grouped chunk.
         args : tuple
             Optional positional arguments to pass to the function.
-        engine: {'cudf', 'jit'}, default 'cudf'
+        engine: 'auto', 'cudf', or 'jit', default 'auto'
           Selects the GroupBy.apply implementation. Use `jit` to
           select the numba JIT pipeline. Only certain operations are allowed
           within the function when using this option: min, max, sum, mean, var,
@@ -1261,6 +1280,11 @@ class GroupBy(Serializable, Reducible, Scannable):
           `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
           <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
+          Use `cudf` to select the iterative groupby apply algorithm which aims
+          to provide maximum flexibility at the expense of performance.
+          The default value `auto` will attempt to use the numba JIT pipeline
+          where possible and will fall back to the iterative algorithm if
+          necessary.
 
         Examples
         --------
@@ -1334,10 +1358,20 @@ class GroupBy(Serializable, Reducible, Scannable):
         1  2     1
         2  3     1
         """
+
+        if self.obj.empty:
+            return self.obj
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
+        if engine == "auto":
+            if (not grouped_values._has_nulls) and _can_be_jitted(
+                grouped_values, function, args
+            ):
+                engine = "jit"
+            else:
+                engine = "cudf"
         if engine == "jit":
             result = self._jit_groupby_apply(
                 function,
@@ -2205,11 +2239,29 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         # TODO: copy metadata after this method is a common pattern, should
         # merge in this method.
-        _, order_cols, _ = self._groupby.groups(
-            [arange(0, result._data.nrows)]
-        )
-        gather_map = order_cols[0].argsort()
-        result = result.take(gather_map)
+
+        # This function is used to reorder the results of scan-based
+        # groupbys which have the same output size as input size.
+        # However, if the grouping key has NAs and dropna=True, the
+        # result coming back from libcudf has null_count few rows than
+        # the input, so we must produce an ordering from the full
+        # input range.
+        _, (ordering,), _ = self._groupby.groups([arange(0, len(self.obj))])
+        if self._dropna and any(
+            c.has_nulls(include_nan=True) > 0
+            for c in self.grouping._key_columns
+        ):
+            # Scan aggregations with null/nan keys put nulls in the
+            # corresponding output rows in pandas, to do that here
+            # expand the result by reindexing.
+            ri = cudf.RangeIndex(0, len(self.obj))
+            result.index = cudf.Index(ordering)
+            # This reorders and expands
+            result = result.reindex(ri)
+        else:
+            # Just reorder according to the groupings
+            result = result.take(ordering.argsort())
+        # Now produce the actual index we first thought of
         result.index = self.obj.index
         return result
 

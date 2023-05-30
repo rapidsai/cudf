@@ -46,7 +46,7 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     >>> codes
     array([0, 1, 1], dtype=int8)
     >>> uniques
-    StringIndex(['a' 'c'], dtype='object')
+    Index(['a' 'c'], dtype='object')
 
     When ``use_na_sentinel=True`` (the default), missing values are indicated
     in the `codes` with the sentinel value ``-1`` and missing values are not
@@ -56,7 +56,7 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     >>> codes
     array([ 1, -1,  0,  2,  1], dtype=int8)
     >>> uniques
-    StringIndex(['a' 'b' 'c'], dtype='object')
+    Index(['a', 'b', 'c'], dtype='object')
 
     If NA is in the values, and we want to include NA in the uniques of the
     values, it can be achieved by setting ``use_na_sentinel=False``.
@@ -66,12 +66,12 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     >>> codes
     array([ 0,  1,  0, -1], dtype=int8)
     >>> uniques
-    Float64Index([1.0, 2.0], dtype='float64')
+    Index([1.0, 2.0], dtype='float64')
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
     array([1, 2, 1, 0], dtype=int8)
     >>> uniques
-    Float64Index([<NA>, 1.0, 2.0], dtype='float64')
+    Index([<NA>, 1.0, 2.0], dtype='float64')
     """
 
     return_cupy_array = isinstance(values, cp.ndarray)

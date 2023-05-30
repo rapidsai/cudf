@@ -11,9 +11,9 @@ import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
-from cudf.api.extensions import no_default
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -83,7 +83,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not isinstance(index, cudf.StringIndex)
+            sort = not index._is_object()
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -427,7 +427,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.core.index.GenericIndex._concat(objs)
+        return cudf.core.index.Index._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 
@@ -1128,7 +1128,7 @@ def _get_unique(column, dummy_na):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
-        unique = column.unique()
+        unique = column.unique().sort_by_values()[0]
     if not dummy_na:
         if np.issubdtype(unique.dtype, np.floating):
             unique = unique.nans_to_nulls()

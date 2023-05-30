@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pickle
 from functools import cached_property
-from typing import Any, Set, TypeVar
+from typing import Any, Set
 
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 import warnings
@@ -57,12 +58,10 @@ Examples
 >>> import cudf
 >>> index = cudf.Index([1, 2, 3])
 >>> index
-Int64Index([1, 2, 3], dtype='int64')
+Index([1, 2, 3], dtype='int64')
 >>> index.astype('float64')
-Float64Index([1.0, 2.0, 3.0], dtype='float64')
+Index([1.0, 2.0, 3.0], dtype='float64')
 """
-
-BaseIndexT = TypeVar("BaseIndexT", bound="BaseIndex")
 
 
 class BaseIndex(Serializable):
@@ -104,8 +103,8 @@ class BaseIndex(Serializable):
         return item in self._values
 
     def _copy_type_metadata(
-        self: BaseIndexT, other: BaseIndexT, *, override_dtypes=None
-    ) -> BaseIndexT:
+        self, other: Self, *, override_dtypes=None
+    ) -> Self:
         raise NotImplementedError
 
     def get_level_values(self, level):
@@ -139,7 +138,7 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx = cudf.Index(["a", "b", "c"])
         >>> idx.get_level_values(0)
-        StringIndex(['a' 'b' 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='object')
         """
 
         if level == self.name:
@@ -186,7 +185,7 @@ class BaseIndex(Serializable):
         to `<NA>` as a preprocessing step to `__repr__` methods.
 
         This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
+        to string dtype but it is the responsibility of the `__repr__`
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
@@ -229,7 +228,7 @@ class BaseIndex(Serializable):
         >>> import numpy as np
         >>> index = cudf.Index([1, 2, np.nan, 3, 4], nan_as_null=False)
         >>> index
-        Float64Index([1.0, 2.0, nan, 3.0, 4.0], dtype='float64')
+        Index([1.0, 2.0, nan, 3.0, 4.0], dtype='float64')
         >>> index.hasnans
         True
 
@@ -237,7 +236,7 @@ class BaseIndex(Serializable):
 
         >>> index = cudf.Index([1, 2, None, 3, 4])
         >>> index
-        Int64Index([1, 2, <NA>, 3, 4], dtype='int64')
+        Index([1, 2, <NA>, 3, 4], dtype='int64')
         >>> index.hasnans
         True
         """
@@ -290,9 +289,9 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx = cudf.Index([1, 2, 3, 4])
         >>> idx
-        Int64Index([1, 2, 3, 4], dtype='int64')
+        Index([1, 2, 3, 4], dtype='int64')
         >>> idx.set_names('quarter')
-        Int64Index([1, 2, 3, 4], dtype='int64', name='quarter')
+        Index([1, 2, 3, 4], dtype='int64', name='quarter')
         >>> idx = cudf.MultiIndex.from_product([['python', 'cobra'],
         ... [2018, 2019]])
         >>> idx
@@ -351,7 +350,7 @@ class BaseIndex(Serializable):
         >>> idx1 = cudf.Index([1, 2, 3, 4])
         >>> idx2 = cudf.Index([3, 4, 5, 6])
         >>> idx1.union(idx2)
-        Int64Index([1, 2, 3, 4, 5, 6], dtype='int64')
+        Index([1, 2, 3, 4, 5, 6], dtype='int64')
 
         MultiIndex case
 
@@ -441,7 +440,7 @@ class BaseIndex(Serializable):
         >>> idx1 = cudf.Index([1, 2, 3, 4])
         >>> idx2 = cudf.Index([3, 4, 5, 6])
         >>> idx1.intersection(idx2)
-        Int64Index([3, 4], dtype='int64')
+        Index([3, 4], dtype='int64')
 
         MultiIndex case
 
@@ -545,9 +544,9 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> index = cudf.Index([1, 2, None, 4])
         >>> index
-        Int64Index([1, 2, <NA>, 4], dtype='int64')
+        Index([1, 2, <NA>, 4], dtype='int64')
         >>> index.fillna(3)
-        Int64Index([1, 2, 3, 4], dtype='int64')
+        Index([1, 2, 3, 4], dtype='int64')
         """
         if downcast is not None:
             raise NotImplementedError(
@@ -639,13 +638,13 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx = cudf.Index([-3, 10, 15, 20])
         >>> idx
-        Int64Index([-3, 10, 15, 20], dtype='int64')
+        Index([-3, 10, 15, 20], dtype='int64')
         >>> idx.to_pandas()
-        Int64Index([-3, 10, 15, 20], dtype='int64')
+        Index([-3, 10, 15, 20], dtype='int64')
         >>> type(idx.to_pandas())
-        <class 'pandas.core.indexes.numeric.Int64Index'>
+        <class 'pandas.core.indexes.base.Index'>
         >>> type(idx)
-        <class 'cudf.core.index.Int64Index'>
+        <class 'cudf.core.index.Index'>
         """
         raise NotImplementedError
 
@@ -670,7 +669,7 @@ class BaseIndex(Serializable):
         --------
         >>> idx = cudf.Index([1,2,3])
         >>> idx
-        Int64Index([1, 2, 3], dtype='int64')
+        Index([1, 2, 3], dtype='int64')
 
         Check whether each index value in a list of values.
 
@@ -740,17 +739,17 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx = cudf.Index([1, 2, 10, 100])
         >>> idx
-        Int64Index([1, 2, 10, 100], dtype='int64')
+        Index([1, 2, 10, 100], dtype='int64')
         >>> other = cudf.Index([200, 400, 50])
         >>> other
-        Int64Index([200, 400, 50], dtype='int64')
+        Index([200, 400, 50], dtype='int64')
         >>> idx.append(other)
-        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+        Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
 
         append accepts list of Index objects
 
         >>> idx.append([other, other])
-        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+        Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
         """
         raise NotImplementedError
 
@@ -782,14 +781,14 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx1 = cudf.Index([2, 1, 3, 4])
         >>> idx1
-        Int64Index([2, 1, 3, 4], dtype='int64')
+        Index([2, 1, 3, 4], dtype='int64')
         >>> idx2 = cudf.Index([3, 4, 5, 6])
         >>> idx2
-        Int64Index([3, 4, 5, 6], dtype='int64')
+        Index([3, 4, 5, 6], dtype='int64')
         >>> idx1.difference(idx2)
-        Int64Index([1, 2], dtype='int64')
+        Index([1, 2], dtype='int64')
         >>> idx1.difference(idx2, sort=False)
-        Int64Index([2, 1], dtype='int64')
+        Index([2, 1], dtype='int64')
         """
         if sort not in {None, False}:
             raise ValueError(
@@ -1235,18 +1234,18 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> idx = cudf.Index([10, 100, 1, 1000])
         >>> idx
-        Int64Index([10, 100, 1, 1000], dtype='int64')
+        Index([10, 100, 1, 1000], dtype='int64')
 
         Sort values in ascending order (default behavior).
 
         >>> idx.sort_values()
-        Int64Index([1, 10, 100, 1000], dtype='int64')
+        Index([1, 10, 100, 1000], dtype='int64')
 
         Sort values in descending order, and also get the indices `idx` was
         sorted by.
 
         >>> idx.sort_values(ascending=False, return_indexer=True)
-        (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
+        (Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
                                                             dtype=int32))
 
         Sorting values in a MultiIndex:
@@ -1323,7 +1322,7 @@ class BaseIndex(Serializable):
                    names=['a', 'b'])
         >>> rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index('a').index
         >>> rhs
-        Int64Index([1, 4, 3], dtype='int64', name='a')
+        Index([1, 4, 3], dtype='int64', name='a')
         >>> lhs.join(rhs, how='inner')
         MultiIndex([(3, 4),
                     (1, 2)],
@@ -1406,12 +1405,12 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> index = cudf.Index([1, 2, 3], name='one')
         >>> index
-        Int64Index([1, 2, 3], dtype='int64', name='one')
+        Index([1, 2, 3], dtype='int64', name='one')
         >>> index.name
         'one'
         >>> renamed_index = index.rename('two')
         >>> renamed_index
-        Int64Index([1, 2, 3], dtype='int64', name='two')
+        Index([1, 2, 3], dtype='int64', name='two')
         >>> renamed_index.name
         'two'
         """
@@ -1442,7 +1441,6 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     def __array_function__(self, func, types, args, kwargs):
-
         # check if the function is implemented for the current type
         cudf_index_module = type(self)
         for submodule in func.__module__.split(".")[1:]:
@@ -1469,7 +1467,12 @@ class BaseIndex(Serializable):
             if cudf_func is func:
                 return NotImplemented
             else:
-                return cudf_func(*args, **kwargs)
+                result = cudf_func(*args, **kwargs)
+                if fname == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Index.unique.
+                    result = result.sort_values()
+                return result
 
         else:
             return NotImplemented
@@ -1501,9 +1504,9 @@ class BaseIndex(Serializable):
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
         >>> cudf.Index.from_pandas(pdi)
-        Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
+        Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
-        Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
+        Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
@@ -1674,7 +1677,7 @@ class BaseIndex(Serializable):
         --------
         >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
         >>> idx.take([2, 0, 4, 3])
-        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
+        Index(['c', 'a', 'e', 'd'], dtype='object')
         """
 
         if axis not in {0, "index"}:
@@ -1725,9 +1728,9 @@ class BaseIndex(Serializable):
         --------
         >>> index = cudf.Index([10, 22, 33, 55])
         >>> index
-        Int64Index([10, 22, 33, 55], dtype='int64')
+        Index([10, 22, 33, 55], dtype='int64')
         >>> index.repeat(5)
-        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+        Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
                     33, 33, 33, 33, 55, 55, 55, 55, 55],
                 dtype='int64')
         """

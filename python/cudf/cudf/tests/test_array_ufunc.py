@@ -368,6 +368,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
                     "fmax",
                     "fmin",
                     "fmod",
+                    "heaviside",
                     "gcd",
                     "hypot",
                     "lcm",

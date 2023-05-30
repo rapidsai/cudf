@@ -1,14 +1,18 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import math
+import operator
 import shutil
 import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Dict, List, Optional, Tuple
+from functools import partial, reduce
+from typing import Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import numpy as np
 import pandas as pd
 from pyarrow import dataset as ds, parquet as pq
 
@@ -481,6 +485,9 @@ def read_parquet(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
 
+    # Normalize and validate filters
+    filters = _normalize_filters(filters)
+
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
@@ -501,8 +508,6 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    elif filters is not None:
-        raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
@@ -547,7 +552,8 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
-    return _parquet_to_frame(
+    # Convert parquet data to a cudf.DataFrame
+    df = _parquet_to_frame(
         filepaths_or_buffers,
         engine,
         *args,
@@ -560,6 +566,115 @@ def read_parquet(
         dataset_kwargs=dataset_kwargs,
         **kwargs,
     )
+
+    # Apply filters row-wise (if any are defined), and return
+    return _apply_post_filters(df, filters)
+
+
+def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
+    # Utility to normalize and validate the `filters`
+    # argument to `read_parquet`
+    if not filters:
+        return None
+
+    msg = (
+        f"filters must be None, or non-empty List[Tuple] "
+        f"or List[List[Tuple]]. Got {filters}"
+    )
+    if not isinstance(filters, list):
+        raise TypeError(msg)
+
+    def _validate_predicate(item):
+        if not isinstance(item, tuple) or len(item) != 3:
+            raise TypeError(
+                f"Predicate must be Tuple[str, str, Any], " f"got {predicate}."
+            )
+
+    filters = filters if isinstance(filters[0], list) else [filters]
+    for conjunction in filters:
+        if not conjunction or not isinstance(conjunction, list):
+            raise TypeError(msg)
+        for predicate in conjunction:
+            _validate_predicate(predicate)
+
+    return filters
+
+
+def _apply_post_filters(
+    df: cudf.DataFrame, filters: List[List[tuple]] | None
+) -> cudf.DataFrame:
+    """Apply DNF filters to an in-memory DataFrame
+
+    Disjunctive normal form (DNF) means that the inner-most
+    tuple describes a single column predicate. These inner
+    predicates are combined with an AND conjunction into a
+    larger predicate. The outer-most list then combines all
+    of the combined filters with an OR disjunction.
+    """
+
+    if not filters:
+        # No filters to apply
+        return df
+
+    def _handle_in(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if not isinstance(value, (list, set, tuple)):
+            raise TypeError(
+                "Value of 'in'/'not in' filter must be a list, set, or tuple."
+            )
+        return ~column.isin(value) if negate else column.isin(value)
+
+    def _handle_is(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if value not in {np.nan, None}:
+            raise TypeError(
+                "Value of 'is'/'is not' filter must be np.nan or None."
+            )
+        return ~column.isna() if negate else column.isna()
+
+    handlers: Dict[str, Callable] = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+        "in": partial(_handle_in, negate=False),
+        "not in": partial(_handle_in, negate=True),
+        "is": partial(_handle_is, negate=False),
+        "is not": partial(_handle_is, negate=True),
+    }
+
+    # Can re-set the index before returning if we filter
+    # out rows from a DataFrame with a default RangeIndex
+    # (to reduce memory usage)
+    reset_index = (
+        isinstance(df.index, cudf.RangeIndex)
+        and df.index.name is None
+        and df.index.start == 0
+        and df.index.step == 1
+    )
+
+    try:
+        selection: cudf.Series = reduce(
+            operator.or_,
+            (
+                reduce(
+                    operator.and_,
+                    (
+                        handlers[op](df[column], value)
+                        for (column, op, value) in expr
+                    ),
+                )
+                for expr in filters
+            ),
+        )
+        if reset_index:
+            return df[selection].reset_index(drop=True)
+        return df[selection]
+    except (KeyError, TypeError):
+        warnings.warn(
+            f"Row-wise filtering failed in read_parquet for {filters}"
+        )
+        return df
 
 
 @_cudf_nvtx_annotate

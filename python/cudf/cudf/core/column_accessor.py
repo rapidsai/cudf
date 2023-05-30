@@ -18,6 +18,7 @@ from typing import (
 )
 
 import pandas as pd
+from pandas.api.types import is_bool
 
 import cudf
 from cudf.core import column
@@ -101,7 +102,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def __init__(
         self,
-        data: Union[abc.MutableMapping, ColumnAccessor] = None,
+        data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
     ):
@@ -363,7 +364,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        index : integer, integer slice, or list-like of integers
+        index : integer, integer slice, boolean mask,
+            or list-like of integers
             The column indexes.
 
         Returns
@@ -375,6 +377,18 @@ class ColumnAccessor(abc.MutableMapping):
             return self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
             return (self.names[index],)
+        elif (bn := len(index)) > 0 and all(map(is_bool, index)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
+            if isinstance(index, (pd.Series, cudf.Series)):
+                # Don't allow iloc indexing with series
+                raise NotImplementedError(
+                    "Cannot use Series object for mask iloc indexing"
+                )
+            # TODO: Doesn't handle on-device columns
+            return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
             return tuple(self.names[i] for i in index)
 
@@ -385,7 +399,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        key : integer, integer slice, or list-like of integers
+        key : integer, integer slice, boolean mask,
+            or list-like of integers
 
         Returns
         -------
@@ -466,7 +481,21 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
-        data = {k: self._grouped_data[k] for k in key}
+        # Might be a generator
+        key = tuple(key)
+        # Special-casing for boolean mask
+        if (bn := len(key)) > 0 and all(map(is_bool, key)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
+            data = dict(
+                item
+                for item, keep in zip(self._grouped_data.items(), key)
+                if keep
+            )
+        else:
+            data = {k: self._grouped_data[k] for k in key}
         if self.multiindex:
             data = _to_flat_dict(data)
         return self.__class__(

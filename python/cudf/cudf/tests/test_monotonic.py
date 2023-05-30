@@ -13,9 +13,8 @@ from cudf import MultiIndex, Series
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
-    GenericIndex,
+    Index,
     RangeIndex,
-    StringIndex,
 )
 from cudf.testing._utils import assert_eq
 
@@ -50,7 +49,7 @@ def test_range_index(testrange):
 )
 def test_generic_index(testlist):
 
-    index = GenericIndex(testlist)
+    index = Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
@@ -69,7 +68,7 @@ def test_generic_index(testlist):
 )
 def test_string_index(testlist):
 
-    index = StringIndex(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
@@ -223,7 +222,7 @@ def test_multiindex_tuples(testarr):
 )
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound(testlist, side):
-    index = GenericIndex(testlist)
+    index = Index(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
         expect = index_pd.get_slice_bound(label, side)
@@ -270,7 +269,7 @@ def test_rangeindex_get_slice_bound_step(bounds, label, side):
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound_missing(label, side):
     mylist = [2, 4, 6, 8, 10]
-    index = GenericIndex(mylist)
+    index = Index(mylist)
     index_pd = pd.Index(mylist)
 
     expect = index_pd.get_slice_bound(label, side)
@@ -285,7 +284,7 @@ def test_get_slice_bound_missing_str(label, side):
     # Slicing for monotonic string indices not yet supported
     # when missing values are specified (allowed in pandas)
     mylist = ["b", "d", "f"]
-    index = GenericIndex(mylist)
+    index = Index(mylist)
     index_pd = pd.Index(mylist)
     got = index.get_slice_bound(label, side)
     expect = index_pd.get_slice_bound(label, side)

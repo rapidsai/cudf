@@ -19,7 +19,7 @@ license = { text = "Apache 2.0" }
 requires-python = ">=3.9"
 dependencies = [
     "cudf==23.6.*",
-    "cupy-cuda11x>=9.5.0,<12.0.0a0",
+    "cupy-cuda11x>=12.0.0",
     "dask==2023.3.2",
     "distributed==2023.3.2.1",
     "fsspec>=0.6.0",
@@ -40,7 +40,7 @@ dynamic = ["entry-points"]
 [project.optional-dependencies]
 test = [
     "dask-cuda==23.6.*",
-    "numba>=0.56.4,<0.57",
+    "numba>=0.57",
     "pytest",
     "pytest-cov",
     "pytest-xdist",

@@ -149,9 +149,6 @@ Numeric Index
    :template: autosummary/class_without_autosummary.rst
 
    RangeIndex
-   Int64Index
-   UInt64Index
-   Float64Index
 
 .. _api.categoricalindex:
 
@@ -282,6 +279,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.tz_localize
 
 Conversion
 ~~~~~~~~~~

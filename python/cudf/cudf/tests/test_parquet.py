@@ -69,14 +69,14 @@ def simple_pdf(request):
         "float32",
         "float64",
     ]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
@@ -84,10 +84,6 @@ def simple_pdf(request):
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -115,14 +111,14 @@ def build_pdf(num_columns, day_resolution_timestamps):
         "datetime64[us]",
         "str",
     ]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = num_columns.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
         # Need to ensure that this index is not a RangeIndex to get the
         # expected round-tripping behavior from Parquet reader/writer.
         index=pd.Index(list(range(nrows))),
@@ -130,10 +126,6 @@ def build_pdf(num_columns, day_resolution_timestamps):
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype(typer)
 
     # make datetime64's a little more interesting by increasing the range of
     # dates note that pandas will convert these to ns timestamps, so care is
@@ -541,9 +533,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     )
     assert_eq(
         filtered_df,
-        cudf.DataFrame(
-            {"x": [2, 3, 2, 3], "y": list("bbcc")}, index=[2, 3, 2, 3]
-        ),
+        cudf.DataFrame({"x": [2, 2], "y": list("bc")}, index=[2, 2]),
     )
 
 
@@ -554,13 +544,16 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
-        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([[("x", "==", 0)], [("z", "==", 0)]], 2),
         ([("x", "==", 0), ("z", "==", 0)], 0),
-        ([("x", "==", 0), ("z", "!=", 0)], 2),
-        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("x", "==", 0), ("z", "!=", 0)], 1),
         ([("y", "==", "c"), ("x", ">", 8)], 0),
-        ([("y", "==", "c"), ("x", ">=", 5)], 2),
-        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+        ([("y", "==", "c"), ("x", ">=", 5)], 1),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 5),
+        ([[("x", "not in", (0, 9)), ("z", "not in", (4, 5))]], 6),
+        ([[("y", "==", "c")], [("x", "in", (0, 9)), ("z", "in", (0, 9))]], 4),
+        ([[("x", "==", 0)], [("x", "==", 1)], [("x", "==", 2)]], 3),
+        ([[("x", "==", 0), ("z", "==", 9), ("y", "==", "a")]], 1),
     ],
 )
 def test_parquet_read_filtered_complex_predicate(
@@ -569,7 +562,11 @@ def test_parquet_read_filtered_complex_predicate(
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
     df = pd.DataFrame(
-        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+        {
+            "x": range(10),
+            "y": list("aabbccddee"),
+            "z": reversed(range(10)),
+        }
     )
     df.to_parquet(fname, row_group_size=2)
 
@@ -1983,26 +1980,16 @@ def test_read_parquet_partitioned_filtered(
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 
-    # Filter on non-partitioned column.
-    # Cannot compare to pandas, since the pyarrow
-    # backend will filter by row (and cudf can
-    # only filter by column, for now)
+    # Filter on non-partitioned column
     filters = [("a", "==", 10)]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and 10 in got["a"]
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(
-        read_path,
-        filters=filters,
-        row_groups=row_groups,
-    )
-    assert len(got) < len(df) and (1 in got["c"] and 10 in got["a"])
+    got = cudf.read_parquet(read_path, filters=filters)
+    expect = pd.read_parquet(read_path, filters=filters)
+    assert_eq(expect, got)
 
 
 def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
@@ -2615,6 +2602,20 @@ def test_parquet_reader_one_level_list2(datadir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+# testing a specific bug-fix/edge case.
+# specifically:  in a parquet file containing a particular way of representing
+#                a list column in a schema, the cudf reader was confusing
+#                nesting information and building a list of list of int instead
+#                of a list of int
+def test_parquet_reader_one_level_list3(datadir):
+    fname = datadir / "one_level_list3.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got, check_dtype=True)
 
 
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])

@@ -16,7 +16,6 @@ from typing import (
     MutableMapping,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -24,6 +23,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -44,8 +44,6 @@ from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -90,6 +88,10 @@ class Frame(BinaryOperand, Scannable):
         return dict(
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
+
+    @property
+    def _has_nulls(self):
+        return any(col.has_nulls() for col in self._data.values())
 
     def serialize(self):
         header = {
@@ -146,8 +148,8 @@ class Frame(BinaryOperand, Scannable):
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     def _mimic_inplace(
-        self: T, result: T, inplace: bool = False
-    ) -> Optional[Frame]:
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -208,12 +210,12 @@ class Frame(BinaryOperand, Scannable):
 
         >>> index = cudf.Index([])
         >>> index
-        Float64Index([], dtype='float64')
+        Index([], dtype='float64')
         >>> index.size
         0
         >>> index = cudf.Index([1, 2, 3, 10])
         >>> index
-        Int64Index([1, 2, 3, 10], dtype='int64')
+        Index([1, 2, 3, 10], dtype='int64')
         >>> index.size
         4
 
@@ -1069,7 +1071,6 @@ class Frame(BinaryOperand, Scannable):
         # Handle dict arrays
         cudf_category_frame = {}
         if len(dict_indices):
-
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
             indices_columns = libcudf.interop.from_arrow(dict_indices_table)
@@ -1125,7 +1126,12 @@ class Frame(BinaryOperand, Scannable):
                 result[name] = result[name].as_string_column(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
-                (pa.StructType, pa.ListType, pa.Decimal128Type),
+                (
+                    pa.StructType,
+                    pa.ListType,
+                    pa.Decimal128Type,
+                    pa.TimestampType,
+                ),
             ):
                 # In case of struct column, libcudf is not aware of names of
                 # struct fields, hence renaming the struct fields is
@@ -1137,6 +1143,9 @@ class Frame(BinaryOperand, Scannable):
 
                 # In case of list column, there is a possibility of nested
                 # list columns to have struct or decimal columns inside them.
+
+                # Datetimes ("timestamps") may need timezone metadata
+                # attached to them, as libcudf is timezone-unaware
 
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
@@ -1183,11 +1192,11 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     def _copy_type_metadata(
-        self: T,
-        other: T,
+        self,
+        other: Self,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> T:
+    ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -1280,7 +1289,7 @@ class Frame(BinaryOperand, Scannable):
 
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
-        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.isna()
         array([False, False,  True,  True, False, False])
         """
@@ -1359,7 +1368,7 @@ class Frame(BinaryOperand, Scannable):
 
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
-        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.notna()
         array([ True,  True, False, False,  True,  True])
         """

@@ -100,7 +100,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         name=None,
         **kwargs,
     ):
-
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
         if name is not None:
@@ -349,8 +348,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['Date', 'Symbol'])
         >>> idx2 = idx1.copy(
-        ... levels=[['day1', 'day2'], ['com1', 'com2']],
-        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['col1', 'col2'])
 
         >>> df.index = idx1
@@ -364,13 +361,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         >>> df.index = idx2
         >>> df
-                     Close
-        col1 col2
-        day1 com1  3400.00
-             com2   226.58
-        day2 com1  3401.80
-             com2   228.91
-
+                           Close
+        col1       col2
+        2020-08-27 AMZN  3400.00
+                   MSFT   226.58
+        2020-08-28 AMZN  3401.80
+                   MSFT   228.91
         """
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
@@ -737,7 +733,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def _index_and_downcast(self, result, index, index_key):
-
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
         if (
@@ -995,7 +990,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @classmethod
     @_cudf_nvtx_annotate
     def _concat(cls, objs):
-
         source_data = [o.to_frame(index=False) for o in objs]
 
         # TODO: Verify if this is really necessary or if we can rely on
@@ -1006,11 +1000,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 obj.columns = colnames
 
         source_data = cudf.DataFrame._concat(source_data)
-        names = [None] * source_data._num_columns
-        objs = list(filter(lambda o: o.names is not None, objs))
-        for o in range(len(objs)):
-            for i, name in enumerate(objs[o].names):
-                names[i] = names[i] or name
+        try:
+            # Only set names if all objs have the same names
+            (names,) = {o.names for o in objs} - {None}
+        except ValueError:
+            names = [None] * source_data._num_columns
         return cudf.MultiIndex.from_frame(source_data, names=names)
 
     @classmethod
@@ -1383,7 +1377,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Dropping multiple levels:
 
         >>> idx.droplevel(["first", "second"])
-        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
         mi = self.copy(deep=False)
         mi._poplevels(level)
@@ -1876,7 +1870,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common
         # logic between MultiIndex._union & BaseIndex._union into
-        # GenericIndex._union.
+        # Index._union.
         other_df = other.copy(deep=True).to_frame(index=False)
         self_df = self.copy(deep=True).to_frame(index=False)
         col_names = list(range(0, self.nlevels))

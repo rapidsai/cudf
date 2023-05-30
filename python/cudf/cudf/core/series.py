@@ -25,6 +25,7 @@ from cudf._typing import (
     NotImplementedType,
     ScalarLike,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -59,7 +60,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -79,7 +80,6 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-from cudf.api.extensions import no_default
 
 
 def _format_percentile_names(percentiles):
@@ -1076,7 +1076,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             # Apply a Series method if one exists.
             if cudf_func := getattr(Series, func.__name__, None):
-                return cudf_func(*args, **kwargs)
+                result = cudf_func(*args, **kwargs)
+                if func.__name__ == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Series.unique.
+                    result = result.sort_values()
+                return result
 
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
@@ -1416,9 +1421,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = cudf.core.index.GenericIndex._concat(
-                    [o.index for o in objs]
-                )
+                index = cudf.core.index.Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1467,15 +1470,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        # Reassign precision for decimal cols & type schema for struct cols
-        if isinstance(
-            col,
-            (
-                cudf.core.column.DecimalBaseColumn,
-                cudf.core.column.StructColumn,
-                cudf.core.column.ListColumn,
-            ),
-        ):
+        if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
@@ -1651,20 +1646,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         to be sorted.
 
         >>> s.drop_duplicates()
-        3    beetle
-        1       cow
-        5     hippo
         0      lama
+        1       cow
+        3    beetle
+        5     hippo
         Name: animal, dtype: object
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
 
         >>> s.drop_duplicates(keep='last')
-        3    beetle
         1       cow
-        5     hippo
+        3    beetle
         4      lama
+        5     hippo
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
@@ -1673,8 +1668,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         >>> s.drop_duplicates(keep=False, inplace=True)
         >>> s
-        3    beetle
         1       cow
+        3    beetle
         5     hippo
         Name: animal, dtype: object
         """
@@ -2812,9 +2807,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         6       c
         dtype: object
         >>> series.unique()
-        0    <NA>
-        1       a
-        2       b
+        0       a
+        1       b
+        2    <NA>
         3       c
         dtype: object
         """
@@ -3212,10 +3207,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -3330,7 +3325,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         c    3
         dtype: int64
         >>> sr.keys()
-        StringIndex(['a' 'b' 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='object')
         """
         return self.index
 
@@ -4510,6 +4505,42 @@ class DatetimeProperties:
         )
         return Series(
             data=str_col, index=self.series._index, name=self.series.name
+        )
+
+    @copy_docstring(DatetimeIndex.tz_localize)
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+        from cudf.core._internals.timezones import localize
+
+        if tz is None:
+            result_col = self.series._column._local_time
+        else:
+            result_col = localize(
+                self.series._column, tz, ambiguous, nonexistent
+            )
+        return Series._from_data(
+            data={self.series.name: result_col},
+            index=self.series._index,
+        )
+
+    @copy_docstring(DatetimeIndex.tz_convert)
+    def tz_convert(self, tz):
+        """
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the
+            timezone information.
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self.series._column._utc_time
+        else:
+            result_col = convert(self.series._column, tz)
+        return Series._from_data(
+            {self.series.name: result_col}, index=self.series._index
         )
 
 
