@@ -802,10 +802,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n)).sort_index()
-        sizes = self.size().sort_index()
 
-        return result[sizes > n]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
+        # We perform another groupby here to have the grouping columns
+        # be a part of dataframe columns.
+        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
+        sizes = self.size().reindex(result.index)
+
+        result = result[sizes > n]
+
+        result._index = self.obj.index.take(
+            result._data["__groupbynth_order__"]
+        )
+        del result._data["__groupbynth_order__"]
+        del self.obj._data["__groupbynth_order__"]
+        return result
 
     @_cudf_nvtx_annotate
     def ngroup(self, ascending=True):
