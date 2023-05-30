@@ -216,14 +216,16 @@ class reader::impl {
 
  private:
   rmm::mr::device_memory_resource* const _mr;
-  std::vector<std::unique_ptr<datasource>> const _sources;
-  cudf::io::orc::detail::column_hierarchy const _selected_columns;
-  data_type const _timestamp_type{type_id::EMPTY};  /// Override output timestamp resolution
-  bool const _use_index;      /// Enable or disable attempt to use row index for parsing
-  bool const _use_np_dtypes;  /// Enable or disable the conversion to numpy-compatible dtypes
-  std::vector<std::string> const _decimal128_columns;  /// Control decimals conversion
 
+  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for others
   cudf::io::orc::detail::aggregate_orc_metadata _metadata;
+  cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
+
+  data_type const _timestamp_type;  // Override output timestamp resolution
+  bool const _use_index;            // Enable or disable attempt to use row index for parsing
+  bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
+  std::vector<std::string> const _decimal128_columns;  // Control decimals conversion
+
   reader_column_meta _col_meta{};
 };
 
