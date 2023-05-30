@@ -180,15 +180,6 @@ class reader::impl {
                       std::vector<column_name_info>& schema_info,
                       rmm::cuda_stream_view stream);
 
-  /**
-   * @brief Setup table for converting timestamp columns from local to UTC time
-   *
-   * @return Timezone table with timestamp offsets
-   */
-  std::unique_ptr<table> compute_timezone_table(
-    const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
-    rmm::cuda_stream_view stream);
-
  private:
   rmm::mr::device_memory_resource* const _mr;
 

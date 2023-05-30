@@ -941,16 +941,23 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 {
 }
 
-std::unique_ptr<table> reader::impl::compute_timezone_table(
-  const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
+/**
+ * @brief Setup table for converting timestamp columns from local to UTC time
+ *
+ * @return Timezone table with timestamp offsets
+ */
+std::unique_ptr<table> compute_timezone_table(
+  cudf::io::orc::detail::column_hierarchy const selected_columns,
+  cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+  std::vector<cudf::io::orc::metadata::stripe_source_mapping> const& selected_stripes,
   rmm::cuda_stream_view stream)
 {
   if (selected_stripes.empty()) return std::make_unique<cudf::table>();
 
   auto const has_timestamp_column = std::any_of(
-    _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto& col_lvl) {
+    selected_columns.levels.cbegin(), selected_columns.levels.cend(), [&](auto& col_lvl) {
       return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto& col_meta) {
-        return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
+        return metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
       });
     });
   if (not has_timestamp_column) return std::make_unique<cudf::table>();
@@ -985,7 +992,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
   auto const [rows_to_skip, rows_to_read, selected_stripes] =
     _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
 
-  auto const tz_table = compute_timezone_table(selected_stripes, stream);
+  auto const tz_table =
+    compute_timezone_table(_selected_columns, _metadata, selected_stripes, stream);
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
