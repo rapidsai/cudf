@@ -2251,10 +2251,15 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     ],
 )
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_multi_numeric_deviate(idx, key, method):
+def test_get_indexer_multi_numeric_deviate(request, idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)
-
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=method is not None and key == ((1, 2, 3),),
+            reason="https://github.com/pandas-dev/pandas/issues/53452",
+        )
+    )
     expected = pi.get_indexer(key, method=method)
     got = gi.get_indexer(key, method=method)
 
