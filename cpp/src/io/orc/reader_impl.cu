@@ -656,42 +656,54 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   });
 }
 
-// Aggregate child column metadata per stripe and per column
-void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
-                                        cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
-                                        std::vector<column_buffer>& out_buffers,
-                                        std::vector<orc_column_meta> const& list_col,
-                                        const size_type level)
+/**
+ * @brief Aggregate child metadata from parent column chunks.
+ * TODO
+ * @param selected_columns
+ * @param col_meta
+ * @param chunks Vector of list of parent column chunks.
+ * @param row_groups Vector of list of row index descriptors
+ * @param out_buffers Column buffers for columns.
+ * @param list_col Vector of column metadata of list type parent columns.
+ * @param level Current nesting level being processed.
+ */
+void aggregate_child_meta(cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                          reader_column_meta& col_meta,
+                          cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
+                          cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
+                          std::vector<column_buffer>& out_buffers,
+                          std::vector<orc_column_meta> const& list_col,
+                          const size_type level)
 {
   const auto num_of_stripes         = chunks.size().first;
   const auto num_of_rowgroups       = row_groups.size().first;
-  const auto num_parent_cols        = _selected_columns.levels[level].size();
-  const auto num_child_cols         = _selected_columns.levels[level + 1].size();
+  const auto num_parent_cols        = selected_columns.levels[level].size();
+  const auto num_child_cols         = selected_columns.levels[level + 1].size();
   const auto number_of_child_chunks = num_child_cols * num_of_stripes;
-  auto& num_child_rows              = _col_meta.num_child_rows;
-  auto& parent_column_data          = _col_meta.parent_column_data;
+  auto& num_child_rows              = col_meta.num_child_rows;
+  auto& parent_column_data          = col_meta.parent_column_data;
 
   // Reset the meta to store child column details.
-  num_child_rows.resize(_selected_columns.levels[level + 1].size());
+  num_child_rows.resize(selected_columns.levels[level + 1].size());
   std::fill(num_child_rows.begin(), num_child_rows.end(), 0);
   parent_column_data.resize(number_of_child_chunks);
-  _col_meta.parent_column_index.resize(number_of_child_chunks);
-  _col_meta.child_start_row.resize(number_of_child_chunks);
-  _col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
-  _col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
+  col_meta.parent_column_index.resize(number_of_child_chunks);
+  col_meta.child_start_row.resize(number_of_child_chunks);
+  col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
+  col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
 
   auto child_start_row = cudf::detail::host_2dspan<uint32_t>(
-    _col_meta.child_start_row.data(), num_of_stripes, num_child_cols);
+    col_meta.child_start_row.data(), num_of_stripes, num_child_cols);
   auto num_child_rows_per_stripe = cudf::detail::host_2dspan<uint32_t>(
-    _col_meta.num_child_rows_per_stripe.data(), num_of_stripes, num_child_cols);
+    col_meta.num_child_rows_per_stripe.data(), num_of_stripes, num_child_cols);
   auto rwgrp_meta = cudf::detail::host_2dspan<reader_column_meta::row_group_meta>(
-    _col_meta.rwgrp_meta.data(), num_of_rowgroups, num_child_cols);
+    col_meta.rwgrp_meta.data(), num_of_rowgroups, num_child_cols);
 
   int index = 0;  // number of child column processed
 
   // For each parent column, update its child column meta for each stripe.
   std::for_each(list_col.cbegin(), list_col.cend(), [&](const auto p_col) {
-    const auto parent_col_idx = _col_meta.orc_col_map[level][p_col.id];
+    const auto parent_col_idx = col_meta.orc_col_map[level][p_col.id];
     auto start_row            = 0;
     auto processed_row_groups = 0;
 
@@ -734,8 +746,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     auto num_rows          = out_buffers[parent_col_idx].size;
 
     for (size_type id = 0; id < p_col.num_children; id++) {
-      const auto child_col_idx                     = index + id;
-      _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
+      const auto child_col_idx                    = index + id;
+      col_meta.parent_column_index[child_col_idx] = parent_col_idx;
       if (type == type_id::STRUCT) {
         parent_column_data[child_col_idx] = {parent_valid_map, parent_null_count};
         // Number of rows in child will remain same as parent in case of struct column
@@ -1271,7 +1283,13 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
             scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           }
           row_groups.device_to_host(stream, true);
-          aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
+          aggregate_child_meta(_selected_columns,
+                               _col_meta,
+                               chunks,
+                               row_groups,
+                               out_buffers[level],
+                               nested_col,
+                               level);
         }
 
         // ORC stores number of elements at each row, so we need to generate offsets from that

@@ -152,21 +152,6 @@ class reader::impl {
                           size_t level,
                           rmm::cuda_stream_view stream);
 
-  /**
-   * @brief Aggregate child metadata from parent column chunks.
-   *
-   * @param chunks Vector of list of parent column chunks.
-   * @param row_groups Vector of list of row index descriptors
-   * @param out_buffers Column buffers for columns.
-   * @param list_col Vector of column metadata of list type parent columns.
-   * @param level Current nesting level being processed.
-   */
-  void aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
-                            cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
-                            std::vector<column_buffer>& out_buffers,
-                            std::vector<orc_column_meta> const& list_col,
-                            const int32_t level);
-
  private:
   rmm::mr::device_memory_resource* const _mr;
 
