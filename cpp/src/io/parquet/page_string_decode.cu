@@ -664,8 +664,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // offsets is global...but the output is local, so account for that below
-  if (t == 0) { last_offset = s->page.str_offset; }
+  // offsets are local to the page
+  if (t == 0) { last_offset = 0; }
   __syncthreads();
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
@@ -781,9 +781,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
                 auto offptr =
                   reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) +
                   dsts[ss];
-                *offptr = lengths[ss];
-                auto str_ptr =
-                  nesting_info_base[leaf_level_index].string_out + offsets[ss] - s->page.str_offset;
+                *offptr      = lengths[ss];
+                auto str_ptr = nesting_info_base[leaf_level_index].string_out + offsets[ss];
                 ll_strcpy(str_ptr, pointers[ss], lengths[ss], me);
               }
             }
@@ -792,9 +791,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
             if (src_pos + i < target_pos && dst_pos >= 0) {
               auto offptr =
                 reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
-              *offptr = len;
-              auto str_ptr =
-                nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
+              *offptr      = len;
+              auto str_ptr = nesting_info_base[leaf_level_index].string_out + offset;
               memcpy(str_ptr, ptr, len);
             }
             __syncwarp();
