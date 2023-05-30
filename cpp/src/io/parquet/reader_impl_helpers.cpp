@@ -346,6 +346,14 @@ aggregate_reader_metadata::select_row_groups(
   host_span<data_type const> output_dtypes,
   std::optional<std::reference_wrapper<ast::expression const>> filter) const
 {
+  std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  if (filter.has_value()) {
+    filtered_row_group_indices =
+      filter_row_groups(row_group_indices, output_dtypes, filter.value());
+    if (filtered_row_group_indices.has_value())
+      row_group_indices =
+        host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
+  }
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
