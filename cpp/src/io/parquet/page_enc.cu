@@ -115,8 +115,17 @@ constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_value
 {
   if (value_bit_width == 0) return 0;
 
-  // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
-  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 256);
+  // Run length = 4, max(rle/bitpack header) = 5. bitpacking worst case is one byte every 8 values
+  // (because bitpacked runs are a multiple of 8). Don't need to round up the last term since that
+  // overhead is accounted for in the '5'.
+  // TODO: this formula does not take into account the data for RLE runs. The worst realistic case
+  // is repeated runs of 8 bitpacked, 2 RLE values. In this case, the formula would be
+  //   0.8 * (num_values * bw / 8 + num_values / 8) + 0.2 * (num_values / 2 * (1 + (bw+7)/8))
+  // for bw < 8 the above value will be larger than below, but in testing it seems like for low
+  // bitwidths it's hard to get the pathological 8:2 split.
+  // If the encoder starts printing the data corruption warning, then this will need to be
+  // revisited.
+  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 8);
 }
 
 // subtract b from a, but return 0 if this would underflow
@@ -1302,6 +1311,9 @@ __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
     auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    if (actual_data_size > s->page.max_data_size) {
+      CUDF_UNREACHABLE("detected possible page data corruption");
+    }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};

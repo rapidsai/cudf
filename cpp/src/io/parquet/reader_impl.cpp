@@ -135,7 +135,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   }
 
   // TODO: investigate running the following three kernels on separate streams
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
   if (has_delta_binary) { gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, _stream); }
   if (has_delta_byte_array) {
     gpu::DecodeDeltaByteArray(pages, chunks, num_rows, skip_rows, _stream);

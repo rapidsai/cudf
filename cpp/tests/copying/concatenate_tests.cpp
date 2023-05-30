@@ -24,14 +24,11 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 #include <numeric>
 #include <stdexcept>
@@ -66,10 +63,13 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
       cudaMemcpyAsync(typed_data, h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(typed_mask, h_mask.data(), mask.size(), cudaMemcpyDefault, stream.value()));
+    _null_count = cudf::detail::null_count(
+      static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements, stream);
     stream.synchronize();
   }
 
-  cudf::size_type num_elements() { return _num_elements; }
+  cudf::size_type num_elements() const { return _num_elements; }
+  cudf::size_type null_count() const { return _null_count; }
 
   std::random_device r;
   std::default_random_engine generator{r()};
@@ -77,6 +77,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::size_type _num_elements{distribution(generator)};
   rmm::device_buffer data{};
   rmm::device_buffer mask{};
+  cudf::size_type _null_count{};
   rmm::device_buffer all_valid_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_VALID)};
   rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
@@ -105,7 +106,11 @@ TYPED_TEST(TypedColumnTest, ConcatenateNoColumns)
 
 TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
 {
-  column original{this->type(), this->num_elements(), std::move(this->data), std::move(this->mask)};
+  column original{this->type(),
+                  this->num_elements(),
+                  std::move(this->data),
+                  std::move(this->mask),
+                  this->null_count()};
   std::vector<cudf::size_type> indices{0,
                                        this->num_elements() / 3,
                                        this->num_elements() / 3,
@@ -181,7 +186,6 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
   std::vector<const char*> expected_strings;
   std::vector<cudf::test::strings_column_wrapper> wrappers;
   std::vector<cudf::column_view> strings_columns;
-  std::string expected_string;
   for (int i = 0; i < 200; ++i) {
     wrappers.emplace_back(h_strings.data(), h_strings.data() + h_strings.size());
     strings_columns.push_back(wrappers[i]);
@@ -553,7 +557,7 @@ TEST_F(OverflowTest, Presliced)
       cudf::table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
-                   cudf::logic_error);
+                   std::overflow_error);
     }
   }
 
@@ -627,7 +631,7 @@ TEST_F(OverflowTest, Presliced)
       cudf::table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
-                   cudf::logic_error);
+                   std::overflow_error);
     }
   }
 
