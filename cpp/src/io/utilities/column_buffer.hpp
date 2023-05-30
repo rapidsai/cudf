@@ -102,6 +102,14 @@ class column_buffer_base {
   {
   }
 
+  // move constructor
+  column_buffer_base(column_buffer_base&& col)            = default;
+  column_buffer_base& operator=(column_buffer_base&& col) = default;
+
+  // copy constructor
+  column_buffer_base(column_buffer_base const& col)            = delete;
+  column_buffer_base& operator=(column_buffer_base const& col) = delete;
+
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
