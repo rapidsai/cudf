@@ -801,6 +801,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
 
         self.obj["__groupbynth_order__"] = range(0, len(self.obj))
+        # We perform another groupby here to have the grouping columns
+        # be a part of dataframe columns.
         result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
         sizes = self.size().reindex(result.index)
 
