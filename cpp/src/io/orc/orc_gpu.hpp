@@ -16,17 +16,18 @@
 
 #pragma once
 
-#include <cudf/detail/timezone.cuh>
-
 #include "orc.hpp"
 
-#include <cudf/io/orc_types.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 #include <io/comp/gpuinflate.hpp>
 #include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
+
+#include <cudf/detail/timezone.cuh>
+#include <cudf/io/orc_types.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -350,21 +351,26 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
  * @param[in] comp_block_align Required alignment for compressed blocks
+ * @param[in] collect_statistics Whether to collect compression statistics
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_res Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Compression statistics (if requested)
  */
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream);
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  device_span<uint8_t> compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks

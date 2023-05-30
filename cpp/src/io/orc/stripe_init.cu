@@ -21,6 +21,8 @@
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf {
 namespace io {
@@ -227,6 +229,30 @@ enum row_entry_state_e {
 };
 
 /**
+ * @brief Calculates the order of index streams based on the index types present in the column.
+ *
+ * @param index_types_bitmap The bitmap of index types showing which index streams are present
+ *
+ * @return The order of index streams
+ */
+static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
+{
+  constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
+
+  std::array<uint32_t, full_order.size()> partial_order;
+  thrust::copy_if(thrust::seq,
+                  full_order.cbegin(),
+                  full_order.cend(),
+                  partial_order.begin(),
+                  [index_types_bitmap] __device__(auto index_type) {
+                    // Check if the index type is present
+                    return index_types_bitmap & (1 << index_type);
+                  });
+
+  return partial_order;
+}
+
+/**
  * @brief Decode a single row group index entry
  *
  * @param[in,out] s row group index state
@@ -239,11 +265,14 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
                                                       uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
+  auto const stream_order                = index_order_from_index_types(s->chunk.skip_count);
 
   const uint8_t* cur      = start;
   row_entry_state_e state = NOT_FOUND;
-  uint32_t length = 0, strm_idx_id = s->chunk.skip_count >> 8, idx_id = 1, ci_id = CI_PRESENT,
-           pos_end = 0;
+  uint32_t length         = 0;
+  uint32_t idx_id         = 0;
+  uint32_t pos_end        = 0;
+  uint32_t ci_id          = CI_NUM_STREAMS;
   while (cur < end) {
     uint32_t v = 0;
     for (uint32_t l = 0; l <= 28; l += 7) {
@@ -283,10 +312,8 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
         }
         break;
       case STORE_INDEX0:
-        ci_id = (idx_id == (strm_idx_id & 0xff))          ? CI_DATA
-                : (idx_id == ((strm_idx_id >> 8) & 0xff)) ? CI_DATA2
-                                                          : CI_PRESENT;
-        idx_id++;
+        // Start of a new entry; determine the stream index types
+        ci_id = stream_order[idx_id++];
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;
           if (cur >= start + pos_end) return length;

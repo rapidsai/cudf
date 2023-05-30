@@ -214,8 +214,9 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
 
   // First, verify that if the structs column has only nulls, all output rows are ranked 1.
   {
-    struct_col->set_null_mask(
-      create_null_mask(12, cudf::mask_state::ALL_NULL));  // Null mask not pushed down to members.
+    // Null mask not pushed down to members.
+    struct_col->set_null_mask(create_null_mask(struct_col->size(), cudf::mask_state::ALL_NULL),
+                              struct_col->size());
     auto const expected_null_result = rank_result_col{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     auto const expected_percent_rank_null_result =
       percent_result_col{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};

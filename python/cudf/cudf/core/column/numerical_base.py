@@ -1,9 +1,9 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Optional, cast
 
 import numpy as np
 
@@ -40,10 +40,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def _can_return_nan(self, skipna: bool = None) -> bool:
+    def _can_return_nan(self, skipna: Optional[bool] = None) -> bool:
         return not skipna and self.has_nulls()
 
-    def kurtosis(self, skipna: bool = None) -> float:
+    def kurtosis(self, skipna: Optional[bool] = None) -> float:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
@@ -68,7 +68,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: bool = None) -> ScalarLike:
+    def skew(self, skipna: Optional[bool] = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
@@ -122,26 +122,39 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         return result
 
-    def mean(self, skipna: bool = None, min_count: int = 0, dtype=np.float64):
+    def mean(
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+    ):
         return self._reduce(
             "mean", skipna=skipna, min_count=min_count, dtype=dtype
         )
 
     def var(
-        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+        ddof=1,
     ):
         return self._reduce(
             "var", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
         )
 
     def std(
-        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+        ddof=1,
     ):
         return self._reduce(
             "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
         )
 
-    def median(self, skipna: bool = None) -> NumericalBaseColumn:
+    def median(self, skipna: Optional[bool] = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
