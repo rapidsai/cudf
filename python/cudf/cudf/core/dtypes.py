@@ -162,7 +162,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.GenericIndex":
+    def categories(self) -> "cudf.core.index.Index":
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -171,7 +171,7 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype.categories
-        StringIndex(['b' 'a'], dtype='object')
+        Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
             return cudf.core.index.as_index(
@@ -238,9 +238,10 @@ class CategoricalDtype(_BaseDtype):
         if self._categories is None:
             categories = None
         else:
-            if isinstance(
-                self._categories, (cudf.Float32Index, cudf.Float64Index)
-            ):
+            if self._categories.dtype in {
+                cudf.dtype("float32"),
+                cudf.dtype("float64"),
+            }:
                 categories = self._categories.dropna().to_pandas()
             else:
                 categories = self._categories.to_pandas()

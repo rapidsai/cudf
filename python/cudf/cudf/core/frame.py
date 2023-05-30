@@ -210,12 +210,12 @@ class Frame(BinaryOperand, Scannable):
 
         >>> index = cudf.Index([])
         >>> index
-        Float64Index([], dtype='float64')
+        Index([], dtype='float64')
         >>> index.size
         0
         >>> index = cudf.Index([1, 2, 3, 10])
         >>> index
-        Int64Index([1, 2, 3, 10], dtype='int64')
+        Index([1, 2, 3, 10], dtype='int64')
         >>> index.size
         4
 
@@ -1289,7 +1289,7 @@ class Frame(BinaryOperand, Scannable):
 
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
-        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.isna()
         array([False, False,  True,  True, False, False])
         """
@@ -1368,7 +1368,7 @@ class Frame(BinaryOperand, Scannable):
 
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
-        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.notna()
         array([ True,  True, False, False,  True,  True])
         """

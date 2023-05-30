@@ -1000,11 +1000,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 obj.columns = colnames
 
         source_data = cudf.DataFrame._concat(source_data)
-        names = [None] * source_data._num_columns
-        objs = list(filter(lambda o: o.names is not None, objs))
-        for o in range(len(objs)):
-            for i, name in enumerate(objs[o].names):
-                names[i] = names[i] or name
+        try:
+            # Only set names if all objs have the same names
+            (names,) = {o.names for o in objs} - {None}
+        except ValueError:
+            names = [None] * source_data._num_columns
         return cudf.MultiIndex.from_frame(source_data, names=names)
 
     @classmethod
@@ -1377,7 +1377,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Dropping multiple levels:
 
         >>> idx.droplevel(["first", "second"])
-        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
         mi = self.copy(deep=False)
         mi._poplevels(level)
@@ -1779,7 +1779,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common
         # logic between MultiIndex._union & BaseIndex._union into
-        # GenericIndex._union.
+        # Index._union.
         other_df = other.copy(deep=True).to_frame(index=False)
         self_df = self.copy(deep=True).to_frame(index=False)
         col_names = list(range(0, self.nlevels))

@@ -57,8 +57,8 @@ def _nonempty_index(idx):
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.StringIndex):
-        return cudf.StringIndex(["cat", "dog"], name=idx.name)
+    elif isinstance(idx._column, cudf.core.column.StringColumn):
+        return cudf.Index(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1
@@ -69,8 +69,8 @@ def _nonempty_index(idx):
             categories=categories, codes=codes, ordered=ordered
         )
         return cudf.core.index.CategoricalIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.GenericIndex):
-        return cudf.core.index.GenericIndex(
+    elif isinstance(idx, cudf.core.index.Index):
+        return cudf.core.index.Index(
             np.arange(2, dtype=idx.dtype), name=idx.name
         )
     elif isinstance(idx, cudf.core.multiindex.MultiIndex):

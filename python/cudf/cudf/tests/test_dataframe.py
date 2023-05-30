@@ -6518,7 +6518,7 @@ def test_dataframe_info_basic():
     str_cmp = textwrap.dedent(
         """\
     <class 'cudf.core.dataframe.DataFrame'>
-    StringIndex: 10 entries, a to 1111
+    Index: 10 entries, a to 1111
     Data columns (total 10 columns):
      #   Column  Non-Null Count  Dtype
     ---  ------  --------------  -----
@@ -6591,7 +6591,7 @@ def test_dataframe_info_verbose_mem_usage():
     str_cmp = textwrap.dedent(
         """\
     <class 'cudf.core.dataframe.DataFrame'>
-    StringIndex: 3 entries, sdfdsf to dsfdf
+    Index: 3 entries, sdfdsf to dsfdf
     Data columns (total 2 columns):
      #   Column  Non-Null Count  Dtype
     ---  ------  --------------  -----

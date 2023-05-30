@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, GenericIndex, RangeIndex, Series
+from cudf import DataFrame, Index, RangeIndex, Series
 from cudf.core.buffer import as_buffer
 from cudf.testing._utils import assert_eq
 
@@ -22,7 +22,7 @@ def check_serialization(df):
     assert_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
+    assert isinstance(sortvaldf.index, (Index, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
     buffers = []
@@ -80,7 +80,7 @@ def test_memory_usage_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(np.arange(nelem), name="a")
+    idx = Index(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert (idx == out).all()

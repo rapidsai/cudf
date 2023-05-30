@@ -65,25 +65,17 @@ def _check_types(
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
-            and isinstance(
-                right,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(right, cudf.Index)
+                and hasattr(right, "dtype")
+                and right.dtype.kind == "i"
             )
         ) or (
             isinstance(right, cudf.RangeIndex)
-            and isinstance(
-                left,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(left, cudf.Index)
+                and hasattr(left, "dtype")
+                and left.dtype.kind == "i"
             )
         ):
             return
@@ -324,7 +316,7 @@ def assert_index_equal(
     exact : bool or {'equiv'}, default 'equiv'
         Whether to check the Index class, dtype and inferred_type
         are identical. If 'equiv', then RangeIndex can be substituted
-        for Int8Index, Int16Index, Int32Index, Int64Index as well.
+        for Index with an int8/int32/int64 dtype as well.
     check_names : bool, default True
         Whether to check the names attribute.
     check_less_precise : bool or int, default False

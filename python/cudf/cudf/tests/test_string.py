@@ -17,7 +17,7 @@ import cudf
 from cudf import concat
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column.string import StringColumn
-from cudf.core.index import StringIndex, as_index
+from cudf.core.index import Index, as_index
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -1075,8 +1075,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    with pytest.warns(FutureWarning):
-        stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

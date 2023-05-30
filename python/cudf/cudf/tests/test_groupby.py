@@ -33,6 +33,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -1290,7 +1291,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.StringIndex)
+    assert res.index.dtype == cudf.dtype("object")
 
 
 @pytest.mark.parametrize(
@@ -2020,7 +2021,7 @@ def test_groupby_no_keys(pdf):
         pdf.groupby([]).max(),
         gdf.groupby([]).max(),
         check_dtype=False,
-        check_index_type=False,  # Int64Index v/s Float64Index
+        check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
 
@@ -2038,7 +2039,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([], group_keys=False).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
-        check_index_type=False,  # Int64Index v/s Float64Index
+        check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
 

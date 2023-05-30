@@ -948,7 +948,7 @@ class IndexedFrame(Frame):
                 self._index, cudf.core.index.CategoricalIndex
             ):
                 self._index = cudf.Index(
-                    cast(cudf.core.index.NumericIndex, self._index)._column,
+                    cast("cudf.Index", self._index)._column,
                     name=self._index.name,
                 )
             elif isinstance(other._index, cudf.MultiIndex) and not isinstance(

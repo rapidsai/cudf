@@ -531,7 +531,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
-        # a Float64Index, while Pandas returns an Int64Index
+        # an Index with float64 dtype, while Pandas returns
+        # an Index with int64 dtype.
         # (GH: 6945)
         (
             result_columns,

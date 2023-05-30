@@ -83,7 +83,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not isinstance(index, cudf.StringIndex)
+            sort = not index._is_object()
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -427,7 +427,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.core.index.GenericIndex._concat(objs)
+        return cudf.core.index.Index._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 

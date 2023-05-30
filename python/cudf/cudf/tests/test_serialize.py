@@ -193,8 +193,8 @@ def test_serialize_range_index():
 
 
 def test_serialize_generic_index():
-    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
+    index = cudf.core.index.Index(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
