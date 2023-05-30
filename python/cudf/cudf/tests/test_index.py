@@ -1940,7 +1940,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
         list(range(77, 110, 3)),
     ],
 )
-@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
 @pytest.mark.parametrize("tolerance", [None, 0, 1, 13, 20])
 def test_get_indexer_rangeindex(idx, key, method, tolerance):
     pi = idx
@@ -2018,8 +2018,9 @@ def test_get_loc_single_duplicate_numeric(idx, key):
     ],
 )
 @pytest.mark.parametrize("key", [[0, 3, 1], [6, 7]])
-@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_single_duplicate_numeric(idx, key, method):
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
+@pytest.mark.parametrize("tolerance", [None, 1, 2])
+def test_get_indexer_single_duplicate_numeric(idx, key, method, tolerance):
     pi = idx
     gi = cudf.from_pandas(pi)
 
@@ -2031,8 +2032,12 @@ def test_get_indexer_single_duplicate_numeric(idx, key, method):
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        expected = pi.get_indexer(key, method=method)
-        got = gi.get_indexer(key, method=method)
+        expected = pi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
+        got = gi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
 
         assert_eq(expected, got)
 
@@ -2179,7 +2184,7 @@ def test_get_loc_multi_numeric(idx, key):
     ],
 )
 @pytest.mark.parametrize("key", [[(1, 2, 3)], [(9, 9, 9)]])
-@pytest.mark.parametrize("method", [None])
+@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
 def test_get_indexer_multi_numeric(idx, key, method):
     pi = idx.sort_values()
     gi = cudf.from_pandas(pi)

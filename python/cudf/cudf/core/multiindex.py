@@ -27,6 +27,7 @@ from cudf.core.index import (
     _index_astype_docstring,
     _lexsorted_equal_range,
     as_index,
+    _get_indexer_basic,
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
@@ -1696,6 +1697,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise NotImplementedError(
                 "Parameter tolerance is not supported yet."
             )
+        if method == "nearest":
+            raise NotImplementedError(
+                f"{method=} is not supported yet for MultiIndex."
+            )
+
         target = cudf.MultiIndex.from_tuples(target)
         needle_table = target.to_frame(index=False)
         col_names = list(range(0, self.nlevels))
@@ -1712,28 +1718,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         if method is None:
             result_series = result_series.fillna(-1)
-        else:
-            nonexact = result_series.isnull()
-            result_series[nonexact] = self.searchsorted(
-                needle_table[col_names][nonexact],
-                side="left" if method in {"pad", "ffill"} else "right",
+        elif method in {"ffill", "bfill", "pad", "backfill"}:
+            result_series = _get_indexer_basic(
+                index=self,
+                positions=result_series,
+                method=method,
+                target_col=needle_table[col_names],
+                tolerance=tolerance,
             )
-            if method in {"pad", "ffill"}:
-                # searchsorted returns "indices into a sorted array such that,
-                # if the corresponding elements in v were inserted before the
-                # indices, the order of a would be preserved".
-                # Thus, we need to subtract 1 to find values to the left.
-                result_series[nonexact] -= 1
-                # This also mapped not found values (values of 0 from
-                # np.searchsorted) to -1, which conveniently is also our
-                # sentinel for missing values
-            else:
-                # Mark indices to the right of the largest value as not found
-                result_series[result_series == len(self)] = -1
-            if tolerance is not None:
-                distance = self[result_series] - needle_table["None"]
-                # return cupy.where(distance <= tolerance, result_series, -1)
-                return result_series.where(distance <= tolerance, -1).to_cupy()
+        else:
+            raise ValueError(
+                f"{method=} is unsupported, only supported values are: "
+                f"{['ffill', 'bfill', None]}"
+            )
+
         return result_series.to_cupy()
 
     @_cudf_nvtx_annotate

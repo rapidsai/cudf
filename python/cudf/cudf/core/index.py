@@ -16,6 +16,7 @@ from typing import (
 )
 
 import cupy
+import operator
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -1174,10 +1175,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         """
         if is_scalar(target):
             raise TypeError("Should be a sequence")
-        # if tolerance is not None:
-        #     raise NotImplementedError(
-        #         "Parameter tolerance is not supported yet."
-        #     )
+
         if method not in {
             None,
             "ffill",
@@ -1220,28 +1218,27 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
         if method is None:
             result_series = result_series.fillna(-1)
-        else:
-            nonexact = result_series.isnull()
-            result_series[nonexact] = self.searchsorted(
-                needle_table["None"][nonexact],
-                side="left" if method in {"pad", "ffill"} else "right",
+        elif method in {"ffill", "bfill", "pad", "backfill"}:
+            result_series = _get_indexer_basic(
+                index=self,
+                positions=result_series,
+                method=method,
+                target_col=needle_table["None"],
+                tolerance=tolerance,
             )
-            if method in {"pad", "ffill"}:
-                # searchsorted returns "indices into a sorted array such that,
-                # if the corresponding elements in v were inserted before the
-                # indices, the order of a would be preserved".
-                # Thus, we need to subtract 1 to find values to the left.
-                result_series[nonexact] -= 1
-                # This also mapped not found values (values of 0 from
-                # np.searchsorted) to -1, which conveniently is also our
-                # sentinel for missing values
-            else:
-                # Mark indices to the right of the largest value as not found
-                result_series[result_series == len(self)] = -1
-            if tolerance is not None:
-                distance = self[result_series] - needle_table["None"]
-                # return cupy.where(distance <= tolerance, result_series, -1)
-                return result_series.where(distance <= tolerance, -1).to_cupy()
+        elif method == "nearest":
+            result_series = _get_nearest_indexer(
+                index=self,
+                positions=result_series,
+                target_col=needle_table["None"],
+                tolerance=tolerance,
+            )
+        else:
+            raise ValueError(
+                f"{method=} is unsupported, only supported values are: "
+                f"{['ffill', 'bfill', 'nearest', None]}"
+            )
+
         return result_series.to_cupy()
 
     @_cudf_nvtx_annotate
@@ -2908,3 +2905,72 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
         old_s, s = s, old_s - quotient * s
         old_t, t = t, old_t - quotient * t
     return old_r, old_s, old_t
+
+
+def _get_indexer_basic(index, positions, method, target_col, tolerance):
+    nonexact = positions.isnull()
+    positions[nonexact] = index.searchsorted(
+        target_col[nonexact],
+        side="left" if method in {"pad", "ffill"} else "right",
+    )
+    if method in {"pad", "ffill"}:
+        # searchsorted returns "indices into a sorted array such that,
+        # if the corresponding elements in v were inserted before the
+        # indices, the order of a would be preserved".
+        # Thus, we need to subtract 1 to find values to the left.
+        positions[nonexact] -= 1
+        # This also mapped not found values (values of 0 from
+        # np.searchsorted) to -1, which conveniently is also our
+        # sentinel for missing values
+    else:
+        # Mark indices to the right of the largest value as not found
+        positions[positions == len(index)] = -1
+
+    if tolerance is not None:
+        distance = abs(index[positions] - target_col)
+        return positions.where(distance <= tolerance, -1)
+    return positions
+
+
+def _get_nearest_indexer(index, positions, target_col, tolerance):
+    """
+    Get the indexer for the nearest index labels; requires an index with
+    values that can be subtracted from each other.
+    """
+    if not len(index):
+        return _get_indexer_basic(
+            index=index,
+            positions=positions.copy(deep=True),
+            method="pad",
+            targe_col=target_col,
+            tolerance=tolerance,
+        )
+
+    left_indexer = _get_indexer_basic(
+        index=index,
+        positions=positions.copy(deep=True),
+        method="pad",
+        target_col=target_col,
+        tolerance=tolerance,
+    )
+    right_indexer = _get_indexer_basic(
+        index=index,
+        positions=positions.copy(deep=True),
+        method="backfill",
+        target_col=target_col,
+        tolerance=tolerance,
+    )
+
+    left_distances = abs(index[left_indexer] - target_col)
+    right_distances = abs(index[right_indexer] - target_col)
+
+    op = operator.lt if index.is_monotonic_increasing else operator.le
+    indexer = left_indexer.where(
+        op(left_distances, right_distances) | (right_indexer == -1),
+        right_indexer,
+    )
+
+    if tolerance is not None:
+        distance = abs(index[indexer] - target_col)
+        return indexer.where(distance <= tolerance, -1)
+    return indexer
