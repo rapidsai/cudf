@@ -355,7 +355,7 @@ class orc_metadata {
 };
 
 /**
- * @brief Reads meta data of ORC dataset.
+ * @brief Reads metadata of ORC dataset.
  *
  * @ingroup io_readers
  *
