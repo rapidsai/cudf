@@ -141,16 +141,16 @@ struct scan_functor<Op, cudf::string_view> {
     auto d_input = column_device_view::create(input_view, stream);
 
     // build indices of the scan operation results
-    rmm::device_uvector<size_type> result(input_view.size(), stream);
+    rmm::device_uvector<size_type> result_map(input_view.size(), stream);
     thrust::inclusive_scan(
       rmm::exec_policy(stream),
       thrust::counting_iterator<size_type>(0),
       thrust::counting_iterator<size_type>(input_view.size()),
-      result.begin(),
+      result_map.begin(),
       min_max_scan_operator<cudf::string_view, Op>{*d_input, input_view.has_nulls()});
 
     if (input_view.has_nulls()) {
-      // fill the null entries with out-of-bounds value so gather records them as null
+      // fill the null rows with out-of-bounds values so gather records them as null;
       // this prevents un-sanitized null entries in the output
       auto null_itr = detail::make_counting_transform_iterator(0, null_iterator{mask});
       auto oob_val  = thrust::constant_iterator<size_type>(input_view.size());
@@ -159,12 +159,12 @@ struct scan_functor<Op, cudf::string_view> {
                          oob_val + input_view.size(),
                          thrust::counting_iterator<size_type>(0),
                          null_itr,
-                         result.data());
+                         result_map.data());
     }
 
     // call gather using the indices to build the output column
     auto result_table = cudf::detail::gather(cudf::table_view({input_view}),
-                                             result,
+                                             result_map,
                                              out_of_bounds_policy::NULLIFY,
                                              negative_index_policy::NOT_ALLOWED,
                                              stream,
