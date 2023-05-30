@@ -73,9 +73,9 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
-    - ptxcompiler >=0.7.0
+    - ptxcompiler >=0.8.1
     - cachetools
-    - cubinlinker  # CUDA enhanced compatibility.
+    - cubinlinker  >=0.3.0 # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0
 
 test:

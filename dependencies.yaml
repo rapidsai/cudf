@@ -358,7 +358,7 @@ dependencies:
           - *protobuf
       - output_types: conda
         packages:
-          - cubinlinker
+          - cubinlinker>=0.3.0
           - cupy>=12.0.0
           - pip
           - pip:
@@ -374,7 +374,7 @@ dependencies:
           - ptxcompiler-cu11
       - output_types: pyproject
         packages:
-          - cubinlinker
+          - cubinlinker>=0.3.0
           - &cupy_pip cupy-cuda11x>=12.0.0
           - ptxcompiler
     specific:
