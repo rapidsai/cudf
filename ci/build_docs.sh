@@ -19,7 +19,7 @@ rapids-print-env
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-VERSION_NUMBER="23.06"
+VERSION_NUMBER="23.08"
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
