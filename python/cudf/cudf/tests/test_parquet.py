@@ -1749,6 +1749,15 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
+    if PANDAS_GE_200 and isinstance(got_pd["c"].dtype, pd.CategoricalDtype):
+        # Work-around for pandas bug:
+        # https://github.com/pandas-dev/pandas/issues/53345
+        got_pd["c"] = got_pd["c"].astype(
+            pd.CategoricalDtype(
+                categories=got_pd["c"].dtype.categories.astype("int64"),
+                ordered=got_pd["c"].dtype.ordered,
+            )
+        )
     assert_eq(got_pd, got_cudf)
 
     # If filename is specified, check that it is correct
@@ -1796,6 +1805,15 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
+    if PANDAS_GE_200:
+        # Work-around for pandas bug:
+        # https://github.com/pandas-dev/pandas/issues/53345
+        got_pd["a"] = got_pd["a"].astype(
+            pd.CategoricalDtype(
+                categories=got_pd["a"].dtype.categories.astype("int64"),
+                ordered=got_pd["a"].dtype.ordered,
+            )
+        )
     assert_eq(got_pd, got_cudf)
 
 
@@ -1836,7 +1854,15 @@ def test_parquet_writer_chunked_max_file_size(
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-
+    if PANDAS_GE_200:
+        # Work-around for pandas bug:
+        # https://github.com/pandas-dev/pandas/issues/53345
+        got_pd["a"] = got_pd["a"].astype(
+            pd.CategoricalDtype(
+                categories=got_pd["a"].dtype.categories.astype("int64"),
+                ordered=got_pd["a"].dtype.ordered,
+            )
+        )
     assert_eq(
         got_pd.sort_values(["b"]).reset_index(drop=True),
         got_cudf.sort_values(["b"]).reset_index(drop=True),
@@ -1882,6 +1908,15 @@ def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
+    if PANDAS_GE_200:
+        # Work-around for pandas bug:
+        # https://github.com/pandas-dev/pandas/issues/53345
+        got_pd["a"] = got_pd["a"].astype(
+            pd.CategoricalDtype(
+                categories=got_pd["a"].dtype.categories.astype("int64"),
+                ordered=got_pd["a"].dtype.ordered,
+            )
+        )
     assert_eq(got_pd, got_cudf)
 
 
@@ -1989,6 +2024,15 @@ def test_read_parquet_partitioned_filtered(
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
     got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
+    if PANDAS_GE_200:
+        # Work-around for pandas bug:
+        # https://github.com/pandas-dev/pandas/issues/53345
+        expect["c"] = expect["c"].astype(
+            pd.CategoricalDtype(
+                categories=expect["c"].dtype.categories.astype("int64"),
+                ordered=expect["c"].dtype.ordered,
+            )
+        )
     assert_eq(expect, got)
 
 
@@ -2803,7 +2847,9 @@ def test_parquet_roundtrip_time_delta():
     )
     buffer = BytesIO()
     df.to_parquet(buffer)
-    assert_eq(df, cudf.read_parquet(buffer))
+    # TODO: Remove `check_dtype` once following issue is fixed in arrow:
+    # https://github.com/apache/arrow/issues/33321
+    assert_eq(df, cudf.read_parquet(buffer), check_dtype=not PANDAS_GE_200)
 
 
 def test_parquet_reader_malformed_file(datadir):
