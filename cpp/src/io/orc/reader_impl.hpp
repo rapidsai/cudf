@@ -120,7 +120,7 @@ class reader::impl {
    */
   rmm::device_buffer decompress_stripe_data(
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-    const std::vector<rmm::device_buffer>& stripe_data,
+    std::vector<rmm::device_buffer> const& stripe_data,
     OrcDecompressor const& decompressor,
     std::vector<orc_stream_info>& stream_info,
     size_t num_stripes,
