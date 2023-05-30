@@ -23,7 +23,6 @@
 #include <io/utilities/block_utils.cuh>
 
 namespace cudf::io::parquet::gpu {
-namespace {
 
 constexpr int preprocess_block_size = num_rle_stream_decode_threads;  // 512
 constexpr int decode_block_size     = 128;
@@ -342,10 +341,10 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
  *
  * @return The new output position
  */
-__device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
-                                    volatile page_state_buffers_s* sb,
-                                    int target_pos,
-                                    int t)
+inline __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
+                                           volatile page_state_buffers_s* sb,
+                                           int target_pos,
+                                           int t)
 {
   const uint8_t* end = s->data_end;
   int pos            = s->dict_pos;
@@ -549,9 +548,9 @@ __device__ void gpuDecodeStream(
  * @param[in] valid_mask The validity mask to be stored
  * @param[in] value_count # of bits in the validity mask
  */
-__device__ void store_validity(PageNestingDecodeInfo* nesting_info,
-                               uint32_t valid_mask,
-                               int32_t value_count)
+inline __device__ void store_validity(PageNestingDecodeInfo* nesting_info,
+                                      uint32_t valid_mask,
+                                      int32_t value_count)
 {
   int word_offset = nesting_info->valid_map_offset / 32;
   int bit_offset  = nesting_info->valid_map_offset % 32;
@@ -874,10 +873,10 @@ __device__ void gpuDecodeLevels(page_state_s* s,
  *
  * @return The length of the section
  */
-__device__ uint32_t InitLevelSection(page_state_s* s,
-                                     const uint8_t* cur,
-                                     const uint8_t* end,
-                                     level_type lvl)
+inline __device__ uint32_t InitLevelSection(page_state_s* s,
+                                            const uint8_t* cur,
+                                            const uint8_t* end,
+                                            level_type lvl)
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];
@@ -947,12 +946,12 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
  * Currently only used by gpuComputePageSizes step)
  */
-__device__ bool setupLocalPageInfo(page_state_s* const s,
-                                   PageInfo const* p,
-                                   device_span<ColumnChunkDesc const> chunks,
-                                   size_t min_row,
-                                   size_t num_rows,
-                                   bool is_decode_step)
+inline __device__ bool setupLocalPageInfo(page_state_s* const s,
+                                          PageInfo const* p,
+                                          device_span<ColumnChunkDesc const> chunks,
+                                          size_t min_row,
+                                          size_t num_rows,
+                                          bool is_decode_step)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1287,5 +1286,4 @@ __device__ bool setupLocalPageInfo(page_state_s* const s,
   return true;
 }
 
-}  // namespace
 }  // namespace cudf::io::parquet::gpu
