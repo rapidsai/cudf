@@ -226,7 +226,7 @@ struct ColumnChunkMetaData {
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
-    0;  // Byte offset from the beginning of file to first (only) dictionary page
+    0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
 };
 
