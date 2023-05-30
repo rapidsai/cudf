@@ -109,12 +109,12 @@ struct stats_caster {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto const& colchunk  = row_group.columns[col_idx];
           // To support deprecated min, max fields.
-          auto const& min_value = colchunk.meta_data.statistics_blob.min_value.size() > 0
-                                    ? colchunk.meta_data.statistics_blob.min_value
-                                    : colchunk.meta_data.statistics_blob.min;
-          auto const& max_value = colchunk.meta_data.statistics_blob.max_value.size() > 0
-                                    ? colchunk.meta_data.statistics_blob.max_value
-                                    : colchunk.meta_data.statistics_blob.max;
+          auto const& min_value = colchunk.meta_data.statistics.min_value.size() > 0
+                                    ? colchunk.meta_data.statistics.min_value
+                                    : colchunk.meta_data.statistics.min;
+          auto const& max_value = colchunk.meta_data.statistics.max_value.size() > 0
+                                    ? colchunk.meta_data.statistics.max_value
+                                    : colchunk.meta_data.statistics.max;
           // translate binary data to Type then to <T>
           min.set_index(stats_idx, min_value, colchunk.meta_data.type);
           max.set_index(stats_idx, max_value, colchunk.meta_data.type);

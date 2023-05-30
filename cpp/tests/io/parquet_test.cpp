@@ -283,19 +283,10 @@ cudf::io::parquet::OffsetIndex read_offset_index(
   return offidx;
 }
 
-// parse the statistics_blob on chunk and return as a Statistics struct.
-// throws cudf::logic_error if the chunk statistics_blob is invalid.
-cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnChunk& chunk)
+// Return as a Statistics from the column chunk
+cudf::io::parquet::Statistics get_statistics(const cudf::io::parquet::ColumnChunk& chunk)
 {
-  return chunk.meta_data.statistics_blob;
-  // auto& stats_blob = chunk.meta_data.statistics_blob;
-  // CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
-
-  // cudf::io::parquet::Statistics stats;
-  // cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  // bool res = cp.read(&stats);
-  // CUDF_EXPECTS(res, "Cannot parse column statistics");
-  // return stats;
+  return chunk.meta_data.statistics;
 }
 
 // read page header from datasource at location indicated by page_loc,
@@ -3741,7 +3732,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   read_footer(source, &fmd);
 
-  auto const stats = parse_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
 
   EXPECT_EQ(expected_min, stats.min_value);
   EXPECT_EQ(expected_max, stats.max_value);
@@ -4089,7 +4080,7 @@ TEST_F(ParquetWriterTest, LargeColumnIndex)
       auto const& chunk = rg.columns[c];
 
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
@@ -4169,7 +4160,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       // loop over page stats from the column index. check that stats.min <= page.min
       // and stats.max >= page.max for each page.
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // schema indexing starts at 1
       auto const ptype = fmd.schema[c + 1].type;
@@ -4266,7 +4257,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       // loop over page stats from the column index. check that stats.min <= page.min
       // and stats.max >= page.max for each page.
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // should be half nulls, except no nulls in column 0
       EXPECT_EQ(stats.null_count, c == 0 ? 0 : num_rows / 2);
@@ -4354,7 +4345,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       // loop over page stats from the column index. check that stats.min <= page.min
       // and stats.max >= page.max for each non-empty page.
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // there should be no nulls except column 1 which is all nulls
       EXPECT_EQ(stats.null_count, c == 1 ? num_rows : 0);
@@ -4446,7 +4437,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       // loop over page stats from the column index. check that stats.min <= page.min
       // and stats.max >= page.max for each page.
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
@@ -4577,7 +4568,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexListWithNulls)
 
       // check null counts in column chunk stats and page indexes
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
       EXPECT_EQ(stats.null_count, expected_null_counts[c]);
 
       // should only be one page
@@ -4665,7 +4656,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
       auto const& chunk = rg.columns[c];
 
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
@@ -4723,7 +4714,7 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
       auto const& chunk = rg.columns[c];
 
       auto const ci    = read_column_index(source, chunk);
-      auto const stats = parse_statistics(chunk);
+      auto const stats = get_statistics(chunk);
 
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
@@ -4931,8 +4922,8 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   EXPECT_EQ(fmd.schema[1].type, cudf::io::parquet::Type::BYTE_ARRAY);
   EXPECT_EQ(fmd.schema[2].type, cudf::io::parquet::Type::BYTE_ARRAY);
 
-  auto const stats0 = parse_statistics(fmd.row_groups[0].columns[0]);
-  auto const stats1 = parse_statistics(fmd.row_groups[0].columns[1]);
+  auto const stats0 = get_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats1 = get_statistics(fmd.row_groups[0].columns[1]);
 
   EXPECT_EQ(expected_col0_min, stats0.min_value);
   EXPECT_EQ(expected_col0_max, stats0.max_value);
