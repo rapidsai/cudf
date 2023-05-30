@@ -201,7 +201,6 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData& s)
   c.field_int(9, s.data_page_offset);
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
-  // if (s.statistics_blob.size() != 0) { c.field_struct_blob(12, s.statistics_blob); }
   c.field_struct(12, s.statistics_blob);
   return c.value();
 }
