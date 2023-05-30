@@ -304,3 +304,18 @@ _register_option(
     ),
     _integer_validator,
 )
+
+_register_option(
+    "mode.pandas_compatible",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, retains `cudf` specific behavior.
+        If set to `True`, enables pandas compatibility mode,
+        which will try to match pandas API behaviors in case of
+        any inconsistency.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)

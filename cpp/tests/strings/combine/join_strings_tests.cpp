@@ -58,6 +58,19 @@ TEST_F(JoinStringsTest, Join)
   }
 }
 
+TEST_F(JoinStringsTest, JoinLongStrings)
+{
+  std::string data(200, '0');
+  cudf::test::strings_column_wrapper input({data, data, data, data});
+
+  auto results =
+    cudf::strings::join_strings(cudf::strings_column_view(input), cudf::string_scalar("+"));
+
+  auto expected_data = data + "+" + data + "+" + data + "+" + data;
+  cudf::test::strings_column_wrapper expected({expected_data});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(JoinStringsTest, JoinZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(

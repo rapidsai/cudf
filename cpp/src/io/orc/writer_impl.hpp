@@ -210,7 +210,7 @@ struct persisted_statistics {
 
   void persist(int num_table_rows,
                single_write_mode write_mode,
-               intermediate_statistics& intermediate_stats,
+               intermediate_statistics&& intermediate_stats,
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
@@ -299,7 +299,7 @@ class writer::impl {
    * @param[in] compressed_data Compressed stream data
    * @param[in] comp_results Status of data compression
    * @param[in] strm_descs List of stream descriptors
-   * @param[in,out] intermediate_stats Statistics data stored between calls to write
+   * @param[in] rg_stats row group level statistics
    * @param[in,out] streams List of stream descriptors
    * @param[in,out] stripes List of stripe description
    * @param[out] bounce_buffer Temporary host output buffer
@@ -310,7 +310,7 @@ class writer::impl {
                               device_span<uint8_t const> compressed_data,
                               host_span<compression_result const> comp_results,
                               host_2dspan<gpu::StripeStream const> strm_descs,
-                              intermediate_statistics& intermediate_stats,
+                              host_span<ColStatsBlob const> rg_stats,
                               orc_streams& streams,
                               host_span<StripeInformation> stripes,
                               host_span<uint8_t> bounce_buffer);
@@ -324,6 +324,17 @@ class writer::impl {
   void add_table_to_footer_data(orc_table_view const& orc_table,
                                 std::vector<StripeInformation>& stripes);
 
+  /**
+   * @brief Update writer-level statistics with data from the current table.
+   *
+   * @param num_rows Number of rows in the current table
+   * @param single_table_stats Statistics data from the current table
+   * @param compression_stats Compression statistics from the current table
+   */
+  void update_statistics(size_type num_rows,
+                         intermediate_statistics&& single_table_stats,
+                         std::optional<writer_compression_statistics> const& compression_stats);
+
  private:
   // CUDA stream.
   rmm::cuda_stream_view const _stream;
@@ -333,6 +344,7 @@ class writer::impl {
   size_type const _row_index_stride;
   CompressionKind const _compression_kind;
   size_t const _compression_blocksize;
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
   single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
                                                // indicate that we are guaranteeing a single table
