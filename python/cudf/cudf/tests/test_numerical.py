@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -194,6 +194,7 @@ def test_to_numeric_downcast_int(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -223,6 +224,7 @@ def test_to_numeric_downcast_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -245,6 +247,7 @@ def test_to_numeric_downcast_large_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -325,6 +328,7 @@ def test_to_numeric_downcast_string_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
