@@ -7,18 +7,10 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy
+from typing_extensions import Self
 
 import rmm
 
@@ -32,9 +24,6 @@ from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spill_manager import SpillManager
-
-
-T = TypeVar("T", bound="SpillableBuffer")
 
 
 def get_spillable_owner(data) -> Optional[SpillableBuffer]:
@@ -212,9 +201,7 @@ class SpillableBuffer(Buffer):
         self._manager.add(self)
 
     @classmethod
-    def _from_device_memory(
-        cls: Type[T], data: Any, *, exposed: bool = False
-    ) -> T:
+    def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -236,7 +223,7 @@ class SpillableBuffer(Buffer):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         """Create a spillabe buffer from host memory.
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -448,7 +435,9 @@ class SpillableBuffer(Buffer):
             "version": 0,
         }
 
-    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         size = self._size if size is None else size
         with self.lock:
             if self.spillable:
@@ -573,7 +562,9 @@ class SpillableBufferSlice(SpillableBuffer):
         # copied.
         return SpillableBuffer.deserialize(header, frames)
 
-    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         size = self._size if size is None else size
         return self._base.memoryview(offset=self._offset + offset, size=size)
 

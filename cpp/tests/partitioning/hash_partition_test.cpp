@@ -186,8 +186,6 @@ TEST_F(HashPartition, IdentityHashFailure)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
   EXPECT_THROW(
     cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_IDENTITY),
     cudf::logic_error);
@@ -203,8 +201,6 @@ TEST_F(HashPartition, UnsupportedHashFunction)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
   EXPECT_THROW(
     cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MD5),
     cudf::logic_error);
@@ -308,7 +304,7 @@ void run_fixed_width_test(size_t cols,
   constexpr cudf::data_type dtype{cudf::type_id::INT32};
   auto d_partitions = cudf::detail::make_device_uvector_sync(
     partitions, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  cudf::column_view partitions_col(dtype, rows, d_partitions.data());
+  cudf::column_view partitions_col(dtype, rows, d_partitions.data(), nullptr, 0);
   cudf::table_view partitions_table({partitions_col});
 
   // Sort partition numbers by the corresponding row hashes of each output

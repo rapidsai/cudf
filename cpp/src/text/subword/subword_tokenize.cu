@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -31,6 +34,7 @@
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/tabulate.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -125,6 +129,28 @@ __global__ void kernel_compute_tensor_metadata(
   }
 }
 
+// this happens if there are no tokens in the input
+tokenizer_result build_empty_result(cudf::size_type size,
+                                    uint32_t max_sequence_length,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  auto zero = cudf::numeric_scalar<uint32_t>(0, true, stream);
+  auto ids  = cudf::detail::sequence(size * max_sequence_length, zero, zero, stream, mr);
+  auto mask = cudf::detail::sequence(size * max_sequence_length, zero, zero, stream, mr);
+
+  auto metadata = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::UINT32}, size * 3, cudf::mask_state::UNALLOCATED, stream, mr);
+  thrust::tabulate(rmm::exec_policy(stream),
+                   metadata->mutable_view().begin<uint32_t>(),
+                   metadata->mutable_view().end<uint32_t>(),
+                   [] __device__(auto idx) { return ((idx % 3) == 0) ? idx : 0; });
+  metadata->set_null_count(0);
+
+  return tokenizer_result{
+    0, max_sequence_length, std::move(ids), std::move(mask), std::move(metadata)};
+}
+
 }  // namespace
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
@@ -139,16 +165,19 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
-  CUDF_EXPECTS(max_sequence_length * max_rows_tensor <
-                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-               "max_sequence_length x max_rows_tensor is too large for cudf output column size");
+  CUDF_EXPECTS(
+    max_sequence_length <=
+      (static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()) / max_rows_tensor),
+    "max_sequence_length times max_rows_tensor exceeds the column size limit",
+    std::overflow_error);
   auto const strings_count = strings.size();
-  if (strings_count == 0 || strings.chars_size() == 0)
+  if (strings_count == strings.null_count()) {  // empty or all-null returns empty
     return tokenizer_result{0,
                             max_sequence_length,
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32})};
+  }
 
   auto const offsets   = strings.offsets();
   auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
@@ -187,6 +216,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     thrust::plus<uint32_t>());
   // last element is the total number of output rows
   uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
+  // if there are no tokens at all, build a specific empty result
+  if (nrows_tensor_token_ids == 0) {
+    return build_empty_result(strings_count, max_sequence_length, stream, mr);
+  }
 
   // compute global_row to tensor, and global_row to within_tensor_row correspondence
   rmm::device_uvector<uint32_t> row2tensor(nrows_tensor_token_ids, stream);

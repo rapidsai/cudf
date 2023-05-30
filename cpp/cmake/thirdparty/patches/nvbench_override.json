@@ -12,6 +12,11 @@
           "file" : "nvbench/use_existing_fmt.diff",
           "issue" : "Fix add support for using an existing fmt [https://github.com/NVIDIA/nvbench/pull/125]",
           "fixed_in" : ""
+        },
+        {
+          "file" : "nvbench/public_fmt_dep_in_conda.diff",
+          "issue" : "Propagate fmt requirement in conda envs [https://github.com/NVIDIA/nvbench/pull/127]",
+          "fixed_in" : ""
         }
       ]
     }
