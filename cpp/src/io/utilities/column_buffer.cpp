@@ -31,17 +31,16 @@ namespace cudf::io::detail {
 void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (type.id() == type_id::STRING) {
-    // The contents of _strings will never be directly returned to the user.
-    // Due to the fact that make_strings_column copies the input data to
-    // produce its outputs, _strings is actually a temporary. As a result, we
-    // do not pass the provided mr to the call to
-    // make_zeroed_device_uvector_async here and instead let it use the
-    // default rmm memory resource.
-    _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
-      cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-        size, stream, rmm::mr::get_current_device_resource()));
-  }
+  CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
+  // The contents of _strings will never be directly returned to the user.
+  // Due to the fact that make_strings_column copies the input data to
+  // produce its outputs, _strings is actually a temporary. As a result, we
+  // do not pass the provided mr to the call to
+  // make_zeroed_device_uvector_async here and instead let it use the
+  // default rmm memory resource.
+  _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
+    cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+      size, stream, rmm::mr::get_current_device_resource()));
 }
 
 std::unique_ptr<column> gather_column_buffer::make_string_column_impl(
@@ -57,10 +56,9 @@ std::unique_ptr<column> gather_column_buffer::make_string_column_impl(
 void inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (type.id() == type_id::STRING) {
-    // size + 1 for final offset. _string_data will be initialized later.
-    _data = create_data(data_type{type_id::INT32}, size + 1, stream, mr);
-  }
+  CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
+  // size + 1 for final offset. _string_data will be initialized later.
+  _data = create_data(data_type{type_id::INT32}, size + 1, stream, mr);
 }
 
 void inline_column_buffer::create_string_data(size_t num_bytes,
