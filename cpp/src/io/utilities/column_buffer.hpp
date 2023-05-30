@@ -82,7 +82,8 @@ template <class string_policy>
 std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
-                                    rmm::cuda_stream_view stream);
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 template <typename string_policy>
 class column_buffer_base {
@@ -122,16 +123,16 @@ class column_buffer_base {
   auto data() { return static_cast<string_policy*>(this)->data_impl(); }
   auto data_size() { return static_cast<string_policy*>(this)->data_size_impl(); }
 
-  std::unique_ptr<column> make_string_column(rmm::cuda_stream_view stream)
+  std::unique_ptr<column> make_string_column(rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
   {
-    return static_cast<string_policy*>(this)->make_string_column_impl(stream);
+    return static_cast<string_policy*>(this)->make_string_column_impl(stream, mr);
   }
 
  protected:
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
-  rmm::mr::device_memory_resource* _mr;
 
  public:
   data_type type{type_id::EMPTY};
@@ -146,7 +147,8 @@ class column_buffer_base {
     column_buffer_base& buffer,
     column_name_info* schema_info,
     std::optional<reader_column_schema> const& schema,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr);
 };
 
 // column buffer that uses a string_index_pair for strings data, requiring a gather step when
@@ -171,12 +173,13 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
   void* data_impl() { return _strings ? _strings->data() : _data.data(); }
   size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
 
-  std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
+  std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
  public:
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
@@ -204,13 +207,16 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
     create(_size, stream, mr);
   }
 
-  void allocate_strings_data(rmm::cuda_stream_view stream);
+  void allocate_strings_data(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
   void* data_impl() { return _data.data(); }
   size_t data_size_impl() const { return _data.size(); }
-  std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
+  std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
-  void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
+  void create_string_data(size_t num_bytes,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr);
   void* string_data() { return _string_data.data(); }
   size_t string_size() const { return _string_data.size(); }
 
