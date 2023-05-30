@@ -909,22 +909,6 @@ column_buffer assemble_buffer(size_type const orc_col_id,
 }
 
 // creates columns along with schema information for each column
-void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_buffers,
-                                  std::vector<std::unique_ptr<column>>& out_columns,
-                                  std::vector<column_name_info>& schema_info,
-                                  rmm::cuda_stream_view stream)
-{
-  std::transform(
-    _selected_columns.levels[0].begin(),
-    _selected_columns.levels[0].end(),
-    std::back_inserter(out_columns),
-    [&](auto const col_meta) {
-      schema_info.emplace_back("");
-      auto col_buffer = assemble_buffer(
-        col_meta.id, col_buffers, _col_meta, _metadata, _selected_columns, 0, stream, _mr);
-      return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
-    });
-}
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
@@ -1311,9 +1295,18 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
     }
   }
 
-  // If out_columns is empty, then create columns from buffer.
+  // If out_columns is empty, then create columns from buffer with respective schema information.
   if (out_columns.empty()) {
-    create_columns(std::move(out_buffers), out_columns, schema_info, stream);
+    std::transform(
+      _selected_columns.levels[0].begin(),
+      _selected_columns.levels[0].end(),
+      std::back_inserter(out_columns),
+      [&](auto const col_meta) {
+        schema_info.emplace_back("");
+        auto col_buffer = assemble_buffer(
+          col_meta.id, out_buffers, _col_meta, _metadata, _selected_columns, 0, stream, _mr);
+        return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
+      });
   }
 
   out_metadata.schema_info = std::move(schema_info);

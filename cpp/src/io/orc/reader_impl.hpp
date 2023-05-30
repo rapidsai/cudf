@@ -167,19 +167,6 @@ class reader::impl {
                             std::vector<orc_column_meta> const& list_col,
                             const int32_t level);
 
-  /**
-   * @brief Create columns and respective schema information from the buffer.
-   *
-   * @param col_buffers Column buffers for columns and children.
-   * @param out_columns Vector of columns formed from column buffers.
-   * @param schema_info Vector of schema information formed from column buffers.
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  void create_columns(std::vector<std::vector<column_buffer>>&& col_buffers,
-                      std::vector<std::unique_ptr<column>>& out_columns,
-                      std::vector<column_name_info>& schema_info,
-                      rmm::cuda_stream_view stream);
-
  private:
   rmm::mr::device_memory_resource* const _mr;
 
