@@ -5476,37 +5476,6 @@ TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
   EXPECT_TRUE(iterations < 10);
 }
 
-TEST_F(ParquetReaderTest, FilterAST)
-{
-  srand(31337);
-  auto written_table = create_random_fixed_table<int>(9, 9, false);
-
-  auto filepath = temp_env->get_temp_filepath("NonNullable.parquet");
-  cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *written_table);
-  cudf::io::write_parquet(args);
-
-  // Filtering AST - table[0] < RAND_MAX/2
-  auto literal_value     = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-  auto predicate = cudf::compute_column(*written_table, filter_expression);
-  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
-    << "Predicate filter should return a boolean";
-  auto expected = cudf::apply_boolean_mask(*written_table, *predicate);
-  // To make sure AST filters out some elements
-  EXPECT_NE(written_table->num_rows(), expected->num_rows());
-
-  cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .filter(filter_expression);
-  auto result = cudf::io::read_parquet(read_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-}
-
 TEST_F(ParquetWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
@@ -5589,6 +5558,86 @@ TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
   cudf::io::parquet_chunked_writer(opts).write(*table_no_rows);
 
   expect_compression_stats_empty(stats);
+}
+
+TEST_F(ParquetReaderTest, FilterAST)
+{
+  srand(31337);
+  auto written_table = create_random_fixed_table<int>(9, 9, false);
+
+  auto filepath = temp_env->get_temp_filepath("FilterAST.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *written_table);
+  cudf::io::write_parquet(args);
+
+  // Filtering AST - table[0] < RAND_MAX/2
+  auto literal_value     = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_reference(0);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto predicate = cudf::compute_column(*written_table, filter_expression);
+  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+    << "Predicate filter should return a boolean";
+  auto expected = cudf::apply_boolean_mask(*written_table, *predicate);
+  // To make sure AST filters out some elements
+  EXPECT_NE(written_table->num_rows(), expected->num_rows());
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}
+
+auto create_parquet_with_stats(std::string const& filename)
+{
+  auto col0 = testdata::ascending<uint32_t>();
+  auto col1 = testdata::descending<int64_t>();
+  auto col2 = testdata::unordered<double>();
+
+  auto const expected = table_view{{col0, col1, col2}};
+  std::cout << "expected.size=" << expected.num_rows() << "\n";
+  auto const filepath = temp_env->get_temp_filepath(filename);
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .row_group_size_rows(8000)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+  cudf::io::write_parquet(out_opts);
+  return filepath;
+}
+
+TEST_F(ParquetReaderTest, StatsPrint)
+{
+  auto filepath     = create_parquet_with_stats("StatsPrint.parquet");
+  auto const source = cudf::io::datasource::create(filepath);
+
+  // Filtering AST - table[0] < RAND_MAX/2
+  auto literal_value     = cudf::numeric_scalar<bool>(true);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, literal);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result = cudf::io::read_parquet(read_opts);
+}
+
+TEST_F(ParquetReaderTest, StatsRowGroups)
+{
+  auto filepath = create_parquet_with_stats("StatsRowGroups.parquet");
+  auto const source = cudf::io::datasource::create(filepath);
+  // Filtering AST - table[0] < 150
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_reference(0);
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result = cudf::io::read_parquet(read_opts);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
