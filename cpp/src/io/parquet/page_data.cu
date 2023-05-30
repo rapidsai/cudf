@@ -118,17 +118,17 @@ struct page_state_buffers_s {
 };
 
 struct delta_binary_state_s {
-  uint8_t const* block_start;  // start of data, but updated as data is read
-  uint8_t const* block_end;    // end of data
-  uint32_t block_size;         // usually 128, must be multiple of 128
-  uint32_t mini_block_count;   // usually 4, chosen such that block_size/mini_block_count is a
-                               // multiple of 32
-  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
-  uint32_t value_count;        // total values encoded in the block
-  int64_t last_value;          // last value decoded, initialized to first_value from header
-                               // should be int128_t, but in all likelihood we'll never see
-                               // an int96 with this encoding
-  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
+  uint8_t const* block_start;    // start of data, but updated as data is read
+  uint8_t const* block_end;      // end of data
+  uint32_t block_size;           // usually 128, must be multiple of 128
+  uint32_t mini_block_count;     // usually 4, chosen such that block_size/mini_block_count is a
+                                 // multiple of 32
+  uint32_t values_per_mb;        // block_size / mini_block_count, must be multiple of 32
+  uint32_t value_count;          // total values encoded in the block
+  int64_t last_value;            // last value decoded, initialized to first_value from header
+                                 // should be int128_t, but in all likelihood we'll never see
+                                 // an int96 with this encoding
+  uint32_t current_value_idx;    // current value index, initialized to 0 at start of block
 
   int64_t cur_min_delta;         // min delta for the block
   uint32_t cur_mb;               // index of the current mini-block within the block
@@ -2577,6 +2577,7 @@ __device__ void restore_decode_cache(page_state_s* s)
 // only used for int32 and int64 physical types (and appears to only be used
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
+template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
@@ -2616,6 +2617,9 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
+  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
+  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
+
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
@@ -2642,7 +2646,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
 
     if (t < 64) {  // warp0..1
       target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
-    } else {  // warp2...
+    } else {       // warp2...
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
     __syncthreads();
@@ -2656,7 +2660,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, sb, target_pos, t);
+      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
     } else if (t < 64) {
       // warp 1
       // unpack deltas and save in db->value
@@ -2704,7 +2708,8 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
 // the prefix lengths to do the final decode for each value. Because the lengths of the prefixes and
 // suffixes are not encoded in the header, we're going to have to first do a quick pass through them
 // to find the start/end of each structure.
-__global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
+template <int lvl_buf_size, typename level_t>
+__global__ void __launch_bounds__(decode_block_size) gpuDecodeDeltaByteArray(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_byte_array_state_s db_state;
@@ -2751,6 +2756,9 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
+
+  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
+  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -2799,7 +2807,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
 
     if (t < 96) {  // warp 0..2
       target_pos = min(src_pos + 2 * (batch_size), s->nz_count + batch_size);
-    } else {  // warp 3
+    } else {       // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
     __syncthreads();
@@ -2812,7 +2820,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodeDeltaByteArray(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels(s, sb, target_pos, t);
+      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
 
     } else if (t < 96) {
       // warp 1 gets prefixes and warp 2 gets suffixes
@@ -3207,8 +3215,8 @@ void __host__ DecodeDeltaBinary(hostdevice_vector<PageInfo>& pages,
   dim3 dim_block(96, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  gpuDecodeDeltaBinary<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows);
+  gpuDecodeDeltaBinary<non_zero_buffer_size, uint16_t>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
 }
 
 /**
@@ -3222,11 +3230,11 @@ void __host__ DecodeDeltaByteArray(hostdevice_vector<PageInfo>& pages,
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
-  dim3 dim_block(block_size, 1);
+  dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  gpuDecodeDeltaByteArray<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows);
+  gpuDecodeDeltaByteArray<non_zero_buffer_size, uint16_t>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
 }
 
 }  // namespace gpu
