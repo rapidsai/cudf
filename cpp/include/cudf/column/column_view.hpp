@@ -160,14 +160,9 @@ class column_view_base {
   /**
    * @brief Returns the count of null elements
    *
-   * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
-   * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
-   * first invocation of `null_count()` will compute and store the count of null
-   * elements indicated by the `null_mask` (if it exists).
-   *
    * @return The count of null elements
    */
-  [[nodiscard]] size_type null_count() const;
+  [[nodiscard]] size_type null_count() const { return _null_count; }
 
   /**
    * @brief Returns the count of null elements in the range [begin, end)
@@ -263,10 +258,6 @@ class column_view_base {
    *
    * If `null_count()` is zero, `null_mask` is optional.
    *
-   * If the null count of the `null_mask` is not specified, it defaults to
-   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
-   * compute the null count if `null_mask` exists.
-   *
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
@@ -280,17 +271,17 @@ class column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
    */
   column_view_base(data_type type,
                    size_type size,
                    void const* data,
-                   bitmask_type const* null_mask = nullptr,
-                   size_type null_count          = UNKNOWN_NULL_COUNT,
-                   size_type offset              = 0);
+                   bitmask_type const* null_mask,
+                   size_type null_count,
+                   size_type offset = 0);
 };
 
 class mutable_column_view_base : public column_view_base {
@@ -357,10 +348,6 @@ class column_view : public detail::column_view_base {
    *
    * If `null_count()` is zero, `null_mask` is optional.
    *
-   * If the null count of the `null_mask` is not specified, it defaults to
-   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
-   * compute the null count if `null_mask` exists.
-   *
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
@@ -374,18 +361,18 @@ class column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   column_view(data_type type,
               size_type size,
               void const* data,
-              bitmask_type const* null_mask            = nullptr,
-              size_type null_count                     = UNKNOWN_NULL_COUNT,
+              bitmask_type const* null_mask,
+              size_type null_count,
               size_type offset                         = 0,
               std::vector<column_view> const& children = {});
 
@@ -435,8 +422,9 @@ class column_view : public detail::column_view_base {
         cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
   {
     CUDF_EXPECTS(
-      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Data exceeds the maximum size of a column view.");
+      data.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the column size limit",
+      std::overflow_error);
   }
 
   /**
@@ -509,12 +497,8 @@ class mutable_column_view : public detail::column_view_base {
 
   /**
    * @brief Construct a `mutable_column_view` from pointers to device memory for
-   *the elements and bitmask of the column.
+   * the elements and bitmask of the column.
 
-   * If the null count of the `null_mask` is not specified, it defaults to
-   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
-   * compute the null count.
-   *
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
@@ -528,19 +512,19 @@ class mutable_column_view : public detail::column_view_base {
    * @param type The element type
    * @param size The number of elements
    * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
+   * @param null_mask Pointer to device memory containing the null
    indicator
    * bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
+   * @param null_count The number of null elements.
+   * @param offset Optional, index of the first element
+   * @param children Optional, depending on the element type, child columns may
    * contain additional data
    */
   mutable_column_view(data_type type,
                       size_type size,
                       void* data,
-                      bitmask_type* null_mask                          = nullptr,
-                      size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
+                      bitmask_type* null_mask,
+                      size_type null_count,
                       size_type offset                                 = 0,
                       std::vector<mutable_column_view> const& children = {});
 

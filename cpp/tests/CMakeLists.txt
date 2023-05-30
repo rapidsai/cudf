@@ -74,7 +74,7 @@ ConfigureTest(
   COLUMN_TEST
   column/bit_cast_test.cpp
   column/column_device_view_test.cu
-  column/column_test.cu
+  column/column_test.cpp
   column/column_view_device_span_test.cpp
   column/column_view_shallow_test.cpp
   column/compound_test.cu
@@ -306,7 +306,7 @@ ConfigureTest(
 # * copying tests ---------------------------------------------------------------------------------
 ConfigureTest(
   COPYING_TEST
-  copying/concatenate_tests.cu
+  copying/concatenate_tests.cpp
   copying/copy_if_else_nested_tests.cpp
   copying/copy_range_tests.cpp
   copying/copy_tests.cpp
@@ -385,7 +385,7 @@ ConfigureTest(
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu
+  table/experimental_row_operator_tests.cu table/row_operator_tests_utilities.cu
 )
 
 # ##################################################################################################
@@ -401,8 +401,9 @@ ConfigureTest(
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
   stream_compaction/distinct_tests.cpp
-  stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
+  stream_compaction/drop_nulls_tests.cpp
+  stream_compaction/stable_distinct_tests.cpp
   stream_compaction/unique_count_tests.cpp
   stream_compaction/unique_tests.cpp
 )
@@ -507,6 +508,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
   text/normalize_tests.cpp

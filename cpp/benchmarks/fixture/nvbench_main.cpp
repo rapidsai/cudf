@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,9 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#define NVBENCH_ENVIRONMENT cudf::nvbench_base_fixture
 
-namespace cudf {
-namespace io {
-/**
- * @brief Convert a string to a cuDF data_type
- *
- * @param[in] dtype_in The string to be converted
- *
- * @return data_type The converted data type
- */
-data_type convert_string_to_dtype(const std::string& dtype_in);
+#include <nvbench/main.cuh>
 
-}  // namespace io
-}  // namespace cudf
+NVBENCH_MAIN

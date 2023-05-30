@@ -66,7 +66,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int const len_mult   = 2;
   for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
       // avoid generating combinations that exceed the cudf column limit

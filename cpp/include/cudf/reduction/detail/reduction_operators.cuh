@@ -183,7 +183,7 @@ struct compound_op : public simple_op<Derived> {
    * @copydoc simple_op<Derived>::template get_null_replacing_element_transformer<ResultType>()
    */
   template <typename ResultType>
-  auto get_null_replacing_element_transformer() override
+  auto get_null_replacing_element_transformer()
   {
     using element_transformer = typename Derived::transformer<ResultType>;
     using OutputType          = typename Derived::intermediate<ResultType>::IntermediateType;

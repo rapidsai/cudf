@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -8,6 +8,7 @@
 import copy
 import random
 import string
+import uuid
 from multiprocessing import Pool
 
 import mimesis
@@ -457,8 +458,7 @@ def rand_dataframe(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
                     generator=lambda cardinality=cardinality: [
-                        mimesis.random.random.randstr(unique=True, length=2000)
-                        for _ in range(cardinality)
+                        _unique_string() for _ in range(cardinality)
                     ],
                     is_sorted=False,
                     dtype="category",
@@ -502,7 +502,7 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda cardinality=cardinality: [
-                            mimesis.random.random.generate_string(
+                            _generate_string(
                                 string.printable,
                                 np.random.randint(
                                     low=0,
@@ -684,7 +684,7 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
         values = float_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind in ("U", "O"):
         values = [
-            mimesis.random.random.generate_string(
+            _generate_string(
                 string.printable,
                 100,
             )
@@ -847,3 +847,11 @@ def create_nested_struct_type(max_types_at_each_level, nesting_level):
         else:
             type_dict[str(name)] = cudf.dtype(type_)
     return cudf.StructDtype(type_dict)
+
+
+def _generate_string(str_seq: str, length: int = 10) -> str:
+    return "".join(random.choices(str_seq, k=length))
+
+
+def _unique_string() -> str:
+    return str(uuid.uuid4()).replace("-", "")

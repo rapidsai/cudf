@@ -66,6 +66,7 @@
  *     @}
  *     @defgroup copy_split Splitting
  *     @{
+ *        @file cudf/contiguous_split.hpp
  *        @file cudf/copying.hpp
  *     @}
  *     @defgroup copy_shift Shifting
@@ -164,6 +165,7 @@
  *   @defgroup nvtext_edit_distance Edit Distance
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
+ *   @defgroup nvtext_minhash MinHashing
  * @}
  * @defgroup utility_apis Utilities
  * @{

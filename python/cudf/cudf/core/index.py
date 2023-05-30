@@ -15,7 +15,6 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -64,8 +63,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-
-T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
@@ -1048,7 +1045,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _binaryop(
         self,
-        other: T,
+        other: Frame,
         op: str,
         fill_value: Any = None,
         *args,
@@ -2364,7 +2361,13 @@ class DatetimeIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
-        nanos = self._values.astype("datetime64[ns]")
+        # TODO: no need to convert to nanos with Pandas 2.x
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            nanos = self._values.astype(
+                pd.DatetimeTZDtype("ns", self.dtype.tz)
+            )
+        else:
+            nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     @_cudf_nvtx_annotate
@@ -2490,6 +2493,98 @@ class DatetimeIndex(GenericIndex):
 
         return self.__class__._from_data({self.name: out_column})
 
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+        """
+        Localize timezone-naive data to timezone-aware data.
+
+        Parameters
+        ----------
+        tz : str
+            Timezone to convert timestamps to.
+
+        Returns
+        -------
+        DatetimeIndex containing timezone aware timestamps.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> tz_aware = tz_naive.tz_localize("America/New_York")
+        >>> tz_aware
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+
+        Ambiguous or nonexistent datetimes are converted to NaT.
+
+        >>> s = cudf.to_datetime(cudf.Series(['2018-10-28 01:20:00',
+        ...                                   '2018-10-28 02:36:00',
+        ...                                   '2018-10-28 03:46:00']))
+        >>> s.dt.tz_localize("CET")
+        0    2018-10-28 01:20:00.000000000
+        1                             <NA>
+        2    2018-10-28 03:46:00.000000000
+        dtype: datetime64[ns, CET]
+
+        Notes
+        -----
+        'NaT' is currently the only supported option for the
+        ``ambiguous`` and ``nonexistent`` arguments. Any
+        ambiguous or nonexistent timestamps are converted
+        to 'NaT'.
+        """
+        from cudf.core._internals.timezones import localize
+
+        if tz is None:
+            result_col = self._column._local_time
+        else:
+            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        return DatetimeIndex._from_data({self.name: result_col})
+
+    def tz_convert(self, tz):
+        """
+        Convert tz-aware datetimes from one time zone to another.
+
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the timezone
+            information.
+
+        Returns
+        -------
+        DatetimeIndex containing timestamps corresponding to the timezone
+        `tz`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> dti = dti.tz_localize("America/New_York")
+        >>> dti
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+        >>> dti.tz_convert("Europe/London")
+        DatetimeIndex(['2018-03-01 14:00:00+00:00',
+                       '2018-03-02 14:00:00+00:00',
+                       '2018-03-03 14:00:00+00:00'],
+                      dtype='datetime64[ns, Europe/London]')
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self._column._utc_time
+        else:
+            result_col = convert(self._column, tz)
+        return DatetimeIndex._from_data({self.name: result_col})
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -2544,7 +2639,6 @@ class TimedeltaIndex(GenericIndex):
         copy=False,
         name=None,
     ):
-
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
@@ -2934,6 +3028,10 @@ class IntervalIndex(GenericIndex):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
+
+        if closed is None:
+            closed = "right"
+
         if isinstance(data, IntervalColumn):
             data = data
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
@@ -3011,6 +3109,9 @@ class IntervalIndex(GenericIndex):
 class StringIndex(GenericIndex):
     """String defined indices into another Column
 
+    .. deprecated:: 23.06
+        `StringIndex` is deprecated, use `Index` instead.
+
     Attributes
     ----------
     _values: A StringColumn object or NDArray of strings
@@ -3019,6 +3120,12 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
