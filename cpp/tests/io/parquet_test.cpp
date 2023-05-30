@@ -5617,7 +5617,7 @@ TEST_F(ParquetReaderTest, StatsPrint)
 
 TEST_F(ParquetReaderTest, StatsRowGroups)
 {
-  auto filepath = create_parquet_with_stats("StatsRowGroups.parquet");
+  auto filepath     = create_parquet_with_stats("StatsRowGroups.parquet");
   auto const source = cudf::io::datasource::create(filepath);
   // Filtering AST - table[0] < 150
   auto literal_value     = cudf::numeric_scalar<uint32_t>(150);

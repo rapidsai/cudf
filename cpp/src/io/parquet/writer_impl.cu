@@ -2343,9 +2343,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   // Reader doesn't currently populate column_order, so infer it here
   if (md.row_groups.size() != 0) {
     auto const is_valid_stats = [](auto const& stats) {
-      return stats.max.size() != 0 || stats.min.size() != 0 ||
-             stats.null_count != -1 || stats.distinct_count != -1 ||
-             stats.max_value.size() != 0 || stats.min_value.size() != 0;
+      return stats.max.size() != 0 || stats.min.size() != 0 || stats.null_count != -1 ||
+             stats.distinct_count != -1 || stats.max_value.size() != 0 ||
+             stats.min_value.size() != 0;
     };
 
     uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
