@@ -36,7 +36,7 @@ def subword_tokenize_inmem_hash(
     uint32_t max_sequence_length=64,
     uint32_t stride=48,
     bool do_lower=True,
-    bool do_truncate=False
+    bool do_truncate=False,
 ):
     """
     Subword tokenizes text series by using the pre-loaded hashed vocabulary
@@ -51,7 +51,7 @@ def subword_tokenize_inmem_hash(
                 max_sequence_length,
                 stride,
                 do_lower,
-                do_truncate
+                do_truncate,
             )
         )
     # return the 3 tensor components
