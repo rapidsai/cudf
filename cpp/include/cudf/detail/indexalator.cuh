@@ -582,7 +582,7 @@ struct indexalator_factory {
   };
 
   /**
-   * @brief An index accessor that returns an index value if scalar's validity flag is true.
+   * @brief An index accessor that returns an index value if the scalar's validity flag is true.
    *
    * This is suitable as an `optional_iterator`.
    */

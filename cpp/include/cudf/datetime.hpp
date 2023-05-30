@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> extract_day(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts week day from any datetime type and returns an int16_t
+ * @brief  Extracts a weekday from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
