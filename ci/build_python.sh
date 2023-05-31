@@ -12,6 +12,7 @@ rapids-print-env
 rapids-logger "Begin py build"
 
 PY_VER=${RAPIDS_PY_VERSION//./}
+_CUDA_MAJOR=$(nvcc --version | tail -n 2 | head -n 1 | cut -d',' -f 2 | cut -d' ' -f 3 | cut -d'.' -f 1)
 
 LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1278/4e1392d/rmm_conda_cpp_cuda${CUDA_MAJOR}_$(arch).tar.gz)
 RMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1278/4e1392d/rmm_conda_python_cuda${CUDA_MAJOR}_${PY_VER}_$(arch).tar.gz)
