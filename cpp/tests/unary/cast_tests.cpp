@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,70 +90,91 @@ inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
         test_timestamps_D.size(),
         rmm::device_buffer{test_timestamps_D.data(),
                            test_timestamps_D.size() * sizeof(test_timestamps_D.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::TIMESTAMP_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_s.size(),
         rmm::device_buffer{test_timestamps_s.data(),
                            test_timestamps_s.size() * sizeof(test_timestamps_s.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ms.size(),
         rmm::device_buffer{test_timestamps_ms.data(),
                            test_timestamps_ms.size() * sizeof(test_timestamps_ms.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_us.size(),
         rmm::device_buffer{test_timestamps_us.data(),
                            test_timestamps_us.size() * sizeof(test_timestamps_us.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ns.size(),
         rmm::device_buffer{test_timestamps_ns.data(),
                            test_timestamps_ns.size() * sizeof(test_timestamps_ns.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::DURATION_DAYS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_D.size(),
         rmm::device_buffer{test_durations_D.data(),
                            test_durations_D.size() * sizeof(test_durations_D.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::DURATION_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_s.size(),
         rmm::device_buffer{test_durations_s.data(),
                            test_durations_s.size() * sizeof(test_durations_s.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::DURATION_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ms.size(),
         rmm::device_buffer{test_durations_ms.data(),
                            test_durations_ms.size() * sizeof(test_durations_ms.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::DURATION_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_us.size(),
         rmm::device_buffer{test_durations_us.data(),
                            test_durations_us.size() * sizeof(test_durations_us.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     case cudf::type_id::DURATION_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ns.size(),
         rmm::device_buffer{test_durations_ns.data(),
                            test_durations_ns.size() * sizeof(test_durations_ns.front()),
-                           cudf::get_default_stream()});
+                           cudf::get_default_stream()},
+        rmm::device_buffer{},
+        0);
     default: CUDF_FAIL("Unsupported type_id");
   }
 };
@@ -193,8 +214,7 @@ inline auto make_data_type()
   return cudf::data_type{cudf::type_to_id<T>()};
 }
 
-struct CastTimestampsSimple : public cudf::test::BaseFixture {
-};
+struct CastTimestampsSimple : public cudf::test::BaseFixture {};
 
 TEST_F(CastTimestampsSimple, IsIdempotent)
 {
@@ -235,8 +255,7 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
   validate_cast_result<cudf::timestamp_ns, cudf::timestamp_ns>(timestamps_ns, *timestamps_ns_got);
 }
 
-struct CastDurationsSimple : public cudf::test::BaseFixture {
-};
+struct CastDurationsSimple : public cudf::test::BaseFixture {};
 
 TEST_F(CastDurationsSimple, IsIdempotent)
 {
@@ -273,8 +292,7 @@ TEST_F(CastDurationsSimple, IsIdempotent)
 }
 
 template <typename T>
-struct CastChronosTyped : public cudf::test::BaseFixture {
-};
+struct CastChronosTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastChronosTyped, cudf::test::ChronoTypes);
 
@@ -351,8 +369,7 @@ TYPED_TEST(CastChronosTyped, DownCastingToDaysFloorsValues)
   validate_cast_result<cudf::duration_D, cudf::duration_D>(duration_exp, *duration_got);
 }
 
-struct CastToTimestamps : public cudf::test::BaseFixture {
-};
+struct CastToTimestamps : public cudf::test::BaseFixture {};
 
 // Cast duration types to timestamps (as integral types can't be converted)
 TEST_F(CastToTimestamps, AllValid)
@@ -382,8 +399,7 @@ TEST_F(CastToTimestamps, AllValid)
   validate_cast_result<cudf::duration_ns, cudf::timestamp_ns>(durations_ns, *timestamps_ns_got);
 }
 
-struct CastFromTimestamps : public cudf::test::BaseFixture {
-};
+struct CastFromTimestamps : public cudf::test::BaseFixture {};
 
 // Convert timestamps to duration types
 TEST_F(CastFromTimestamps, AllValid)
@@ -445,8 +461,7 @@ TEST_F(CastFromTimestamps, WithNulls)
 }
 
 template <typename T>
-struct CastToDurations : public cudf::test::BaseFixture {
-};
+struct CastToDurations : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastToDurations, cudf::test::IntegralTypes);
 
@@ -478,8 +493,7 @@ TYPED_TEST(CastToDurations, AllValid)
 }
 
 template <typename T>
-struct CastFromDurations : public cudf::test::BaseFixture {
-};
+struct CastFromDurations : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CastFromDurations, cudf::test::NumericTypes);
 
@@ -549,12 +563,10 @@ inline auto make_fixed_point_data_type(int32_t scale)
   return cudf::data_type{cudf::type_to_id<T>(), scale};
 }
 
-struct FixedPointTestSingleType : public cudf::test::BaseFixture {
-};
+struct FixedPointTestSingleType : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FixedPointTests : public cudf::test::BaseFixture {
-};
+struct FixedPointTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 

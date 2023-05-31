@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,6 +174,21 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
+TYPED_TEST(RepeatTypedTestFixture, ZeroCount)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
+                                                           thrust::make_counting_iterator(10));
+
+  auto expected = cudf::make_empty_column(cudf::type_to_id<T>());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::repeat(input_table, 0);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected->view());
+}
+
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
                                 cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
@@ -240,8 +255,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
-class RepeatErrorTestFixture : public cudf::test::BaseFixture {
-};
+class RepeatErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(RepeatErrorTestFixture, LengthMismatch)
 {
@@ -271,4 +285,23 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
 
   // input_table.has_nulls() == true
   EXPECT_THROW(auto ret = cudf::repeat(input_table, count), cudf::logic_error);
+}
+
+TEST_F(RepeatErrorTestFixture, Overflow)
+{
+  auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
+  cudf::table_view input_table{{input}};
+  // set the count such that (count * num_rows) > max(size_type);
+  // the extra divide by 2 ensures the max is exceeded despite truncation in integer division
+  auto count = std::numeric_limits<cudf::size_type>::max() / (input_table.num_rows() / 2);
+  EXPECT_THROW(cudf::repeat(input_table, count), std::overflow_error);
+}
+
+TEST_F(RepeatErrorTestFixture, NegativeCount)
+{
+  auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
+  cudf::table_view input_table{{input}};
+  EXPECT_THROW(cudf::repeat(input_table, -1), cudf::logic_error);
 }

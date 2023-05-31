@@ -169,7 +169,7 @@ function buildLibCudfJniInDocker {
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
-                -Dtest=*,!CuFileTest,!CudaFatalTest"
+                -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 }
 
 if hasArg -h || hasArg --h || hasArg --help; then
@@ -257,7 +257,7 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf || hasArg cudfjar; then
+if buildAll || hasArg libcudf || hasArg cudf || hasArg cudfjar; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
         CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
         if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then

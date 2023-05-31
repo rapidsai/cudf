@@ -34,8 +34,7 @@ using cudf::test::strings_column_wrapper;
 // 😀 | F0 9F 98 80 | 11110000 10011111 10011000 10000000
 // 😎 | F0 9F 98 8E | 11110000 10011111 10011000 10001110
 
-struct MultibyteSplitTest : public cudf::test::BaseFixture {
-};
+struct MultibyteSplitTest : public cudf::test::BaseFixture {};
 
 TEST_F(MultibyteSplitTest, Simple)
 {
@@ -268,9 +267,7 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
 
 TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
   }
@@ -294,9 +291,7 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 
 TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += ".....";
   }
@@ -322,9 +317,7 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
 
 TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
   }
@@ -348,9 +341,7 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
 
 TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRangeSingleByte)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += ".....";
   }

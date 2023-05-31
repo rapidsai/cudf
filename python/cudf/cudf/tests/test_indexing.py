@@ -579,7 +579,6 @@ def test_dataframe_series_loc_multiindex(obj):
 
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
-
     # create random cudf.Series
     np.random.seed(12)
     ps = pd.Series(np.random.sample(nelem))
@@ -1265,7 +1264,6 @@ def test_iloc_categorical_index(index):
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-
     if is_dataframe is True:
         pd_data = pd.DataFrame(
             {"a": [1, 2, 3]},
@@ -1685,3 +1683,61 @@ def test_loc_single_row_from_slice():
     pdf = pd.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
     df = cudf.from_pandas(pdf)
     assert_eq(pdf.loc[5:10], df.loc[5:10])
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+@pytest.mark.parametrize(
+    "mask",
+    [[False, True], [False, False, True, True, True]],
+    ids=["too-short", "too-long"],
+)
+def test_boolean_mask_wrong_length(indexer, mask):
+    s = pd.Series([1, 2, 3, 4])
+
+    indexee = getattr(s, indexer)
+    with pytest.raises(IndexError):
+        indexee[mask]
+
+    c = cudf.from_pandas(s)
+    indexee = getattr(c, indexer)
+    with pytest.raises(IndexError):
+        indexee[mask]
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+def test_boolean_mask_columns(indexer):
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+    mask = [True, False, True]
+    expect = getattr(df, indexer)[:, mask]
+    got = getattr(cdf, indexer)[:, mask]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("indexer", ["loc", "iloc"])
+@pytest.mark.parametrize(
+    "mask",
+    [[False, True], [False, False, True, True, True]],
+    ids=["too-short", "too-long"],
+)
+def test_boolean_mask_columns_wrong_length(indexer, mask):
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    with pytest.raises(IndexError):
+        getattr(df, indexer)[:, mask]
+    with pytest.raises(IndexError):
+        getattr(cdf, indexer)[:, mask]
+
+
+def test_boolean_mask_columns_iloc_series():
+    df = pd.DataFrame(np.zeros((3, 3)))
+    cdf = cudf.from_pandas(df)
+
+    mask = pd.Series([True, False, True], dtype=bool)
+    with pytest.raises(NotImplementedError):
+        df.iloc[:, mask]
+
+    with pytest.raises(NotImplementedError):
+        cdf.iloc[:, mask]

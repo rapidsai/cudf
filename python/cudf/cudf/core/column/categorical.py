@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -710,13 +711,12 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         dtype: CategoricalDtype,
-        mask: Buffer = None,
-        size: int = None,
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-
         if size is None:
             for child in children:
                 assert child.offset == 0
@@ -874,7 +874,7 @@ class CategoricalColumn(column.ColumnBase):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> "column.ColumnBase":
+    ) -> Self:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -889,18 +889,21 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def slice(
-        self, start: int, stop: int, stride: int = None
-    ) -> "column.ColumnBase":
+        self, start: int, stop: int, stride: Optional[int] = None
+    ) -> Self:
         codes = self.codes.slice(start, stop, stride)
-        return cudf.core.column.build_categorical_column(
-            categories=self.categories,
-            codes=cudf.core.column.build_column(
-                codes.base_data, dtype=codes.dtype
+        return cast(
+            Self,
+            cudf.core.column.build_categorical_column(
+                categories=self.categories,
+                codes=cudf.core.column.build_column(
+                    codes.base_data, dtype=codes.dtype
+                ),
+                mask=codes.base_mask,
+                ordered=self.ordered,
+                size=codes.size,
+                offset=codes.offset,
             ),
-            mask=codes.base_mask,
-            ordered=self.ordered,
-            size=codes.size,
-            offset=codes.offset,
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -962,7 +965,9 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -1037,8 +1042,15 @@ class CategoricalColumn(column.ColumnBase):
     ) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view(mode=mode)
 
-    def unique(self, preserve_order=False) -> CategoricalColumn:
-        codes = self.as_numerical.unique(preserve_order=preserve_order)
+    def unique(self, preserve_order=True) -> CategoricalColumn:
+        if preserve_order is not True:
+            warnings.warn(
+                "The preserve_order argument is deprecated. It will be "
+                "removed in a future version. As of now, unique always "
+                "preserves order regardless of the argument's value.",
+                FutureWarning,
+            )
+        codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1219,7 +1231,10 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def fillna(
-        self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Any = None,
+        dtype: Optional[Dtype] = None,
     ) -> CategoricalColumn:
         """
         Fill null values with *fill_value*
@@ -1237,7 +1252,7 @@ class CategoricalColumn(column.ColumnBase):
                     try:
                         fill_value = self._encode(fill_value)
                         fill_value = self.codes.dtype.type(fill_value)
-                    except (ValueError) as err:
+                    except ValueError as err:
                         err_msg = "fill value must be in categories"
                         raise ValueError(err_msg) from err
             else:
@@ -1351,7 +1366,7 @@ class CategoricalColumn(column.ColumnBase):
         out = out.set_mask(self.mask)
         return out
 
-    def copy(self, deep: bool = True) -> CategoricalColumn:
+    def copy(self, deep: bool = True) -> Self:
         result_col = super().copy(deep=deep)
         if deep:
             result_col.categories = libcudf.copying.copy_column(
@@ -1365,7 +1380,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
-    ) -> Optional[ColumnBase]:
+    ) -> Optional[Self]:
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col._codes
@@ -1389,9 +1404,7 @@ class CategoricalColumn(column.ColumnBase):
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 
         # Combine and de-dupe the categories
-        cats = column.concat_columns([o.categories for o in objs]).unique(
-            preserve_order=True
-        )
+        cats = column.concat_columns([o.categories for o in objs]).unique()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 
@@ -1530,10 +1543,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
-            # drop_duplicates() instead of unique() to preserve order
-            new_cats = cudf.Series(new_cats)._column.unique(
-                preserve_order=True
-            )
+            new_cats = cudf.Series(new_cats)._column.unique()
 
         cur_codes = self.codes
         max_cat_size = (
@@ -1641,7 +1651,7 @@ def _create_empty_categorical_column(
 
 
 def pandas_categorical_as_column(
-    categorical: ColumnLike, codes: ColumnLike = None
+    categorical: ColumnLike, codes: Optional[ColumnLike] = None
 ) -> CategoricalColumn:
     """Creates a CategoricalColumn from a pandas.Categorical
 

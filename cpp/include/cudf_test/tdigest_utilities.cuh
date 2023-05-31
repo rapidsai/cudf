@@ -179,7 +179,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
                     spans.end(),
                     expected_min->mutable_view().template begin<double>(),
                     column_min<T>{});
-  column_view result_min(data_type{type_id::FLOAT64}, tdv.size(), tdv.min_begin());
+  column_view result_min(data_type{type_id::FLOAT64}, tdv.size(), tdv.min_begin(), nullptr, 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_min, *expected_min);
 
   auto expected_max = cudf::make_fixed_width_column(
@@ -189,7 +189,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
                     spans.end(),
                     expected_max->mutable_view().template begin<double>(),
                     column_max<T>{});
-  column_view result_max(data_type{type_id::FLOAT64}, tdv.size(), tdv.max_begin());
+  column_view result_max(data_type{type_id::FLOAT64}, tdv.size(), tdv.max_begin(), nullptr, 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_max, *expected_max);
 }
 
@@ -224,9 +224,9 @@ void tdigest_simple_aggregation(Func op)
   double const min = 1;
   double const max = 126;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -249,9 +249,9 @@ void tdigest_simple_with_nulls_aggregation(Func op)
   double const min = 1;
   double const max = 122;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.06.00
+  VERSION 23.08.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -178,8 +178,7 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+include(cmake/thirdparty/get_libcudacxx.cmake)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
@@ -346,6 +345,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
+  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -395,8 +395,8 @@ add_library(
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
+  src/io/utilities/row_selection.cpp
   src/io/utilities/trie.cu
-  src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
   src/jit/util.cpp
@@ -513,6 +513,7 @@ add_library(
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
+  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
@@ -579,6 +580,7 @@ add_library(
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
+  src/text/minhash.cu
   src/text/ngrams_tokenize.cu
   src/text/normalize.cu
   src/text/replace.cu
@@ -604,6 +606,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp

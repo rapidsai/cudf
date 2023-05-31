@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
 
 #include <vector>
 
-struct StringsColumnTest : public cudf::test::BaseFixture {
-};
+struct StringsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsColumnTest, Sort)
 {
@@ -55,8 +54,7 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 }
 
 class SliceParmsTest : public StringsColumnTest,
-                       public testing::WithParamInterface<cudf::size_type> {
-};
+                       public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(SliceParmsTest, Slice)
 {
@@ -159,7 +157,7 @@ TEST_F(StringsColumnTest, GatherTooBig)
     cudf::data_type{cudf::type_id::STRING}, 1, nullptr, nullptr, 0, 0, {offsets, chars});
   auto map = thrust::constant_iterator<int8_t>(0);
   cudf::test::fixed_width_column_wrapper<int8_t> gather_map(map, map + 1000);
-  EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), cudf::logic_error);
+  EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), std::overflow_error);
 }
 
 TEST_F(StringsColumnTest, Scatter)

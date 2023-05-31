@@ -222,7 +222,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
     chars_offsets.begin(), chars_offsets.end(), chars_offsets.begin(), stream);
   CUDF_EXPECTS(
     output_chars_size <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "Size of output exceeds column size limit",
+    "Size of output exceeds the column size limit",
     std::overflow_error);
 
   // This will contain the size in bytes of each ngram to generate

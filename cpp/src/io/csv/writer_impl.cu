@@ -251,7 +251,7 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_timestamps(
       column,
       format,
-      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr}),
+      strings_column_view(make_empty_column(type_id::STRING)->view()),
       stream_,
       mr_);
   }

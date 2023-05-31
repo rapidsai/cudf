@@ -44,7 +44,6 @@ namespace io {
 namespace detail {
 namespace parquet {
 // Forward internal classes
-struct parquet_column_view;
 struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
@@ -65,13 +64,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
-                SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                single_write_mode mode,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -80,13 +77,11 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
-                SingleWriteMode mode,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                single_write_mode mode,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -97,6 +92,14 @@ class writer::impl {
    * @brief Initializes the states before writing.
    */
   void init_state();
+
+  /**
+   * @brief Updates writer-level statistics with data from the current table.
+   *
+   * @param compression_stats Optional compression statistics from the current table
+   */
+  void update_compression_statistics(
+    std::optional<writer_compression_statistics> const& compression_stats);
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write,
@@ -122,134 +125,59 @@ class writer::impl {
 
  private:
   /**
-   * @brief Gather row group fragments
+   * @brief Write the intermediate Parquet data into the data sink.
    *
-   * This calculates fragments to be used in determining row group boundariesa.
+   * The intermediate data is generated from processing (compressing/encoding) a cuDF input table
+   * by `convert_table_to_parquet_data` called in the `write()` function.
    *
-   * @param frag Destination row group fragments
-   * @param col_desc column description array
-   * @param[in] partitions Information about partitioning of table
-   * @param[in] part_frag_offset A Partition's offset into fragment array
-   * @param fragment_size Number of rows per fragment
+   * @param updated_agg_meta The updated aggregate data after processing the input
+   * @param pages Encoded pages
+   * @param chunks Column chunks
+   * @param global_rowgroup_base Numbers of rowgroups in each file/partition
+   * @param first_rg_in_part The first rowgroup in each partition
+   * @param batch_list The batches of rowgroups to encode
+   * @param rg_to_part A map from rowgroup to partition
+   * @param[out] bounce_buffer Temporary host output buffer
    */
-  void init_row_group_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
-                                device_span<gpu::parquet_column_device_view const> col_desc,
-                                host_span<partition_info const> partitions,
-                                device_span<int const> part_frag_offset,
-                                uint32_t fragment_size);
+  void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
+                                  device_span<gpu::EncPage const> pages,
+                                  host_2dspan<gpu::EncColumnChunk const> chunks,
+                                  host_span<size_t const> global_rowgroup_base,
+                                  host_span<int const> first_rg_in_part,
+                                  host_span<size_type const> batch_list,
+                                  host_span<int const> rg_to_part,
+                                  host_span<uint8_t> bounce_buffer);
 
-  /**
-   * @brief Recalculate page fragments
-   *
-   * This calculates fragments to be used to determine page boundaries within
-   * column chunks.
-   *
-   * @param frag Destination page fragments
-   * @param frag_sizes Array of fragment sizes for each column
-   */
-  void calculate_page_fragments(device_span<gpu::PageFragment> frag,
-                                host_span<size_type const> frag_sizes);
-
-  /**
-   * @brief Gather per-fragment statistics
-   *
-   * @param frag_stats output statistics
-   * @param frags Input page fragments
-   */
-  void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
-                                  device_span<gpu::PageFragment const> frags);
-
-  /**
-   * @brief Initialize encoder pages
-   *
-   * @param chunks column chunk array
-   * @param col_desc column description array
-   * @param pages encoder pages array
-   * @param page_stats page statistics array
-   * @param frag_stats fragment statistics array
-   * @param max_page_comp_data_size max compressed
-   * @param num_columns Total number of columns
-   * @param num_pages Total number of pages
-   * @param num_stats_bfr Number of statistics buffers
-   */
-  void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                          device_span<gpu::parquet_column_device_view const> col_desc,
-                          device_span<gpu::EncPage> pages,
-                          hostdevice_vector<size_type>& comp_page_sizes,
-                          statistics_chunk* page_stats,
-                          statistics_chunk* frag_stats,
-                          uint32_t num_columns,
-                          uint32_t num_pages,
-                          uint32_t num_stats_bfr);
-  /**
-   * @brief Encode a batch of pages
-   *
-   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
-   *
-   * @param chunks column chunk array
-   * @param pages encoder pages array
-   * @param max_page_uncomp_data_size maximum uncompressed size of any page's data
-   * @param pages_in_batch number of pages in this batch
-   * @param first_page_in_batch first page in batch
-   * @param rowgroups_in_batch number of rowgroups in this batch
-   * @param first_rowgroup first rowgroup in batch
-   * @param page_stats optional page-level statistics (nullptr if none)
-   * @param chunk_stats optional chunk-level statistics (nullptr if none)
-   * @param column_stats optional page-level statistics for column index (nullptr if none)
-   */
-  void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                    device_span<gpu::EncPage> pages,
-                    size_t max_page_uncomp_data_size,
-                    uint32_t pages_in_batch,
-                    uint32_t first_page_in_batch,
-                    uint32_t rowgroups_in_batch,
-                    uint32_t first_rowgroup,
-                    const statistics_chunk* page_stats,
-                    const statistics_chunk* chunk_stats,
-                    const statistics_chunk* column_stats);
-
-  /**
-   * @brief Function to calculate the memory needed to encode the column index of the given
-   * column chunk
-   *
-   * @param chunk pointer to column chunk
-   */
-  size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
-
- private:
-  // TODO : figure out if we want to keep this. It is currently unused.
-  rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream;
+  rmm::cuda_stream_view _stream;
 
-  Compression compression_             = Compression::UNCOMPRESSED;
-  size_t max_row_group_size            = default_row_group_size_bytes;
-  size_type max_row_group_rows         = default_row_group_size_rows;
-  size_t max_page_size_bytes           = default_max_page_size_bytes;
-  size_type max_page_size_rows         = default_max_page_size_rows;
-  statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
-  dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
-  size_t max_dictionary_size_          = default_max_dictionary_size;
-  bool int96_timestamps                = false;
-  int32_t column_index_truncate_length = default_column_index_truncate_length;
-  std::optional<size_type> max_page_fragment_size_;
-  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  std::unique_ptr<aggregate_writer_metadata> md;
-  // File footer key-value metadata. Written during write_chunked_end()
-  std::vector<std::map<std::string, std::string>> kv_md;
-  // optional user metadata
-  std::unique_ptr<table_input_metadata> table_meta;
-  // to track if the output has been written to sink
-  bool closed = false;
-  // To track if the last write(table) call completed successfully
-  bool last_write_successful = false;
-  // current write position for rowgroups/chunks
-  std::vector<std::size_t> current_chunk_offset;
-  // special parameter only used by detail::write() to indicate that we are guaranteeing
-  // a single table write.  this enables some internal optimizations.
-  bool const single_write_mode = true;
+  // Writer options.
+  Compression const _compression;
+  size_t const _max_row_group_size;
+  size_type const _max_row_group_rows;
+  size_t const _max_page_size_bytes;
+  size_type const _max_page_size_rows;
+  statistics_freq const _stats_granularity;
+  dictionary_policy const _dict_policy;
+  size_t const _max_dictionary_size;
+  std::optional<size_type> const _max_page_fragment_size;
+  bool const _int96_timestamps;
+  int32_t const _column_index_truncate_length;
+  std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
+  single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
+                                               // indicate that we are guaranteeing a single table
+                                               // write. This enables some internal optimizations.
+  std::vector<std::unique_ptr<data_sink>> const _out_sink;
 
-  std::vector<std::unique_ptr<data_sink>> out_sink_;
+  // Internal states, filled during `write()` and written to sink during `write` and `close()`.
+  std::unique_ptr<table_input_metadata> _table_meta;
+  std::unique_ptr<aggregate_writer_metadata> _agg_meta;
+  std::vector<std::size_t> _current_chunk_offset;  // To track if the last write(table) call
+                                                   // completed successfully current write
+                                                   // position for rowgroups/chunks.
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
+  bool _last_write_successful = false;
+  bool _closed                = false;  // To track if the output has been written to sink.
 };
 
 }  // namespace parquet

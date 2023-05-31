@@ -169,11 +169,11 @@ struct sizes_to_offsets_iterator {
     return *this;
   }
 
-  sizes_to_offsets_iterator()                                 = default;
-  sizes_to_offsets_iterator(sizes_to_offsets_iterator const&) = default;
-  sizes_to_offsets_iterator(sizes_to_offsets_iterator&&)      = default;
+  sizes_to_offsets_iterator()                                            = default;
+  sizes_to_offsets_iterator(sizes_to_offsets_iterator const&)            = default;
+  sizes_to_offsets_iterator(sizes_to_offsets_iterator&&)                 = default;
   sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator const&) = default;
-  sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator&&) = default;
+  sizes_to_offsets_iterator& operator=(sizes_to_offsets_iterator&&)      = default;
 
  protected:
   template <typename S, typename R>
@@ -319,7 +319,7 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
   CUDF_EXPECTS(
     total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
-    "Size of output exceeds column size limit",
+    "Size of output exceeds the column size limit",
     std::overflow_error);
 
   offsets_column->set_null_count(0);

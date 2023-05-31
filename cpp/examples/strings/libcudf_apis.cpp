@@ -25,7 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 /**
  * @brief Redacts each name per the corresponding visibility entry

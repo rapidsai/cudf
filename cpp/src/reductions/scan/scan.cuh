@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,14 +24,16 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <utility>
+
 namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-rmm::device_buffer mask_scan(column_view const& input_view,
-                             scan_type inclusive,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
+std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
+                                                   scan_type inclusive,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr);
 
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,

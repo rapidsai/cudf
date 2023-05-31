@@ -81,10 +81,10 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Buffer = None,
-        size: int = None,  # TODO: make this non-optional
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,  # TODO: make this non-optional
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -428,11 +428,11 @@ class NumericalColumn(NumericalBaseColumn):
 
         return lhs, rhs
 
-    def _can_return_nan(self, skipna: bool = None) -> bool:
+    def _can_return_nan(self, skipna: Optional[bool] = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
 
     def _process_for_reduction(
-        self, skipna: bool = None, min_count: int = 0
+        self, skipna: Optional[bool] = None, min_count: int = 0
     ) -> Union[NumericalColumn, ScalarLike]:
         skipna = True if skipna is None else skipna
 
@@ -516,8 +516,8 @@ class NumericalColumn(NumericalBaseColumn):
     def fillna(
         self,
         fill_value: Any = None,
-        method: str = None,
-        dtype: Dtype = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
         fill_nan: bool = True,
     ) -> NumericalColumn:
         """
@@ -684,7 +684,6 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 return True
             else:
-
                 filled = self.fillna(0)
                 return (
                     cudf.Series(filled).astype(to_dtype).astype(filled.dtype)
@@ -720,8 +719,11 @@ class NumericalColumn(NumericalBaseColumn):
         return self
 
     def to_pandas(
-        self, index: pd.Index = None, nullable: bool = False, **kwargs
-    ) -> "pd.Series":
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
+    ) -> pd.Series:
         if nullable and self.dtype in np_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
             arrow_array = self.to_arrow()
@@ -766,10 +768,12 @@ def _normalize_find_and_replace_input(
         if len(col_to_normalize) == 1:
             if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
-            else:
-                col_to_normalize_casted = input_column_dtype.type(
-                    col_to_normalize[0]
-                )
+            if np.isinf(col_to_normalize[0]):
+                return normalized_column
+            col_to_normalize_casted = np.array(col_to_normalize[0]).astype(
+                input_column_dtype
+            )
+
             if not np.isnan(col_to_normalize_casted) and (
                 col_to_normalize_casted != col_to_normalize[0]
             ):

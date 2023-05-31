@@ -109,9 +109,9 @@ mixed_join(
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -125,8 +125,6 @@ mixed_join(
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
@@ -141,8 +139,15 @@ mixed_join(
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -161,6 +166,14 @@ mixed_join(
   // not passed as input, and rmm::device_uvector is not default constructible
   std::optional<rmm::device_uvector<size_type>> matches_per_row{};
   device_span<size_type const> matches_per_row_span{};
+
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -184,6 +197,7 @@ mixed_join(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -198,6 +212,7 @@ mixed_join(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -241,6 +256,7 @@ mixed_join(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -256,6 +272,7 @@ mixed_join(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -358,9 +375,9 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -374,8 +391,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
@@ -390,8 +405,15 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -405,6 +427,14 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
 
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   if (has_nulls) {
@@ -414,6 +444,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,
@@ -428,6 +459,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,
