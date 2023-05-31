@@ -1422,8 +1422,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                   "cannot pass in both a buffer and an inputfilepath", 0);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
-                  0);
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
   }
 
   try {
@@ -1450,8 +1449,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
-                    0);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty", 0);
     }
 
     auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char *>(buffer),
