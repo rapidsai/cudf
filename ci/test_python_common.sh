@@ -23,6 +23,10 @@ set -u
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+PY_VER=${RAPIDS_PY_VERSION//./}
+
+LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1278/4e1392d/rmm_conda_cpp_cuda${CUDA_MAJOR}_$(arch).tar.gz)
+RMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1278/4e1392d/rmm_conda_python_cuda${CUDA_MAJOR}_${PY_VER}_$(arch).tar.gz)
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
@@ -33,4 +37,6 @@ rapids-print-env
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
+  --channel "${LIBRMM_CHANNEL}" \
+  --channel "${RMM_CHANNEL}" \
   cudf libcudf
