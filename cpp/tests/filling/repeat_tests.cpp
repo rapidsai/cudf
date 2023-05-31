@@ -174,6 +174,21 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
+TYPED_TEST(RepeatTypedTestFixture, ZeroCount)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
+                                                           thrust::make_counting_iterator(10));
+
+  auto expected = cudf::make_empty_column(cudf::type_to_id<T>());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::repeat(input_table, 0);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected->view());
+}
+
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
                                 cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
