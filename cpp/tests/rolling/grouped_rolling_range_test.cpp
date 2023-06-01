@@ -46,20 +46,46 @@ using bigints_column  = fwcw<int64_t>;
 using strings_column  = cudf::test::strings_column_wrapper;
 using column_ptr      = std::unique_ptr<cudf::column>;
 
-struct BaseGroupedRollingRangeOrderByDecimalTest : public cudf::test::BaseFixture {
+template <typename T>
+struct BaseGroupedRollingRangeOrderByTest : public cudf::test::BaseFixture {
   // Stand-in for std::pow(10, n), but for integral return.
   static constexpr std::array<int32_t, 6> pow10{1, 10, 100, 1000, 10000, 100000};
+
   // Test data.
   column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
   column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
   cudf::size_type const num_rows = grouping_keys->size();
+
+  /**
+   * @brief Get grouped rolling results for specified order-by column and range scale
+   *
+   */
+  [[nodiscard]]
+  column_ptr get_grouped_range_rolling_result(cudf::range_window_bounds const& preceding,
+                                              cudf::range_window_bounds const& following,
+                                              cudf::column_view const& order_by_column,
+                                              numeric::scale_type const& range_scale) const
+  {
+    return cudf::grouped_range_rolling_window(
+        cudf::table_view{{grouping_keys->view()}},
+        order_by_column,
+        cudf::order::ASCENDING,
+        agg_values->view(),
+        preceding,
+        following,
+        1,  // min_periods
+        *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+  }
 };
 
-using base = BaseGroupedRollingRangeOrderByDecimalTest;  // Shortcut to base test class.
-
 template <typename DecimalT>
-struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrderByDecimalTest {
+struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrderByTest<typename DecimalT::rep> {
   using Rep = typename DecimalT::rep;
+  using base = BaseGroupedRollingRangeOrderByTest<Rep>;
+
+  using base::agg_values;
+  using base::grouping_keys;
+  using base::num_rows;
 
   [[nodiscard]] auto make_fixed_point_range_bounds(typename DecimalT::rep value,
                                                    numeric::scale_type scale) const
@@ -108,6 +134,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
    * @brief Get grouped rolling results for specified order-by column and range scale
    *
    */
+  [[nodiscard]]
   column_ptr get_grouped_range_rolling_result(cudf::column_view const& order_by_column,
                                               numeric::scale_type const& range_scale) const
   {
@@ -116,15 +143,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
     auto const following =
       this->make_fixed_point_range_bounds(rescale_range_value(Rep{100}, range_scale), range_scale);
 
-    return cudf::grouped_range_rolling_window(
-      cudf::table_view{{grouping_keys->view()}},
-      order_by_column,
-      cudf::order::ASCENDING,
-      agg_values->view(),
-      preceding,
-      following,
-      1,  // min_periods
-      *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+    return base::get_grouped_range_rolling_result(preceding, following, order_by_column, range_scale);
   }
 
   /**
