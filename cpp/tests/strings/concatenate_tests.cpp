@@ -28,7 +28,7 @@ struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
@@ -84,7 +84,7 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
 
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
