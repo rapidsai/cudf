@@ -69,6 +69,10 @@ __global__ void offset_bitmask_binop(Binop op,
   constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
+  size_type const last_bit_index  = source_size_bits - 1;
+  size_type const num_slack_bits  = word_size - (last_bit_index % word_size) - 1;
+  size_type const last_word_index = cudf::word_index(last_bit_index);
+
   size_type thread_count = 0;
 
   for (size_type destination_word_index = tid; destination_word_index < destination.size();
@@ -88,15 +92,8 @@ __global__ void offset_bitmask_binop(Binop op,
 
     destination[destination_word_index] = destination_word;
     thread_count += __popc(destination_word);
-  }
-
-  // Subtract any slack bits from the last word
-  if (tid == 0) {
-    size_type const last_bit_index = source_size_bits - 1;
-    size_type const num_slack_bits = word_size - (last_bit_index % word_size) - 1;
-    if (num_slack_bits > 0) {
-      size_type const word_index = cudf::word_index(last_bit_index);
-      thread_count -= __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
+    if (destination_word_index == last_word_index) {
+      thread_count -= __popc(destination_word & set_most_significant_bits(num_slack_bits));
     }
   }
 
