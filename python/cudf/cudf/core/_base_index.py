@@ -395,10 +395,10 @@ class BaseIndex(Serializable):
         if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
-        if sort not in {None, False}:
+        if sort not in {None, False, True}:
             raise ValueError(
                 f"The 'sort' keyword only takes the values of "
-                f"None or False; {sort} was passed."
+                f"[None, False, True]; {sort} was passed."
             )
 
         if not len(other) or self.equals(other):
@@ -475,10 +475,10 @@ class BaseIndex(Serializable):
         if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
-        if sort not in {None, False}:
+        if sort not in {None, False, True}:
             raise ValueError(
                 f"The 'sort' keyword only takes the values of "
-                f"None or False; {sort} was passed."
+                f"[None, False, True]; {sort} was passed."
             )
 
         if self.equals(other):
@@ -787,16 +787,18 @@ class BaseIndex(Serializable):
         >>> idx1.difference(idx2, sort=False)
         Index([2, 1], dtype='int64')
         """
-        if sort not in {None, False}:
+        if sort not in {None, False, True}:
             raise ValueError(
                 f"The 'sort' keyword only takes the values "
-                f"of None or False; {sort} was passed."
+                f"of [None, False, True]; {sort} was passed."
             )
 
         other = cudf.Index(other)
 
-        if is_mixed_with_object_dtype(self, other):
+        if is_mixed_with_object_dtype(self, other) or len(other) == 0:
             difference = self.copy()
+            if sort is True:
+                return difference.sort_values()
         else:
             other = other.copy(deep=False)
             other.names = self.names
@@ -813,7 +815,7 @@ class BaseIndex(Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return difference.sort_values()
 
         return difference
@@ -1170,7 +1172,7 @@ class BaseIndex(Serializable):
         )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return union_result.sort_values()
         return union_result
 
@@ -1187,7 +1189,7 @@ class BaseIndex(Serializable):
             ._data
         )
 
-        if sort is None and len(other):
+        if sort is {None, True} and len(other):
             return intersection_result.sort_values()
         return intersection_result
 
