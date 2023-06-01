@@ -6730,7 +6730,10 @@ public class ColumnVectorTest extends CudfTestBase {
   public void testEventHandlerIsCalledForEachClose() {
     final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        assertEquals(cv, col);
+        onClosedWasCalled.incrementAndGet();
+      });
     }
     assertEquals(1, onClosedWasCalled.get());
   }
@@ -6744,7 +6747,9 @@ public class ColumnVectorTest extends CudfTestBase {
     assertEquals(0, onClosedWasCalled.get());
 
     try (ColumnVector cv = ColumnVector.fromInts(1,2,3,4)) {
-      cv.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      cv.setEventHandler((col, refCount) -> {
+        onClosedWasCalled.incrementAndGet();
+      });
       cv.setEventHandler(null);
     }
     assertEquals(0, onClosedWasCalled.get());

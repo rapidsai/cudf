@@ -27,6 +27,7 @@ from cudf.core.udf.utils import (
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
 )
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 
@@ -196,7 +197,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     )
 
     # Launch kernel
-    specialized[ngroups, tpb](*launch_args)
+    with _CUDFNumbaConfig():
+        specialized[ngroups, tpb](*launch_args)
 
     return output
 
@@ -207,6 +209,10 @@ def _can_be_jitted(frame, func, args):
     by attempting to compile just the function to PTX using the
     target set of types
     """
+    if not hasattr(func, "__code__"):
+        # Numba requires bytecode to be present to proceed.
+        # See https://github.com/numba/numba/issues/4587
+        return False
     np_field_types = np.dtype(
         list(
             _supported_dtypes_from_frame(
