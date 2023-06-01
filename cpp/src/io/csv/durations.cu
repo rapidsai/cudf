@@ -88,12 +88,12 @@ struct duration_to_string_size_fn {
 
 template <typename T>
 struct duration_to_string_fn : public duration_to_string_size_fn<T> {
-  const int32_t* d_offsets;
+  int32_t const* d_offsets;
   char* d_chars;
   using duration_to_string_size_fn<T>::d_durations;
 
   duration_to_string_fn(const column_device_view d_durations,
-                        const int32_t* d_offsets,
+                        int32_t const* d_offsets,
                         char* d_chars)
     : duration_to_string_size_fn<T>{d_durations}, d_offsets(d_offsets), d_chars(d_chars)
   {

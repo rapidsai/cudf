@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ class TransitionTable {
     transition_table_init.host_to_device(stream);
   }
 
-  constexpr CUDF_HOST_DEVICE TransitionTable(const KernelParameter& kernel_param,
+  constexpr CUDF_HOST_DEVICE TransitionTable(KernelParameter const& kernel_param,
                                              TempStorage& temp_storage)
     : temp_storage(temp_storage.Alias())
   {

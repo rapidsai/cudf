@@ -85,8 +85,8 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&)            = delete;
-  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher const&)            = delete;
+  MD5Hasher& operator=(MD5Hasher const&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
   MD5Hasher& operator=(MD5Hasher&&)      = delete;
 

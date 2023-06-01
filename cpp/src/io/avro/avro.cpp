@@ -297,7 +297,7 @@ enum attrtype_e {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
@@ -481,8 +481,8 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 std::string schema_parser::get_str()
 {
   std::string s;
-  const char* start = m_cur;
-  const char* cur   = start;
+  char const* start = m_cur;
+  char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
   int32_t len = static_cast<int32_t>(cur - start - 1);

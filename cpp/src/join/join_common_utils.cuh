@@ -77,7 +77,7 @@ class row_is_valid {
  public:
   row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  __device__ __inline__ bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -276,7 +276,7 @@ struct valid_range {
 __inline__ __device__ void add_pair_to_cache(const size_type first,
                                              const size_type second,
                                              size_type* current_idx_shared,
-                                             const int warp_id,
+                                             int const warp_id,
                                              size_type* joined_shared_l,
                                              size_type* joined_shared_r)
 {
@@ -288,10 +288,10 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 }
 
 template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
+__device__ void flush_output_cache(unsigned int const activemask,
                                    const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
+                                   int const warp_id,
+                                   int const lane_id,
                                    cudf::size_type* current_idx,
                                    cudf::size_type current_idx_shared[num_warps],
                                    size_type join_shared_l[num_warps][output_cache_size],

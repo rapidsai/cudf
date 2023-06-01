@@ -375,8 +375,8 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                   stream.value()));
     stream.synchronize();
 
-    const auto header_start = buffer_pos + row_ctx[0];
-    const auto header_end   = buffer_pos + row_ctx[1];
+    auto const header_start = buffer_pos + row_ctx[0];
+    auto const header_end   = buffer_pos + row_ctx[1];
     CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
                  "Invalid csv header location");
     header.assign(data.begin() + header_start, data.begin() + header_end);
@@ -414,7 +414,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     auto buffer    = source->host_read(range_offset, data_size);
 
     auto h_data = host_span<char const>(  //
-      reinterpret_cast<const char*>(buffer->data()),
+      reinterpret_cast<char const*>(buffer->data()),
       buffer->size());
 
     std::vector<uint8_t> h_uncomp_data_owner;
@@ -426,7 +426,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
                 h_uncomp_data_owner.size()};
     }
     // None of the parameters for row selection is used, we are parsing the entire file
-    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
+    bool const load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
     // With byte range, find the start of the first data row
@@ -627,10 +627,10 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
   std::vector<data_type> column_types(column_flags.size());
 
   std::visit(cudf::detail::visitor_overload{
-               [&](const std::vector<data_type>& user_dtypes) {
+               [&](std::vector<data_type> const& user_dtypes) {
                  return select_data_types(user_dtypes, column_flags, column_types);
                },
-               [&](const std::map<std::string, data_type>& user_dtypes) {
+               [&](std::map<std::string, data_type> const& user_dtypes) {
                  return get_data_types_from_column_names(
                    user_dtypes, column_names, column_flags, column_types);
                }},
@@ -722,7 +722,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
           CUDF_LOG_WARN("Multiple columns with name {}; only the first appearance is parsed",
                         col_name);
 
-          const auto idx    = &col_name - column_names.data();
+          auto const idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
       }
@@ -804,11 +804,11 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // User can specify which columns should be read as datetime
   if (!reader_opts.get_parse_dates_indexes().empty() ||
       !reader_opts.get_parse_dates_names().empty()) {
-    for (const auto index : reader_opts.get_parse_dates_indexes()) {
+    for (auto const index : reader_opts.get_parse_dates_indexes()) {
       column_flags[index] |= column_parse::as_datetime;
     }
 
-    for (const auto& name : reader_opts.get_parse_dates_names()) {
+    for (auto const& name : reader_opts.get_parse_dates_names()) {
       auto it = std::find(column_names.begin(), column_names.end(), name);
       if (it != column_names.end()) {
         column_flags[it - column_names.begin()] |= column_parse::as_datetime;
@@ -818,11 +818,11 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // User can specify which columns should be parsed as hexadecimal
   if (!reader_opts.get_parse_hex_indexes().empty() || !reader_opts.get_parse_hex_names().empty()) {
-    for (const auto index : reader_opts.get_parse_hex_indexes()) {
+    for (auto const index : reader_opts.get_parse_hex_indexes()) {
       column_flags[index] |= column_parse::as_hexadecimal;
     }
 
-    for (const auto& name : reader_opts.get_parse_hex_names()) {
+    for (auto const& name : reader_opts.get_parse_hex_names()) {
       auto it = std::find(column_names.begin(), column_names.end(), name);
       if (it != column_names.end()) {
         column_flags[it - column_names.begin()] |= column_parse::as_hexadecimal;

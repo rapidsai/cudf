@@ -90,7 +90,7 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
@@ -106,7 +106,7 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {

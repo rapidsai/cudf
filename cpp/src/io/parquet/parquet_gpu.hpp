@@ -642,7 +642,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_res,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk* chunk_stats,
+                       statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream);
 
 /**

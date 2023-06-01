@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ struct default_allocator {
   default_allocator() = default;
 
   template <class U>
-  constexpr default_allocator(const default_allocator<U>&) noexcept
+  constexpr default_allocator(default_allocator<U> const&) noexcept
   {
   }
 
@@ -51,12 +51,12 @@ struct default_allocator {
 };
 
 template <class T, class U>
-bool operator==(const default_allocator<T>&, const default_allocator<U>&)
+bool operator==(default_allocator<T> const&, default_allocator<U> const&)
 {
   return true;
 }
 template <class T, class U>
-bool operator!=(const default_allocator<T>&, const default_allocator<U>&)
+bool operator!=(default_allocator<T> const&, default_allocator<U> const&)
 {
   return false;
 }

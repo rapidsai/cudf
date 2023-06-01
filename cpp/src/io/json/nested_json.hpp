@@ -79,8 +79,8 @@ struct json_column {
   json_column()                              = default;
   json_column(json_column&& other)           = default;
   json_column& operator=(json_column&&)      = default;
-  json_column(const json_column&)            = delete;
-  json_column& operator=(const json_column&) = delete;
+  json_column(json_column const&)            = delete;
+  json_column& operator=(json_column const&) = delete;
 
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.

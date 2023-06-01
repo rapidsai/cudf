@@ -1266,9 +1266,9 @@ void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                   uint32_t first_page_in_batch,
                   uint32_t rowgroups_in_batch,
                   uint32_t first_rowgroup,
-                  const statistics_chunk* page_stats,
-                  const statistics_chunk* chunk_stats,
-                  const statistics_chunk* column_stats,
+                  statistics_chunk const* page_stats,
+                  statistics_chunk const* chunk_stats,
+                  statistics_chunk const* column_stats,
                   std::optional<writer_compression_statistics>& comp_stats,
                   Compression compression,
                   int32_t column_index_truncate_length,
@@ -2267,14 +2267,14 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     buffer.insert(buffer.end(),
-                  reinterpret_cast<const uint8_t*>(&fhdr),
-                  reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+                  reinterpret_cast<uint8_t const*>(&fhdr),
+                  reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
     file_ender_s fendr;
     fendr.magic      = parquet_magic;
     fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_merged_metadata()));
     buffer.insert(buffer.end(),
-                  reinterpret_cast<const uint8_t*>(&fendr),
-                  reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
+                  reinterpret_cast<uint8_t const*>(&fendr),
+                  reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
     return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
   } else {
     return {nullptr};
@@ -2324,7 +2324,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   FileMetaData md;
 
   md.row_groups.reserve(metadata_list.size());
-  for (const auto& blob : metadata_list) {
+  for (auto const& blob : metadata_list) {
     CompactProtocolReader cpreader(
       blob.get()->data(),
       std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
@@ -2353,13 +2353,13 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   file_ender_s fendr;
   fhdr.magic = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t*>(&fhdr),
-                reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+                reinterpret_cast<uint8_t const*>(&fhdr),
+                reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
   fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
   output.insert(output.end(),
-                reinterpret_cast<const uint8_t*>(&fendr),
-                reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
+                reinterpret_cast<uint8_t const*>(&fendr),
+                reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
   return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -305,7 +305,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
 
   kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    reinterpret_cast<const unsigned char*>(d_strings),
+    reinterpret_cast<unsigned char const*>(d_strings),
     bytes_count,
     d_cp_metadata,
     d_aux_table,

@@ -571,7 +571,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                           std::cend(_build),
                           std::cbegin(probe),
                           std::cend(probe),
-                          [](const auto& b, const auto& p) { return b.type() == p.type(); }),
+                          [](auto const& b, auto const& p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
   return probe_join_indices(probe, join, output_size, stream, mr);
@@ -592,7 +592,7 @@ hash_join::hash_join(cudf::table_view const& build,
                      nullable_join has_nulls,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<const impl_type>(
+  : _impl{std::make_unique<impl_type const>(
       build, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }

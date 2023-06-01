@@ -785,7 +785,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
-      for (const size_type& column_id : columns_to_hash) {
+      for (size_type const& column_id : columns_to_hash) {
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }

@@ -127,7 +127,7 @@ class concurrent_unordered_map {
   using mapped_type    = Element;
   using value_type     = thrust::pair<Key, Element>;
   using iterator       = cycle_iterator_adapter<value_type*>;
-  using const_iterator = const cycle_iterator_adapter<value_type*>;
+  using const_iterator = cycle_iterator_adapter<value_type*> const;
 
  public:
   /**
@@ -162,9 +162,9 @@ class concurrent_unordered_map {
                      rmm::cuda_stream_view stream,
                      const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
-                     const Hasher& hash_function      = hasher(),
-                     const Equality& equal            = key_equal(),
-                     const allocator_type& allocator  = allocator_type())
+                     Hasher const& hash_function      = hasher(),
+                     Equality const& equal            = key_equal(),
+                     allocator_type const& allocator  = allocator_type())
   {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
@@ -421,7 +421,7 @@ class concurrent_unordered_map {
     }
   }
 
-  void assign_async(const concurrent_unordered_map& other, rmm::cuda_stream_view stream)
+  void assign_async(concurrent_unordered_map const& other, rmm::cuda_stream_view stream)
   {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
@@ -454,7 +454,7 @@ class concurrent_unordered_map {
     }
   }
 
-  void prefetch(const int dev_id, rmm::cuda_stream_view stream)
+  void prefetch(int const dev_id, rmm::cuda_stream_view stream)
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
@@ -512,9 +512,9 @@ class concurrent_unordered_map {
   concurrent_unordered_map(size_type capacity,
                            const mapped_type unused_element,
                            const key_type unused_key,
-                           const Hasher& hash_function,
-                           const Equality& equal,
-                           const allocator_type& allocator,
+                           Hasher const& hash_function,
+                           Equality const& equal,
+                           allocator_type const& allocator,
                            rmm::cuda_stream_view stream)
     : m_hf(hash_function),
       m_equal(equal),

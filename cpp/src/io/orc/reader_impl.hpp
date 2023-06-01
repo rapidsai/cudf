@@ -99,7 +99,7 @@ class reader::impl {
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> num_rows,
-                           const std::vector<std::vector<size_type>>& stripes,
+                           std::vector<std::vector<size_type>> const& stripes,
                            rmm::cuda_stream_view stream);
 
  private:
@@ -120,7 +120,7 @@ class reader::impl {
    */
   rmm::device_buffer decompress_stripe_data(
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-    const std::vector<rmm::device_buffer>& stripe_data,
+    std::vector<rmm::device_buffer> const& stripe_data,
     OrcDecompressor const& decompressor,
     std::vector<orc_stream_info>& stream_info,
     size_t num_stripes,
@@ -211,7 +211,7 @@ class reader::impl {
    * @return Timezone table with timestamp offsets
    */
   std::unique_ptr<table> compute_timezone_table(
-    const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
+    std::vector<cudf::io::orc::metadata::stripe_source_mapping> const& selected_stripes,
     rmm::cuda_stream_view stream);
 
  private:

@@ -97,10 +97,10 @@ struct reinst {
  */
 class reprog {
  public:
-  reprog(const reprog&)            = default;
+  reprog(reprog const&)            = default;
   reprog(reprog&&)                 = default;
   ~reprog()                        = default;
-  reprog& operator=(const reprog&) = default;
+  reprog& operator=(reprog const&) = default;
   reprog& operator=(reprog&&)      = default;
 
   /**
@@ -131,7 +131,7 @@ class reprog {
   [[nodiscard]] reclass const& class_at(int32_t id) const;
   [[nodiscard]] reclass const* classes_data() const;
 
-  [[nodiscard]] const int32_t* starts_data() const;
+  [[nodiscard]] int32_t const* starts_data() const;
   [[nodiscard]] int32_t starts_count() const;
 
   void set_start_inst(int32_t id);
