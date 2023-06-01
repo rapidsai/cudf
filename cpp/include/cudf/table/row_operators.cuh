@@ -227,7 +227,7 @@ class element_equality_comparator {
 };
 
 /**
- * @brief Performs a relational comparison between two elements in two columns.
+ * @brief Performs a relational comparison between two elements in two tables.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
