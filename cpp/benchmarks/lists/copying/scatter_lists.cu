@@ -42,7 +42,7 @@ void BM_lists_scatter(::benchmark::State& state)
 
   const cudf::size_type base_size{(cudf::size_type)state.range(0)};
   const cudf::size_type num_elements_per_row{(cudf::size_type)state.range(1)};
-  const auto num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
+  auto const num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
 
   auto source_base_col = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                                  base_size,

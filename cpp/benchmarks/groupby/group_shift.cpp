@@ -29,7 +29,7 @@ class Groupby : public cudf::benchmark {};
 void BM_group_shift(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-  const int num_groups = 100;
+  int const num_groups = 100;
 
   data_profile const profile =
     data_profile_builder().cardinality(0).null_probability(0.01).distribution(

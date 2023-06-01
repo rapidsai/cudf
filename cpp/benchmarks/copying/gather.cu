@@ -32,7 +32,7 @@ template <class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state)
 {
   const cudf::size_type source_size{(cudf::size_type)state.range(0)};
-  const auto n_cols = (cudf::size_type)state.range(1);
+  auto const n_cols = (cudf::size_type)state.range(1);
 
   // Gather indices
   auto gather_map_table =

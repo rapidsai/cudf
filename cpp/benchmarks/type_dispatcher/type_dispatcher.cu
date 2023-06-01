@@ -169,9 +169,9 @@ void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_threa
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(::benchmark::State& state)
 {
-  const auto n_cols          = static_cast<cudf::size_type>(state.range(0));
-  const auto source_size     = static_cast<cudf::size_type>(state.range(1));
-  const auto work_per_thread = static_cast<cudf::size_type>(state.range(2));
+  auto const n_cols          = static_cast<cudf::size_type>(state.range(0));
+  auto const source_size     = static_cast<cudf::size_type>(state.range(1));
+  auto const work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
   auto init = cudf::make_fixed_width_scalar<TypeParam>(static_cast<TypeParam>(0));
 

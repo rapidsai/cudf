@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,17 +73,17 @@ class benchmark : public ::benchmark::Fixture {
  public:
   benchmark() : ::benchmark::Fixture()
   {
-    const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
+    char const* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
     if (env_iterations != nullptr) { this->Iterations(std::max(0L, atol(env_iterations))); }
   }
 
-  void SetUp(const ::benchmark::State& state) override
+  void SetUp(::benchmark::State const& state) override
   {
     mr = make_pool_instance();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  void TearDown(const ::benchmark::State& state) override
+  void TearDown(::benchmark::State const& state) override
   {
     // reset default resource to the initial resource
     rmm::mr::set_current_device_resource(nullptr);
@@ -91,10 +91,10 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  void SetUp(::benchmark::State& st) override { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  void SetUp(::benchmark::State& st) override { SetUp(const_cast<::benchmark::State const&>(st)); }
   void TearDown(::benchmark::State& st) override
   {
-    TearDown(const_cast<const ::benchmark::State&>(st));
+    TearDown(const_cast<::benchmark::State const&>(st));
   }
 
   std::shared_ptr<rmm::mr::device_memory_resource> mr;

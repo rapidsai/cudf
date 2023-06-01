@@ -57,7 +57,7 @@ inline std::unique_ptr<cudf::table> create_structs_data(nvbench::state& state,
 
   const cudf::size_type n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
   const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
-  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;

@@ -192,7 +192,7 @@ void BM_NESTED_JSON_DEPTH(nvbench::state& state)
 
   auto d_scalar = cudf::string_scalar(
     generate_json(100'000'000, 10, depth, 10, 10, string_size), true, cudf::get_default_stream());
-  auto input = cudf::device_span<const char>(d_scalar.data(), d_scalar.size());
+  auto input = cudf::device_span<char const>(d_scalar.data(), d_scalar.size());
 
   state.add_element_count(input.size());
   auto const default_options = cudf::io::json_reader_options{};
