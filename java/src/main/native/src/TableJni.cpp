@@ -1410,20 +1410,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
 
   bool read_buffer = true;
   if (buffer == 0) {
-    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", 0);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
     JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "cannot pass in both a buffer and an inputfilepath", NULL);
+                  "cannot pass in both a buffer and an inputfilepath", 0);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
-                  NULL);
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
   }
 
   try {
@@ -1433,13 +1432,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match null",
-                    NULL);
+                    0);
     }
     std::vector<cudf::data_type> data_types;
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
-                      NULL);
+                      0);
       }
       data_types.reserve(n_types.size());
       std::transform(n_types.begin(), n_types.end(), n_scales.begin(),
@@ -1450,8 +1449,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
-                    NULL);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty", 0);
     }
 
     auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char *>(buffer),
@@ -1465,7 +1463,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                      "types and column names must match size", NULL);
+                      "types and column names must match size", 0);
       }
 
       std::map<std::string, cudf::data_type> map;
@@ -1481,47 +1479,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
       // should infer the types
     }
 
-    cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
+    auto result =
+        std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
 
-    // there is no need to re-order columns when inferring schema
-    if (result.metadata.schema_info.empty() || n_col_names.size() <= 0) {
-      return convert_table_for_return(env, result.tbl);
-    } else {
-      // json reader will not return the correct column order,
-      // so we need to re-order the column of table according to table meta.
-
-      // turn name and its index in table into map<name, index>
-      std::map<std::string, cudf::size_type> m;
-      std::transform(result.metadata.schema_info.cbegin(), result.metadata.schema_info.cend(),
-                     thrust::make_counting_iterator(0), std::inserter(m, m.end()),
-                     [](auto const &column_info, auto const &index) {
-                       return std::make_pair(column_info.name, index);
-                     });
-
-      auto col_names_vec = n_col_names.as_cpp_vector();
-      std::vector<cudf::size_type> indices;
-
-      bool match = true;
-      for (size_t i = 0; i < col_names_vec.size(); i++) {
-        if (m.find(col_names_vec[i]) == m.end()) {
-          match = false;
-          break;
-        } else {
-          indices.push_back(m.at(col_names_vec[i]));
-        }
-      }
-
-      if (!match) {
-        // can't find some input column names in table meta, return what json reader reads.
-        return convert_table_for_return(env, result.tbl);
-      } else {
-        auto tbv = result.tbl->view().select(std::move(indices));
-        auto table = std::make_unique<cudf::table>(tbv);
-        return convert_table_for_return(env, table);
-      }
-    }
+    return reinterpret_cast<jlong>(result.release());
   }
-  CATCH_STD(env, NULL);
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
