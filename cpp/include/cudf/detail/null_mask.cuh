@@ -66,7 +66,7 @@ __global__ void offset_bitmask_binop(Binop op,
                                      size_type source_size_bits,
                                      size_type* count_ptr)
 {
-  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+  // constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto const last_bit_index  = source_size_bits - 1;
@@ -91,8 +91,8 @@ __global__ void offset_bitmask_binop(Binop op,
 
     if (destination_word_index == last_word_index) {
       // mask out any bits not part of this word
-      auto const num_bits_in_last_word = word_size - intra_word_index(last_bit_index) - 1;
-      destination_word &= set_least_significant_bits(word_size - num_bits_in_last_word);
+      auto const num_bits_in_last_word = intra_word_index(last_bit_index);
+      destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
     }
 
     destination[destination_word_index] = destination_word;
