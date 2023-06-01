@@ -91,7 +91,10 @@ __global__ void offset_bitmask_binop(Binop op,
     if (destination_word_index == last_word_index) {
       // mask out any bits not part of this word
       auto const num_bits_in_last_word = intra_word_index(last_bit_index);
-      destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
+      if (num_bits_in_last_word <
+          static_cast<size_type>(detail::size_in_bits<bitmask_type>() - 1)) {
+        destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
+      }
     }
 
     destination[destination_word_index] = destination_word;
