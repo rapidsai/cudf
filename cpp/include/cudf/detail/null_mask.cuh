@@ -66,7 +66,6 @@ __global__ void offset_bitmask_binop(Binop op,
                                      size_type source_size_bits,
                                      size_type* count_ptr)
 {
-  // constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto const last_bit_index  = source_size_bits - 1;
