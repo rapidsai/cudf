@@ -334,6 +334,7 @@ class BaseIndex(Serializable):
               2. `self` or `other` has length 0.
 
             * False : do not sort the result.
+            * True : Sort the result (which may raise TypeError).
 
         Returns
         -------
@@ -425,6 +426,7 @@ class BaseIndex(Serializable):
             * False : do not sort the result.
             * None : sort the result, except when `self` and `other` are equal
               or when the values cannot be compared.
+            * True : Sort the result (which may raise TypeError).
 
         Returns
         -------
@@ -768,6 +770,7 @@ class BaseIndex(Serializable):
             * None : Attempt to sort the result, but catch any TypeErrors
               from comparing incomparable elements.
             * False : Do not sort the result.
+            * True : Sort the result (which may raise TypeError).
 
         Returns
         -------
