@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ struct window_bounds {
   //       For the present, assume units from context:
   //         1. For time-based window functions, assume DAYS as before
   //         2. For all else, assume ROWS as before.
-  const bool is_unbounded;  ///< Whether the window boundary is unbounded
+  bool const is_unbounded;  ///< Whether the window boundary is unbounded
   const size_type value;    ///< Finite window boundary value (in days or rows)
 
  private:

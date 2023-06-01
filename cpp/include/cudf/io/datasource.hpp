@@ -113,7 +113,7 @@ class datasource {
    * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(const std::string& filepath,
+  static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset = 0,
                                             size_t size   = 0);
 

@@ -161,10 +161,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::detail::warp_size;
+      int const last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      int const last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      int const wid        = threadIdx.x / cudf::detail::warp_size;
+      int const lane       = threadIdx.x % cudf::detail::warp_size;
 
       cudf::size_type tmp_warp_valid_counts{0};
 

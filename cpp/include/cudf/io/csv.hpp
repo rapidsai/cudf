@@ -208,7 +208,7 @@ class csv_reader_options {
   [[nodiscard]] std::size_t get_byte_range_padding() const
   {
     auto const num_names   = _names.size();
-    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_dtypes  = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
     auto const num_columns = std::max(num_dtypes, num_names);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
