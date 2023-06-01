@@ -282,7 +282,7 @@ cudf::io::parquet::OffsetIndex read_offset_index(
 }
 
 // Return as a Statistics from the column chunk
-cudf::io::parquet::Statistics get_statistics(const cudf::io::parquet::ColumnChunk& chunk)
+cudf::io::parquet::Statistics const& get_statistics(cudf::io::parquet::ColumnChunk const& chunk)
 {
   return chunk.meta_data.statistics;
 }
