@@ -1923,10 +1923,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_write_size = std::max(max_write_size, ck.compressed_size);
 
         if (ck.ck_stat_size != 0) {
-          std::vector<uint8_t> stats_blob;
-          stats_blob.resize(ck.ck_stat_size);
-          CUDF_CUDA_TRY(cudaMemcpyAsync(
-            stats_blob.data(), dev_bfr, ck.ck_stat_size, cudaMemcpyDefault, stream.value()));
+          std::vector<uint8_t> const stats_blob =
+            cudf::detail::make_std_vector_sync(device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
           cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
           cp.read(&column_chunk_meta.statistics);
           need_sync = true;
