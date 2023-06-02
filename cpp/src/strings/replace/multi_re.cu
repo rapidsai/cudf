@@ -123,7 +123,10 @@ struct replace_multi_regex_fn {
       ++itr;
     }
     if (out_ptr) {  // copy the remainder
-      memcpy(out_ptr, in_ptr + last_pos.byte_offset(), d_str.size_bytes() - last_pos.byte_offset());
+      thrust::copy_n(thrust::seq,
+                     in_ptr + last_pos.byte_offset(),
+                     d_str.size_bytes() - last_pos.byte_offset(),
+                     out_ptr);
     } else {
       d_offsets[idx] = nbytes;
     }

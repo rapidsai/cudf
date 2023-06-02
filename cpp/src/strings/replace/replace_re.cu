@@ -68,7 +68,7 @@ struct replace_regex_fn {
       if (!match) { break; }  // no more matches
 
       auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);               // and compute new size
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);               // add new size
 
       if (out_ptr) {                                                       // replace:
                                                                            // i:bbbbsssseeee
@@ -84,9 +84,10 @@ struct replace_regex_fn {
     }
 
     if (out_ptr) {
-      memcpy(out_ptr,                                       // copy the remainder
-             in_ptr + last_pos.byte_offset(),               // o:bbbbrrrrrreeee
-             d_str.size_bytes() - last_pos.byte_offset());  //             ^   ^
+      thrust::copy_n(thrust::seq,                                  // copy the remainder
+                     in_ptr + last_pos.byte_offset(),              // o:bbbbrrrrrreeee
+                     d_str.size_bytes() - last_pos.byte_offset(),  //             ^   ^
+                     out_ptr);
     } else {
       d_offsets[idx] = nbytes;
     }

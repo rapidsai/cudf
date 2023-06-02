@@ -109,9 +109,10 @@ struct backrefs_fn {
     }
 
     // finally, copy remainder of input string
-    if (out_ptr && (itr.byte_offset() < d_str.size_bytes())) {
-      memcpy(out_ptr, in_ptr + itr.byte_offset(), d_str.size_bytes() - itr.byte_offset());
-    } else if (!out_ptr) {
+    if (out_ptr) {
+      thrust::copy_n(
+        thrust::seq, in_ptr + itr.byte_offset(), d_str.size_bytes() - itr.byte_offset(), out_ptr);
+    } else {
       d_offsets[idx] = nbytes;
     }
   }
