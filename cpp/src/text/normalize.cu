@@ -58,7 +58,7 @@ namespace {
  */
 struct normalize_spaces_fn {
   cudf::column_device_view const d_strings;  // strings to normalize
-  int32_t* d_offsets{};                      // offsets into d_buffer
+  cudf::size_type* d_offsets{};              // offsets into d_chars
   char* d_chars{};                           // output buffer for characters
 
   __device__ void operator()(cudf::size_type idx)
@@ -70,8 +70,9 @@ struct normalize_spaces_fn {
     cudf::string_view const single_space(" ", 1);
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     char* buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    char* optr       = buffer;  // running output pointer
-    int32_t nbytes   = 0;       // holds the number of bytes per output string
+    char* optr       = buffer;   // running output pointer
+
+    cudf::size_type nbytes = 0;  // holds the number of bytes per output string
 
     // create a tokenizer for this string with whitespace delimiter (default)
     characters_tokenizer tokenizer(d_str);
@@ -83,10 +84,14 @@ struct normalize_spaces_fn {
       if (optr) {
         cudf::string_view const token(d_str.data() + token_pos.first,
                                       token_pos.second - token_pos.first);
-        if (optr != buffer)  // prepend space unless we are at the beginning
+        if (optr != buffer) {  // prepend space unless we are at the beginning
           optr = cudf::strings::detail::copy_string(optr, single_space);
+        }
+        // conditionally prefetch into L1/L2
+        nbytes += d_str.size_bytes() > 128 ? std::min(token.length(), 0) : 0;
         // write token to output buffer
-        optr = cudf::strings::detail::copy_string(optr, token);
+        thrust::copy_n(thrust::seq, token.data(), token.size_bytes(), optr);
+        optr += token.size_bytes();
       }
     }
     // remove trailing space
