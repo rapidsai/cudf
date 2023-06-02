@@ -1,7 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import warnings
 from typing import Any, ClassVar, List, Optional
 
 import cudf
@@ -422,11 +421,10 @@ class Merge:
             # modified in the size 0 case.
             and max(lhs._data.nlevels, 1) != max(rhs._data.nlevels, 1)
         ):
-            warnings.warn(
-                "merging between different levels is deprecated and will be "
-                f"removed in a future version. ({lhs._data.nlevels} levels on "
-                f"the left, {rhs._data.nlevels} on the right)",
-                FutureWarning,
+            raise ValueError(
+                "Not allowed to merge between different levels. "
+                f"({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)"
             )
 
 
