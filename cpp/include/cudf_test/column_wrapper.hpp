@@ -756,7 +756,8 @@ class strings_column_wrapper : public detail::column_wrapper {
       chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = cudf::detail::make_device_uvector_sync(
       offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
-    wrapped = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
+    wrapped =
+      cudf::make_strings_column(d_chars, d_offsets, {}, 0, cudf::test::get_default_stream());
   }
 
   /**
