@@ -174,7 +174,7 @@ cpdef generate_pandas_metadata(table, index):
             for col in table._columns
         ],
         df=table,
-        column_names=col_names,
+        column_names=map(str, col_names),
         index_levels=index_levels,
         index_descriptors=index_descriptors,
         preserve_index=index,
