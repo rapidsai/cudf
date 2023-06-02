@@ -23,7 +23,7 @@
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -33,7 +33,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
 #include <nvbench/nvbench.cuh>
@@ -136,7 +135,7 @@ static void bench_multibyte_split(nvbench::state& state,
   std::unique_ptr<cudf::io::datasource> datasource;
   auto device_input      = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input        = std::vector<char>{};
-  auto host_pinned_input = thrust::host_vector<char, cudf::detail::pinned_allocator<char>>{};
+  auto host_pinned_input = cudf::detail::pinned_host_vector<char>{};
 
   if (source_type != data_chunk_source_type::device &&
       source_type != data_chunk_source_type::host_pinned) {

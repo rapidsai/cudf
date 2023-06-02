@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,12 +74,12 @@ class reprog;
  */
 class reprog_device {
  public:
-  reprog_device()                     = delete;
-  ~reprog_device()                    = default;
-  reprog_device(const reprog_device&) = default;
-  reprog_device(reprog_device&&)      = default;
+  reprog_device()                                = delete;
+  ~reprog_device()                               = default;
+  reprog_device(const reprog_device&)            = default;
+  reprog_device(reprog_device&&)                 = default;
   reprog_device& operator=(const reprog_device&) = default;
-  reprog_device& operator=(reprog_device&&) = default;
+  reprog_device& operator=(reprog_device&&)      = default;
 
   /**
    * @brief Create device program instance from a regex program
@@ -258,21 +258,21 @@ class reprog_device {
 
   reprog_device(reprog const&);
 
-  int32_t _startinst_id;          // first instruction id
-  int32_t _num_capturing_groups;  // instruction groups
-  int32_t _insts_count;           // number of instructions
-  int32_t _starts_count;          // number of start-insts ids
-  int32_t _classes_count;         // number of classes
-  int32_t _max_insts;             // for partitioning working memory
+  int32_t _startinst_id;              // first instruction id
+  int32_t _num_capturing_groups;      // instruction groups
+  int32_t _insts_count;               // number of instructions
+  int32_t _starts_count;              // number of start-insts ids
+  int32_t _classes_count;             // number of classes
+  int32_t _max_insts;                 // for partitioning working memory
 
   uint8_t const* _codepoint_flags{};  // table of character types
   reinst const* _insts{};             // array of regex instructions
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
 
-  std::size_t _prog_size{};  // total size of this instance
-  void* _buffer{};           // working memory buffer
-  int32_t _thread_count{};   // threads available in working memory
+  std::size_t _prog_size{};           // total size of this instance
+  void* _buffer{};                    // working memory buffer
+  int32_t _thread_count{};            // threads available in working memory
 };
 
 /**

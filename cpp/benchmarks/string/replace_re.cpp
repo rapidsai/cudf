@@ -27,8 +27,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringReplace : public cudf::benchmark {
-};
+class StringReplace : public cudf::benchmark {};
 
 enum replace_type { replace_re, replace_re_multi, replace_backref };
 

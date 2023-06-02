@@ -80,8 +80,7 @@ std::vector<char> create_hello_world_message()
   return std::vector<char>(hello_world_message.begin(), hello_world_message.end());
 }
 
-class SpanTest : public cudf::test::BaseFixture {
-};
+class SpanTest : public cudf::test::BaseFixture {};
 
 TEST(SpanTest, CanCreateFullSubspan)
 {
@@ -261,8 +260,7 @@ TEST(SpanTest, CanUseDeviceSpan)
   ASSERT_TRUE(d_message.element(0, cudf::get_default_stream()));
 }
 
-class MdSpanTest : public cudf::test::BaseFixture {
-};
+class MdSpanTest : public cudf::test::BaseFixture {};
 
 TEST(MdSpanTest, CanDetermineEmptiness)
 {
@@ -358,6 +356,7 @@ TEST(HostDeviceSpanTest, CanTakeSubspanFull)
   auto const message_span =
     hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
 
+  expect_match("hello world", message.subspan(0, 11));
   expect_match("hello world", message_span.subspan(0, 11));
 }
 
@@ -367,6 +366,7 @@ TEST(HostDeviceSpanTest, CanTakeSubspanPartial)
   auto const message_span =
     hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
 
+  expect_match("lo w", message.subspan(3, 4));
   expect_match("lo w", message_span.subspan(3, 4));
 }
 

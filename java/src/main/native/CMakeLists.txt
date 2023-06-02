@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 23.06.00
+  VERSION 23.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -126,6 +126,7 @@ add_library(
   cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
+  src/ChunkedPackJni.cpp
   src/ChunkedReaderJni.cpp
   src/CudfJni.cpp
   src/CudaJni.cpp
@@ -139,6 +140,7 @@ add_library(
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
   src/NvtxUniqueRangeJni.cpp
+  src/PackedColumnMetadataJni.cpp
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp

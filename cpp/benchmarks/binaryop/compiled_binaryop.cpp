@@ -20,8 +20,7 @@
 
 #include <cudf/binaryop.hpp>
 
-class COMPILED_BINARYOP : public cudf::benchmark {
-};
+class COMPILED_BINARYOP : public cudf::benchmark {};
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)

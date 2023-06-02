@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] size_type calc_num_rows() const;
+  [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
    * @brief Number of columns in a ORC file.
@@ -62,7 +62,7 @@ class aggregate_orc_metadata {
 
  public:
   std::vector<metadata> per_file_metadata;
-  size_type const num_rows;
+  int64_t const num_rows;
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
@@ -115,10 +115,10 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  std::vector<metadata::stripe_source_mapping> select_stripes(
+  std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
-    size_type& row_start,
-    size_type& row_count,
+    int64_t row_start,
+    std::optional<size_type> const& num_rows_opt,
     rmm::cuda_stream_view stream);
 
   /**

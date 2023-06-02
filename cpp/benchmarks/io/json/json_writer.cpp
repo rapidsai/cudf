@@ -72,13 +72,24 @@ void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
 
   cuio_source_sink_pair source_sink(source_type);
   cudf::io::json_writer_options write_opts =
-    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
+    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
+      .na_rep("null")
+      .rows_per_chunk(view.num_rows() / 10);
 
   json_write_common(write_opts, source_sink, data_size, state);
 }
 
 void BM_json_writer_options(nvbench::state& state)
 {
+  auto const source_type    = io_type::HOST_BUFFER;
+  bool const json_lines     = state.get_int64("json_lines");
+  bool const include_nulls  = state.get_int64("include_nulls");
+  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
+
+  if ((json_lines or include_nulls) and rows_per_chunk != 1 << 20) {
+    state.skip("Skipping for unrequired rows_per_chunk combinations");
+    return;
+  }
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
@@ -87,11 +98,6 @@ void BM_json_writer_options(nvbench::state& state)
                                          static_cast<int32_t>(data_type::STRING),
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
-
-  auto const source_type    = io_type::HOST_BUFFER;
-  bool const json_lines     = state.get_int64("json_lines");
-  bool const include_nulls  = state.get_int64("include_nulls");
-  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
 
   auto const tbl = create_random_table(
     cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, data_profile_builder());
@@ -122,4 +128,4 @@ NVBENCH_BENCH(BM_json_writer_options)
   .set_min_samples(4)
   .add_int64_axis("json_lines", {false, true})
   .add_int64_axis("include_nulls", {false, true})
-  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(10, 20, 2));
+  .add_int64_power_of_two_axis("rows_per_chunk", {10, 15, 16, 18, 20});

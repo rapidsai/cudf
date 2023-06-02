@@ -65,12 +65,12 @@ struct hash_join {
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
-  hash_join()                 = delete;
-  ~hash_join()                = default;
-  hash_join(hash_join const&) = delete;
-  hash_join(hash_join&&)      = delete;
+  hash_join()                            = delete;
+  ~hash_join()                           = default;
+  hash_join(hash_join const&)            = delete;
+  hash_join(hash_join&&)                 = delete;
   hash_join& operator=(hash_join const&) = delete;
-  hash_join& operator=(hash_join&&) = delete;
+  hash_join& operator=(hash_join&&)      = delete;
 
  private:
   bool const _is_empty;   ///< true if `_hash_table` is empty
@@ -78,15 +78,14 @@ struct hash_join {
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
+    _preprocessed_build;                   ///< input table preprocssed for row operators
+  map_type _hash_table;                    ///< hash table built on `_build`
 
  public:
   /**
    * @brief Constructor that internally builds the hash table based on the given `build` table.
    *
    * @throw cudf::logic_error if the number of columns in `build` table is 0.
-   * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
    *
    * @param build The build table, from which the hash table is built.
    * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
@@ -177,7 +176,6 @@ struct hash_join {
    * @copydoc cudf::detail::hash_join::probe_join_indices
    *
    * @throw cudf::logic_error if probe table is empty.
-   * @throw cudf::logic_error if the size of probe table exceeds `MAX_JOIN_SIZE`.
    * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
    * @throw cudf::logic_error if the column data types in build table and probe table do not match.
    */

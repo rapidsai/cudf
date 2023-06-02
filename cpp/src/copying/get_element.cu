@@ -180,7 +180,7 @@ struct get_element_functor {
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =
-      std::make_unique<column>(slice(input, index, index + 1), stream, mr)->release();
+      std::make_unique<column>(slice(input, index, index + 1, stream), stream, mr)->release();
     auto scalar_contents = table(std::move(row_contents.children));
     return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
   }

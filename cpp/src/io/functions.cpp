@@ -428,7 +428,7 @@ void write_orc(orc_writer_options const& options)
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table());
 }
@@ -444,7 +444,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**
@@ -519,7 +519,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -575,7 +575,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**
@@ -603,27 +603,25 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
 
 void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> row_groups)
 {
-  if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
+  if ((!row_groups.empty()) and ((_skip_rows != 0) or _num_rows.has_value())) {
     CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
   }
 
   _row_groups = std::move(row_groups);
 }
 
-void parquet_reader_options::set_skip_rows(size_type val)
+void parquet_reader_options::set_skip_rows(int64_t val)
 {
-  if ((val != 0) and (!_row_groups.empty())) {
-    CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-  }
+  CUDF_EXPECTS(val >= 0, "skip_rows cannot be negative");
+  CUDF_EXPECTS(_row_groups.empty(), "skip_rows can't be set along with a non-empty row_groups");
 
   _skip_rows = val;
 }
 
 void parquet_reader_options::set_num_rows(size_type val)
 {
-  if ((val != -1) and (!_row_groups.empty())) {
-    CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-  }
+  CUDF_EXPECTS(val >= 0, "num_rows cannot be negative");
+  CUDF_EXPECTS(_row_groups.empty(), "num_rows can't be set along with a non-empty row_groups");
 
   _num_rows = val;
 }

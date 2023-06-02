@@ -459,7 +459,7 @@ __global__ void generate_cluster_limits_kernel(int delta,
     int adjusted_w_index       = nearest_w_index;
     if ((last_inserted_index < 0) ||  // if we haven't inserted anything yet
         (nearest_w_index ==
-         last_inserted_index)) {  // if we land in the same bucket as the previous cap
+         last_inserted_index)) {      // if we land in the same bucket as the previous cap
 
       // force the value into this bucket
       adjusted_w_index = (last_inserted_index == group_size - 1)
@@ -1126,7 +1126,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();
   auto cumulative_weights = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
+    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED, stream);
   auto keys = cudf::detail::make_counting_transform_iterator(
     0,
     group_key_func<decltype(group_labels)>{

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -480,12 +480,12 @@ class concurrent_unordered_map {
     delete this;
   }
 
-  concurrent_unordered_map()                                = delete;
-  concurrent_unordered_map(concurrent_unordered_map const&) = default;
-  concurrent_unordered_map(concurrent_unordered_map&&)      = default;
+  concurrent_unordered_map()                                           = delete;
+  concurrent_unordered_map(concurrent_unordered_map const&)            = default;
+  concurrent_unordered_map(concurrent_unordered_map&&)                 = default;
   concurrent_unordered_map& operator=(concurrent_unordered_map const&) = default;
-  concurrent_unordered_map& operator=(concurrent_unordered_map&&) = default;
-  ~concurrent_unordered_map()                                     = default;
+  concurrent_unordered_map& operator=(concurrent_unordered_map&&)      = default;
+  ~concurrent_unordered_map()                                          = default;
 
  private:
   hasher m_hf;
