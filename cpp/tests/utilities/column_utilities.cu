@@ -534,8 +534,10 @@ struct column_comparator_impl {
                   size_type fp_ulps,
                   int depth)
   {
-    auto d_lhs_row_indices = cudf::column_device_view::create(lhs_row_indices, cudf::test::get_default_stream());
-    auto d_rhs_row_indices = cudf::column_device_view::create(rhs_row_indices, cudf::test::get_default_stream());
+    auto d_lhs_row_indices =
+      cudf::column_device_view::create(lhs_row_indices, cudf::test::get_default_stream());
+    auto d_rhs_row_indices =
+      cudf::column_device_view::create(rhs_row_indices, cudf::test::get_default_stream());
 
     auto d_lhs = cudf::column_device_view::create(lhs, cudf::test::get_default_stream());
     auto d_rhs = cudf::column_device_view::create(rhs, cudf::test::get_default_stream());
@@ -555,10 +557,12 @@ struct column_comparator_impl {
                          corresponding_rows_not_equivalent<decltype(device_comparator)>>;
 
     auto differences = rmm::device_uvector<int>(
-      lhs_row_indices.size(), cudf::test::get_default_stream());  // worst case: everything different
+      lhs_row_indices.size(),
+      cudf::test::get_default_stream());  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
 
-    auto diff_map = rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::test::get_default_stream());
+    auto diff_map =
+      rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::test::get_default_stream());
 
     thrust::transform(
       rmm::exec_policy(cudf::test::get_default_stream()),
