@@ -93,7 +93,7 @@ __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t
 }
 
 /**
- * @brief Perform exclusive scan for offsets array. Called for each page.
+ * @brief Perform exclusive scan on an array of any length using a single block of threads.
  */
 template <int block_size>
 __device__ void block_excl_sum(size_type* arr, size_type length, size_type initial_value)
@@ -126,6 +126,8 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
+ * @tparam lvl_buf_size Size of the buffer used when decoding repetition and definition levels
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <int lvl_buf_size, typename level_t>
 __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
@@ -367,13 +369,13 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
  * @param start_value Do not count values that occur before this index
  * @param end_value Do not count values that occur after this index
  */
-__device__ size_t countDictEntries(uint8_t const* data,
-                                   uint8_t const* dict_base,
-                                   int dict_bits,
-                                   int dict_size,
-                                   int data_size,
-                                   int start_value,
-                                   int end_value)
+__device__ size_t totalDictEntriesSize(uint8_t const* data,
+                                       uint8_t const* dict_base,
+                                       int dict_bits,
+                                       int dict_size,
+                                       int data_size,
+                                       int start_value,
+                                       int end_value)
 {
   int const t              = threadIdx.x;
   uint8_t const* ptr       = data;
@@ -493,10 +495,10 @@ __device__ size_t countDictEntries(uint8_t const* data,
  * @param start_value Do not count values that occur before this index
  * @param end_value Do not count values that occur after this index
  */
-__device__ size_t countPlainEntries(uint8_t const* data,
-                                    int data_size,
-                                    int start_value,
-                                    int end_value)
+__device__ size_t totalPlainEntriesSize(uint8_t const* data,
+                                        int data_size,
+                                        int start_value,
+                                        int end_value)
 {
   int const t      = threadIdx.x;
   int pos          = 0;
@@ -538,6 +540,8 @@ __device__ size_t countPlainEntries(uint8_t const* data,
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @tparam lvl_buf_size Size of the buffer used when decoding repetition and definition levels
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
@@ -614,12 +618,12 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
       // FIXME: need to return an error condition...this won't actually do anything
       if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
 
-      str_bytes = countDictEntries(
+      str_bytes = totalDictEntriesSize(
         data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
       break;
     case Encoding::PLAIN:
       dict_size = static_cast<int32_t>(end - data);
-      str_bytes = is_bounds_pg ? countPlainEntries(data, dict_size, start_value, end_value)
+      str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
                                : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
       break;
   }
@@ -642,6 +646,8 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @tparam lvl_buf_size Size of the buffer used when decoding repetition and definition levels
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
@@ -688,8 +694,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   int const leaf_level_index                     = s->col.max_nesting_depth - 1;
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
-  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
+  __shared__ level_t rep[lvl_buf_size];  // circular buffer of repetition level values
+  __shared__ level_t def[lvl_buf_size];  // circular buffer of definition level values
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -832,6 +838,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @tparam lvl_buf_size Size of the buffer used when decoding repetition and definition levels
+ * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <int lvl_buf_size, typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
@@ -878,8 +886,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   int const leaf_level_index                     = s->col.max_nesting_depth - 1;
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
-  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
+  __shared__ level_t rep[lvl_buf_size];  // circular buffer of repetition level values
+  __shared__ level_t def[lvl_buf_size];  // circular buffer of definition level values
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
