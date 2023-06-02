@@ -140,7 +140,6 @@ void BM_parquet_read_chunks(
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
-  auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
@@ -149,8 +148,9 @@ void BM_parquet_read_chunks(
                try_drop_l3_cache();
 
                timer.start();
+               auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
                do {
-                 auto chunk = reader.read_chunk();
+                 [[maybe_unused]] auto const chunk = reader.read_chunk();
                } while (reader.has_next());
                timer.stop();
              });

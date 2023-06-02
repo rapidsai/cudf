@@ -27,8 +27,6 @@
 #include <iostream>
 #include <vector>
 
-#define MAX_ROWS_TENSOR 300
-
 static std::string create_hash_vocab_file()
 {
   std::string dir_template{std::filesystem::temp_directory_path().string()};
@@ -74,8 +72,7 @@ static void BM_subword_tokenizer(benchmark::State& state)
                                            max_sequence_length,
                                            stride,
                                            do_lower,
-                                           do_truncate,
-                                           MAX_ROWS_TENSOR);
+                                           do_truncate);
   }
 }
 
