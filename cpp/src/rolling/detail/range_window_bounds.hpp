@@ -40,8 +40,7 @@ constexpr bool is_supported_order_by_column_type()
 {
   return cudf::is_timestamp<ColumnType>() || cudf::is_fixed_point<ColumnType>() ||
          (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>()) ||
-         cudf::is_floating_point<ColumnType>() ||
-         std::is_same_v<ColumnType, cudf::string_view>;
+         cudf::is_floating_point<ColumnType>() || std::is_same_v<ColumnType, cudf::string_view>;
 }
 
 /// Range-comparable representation type for an orderby column type.
@@ -67,7 +66,8 @@ template <typename ColumnType>
 struct range_type_impl<
   ColumnType,
   std::enable_if_t<std::is_floating_point_v<ColumnType> ||
-    (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>()), void>> {
+                     (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>()),
+                   void>> {
   using type     = ColumnType;
   using rep_type = ColumnType;
 };
@@ -101,8 +101,8 @@ void assert_non_negative([[maybe_unused]] T const& value)
 
 template <typename RangeT,
           typename RepT,
-          CUDF_ENABLE_IF(std::is_floating_point_v<RangeT>
-              || (std::is_integral_v<RangeT> && !cudf::is_boolean<RangeT>()))>
+          CUDF_ENABLE_IF(std::is_floating_point_v<RangeT> ||
+                         (std::is_integral_v<RangeT> && !cudf::is_boolean<RangeT>()))>
 RepT range_comparable_value_impl(scalar const& range_scalar,
                                  bool,
                                  data_type const&,
