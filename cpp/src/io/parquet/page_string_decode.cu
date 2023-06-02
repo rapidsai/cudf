@@ -850,15 +850,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   int const t                    = threadIdx.x;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // set during string copy by lane 0
-  int first_non_null = -1;
-
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // offsets is global...but the output is local, so account for that below
-  if (t == 0) { last_offset = s->page.str_offset; }
+  // offsets are local to the page
+  if (t == 0) { last_offset = 0; }
   __syncthreads();
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
@@ -877,8 +874,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     return;
   }
 
-  int out_thread0 = s->dict_base && s->dict_bits == 0 ? 32 : 64;
-
+  int out_thread0                                = s->dict_base && s->dict_bits == 0 ? 32 : 64;
+  int const leaf_level_index                     = s->col.max_nesting_depth - 1;
   PageNestingDecodeInfo* const nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
@@ -914,20 +911,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     // target_pos for value decoding
     target_pos = min(s->nz_count, target_pos);
 
-    // if this is the first page, then the first non-null entry will have an offset of 0.
-    // pages that start with a run of nulls will have repeated 0 values, so for the fixing
-    // of null offsets done at the end, we need to know the last index that should be 0.
-    if (t == 0 && s->page.str_offset == 0 && first_non_null == -1) {
-      for (int i = src_pos; i < target_pos; i++) {
-        int dst_pos = sb->nz_idx[rolling_index(i)];
-        if (!has_repetition) { dst_pos -= s->first_row; }
-        if (dst_pos >= 0) {
-          first_non_null = dst_pos;
-          break;
-        }
-      }
-    }
-
     // Decode values
     src_pos += t;
 
@@ -952,7 +935,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     using cudf::detail::warp_size;
     auto const use_char_ll =
       s->page.num_valids > 0 && (s->page.str_bytes / s->page.num_valids) >= warp_size;
-    int const leaf_level_index = s->col.max_nesting_depth - 1;
 
     auto [ptr, len] = src_pos < target_pos && dst_pos >= 0
                         ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values)
@@ -985,9 +967,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
         if (dsts[ss] >= 0) {
           auto offptr =
             reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dsts[ss];
-          *offptr = offsets[ss];
-          auto str_ptr =
-            nesting_info_base[leaf_level_index].string_out + offsets[ss] - s->page.str_offset;
+          *offptr      = lengths[ss];
+          auto str_ptr = nesting_info_base[leaf_level_index].string_out + offsets[ss];
           ll_strcpy(str_ptr, pointers[ss], lengths[ss], lane_id);
         }
       }
@@ -995,8 +976,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
       if (src_pos < target_pos && dst_pos >= 0) {
         auto offptr =
           reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
-        *offptr      = offset;
-        auto str_ptr = nesting_info_base[leaf_level_index].string_out + offset - s->page.str_offset;
+        *offptr      = len;
+        auto str_ptr = nesting_info_base[leaf_level_index].string_out + offset;
         memcpy(str_ptr, ptr, len);
       }
     }
@@ -1010,39 +991,15 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
     __syncthreads();
   }
 
-  // if there are nulls clean up the offsets array.
-  if (s->page.num_nulls != 0) {
-    int const leaf_level_index = s->col.max_nesting_depth - 1;
-    int value_count            = nesting_info_base[leaf_level_index].value_count;
+  // now turn array of lengths into offsets
+  int value_count = nesting_info_base[leaf_level_index].value_count;
 
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if (!has_repetition) { value_count -= s->first_row; }
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (!has_repetition) { value_count -= s->first_row; }
 
-    auto offptr = reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out);
-
-    if (nesting_info_base[leaf_level_index].null_count > 0) {
-      // if nz_count is 0, then it's all nulls.  set all offsets to str_offset
-      if (s->nz_count == 0) {
-        for (int i = t; i < value_count; i += decode_block_size) {
-          offptr[i] = s->page.str_offset;
-        }
-      }
-      // just some nulls, do this serially for now
-      else if (t == 0) {
-        if (first_non_null == -1) { first_non_null = 0; }
-
-        if (offptr[value_count - 1] == 0 && value_count - 1 != first_non_null) {
-          offptr[value_count - 1] = s->page.str_offset + s->page.str_bytes;
-        }
-        for (int i = value_count - 2; i > first_non_null; i--) {
-          if (offptr[i] == 0) { offptr[i] = offptr[i + 1]; }
-        }
-        offptr[0] = s->page.str_offset;
-      }
-    }
-    __syncthreads();
-  }
+  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
 }
 
 __global__ void __launch_bounds__(preprocess_block_size)
@@ -1130,8 +1087,11 @@ void __host__ DecodeStringPageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  // TODO figure out when one version is better than the other.  waiting on further changes to
-  // rle_stream to simplify the decode step.
+  // TODO gpuDecodeStringPageDataV2 (needs a better name) is an alternative approach that uses
+  // all threads in the thread block to do the string copies (rather than the original approach
+  // which uses a single warp). It is faster in some cases, and slower in others. It's being left
+  // in but unused because it will be the likely only implementation once the dictionary decoding
+  // is modified to use more than a single warp.
   if constexpr (true) {
     if (level_type_size == 1) {
       gpuDecodeStringPageData<non_zero_buffer_size, uint8_t>
