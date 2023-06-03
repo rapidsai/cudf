@@ -1876,14 +1876,19 @@ def test_groupby_list_columns_excluded():
     )
     gdf = cudf.from_pandas(pdf)
 
-    # cudf does not yet support numeric_only, so our default is False, but
-    # pandas defaults to inferring and throws a warning about it, so we need to
-    # catch that. pandas future behavior will match ours by default (at which
-    # point supporting numeric_only=True will be the open feature request).
-    with pytest.warns(FutureWarning):
-        pandas_result = pdf.groupby("a").mean()
-    with pytest.warns(FutureWarning):
-        pandas_agg_result = pdf.groupby("a").agg("mean")
+    if PANDAS_GE_200:
+        pandas_result = pdf.groupby("a").mean(numeric_only=True)
+        pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
+    else:
+        # cudf does not yet support numeric_only, so our default is False, but
+        # pandas defaults to inferring and throws a warning about it, so
+        # we need to catch that. pandas future behavior will match ours
+        # by default (at which point supporting numeric_only=True will
+        # be the open feature request).
+        with pytest.warns(FutureWarning):
+            pandas_result = pdf.groupby("a").mean()
+        with pytest.warns(FutureWarning):
+            pandas_agg_result = pdf.groupby("a").agg("mean")
 
     assert_groupby_results_equal(
         pandas_result, gdf.groupby("a").mean(), check_dtype=False
