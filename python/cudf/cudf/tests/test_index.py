@@ -781,7 +781,7 @@ def test_index_to_series(data):
         [],
     ],
 )
-@pytest.mark.parametrize("sort", [None, False])
+@pytest.mark.parametrize("sort", [None, False, True])
 def test_index_difference(data, other, sort):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
@@ -801,8 +801,8 @@ def test_index_difference_sort_error():
     assert_exceptions_equal(
         pdi.difference,
         gdi.difference,
-        ([pdi], {"sort": True}),
-        ([gdi], {"sort": True}),
+        ([pdi], {"sort": "A"}),
+        ([gdi], {"sort": "A"}),
     )
 
 
@@ -2236,13 +2236,45 @@ def test_range_index_concat(objs):
     [
         (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
         (pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)),
-        (pd.RangeIndex(0, 10, 2), pd.RangeIndex(1, 5, 3)),
-        (pd.RangeIndex(1, 5, 3), pd.RangeIndex(0, 10, 2)),
-        (pd.RangeIndex(1, 10, 3), pd.RangeIndex(1, 5, 2)),
+        pytest.param(
+            pd.RangeIndex(0, 10, 2),
+            pd.RangeIndex(1, 5, 3),
+            marks=pytest.mark.xfail(
+                condition=PANDAS_GE_200,
+                reason="https://github.com/pandas-dev/pandas/issues/53490",
+                strict=False,
+            ),
+        ),
+        pytest.param(
+            pd.RangeIndex(1, 5, 3),
+            pd.RangeIndex(0, 10, 2),
+            marks=pytest.mark.xfail(
+                condition=PANDAS_GE_200,
+                reason="https://github.com/pandas-dev/pandas/issues/53490",
+                strict=False,
+            ),
+        ),
+        pytest.param(
+            pd.RangeIndex(1, 10, 3),
+            pd.RangeIndex(1, 5, 2),
+            marks=pytest.mark.xfail(
+                condition=PANDAS_GE_200,
+                reason="https://github.com/pandas-dev/pandas/issues/53490",
+                strict=False,
+            ),
+        ),
         (pd.RangeIndex(1, 5, 2), pd.RangeIndex(1, 10, 3)),
         (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 3)),
         (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 6)),
-        (pd.RangeIndex(1, 100, 6), pd.RangeIndex(1, 50, 3)),
+        pytest.param(
+            pd.RangeIndex(1, 100, 6),
+            pd.RangeIndex(1, 50, 3),
+            marks=pytest.mark.xfail(
+                condition=PANDAS_GE_200,
+                reason="https://github.com/pandas-dev/pandas/issues/53490",
+                strict=False,
+            ),
+        ),
         (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
         (pd.Index([0, 1, 2, 30], name="a"), pd.Index([90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
@@ -2250,7 +2282,7 @@ def test_range_index_concat(objs):
         (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
     ],
 )
-@pytest.mark.parametrize("sort", [None, False])
+@pytest.mark.parametrize("sort", [None, False, True])
 def test_union_index(idx1, idx2, sort):
     expected = idx1.union(idx2, sort=sort)
 
@@ -2280,7 +2312,7 @@ def test_union_index(idx1, idx2, sort):
         (pd.Index([True, False, True, True]), pd.Index([True, True])),
     ],
 )
-@pytest.mark.parametrize("sort", [None, False])
+@pytest.mark.parametrize("sort", [None, False, True])
 def test_intersection_index(idx1, idx2, sort):
 
     expected = idx1.intersection(idx2, sort=sort)
