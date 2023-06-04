@@ -178,7 +178,7 @@ struct struct_scatter_strings_fn {
 
 struct validity_fn {
   table_device_view const tbl;
-  __device__ bool operator()(size_type idx)
+  __device__ bool operator()(size_type idx) const
   {
     auto const row = idx / tbl.num_columns();
     auto const col = idx % tbl.num_columns();
