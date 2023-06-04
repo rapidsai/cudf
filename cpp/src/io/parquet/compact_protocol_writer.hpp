@@ -50,6 +50,7 @@ class CompactProtocolWriter {
   size_t write(KeyValue const&);
   size_t write(ColumnChunk const&);
   size_t write(ColumnChunkMetaData const&);
+  size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
 
@@ -99,6 +100,8 @@ class CompactProtocolFieldWriter {
   inline size_t value();
 
   inline void field_struct_blob(int field, std::vector<uint8_t> const& val);
+
+  inline void field_binary(int field, std::vector<uint8_t> const& val);
 
   inline void field_string(int field, std::string const& val);
 

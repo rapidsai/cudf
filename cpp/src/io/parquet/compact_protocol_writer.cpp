@@ -201,7 +201,19 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   c.field_int(9, s.data_page_offset);
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
-  if (s.statistics_blob.size() != 0) { c.field_struct_blob(12, s.statistics_blob); }
+  c.field_struct(12, s.statistics);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(Statistics const& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (s.max.size() != 0) { c.field_binary(1, s.max); }
+  if (s.min.size() != 0) { c.field_binary(2, s.min); }
+  if (s.null_count != -1) { c.field_int(3, s.null_count); }
+  if (s.distinct_count != -1) { c.field_int(4, s.distinct_count); }
+  if (s.max_value.size() != 0) { c.field_binary(5, s.max_value); }
+  if (s.min_value.size() != 0) { c.field_binary(6, s.min_value); }
   return c.value();
 }
 
@@ -330,8 +342,16 @@ inline void CompactProtocolFieldWriter::field_struct_blob(int field,
                                                           std::vector<uint8_t> const& val)
 {
   put_field_header(field, current_field_value, ST_FLD_STRUCT);
-  put_byte(val.data(), (uint32_t)val.size());
+  put_byte(val.data(), static_cast<uint32_t>(val.size()));
   put_byte(0);
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_binary(int field, std::vector<uint8_t> const& val)
+{
+  put_field_header(field, current_field_value, ST_FLD_BINARY);
+  put_uint(val.size());
+  put_byte(val.data(), static_cast<uint32_t>(val.size()));
   current_field_value = field;
 }
 
@@ -340,7 +360,7 @@ inline void CompactProtocolFieldWriter::field_string(int field, std::string cons
   put_field_header(field, current_field_value, ST_FLD_BINARY);
   put_uint(val.size());
   // FIXME : replace reinterpret_cast
-  put_byte(reinterpret_cast<uint8_t const*>(val.data()), (uint32_t)val.size());
+  put_byte(reinterpret_cast<uint8_t const*>(val.data()), static_cast<uint32_t>(val.size()));
   current_field_value = field;
 }
 
@@ -353,7 +373,7 @@ inline void CompactProtocolFieldWriter::field_string_list(int field,
   for (auto& v : val) {
     put_uint(v.size());
     // FIXME : replace reinterpret_cast
-    put_byte(reinterpret_cast<uint8_t const*>(v.data()), (uint32_t)v.size());
+    put_byte(reinterpret_cast<uint8_t const*>(v.data()), static_cast<uint32_t>(v.size()));
   }
   current_field_value = field;
 }
