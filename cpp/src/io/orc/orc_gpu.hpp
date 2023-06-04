@@ -179,7 +179,6 @@ struct DictionaryChunk {
   uint32_t* dict_index;  // row indices of corresponding string (row from dictionary index)
   uint32_t start_row;    // start row of this chunk
   uint32_t num_rows;     // num rows in this chunk
-  uint32_t num_strings;  // number of strings in this chunk
   uint32_t
     string_char_count;   // total size of string data (NOTE: assumes less than 4G bytes per chunk)
   uint32_t num_dict_strings;                  // number of strings in dictionary

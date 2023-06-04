@@ -231,18 +231,12 @@ class orc_column_view {
   /**
    * @brief Function that associates an existing dictionary chunk allocation
    */
-  void attach_dict_chunk(gpu::DictionaryChunk const* host_dict,
-                         gpu::DictionaryChunk const* dev_dict)
-  {
-    dict   = host_dict;
-    d_dict = dev_dict;
-  }
+  void attach_dict_chunk(gpu::DictionaryChunk const* host_dict) { dict = host_dict; }
   [[nodiscard]] auto host_dict_chunk(size_t rowgroup) const
   {
     CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
     return &dict[rowgroup * _dict_stride + _str_idx];
   }
-  [[nodiscard]] auto device_dict_chunk() const { return d_dict; }
 
   [[nodiscard]] auto const& decimal_offsets() const { return d_decimal_offsets; }
   void attach_decimal_offsets(uint32_t* sizes_ptr) { d_decimal_offsets = sizes_ptr; }
@@ -312,7 +306,6 @@ class orc_column_view {
   size_t _dict_stride                        = 0;
   gpu::DictionaryChunk const* dict           = nullptr;
   gpu::StripeDictionary const* stripe_dict   = nullptr;
-  gpu::DictionaryChunk const* d_dict         = nullptr;
   gpu::StripeDictionary const* d_stripe_dict = nullptr;
 
   // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
@@ -492,7 +485,7 @@ void init_dictionaries(orc_table_view& orc_table,
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     str_column.set_dict_stride(orc_table.num_string_columns());
-    str_column.attach_dict_chunk(dict->base_host_ptr(), dict->base_device_ptr());
+    str_column.attach_dict_chunk(dict->base_host_ptr());
   }
 
   // Allocate temporary memory for dictionary indices

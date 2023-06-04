@@ -289,7 +289,6 @@ __global__ void __launch_bounds__(block_size, 2)
   // while making any future changes.
   dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (!t) {
-    chunks[group_id][str_col_idx].num_strings       = nnz;
     chunks[group_id][str_col_idx].string_char_count = s->chunk.string_char_count;
     chunks[group_id][str_col_idx].num_dict_strings  = nnz - s->total_dupes;
     chunks[group_id][str_col_idx].dict_char_count   = dict_char_count;
