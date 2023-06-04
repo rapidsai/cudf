@@ -165,25 +165,18 @@ __global__ void __launch_bounds__(block_size, 2)
   // there are no nulls)
   LoadNonNullIndices<block_size>(s, t, temp_storage.scan_storage);
   // Sum the lengths of all the strings
-  if (t == 0) {
-    s->chunk.string_char_count = 0;
-    s->total_dupes             = 0;
-  }
+  if (t == 0) { s->total_dupes = 0; }
   nnz              = s->nnz;
   auto t_dict_data = s->chunk.dict_data;
   start_row        = s->chunk.start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0;
     uint32_t hash   = 0;
-    uint32_t len    = 0;
     if (i + t < nnz) {
       ck_row                 = s->dict[i + t];
       string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
-      len                    = static_cast<uint32_t>(string_val.size_bytes());
       hash                   = hash_string(string_val);
     }
-    len = block_reduce(temp_storage.reduce_storage).Sum(len);
-    if (t == 0) s->chunk.string_char_count += len;
     if (i + t < nnz) {
       atomicAdd(&s->map.u32[hash >> 1], 1 << ((hash & 1) ? 16 : 0));
       t_dict_data[i + t] = start_row + ck_row;
@@ -289,15 +282,19 @@ __global__ void __launch_bounds__(block_size, 2)
   // while making any future changes.
   dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (!t) {
-    chunks[group_id][str_col_idx].string_char_count = s->chunk.string_char_count;
-    chunks[group_id][str_col_idx].num_dict_strings  = nnz - s->total_dupes;
-    chunks[group_id][str_col_idx].dict_char_count   = dict_char_count;
-    chunks[group_id][str_col_idx].leaf_column       = s->chunk.leaf_column;
+    auto const& offsets = s->chunk.leaf_column->child(strings_column_view::offsets_column_index);
+    // Compute total length from the offsets
+    chunks[group_id][str_col_idx].string_char_count =
+      offsets.element<size_type>(s->chunk.start_row + s->chunk.num_rows) -
+      offsets.element<size_type>(s->chunk.start_row);
+    chunks[group_id][str_col_idx].num_dict_strings = nnz - s->total_dupes;
+    chunks[group_id][str_col_idx].dict_char_count  = dict_char_count;
+    chunks[group_id][str_col_idx].leaf_column      = s->chunk.leaf_column;
 
     chunks[group_id][str_col_idx].dict_data  = s->chunk.dict_data;
     chunks[group_id][str_col_idx].dict_index = s->chunk.dict_index;
-    chunks[group_id][str_col_idx].start_row  = s->chunk.start_row;
-    chunks[group_id][str_col_idx].num_rows   = s->chunk.num_rows;
+    chunks[group_id][str_col_idx].start_row  = s->chunk.start_row;  // used?
+    chunks[group_id][str_col_idx].num_rows   = s->chunk.num_rows;   // used?
   }
 }
 
