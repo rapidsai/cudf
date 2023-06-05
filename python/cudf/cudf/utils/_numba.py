@@ -144,7 +144,7 @@ def _setup_numba():
                 _patch_numba_mvc()
 
 
-def requires_numba(func, static_ptx_file=False):
+def requires_numba(*args, static_ptx_file=False):
     error = (static_ptx_file and not _STATIC_PTX_FILE_COMPATIBLE) or (
         not static_ptx_file and not _RUNTIME_COMPATIBLE
     )
@@ -158,6 +158,9 @@ def requires_numba(func, static_ptx_file=False):
 
     if static_ptx_file:
         # @requires_numba(static_ptx_file=True)
+        assert len(args) == 1
+        (func,) = args
+
         def deco(func):
             return wrapper
 
@@ -165,7 +168,6 @@ def requires_numba(func, static_ptx_file=False):
 
     else:
         return wrapper
-
 
 
 def _get_cuda_version_from_ptx_file(path):
