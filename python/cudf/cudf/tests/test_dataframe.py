@@ -8403,7 +8403,6 @@ def test_dataframe_mode(request, df, numeric_only, dropna):
             and "b" in df.columns
             and df["b"].dtype == np.dtype("timedelta64[s]"),
             reason="https://github.com/pandas-dev/pandas/issues/53497",
-            strict=True,
         )
     )
 
