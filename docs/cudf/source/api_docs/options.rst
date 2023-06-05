@@ -10,3 +10,4 @@ cudf Options
    cudf.get_option
    cudf.set_option
    cudf.describe_option
+   cudf.option_context

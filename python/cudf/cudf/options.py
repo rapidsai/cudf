@@ -3,6 +3,7 @@
 import os
 import textwrap
 from collections.abc import Container
+from contextlib import ContextDecorator
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -112,6 +113,40 @@ def set_option(name: str, val: Any):
         raise KeyError(f'"{name}" does not exist.')
     option.validator(val)
     option.value = val
+
+
+class option_context(ContextDecorator):
+    """
+    Context manager to temporarily set options in the `with` statement context.
+
+    You need to invoke as ``option_context(pat, val, [(pat, val), ...])``.
+
+    Examples
+    --------
+    >>> from cudf import option_context
+    >>> with option_context('display.max_rows', 10, 'display.max_columns', 5):
+    ...     pass
+    """
+
+    def __init__(self, *args) -> None:
+        if len(args) % 2 != 0 or len(args) < 2:
+            raise ValueError(
+                "Need to invoke as option_context(pat, val, "
+                "[(pat, val), ...])."
+            )
+
+        self.ops = list(zip(args[::2], args[1::2]))
+
+    def __enter__(self) -> None:
+        self.undo = [(pat, get_option(pat)) for pat, _ in self.ops]
+
+        for pat, val in self.ops:
+            set_option(pat, val)
+
+    def __exit__(self, *args) -> None:
+        if self.undo:
+            for pat, val in self.undo:
+                set_option(pat, val)
 
 
 def _build_option_description(name, opt):
