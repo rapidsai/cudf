@@ -65,19 +65,18 @@ range_window_bounds::range_window_bounds(extent_type extent_, std::unique_ptr<sc
 
 range_window_bounds range_window_bounds::unbounded(data_type type)
 {
-  return range_window_bounds(extent_type::UNBOUNDED, make_default_constructed_scalar(type));
+  return {extent_type::UNBOUNDED, make_default_constructed_scalar(type)};
 }
 
 range_window_bounds range_window_bounds::current_row(data_type type)
 {
-  return range_window_bounds(extent_type::CURRENT_ROW, make_default_constructed_scalar(type));
+  return {extent_type::CURRENT_ROW, make_default_constructed_scalar(type)};
 }
 
 range_window_bounds range_window_bounds::get(scalar const& boundary)
 {
-  return range_window_bounds{
-    extent_type::BOUNDED,
-    cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
+  return {extent_type::BOUNDED,
+          cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
 }
 
 }  // namespace cudf
