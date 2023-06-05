@@ -56,10 +56,8 @@ TEST_F(HashTest, MultiValue)
   auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
   auto const input2 = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
 
-  auto const output1 = cudf::hash(
-    input1, cudf::hash_id::HASH_MURMUR3, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
-  auto const output2 = cudf::hash(
-    input2, cudf::hash_id::HASH_MURMUR3, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
