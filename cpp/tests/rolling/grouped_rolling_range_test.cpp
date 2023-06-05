@@ -216,15 +216,19 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
   }
 };
 
-TYPED_TEST_SUITE(GroupedRollingRangeOrderByNumericTest, cudf::test::FloatingPointTypes);
+template <typename FloatingPointType>
+struct GroupedRollingRangeOrderByFloatingPointTest
+  : GroupedRollingRangeOrderByNumericTest<FloatingPointType> {};
 
-TYPED_TEST(GroupedRollingRangeOrderByNumericTest, BoundedRanges)
+TYPED_TEST_SUITE(GroupedRollingRangeOrderByFloatingPointTest, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, BoundedRanges)
 {
   this->run_test_no_null_oby();
   this->run_test_nulls_in_oby();
 }
 
-TYPED_TEST(GroupedRollingRangeOrderByNumericTest, UnboundedRanges)
+TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, UnboundedRanges)
 {
   this->run_test_unbounded_preceding_to_unbounded_following();
   this->run_test_unbounded_preceding_to_current_row();
