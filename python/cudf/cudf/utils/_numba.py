@@ -167,33 +167,6 @@ def requires_numba(func, static_ptx_file=False):
         return wrapper
 
 
-"""
-def requires_numba(func, static_ptx_file=False):
-
-    #Disable an API that is guaranteed to require numba
-    #if MVC is required but not possible
-
-    def inner(*args, **kwargs):
-        return fun
-
-
-    def wrapper(func, *args, **kwargs):
-        def inner(*args, **kwargs):
-            error = (static_ptx_file and not _STATIC_PTX_FILE_COMPATIBLE) or (
-                not static_ptx_file and not _RUNTIME_COMPATIBLE
-            )
-            if error:
-                raise RuntimeError(
-                    "Minor version compatibility not yet supported "
-                    "for requested API."
-                )
-            else:
-                return func(*args, **kwargs)
-        return inner
-
-    return wrapper
-"""
-
 
 def _get_cuda_version_from_ptx_file(path):
     """
