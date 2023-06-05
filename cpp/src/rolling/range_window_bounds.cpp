@@ -30,37 +30,6 @@ namespace {
  * This makes it possible to copy construct and copy assign `range_window_bounds` objects.
  */
 struct range_scalar_constructor {
-  /*
-  template <typename T, CUDF_ENABLE_IF(not detail::is_supported_range_type<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    CUDF_FAIL(
-      "Unsupported range type. "
-      "Only Durations, fixed-point, and non-boolean integral range types are allowed.");
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    return std::make_unique<duration_scalar<T>>(
-      static_cast<duration_scalar<T> const&>(range_scalar_));
-  }
-
-  template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> && not cudf::is_boolean<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    return std::make_unique<numeric_scalar<T>>(
-      static_cast<numeric_scalar<T> const&>(range_scalar_));
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    return std::make_unique<fixed_point_scalar<T>>(
-      static_cast<fixed_point_scalar<T> const&>(range_scalar_));
-  }
-  */
-
   template <typename T>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
@@ -83,7 +52,6 @@ struct range_scalar_constructor {
     }
   }
 };
-
 }  // namespace
 
 range_window_bounds::range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_)
