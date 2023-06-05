@@ -578,17 +578,26 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
-# * stream identification tests -------------------------------------------------------------------
+# * stream testing ---------------------------------------------------------------------------------
+#   Note that this function only affects how a test is invoked via ctest. At the moment CI is
+#   running all tests by manually invoking the executable, so we'll have to manually pass this
+#   environment variable in that setup.
+function(set_stream_test_properties target mode)
+  set_tests_properties(
+    ${target}
+    PROPERTIES
+      ENVIRONMENT
+      "GTEST_CUDF_STREAM_MODE=new_${mode}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${mode}>"
+  )
+endfunction()
+
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
-# Note that this only works when the test is invoked via ctest. At the moment CI is running all
-# tests by manually invoking the executable, so we'll have to manually pass this environment
-# variable in that setup.
-set_tests_properties(
-  STREAM_IDENTIFICATION_TEST
-  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
-)
+set_stream_test_properties(STREAM_IDENTIFICATION_TEST cudf)
+
+ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp)
+set_stream_test_properties(STREAM_HASHING_TEST testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################
