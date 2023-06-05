@@ -1164,7 +1164,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    #    @requires_numba(static_ptx_file=True)
+    @requires_numba(static_ptx_file=True)
     @_cudf_nvtx_annotate
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
