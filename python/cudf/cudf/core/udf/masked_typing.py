@@ -29,6 +29,7 @@ from cudf.core.udf._ops import (
 from cudf.core.udf.strings_typing import (
     StringView,
     UDFString,
+    any_string_ty,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
@@ -38,6 +39,7 @@ from cudf.core.udf.strings_typing import (
     string_view,
     udf_string,
 )
+from cudf.utils._numba import _STATIC_PTX_FILE_COMPATIBLE
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -82,7 +84,10 @@ def _format_error_string(err):
 
 def _type_to_masked_type(t):
     if isinstance(t, SUPPORTED_NUMBA_TYPES):
-        return t
+        if isinstance(t, any_string_ty) and not _STATIC_PTX_FILE_COMPATIBLE:
+            raise RuntimeError("MVC Required but not available.")
+        else:
+            return t
     else:
         # Unsupported Dtype. Numba tends to print out the type info
         # for whatever operands and operation failed to type and then
