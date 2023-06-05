@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -36,7 +39,8 @@ namespace detail {
  */
 __device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
 {
-  memcpy(buffer, input, bytes);
+  // this can be slightly faster than memcpy
+  thrust::copy_n(thrust::seq, input, bytes, buffer);
   return buffer + bytes;
 }
 
