@@ -14,18 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf_test/default_stream.hpp>
-// #include <cudf/detail/iterator.cuh>
-// #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
-//
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-// #include <cudf_test/iterator_utilities.hpp>
-// #include <cudf_test/type_lists.hpp>
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/default_stream.hpp>
 
 class HashTest : public cudf::test::BaseFixture {};
 
