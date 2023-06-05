@@ -9,17 +9,17 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union, cast
 
 import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float
+from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
@@ -40,6 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core import indexing_utils
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -185,20 +186,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        data = self._frame._get_elements_from_column(arg)
-
-        if (
-            isinstance(data, (dict, list))
-            or _is_scalar_or_zero_d_array(data)
-            or _is_null_host_scalar(data)
-        ):
-            return data
-        return self._frame._from_data(
-            {self._frame.name: data},
-            index=cudf.Index(self._frame.index[arg]),
+        tag, key = indexing_utils.normalize_row_iloc_indexer(
+            indexing_utils.unpack_series_iloc_indexer(arg, self._frame),
+            len(self._frame),
+            check_bounds=True,
         )
+        return self._frame._get(tag, key)
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
@@ -1307,6 +1300,50 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             result = self.apply(arg)
         return result
+
+    def _get(
+        self,
+        tag: indexing_utils.IndexTag,
+        key: Union[slice, ColumnBase],
+    ) -> Union[Self, ScalarLike]:
+        """Get subset of entries given structured data
+
+        Parameters
+        ----------
+        tag:
+            Tag indicating type of indexing to perform
+        key:
+            Preprocessed and normalized key appropriate for the
+            requested indexing type.
+
+        Returns
+        -------
+        Subsetted Series or else scalar (if a scalar entry is
+        requested)
+
+        Notes
+        -----
+        This function performs no bounds-checking or massaging of the
+        inputs.
+        """
+        if tag is indexing_utils.IndexTag.MAP:
+            return self._gather(
+                key,
+                keep_index=True,
+                nullify=False,
+                normalize_and_check=False,
+            )
+        elif tag is indexing_utils.IndexTag.MASK:
+            return self._apply_boolean_mask(
+                key, keep_index=True, normalize_and_check=False
+            )
+        elif tag is indexing_utils.IndexTag.SLICE:
+            return self._slice(cast(slice, key))
+        elif tag is indexing_utils.IndexTag.SCALAR:
+            return libcudf.copying.gather([self._column], key, nullify=False)[
+                0
+            ].element_indexing(0)
+        assert_never(tag)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):

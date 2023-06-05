@@ -1867,7 +1867,6 @@ def test_loc_column_boolean_mask_issue_13270():
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13013")
 @pytest.mark.parametrize("indexer", [[1], [0, 2]])
 def test_iloc_integer_categorical_issue_13013(indexer):
     # https://github.com/rapidsai/cudf/issues/13013
@@ -1898,10 +1897,6 @@ def test_iloc_column_boolean_mask_issue_13265():
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/rapidsai/cudf/issues/13266 "
-    "and https://github.com/rapidsai/cudf/issues/13273"
-)
 def test_iloc_repeated_column_label_issue_13266():
     # https://github.com/rapidsai/cudf/issues/13266
     # https://github.com/rapidsai/cudf/issues/13273
@@ -1909,13 +1904,18 @@ def test_iloc_repeated_column_label_issue_13266():
     cdf = cudf.from_pandas(df)
 
     expect = df.iloc[:, [0, 1, 0]]
-    actual = cdf.iloc[:, [0, 1, 0]]
-    assert_eq(expect, actual)
+    with pytest.raises(NotImplementedError):
+        actual = cdf.iloc[:, [0, 1, 0]]
+        assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13267")
 @pytest.mark.parametrize(
-    "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
+    "indexer",
+    [
+        (..., 0),
+        (0, ...),
+    ],
+    ids=["row_ellipsis", "column_ellipsis"],
 )
 def test_iloc_ellipsis_as_slice_issue_13267(indexer):
     # https://github.com/rapidsai/cudf/issues/13267
@@ -1932,28 +1932,13 @@ def test_iloc_ellipsis_as_slice_issue_13267(indexer):
     [
         0,
         (slice(None), 0),
-        pytest.param(
-            ([0, 2], 1),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13515"
-            ),
-        ),
+        ([0, 2], 1),
         (slice(None), slice(None)),
         (slice(None), [1, 0]),
         (0, 0),
         (1, [1, 0]),
-        pytest.param(
-            ([1, 0], 0),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13515"
-            ),
-        ),
-        pytest.param(
-            ([1, 2], [0, 1]),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13515"
-            ),
-        ),
+        ([1, 0], 0),
+        ([1, 2], [0, 1]),
     ],
 )
 def test_iloc_multiindex_lookup_as_label_issue_13515(indexer):

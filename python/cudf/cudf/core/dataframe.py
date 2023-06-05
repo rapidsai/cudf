@@ -23,6 +23,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import cupy
@@ -36,7 +37,7 @@ from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
-from typing_extensions import Self
+from typing_extensions import assert_never
 
 import cudf
 import cudf.core.common
@@ -57,7 +58,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, df_protocol, reshape
+from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -70,13 +71,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
-from cudf.core.index import (
-    BaseIndex,
-    Index,
-    RangeIndex,
-    _index_from_data,
-    as_index,
-)
+from cudf.core.index import BaseIndex, RangeIndex, _index_from_data, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -401,57 +396,80 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     For selection by index.
     """
 
-    @_cudf_nvtx_annotate
-    def _getitem_tuple_arg(self, arg):
-        # Iloc Step 1:
-        # Gather the columns specified by the second tuple arg
-        columns_df = self._frame._from_data(
-            self._frame._data.select_by_index(arg[1]), self._frame._index
+    _frame: DataFrame
+
+    def __getitem__(self, arg):
+        row_spec, (
+            col_scalar,
+            column_names,
+        ) = indexing_utils.unpack_dataframe_iloc_indexer(arg, self._frame)
+        row_tag, row_key = indexing_utils.normalize_row_iloc_indexer(
+            row_spec, len(self._frame), check_bounds=True
         )
-
-        # Iloc Step 2:
-        # Gather the rows specified by the first tuple arg
-        if isinstance(columns_df.index, MultiIndex):
-            if isinstance(arg[0], slice):
-                df = columns_df[arg[0]]
-            else:
-                df = columns_df.index._get_row_major(columns_df, arg[0])
-            if (len(df) == 1 and len(columns_df) >= 1) and not (
-                isinstance(arg[0], slice) or isinstance(arg[1], slice)
-            ):
-                # Pandas returns a numpy scalar in this case
-                return df.iloc[0]
-            if self._can_downcast_to_series(df, arg):
-                return self._downcast_to_series(df, arg)
-            return df
+        ca = self._frame._data
+        index = self._frame.index
+        if col_scalar:
+            # TODO column accessor should offer this interface
+            # Don't want to go through select_by_label because it does
+            # too much work and we've already turned this into
+            # appropriate indices.
+            (name,) = column_names
+            s = Series._from_data(
+                ca.__class__(
+                    {name: ca[name]},
+                    multiindex=ca.multiindex,
+                    level_names=ca.level_names,
+                ),
+                index=index,
+            )
+            return s._get(row_tag, row_key)
+        if column_names != list(self._frame._column_names):
+            frame = self._frame._from_data(
+                ca.__class__(
+                    {k: ca[k] for k in column_names},
+                    multiindex=ca.multiindex,
+                    level_names=ca.level_names,
+                ),
+                index=index,
+            )
         else:
-            if isinstance(arg[0], slice):
-                df = columns_df._slice(arg[0])
-            elif is_scalar(arg[0]):
-                index = arg[0]
-                if index < 0:
-                    index += len(columns_df)
-                df = columns_df._slice(slice(index, index + 1, 1))
-            else:
-                arg = (as_column(arg[0]), arg[1])
-                if is_bool_dtype(arg[0]):
-                    df = columns_df._apply_boolean_mask(arg[0])
-                else:
-                    df = columns_df._gather(arg[0])
-
-        # Iloc Step 3:
-        # Reindex
-        if df.shape[0] == 1:  # we have a single row without an index
-            df.index = as_index(self._frame.index[arg[0]])
-
-        # Iloc Step 4:
-        # Downcast
-        if self._can_downcast_to_series(df, arg):
-            return self._downcast_to_series(df, arg)
-
-        if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            df._index = as_index(self._frame.index[arg[0]])
-        return df
+            frame = self._frame
+        if row_tag is indexing_utils.IndexTag.MAP:
+            return frame._gather(
+                row_key,
+                keep_index=True,
+                nullify=False,
+                normalize_and_check=False,
+            )
+        elif row_tag is indexing_utils.IndexTag.MASK:
+            return frame._apply_boolean_mask(
+                row_key, keep_index=True, normalize_and_check=False
+            )
+        elif row_tag is indexing_utils.IndexTag.SLICE:
+            return frame._slice(cast(slice, row_key))
+        elif row_tag is indexing_utils.IndexTag.SCALAR:
+            result = frame._gather(
+                row_key,
+                keep_index=True,
+                nullify=False,
+                normalize_and_check=False,
+            )
+            # Attempt to turn into series.
+            try:
+                # Behaviour difference from pandas, which will merrily
+                # turn any heterogeneous set of columns into a series if
+                # you only ask for one row.
+                new_name = result.index[0]
+                result = Series._concat(
+                    [result[name] for name in column_names],
+                    index=result.keys(),
+                )
+                result.name = new_name
+                return result
+            except TypeError:
+                # Couldn't find a common type, just return a 1xN dataframe.
+                return result
+        assert_never(row_tag)
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
@@ -498,10 +516,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 else:
                     for i, col in enumerate(columns_df._column_names):
                         self._frame[col].iloc[key[0]] = value[i]
-
-    def _getitem_scalar(self, arg):
-        col = self._frame.columns[arg[1]]
-        return self._frame[col].iloc[arg[0]]
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
@@ -1302,107 +1316,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def __delitem__(self, name):
         self._drop_column(name)
-
-    @_cudf_nvtx_annotate
-    def _slice(self, arg: slice) -> Self:
-        """
-        _slice : slice the frame as per the arg
-
-        Parameters
-        ----------
-        arg : should always be of type slice
-
-        """
-        num_rows = len(self)
-        if num_rows == 0:
-            return self
-        start, stop, stride = arg.indices(num_rows)
-
-        # early stop for empty cases
-        if len(range(start, stop, stride)) == 0:
-            columns = ColumnAccessor(
-                {
-                    colname: column.column_empty_like(col, newsize=0)
-                    for colname, col in self._data.items()
-                },
-                multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
-            )
-
-            if isinstance(self.index, MultiIndex):
-                mi_columns = ColumnAccessor(
-                    {
-                        colname: column.column_empty_like(col, newsize=0)
-                        for colname, col in self.index._data.items()
-                    }
-                )
-                return DataFrame._from_data(
-                    columns,
-                    index=MultiIndex._from_data(
-                        mi_columns, name=self.index.name
-                    ),
-                )
-            else:
-                return DataFrame._from_data(
-                    columns,
-                    index=(
-                        RangeIndex(
-                            start=start,
-                            stop=stop,
-                            step=stride,
-                            name=self.index.name,
-                        )
-                        if isinstance(self.index, RangeIndex)
-                        else Index(
-                            [], dtype=self.index.dtype, name=self.index.name
-                        )
-                    ),
-                )
-
-        # If index type is RangeIndex, slice without materializing.
-        is_range_index = isinstance(self.index, RangeIndex)
-        if is_range_index:
-            if self._num_columns == 0:
-                result = self._empty_like(keep_index=False)
-                result._index = self.index[start:stop:stride]
-                return result
-
-        if start < 0:
-            start = start + num_rows
-
-        # Decreasing slices that terminates at -1, such as slice(4, -1, -1),
-        # has end index of 0, The check below makes sure -1 is not wrapped
-        # to `-1 + num_rows`.
-        if stop < 0 and not (stride < 0 and stop == -1):
-            stop = stop + num_rows
-        stride = 1 if stride is None else stride
-
-        if (stop - start) * stride <= 0:
-            return self._empty_like(keep_index=True)
-
-        start = len(self) if start > num_rows else start
-        stop = len(self) if stop > num_rows else stop
-
-        if stride != 1:
-            return self._gather(
-                cudf.core.column.arange(
-                    start, stop=stop, step=stride, dtype=np.int32
-                )
-            )
-
-        columns_to_slice = [
-            *(self._index._data.columns if not is_range_index else []),
-            *self._columns,
-        ]
-        result = self._from_columns_like_self(
-            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
-            self._column_names,
-            None if is_range_index else self._index.names,
-        )
-
-        if is_range_index:
-            result.index = self.index[start:stop]
-        return result
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):

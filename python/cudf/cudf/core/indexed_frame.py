@@ -336,7 +336,7 @@ class IndexedFrame(Frame):
         index_names: Optional[List[str]] = None,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ):
+    ) -> Self:
         """Construct a `Frame` from a list of columns with metadata from self.
 
         If `index_names` is set, the first `len(index_names)` columns are
@@ -1725,24 +1725,30 @@ class IndexedFrame(Frame):
         )
 
     def _gather(
-        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+        self,
+        gather_map,
+        keep_index=True,
+        nullify=False,
+        check_bounds=True,
+        normalize_and_check=True,
     ):
         """Gather rows of frame specified by indices in `gather_map`.
 
         Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
-        gather_map = cudf.core.column.as_column(gather_map)
+        if normalize_and_check:
+            gather_map = cudf.core.column.as_column(gather_map)
 
-        # TODO: For performance, the check and conversion of gather map should
-        # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype(size_type_dtype)
-
-        if not libcudf.copying._gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
+            # TODO: For performance, the check and conversion of
+            # gather map should be done by the caller. This check will
+            # be removed in future release.
+            if not is_integer_dtype(gather_map.dtype):
+                gather_map = gather_map.astype(size_type_dtype)
+            if not libcudf.copying._gather_map_is_valid(
+                gather_map, len(self), check_bounds, nullify
+            ):
+                raise IndexError("Gather map index is out of bounds.")
 
         return self._from_columns_like_self(
             libcudf.copying.gather(
@@ -1755,6 +1761,79 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
+
+    def _slice(self, arg: slice, keep_index=True) -> Self:
+        """Slice a frame
+
+        Parameters
+        ----------
+        arg
+            The slice
+        keep_index
+            Preserve the index when slicing?
+
+        Returns
+        -------
+        Sliced frame
+
+        Notes
+        -----
+        This slicing has normal python semantics.
+        """
+        num_rows = len(self)
+        if num_rows == 0:
+            return self
+        start, stop, stride = arg.indices(num_rows)
+        has_range_index = isinstance(self.index, RangeIndex)
+        if len(range(start, stop, stride)) == 0:
+            # Avoid materialising the range index column
+            result = self._empty_like(keep_index=not has_range_index)
+            if has_range_index:
+                result.index = self.index[start:stop:stride]
+            return result
+        if start < 0:
+            start = start + num_rows
+
+        # Decreasing slices that terminates at -1, such as slice(4, -1, -1),
+        # has end index of 0, The check below makes sure -1 is not wrapped
+        # to `-1 + num_rows`.
+        if stop < 0 and not (stride < 0 and stop == -1):
+            stop = stop + num_rows
+        stride = 1 if stride is None else stride
+
+        if (stop - start) * stride <= 0:
+            return self._empty_like(keep_index=True)
+
+        start = len(self) if start > num_rows else start
+        stop = len(self) if stop > num_rows else stop
+
+        if stride != 1:
+            return self._gather(
+                cudf.core.column.arange(
+                    start,
+                    stop=stop,
+                    step=stride,
+                    dtype=libcudf.types.size_type_dtype,
+                ),
+                keep_index=True,
+                nullify=False,
+                check_bounds=False,
+                normalize_and_check=False,
+            )
+
+        columns_to_slice = [
+            *(self._index._data.columns if not has_range_index else []),
+            *self._columns,
+        ]
+        result = self._from_columns_like_self(
+            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            self._column_names,
+            None if has_range_index else self._index.names,
+        )
+
+        if has_range_index:
+            result.index = self.index[start:stop]
+        return result
 
     def _positions_from_column_names(
         self, column_names, offset_by_index_columns=False
@@ -1933,7 +2012,7 @@ class IndexedFrame(Frame):
         return s
 
     @_cudf_nvtx_annotate
-    def _empty_like(self, keep_index=True):
+    def _empty_like(self, keep_index=True) -> Self:
         return self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
@@ -2898,22 +2977,32 @@ class IndexedFrame(Frame):
             self._index.names,
         )
 
-    def _apply_boolean_mask(self, boolean_mask):
+    def _apply_boolean_mask(
+        self, boolean_mask, keep_index=True, normalize_and_check=True
+    ):
         """Apply boolean mask to each row of `self`.
 
         Rows corresponding to `False` is dropped.
+
+        If keep_index is False, the index is not preserved.
         """
-        boolean_mask = cudf.core.column.as_column(boolean_mask)
-        if not is_bool_dtype(boolean_mask.dtype):
-            raise ValueError("boolean_mask is not boolean type.")
-        if (bn := len(boolean_mask)) != (n := len(self)):
-            raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
+        if normalize_and_check:
+            boolean_mask = cudf.core.column.as_column(boolean_mask)
+            if not is_bool_dtype(boolean_mask.dtype):
+                raise ValueError("boolean_mask is not boolean type.")
+            if (bn := len(boolean_mask)) != (n := len(self)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
         return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
-                list(self._index._columns + self._columns), boolean_mask
+                list(self._index._columns + self._columns)
+                if keep_index
+                else list(self._columns),
+                boolean_mask,
             ),
             column_names=self._column_names,
-            index_names=self._index.names,
+            index_names=self._index.names if keep_index else None,
         )
 
     def take(self, indices, axis=0):
