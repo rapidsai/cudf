@@ -26,6 +26,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
+from cudf.utils._numba import _STATIC_PTX_FILE_COMPATIBLE, requires_numba
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -1163,6 +1164,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
+    #    @requires_numba(static_ptx_file=True)
     @_cudf_nvtx_annotate
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
@@ -1351,8 +1353,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "auto":
-            if (not grouped_values._has_nulls) and _can_be_jitted(
-                grouped_values, function, args
+            if (
+                _STATIC_PTX_FILE_COMPATIBLE
+                and (not grouped_values._has_nulls)
+                and _can_be_jitted(grouped_values, function, args)
             ):
                 engine = "jit"
             else:
@@ -1382,6 +1386,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.sort_index()
         return result
 
+    @requires_numba
     @_cudf_nvtx_annotate
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.

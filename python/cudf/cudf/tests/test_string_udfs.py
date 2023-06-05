@@ -20,7 +20,7 @@ from cudf.core.udf.strings_typing import (
     string_view,
     udf_string,
 )
-from cudf.core.udf.utils import _PTX_FILE, _get_extensionty_size
+from cudf.core.udf.utils import _get_extensionty_size, ptx_files
 from cudf.testing._utils import assert_eq, sv_to_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
@@ -43,7 +43,7 @@ def get_kernels(func, dtype, size):
         outty = numba.np.numpy_support.from_dtype(dtype)[::1]
     sig = nb_signature(void, CPointer(string_view), outty)
 
-    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler])
+    @cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])
     def string_view_kernel(input_strings, output_col):
         id = cuda.grid(1)
         if id < size:
@@ -51,7 +51,7 @@ def get_kernels(func, dtype, size):
             result = func(st)
             output_col[id] = result
 
-    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler])
+    @cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])
     def udf_string_kernel(input_strings, output_col):
         # test the string function with a udf_string as input
         id = cuda.grid(1)

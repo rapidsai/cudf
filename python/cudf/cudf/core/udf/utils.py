@@ -31,7 +31,7 @@ from cudf.core.udf.strings_typing import (
     udf_string,
 )
 from cudf.utils import cudautils
-from cudf.utils._numba import _get_ptx_file
+from cudf.utils._numba import _STATIC_PTX_FILE_COMPATIBLE, _get_ptx_file
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -62,7 +62,11 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 launch_arg_getters: Dict[Any, Any] = {}
 
-_PTX_FILE = _get_ptx_file(os.path.dirname(__file__), "shim_")
+ptx_files = (
+    []
+    if not _STATIC_PTX_FILE_COMPATIBLE
+    else [_get_ptx_file(os.path.dirname(__file__), "shim_")]
+)
 
 
 @_cudf_nvtx_annotate
@@ -283,9 +287,9 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(
-        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
-    )(_kernel)
+    kernel = cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])(
+        _kernel
+    )
 
     return kernel
 

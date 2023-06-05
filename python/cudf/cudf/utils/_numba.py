@@ -10,6 +10,8 @@ from numba import config as numba_config
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
 )
+_RUNTIME_COMPATIBLE = True
+_STATIC_PTX_FILE_COMPATIBLE = True
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -106,21 +108,32 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        if driver_version >= (12, 0) and runtime_version > driver_version:
-            warnings.warn(
-                f"Using CUDA toolkit version {runtime_version} with CUDA "
-                f"driver version {driver_version} requires minor version "
-                "compatibility, which is not yet supported for CUDA "
-                "driver versions 12.0 and above. It is likely that many "
-                "cuDF operations will not work in this state. Please "
-                f"install CUDA toolkit version {driver_version} to "
-                "continue using cuDF."
-            )
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(CC_60_PTX_FILE)
+        if driver_version >= (12, 0):
+            global _STATIC_PTX_FILE_COMPATIBLE, _RUNTIME_COMPATIBLE
+            if ptx_toolkit_version > driver_version:
+                # ptx file from the package is too new
+                _STATIC_PTX_FILE_COMPATIBLE = False
+                warnings.warn(
+                    "The installed cuDF package was built with a version of "
+                    "CUDA newer than the driver. Some features, such as JIT "
+                    "compiled GroupBy apply and DataFrame/Series apply with "
+                    "strings will not be available in this configuration."
+                )
+            else:
+                if runtime_version > driver_version:
+                    _RUNTIME_COMPATIBLE = False
+                    warnings.warn(
+                        "The installed CUDA runtime version is newer than "
+                        "the driver. Some APIs, such as those that accept "
+                        "user defined functions will not be available in "
+                        "this configuration. Please install CUDAToolKit "
+                        f"version {'.'.join(driver_version)} to enable these "
+                        "features."
+                    )
         else:
             # Support MVC for all CUDA versions in the 11.x range
-            ptx_toolkit_version = _get_cuda_version_from_ptx_file(
-                CC_60_PTX_FILE
-            )
+
             # Numba thinks cubinlinker is only needed if the driver is older
             # than the CUDA runtime, but when PTX files are present, it might
             # also need to patch because those PTX files may be compiled by
@@ -129,6 +142,57 @@ def _setup_numba():
                 driver_version < runtime_version
             ):
                 _patch_numba_mvc()
+
+
+def requires_numba(func, static_ptx_file=False):
+    error = (static_ptx_file and not _STATIC_PTX_FILE_COMPATIBLE) or (
+        not static_ptx_file and not _RUNTIME_COMPATIBLE
+    )
+    msg = "Minor version compatibility required but not supported."
+
+    def wrapper(*args, **kwargs):
+        if error:
+            raise RuntimeError(msg)
+        else:
+            return func(*args, **kwargs)
+
+    if static_ptx_file:
+        # @requires_numba(static_ptx_file=True)
+        def deco(func):
+            return wrapper
+
+        return deco
+
+    else:
+        return wrapper
+
+
+"""
+def requires_numba(func, static_ptx_file=False):
+
+    #Disable an API that is guaranteed to require numba
+    #if MVC is required but not possible
+
+    def inner(*args, **kwargs):
+        return fun
+
+
+    def wrapper(func, *args, **kwargs):
+        def inner(*args, **kwargs):
+            error = (static_ptx_file and not _STATIC_PTX_FILE_COMPATIBLE) or (
+                not static_ptx_file and not _RUNTIME_COMPATIBLE
+            )
+            if error:
+                raise RuntimeError(
+                    "Minor version compatibility not yet supported "
+                    "for requested API."
+                )
+            else:
+                return func(*args, **kwargs)
+        return inner
+
+    return wrapper
+"""
 
 
 def _get_cuda_version_from_ptx_file(path):

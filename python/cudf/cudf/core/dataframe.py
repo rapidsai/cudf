@@ -91,6 +91,7 @@ from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
 from cudf.utils import applyutils, docutils, ioutils, queryutils
+from cudf.utils._numba import requires_numba
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -4095,6 +4096,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             dropna,
         )
 
+    @requires_numba
     def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
@@ -4374,6 +4376,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self._apply(func, _get_row_kernel, *args, **kwargs)
 
+    @requires_numba
     def applymap(
         self,
         func: Callable[[Any], Any],
@@ -4435,6 +4438,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return DataFrame._from_data(result, index=self.index)
 
+    @requires_numba
     @_cudf_nvtx_annotate
     @applyutils.doc_apply()
     def apply_rows(
@@ -4514,6 +4518,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             cache_key=cache_key,
         )
 
+    @requires_numba
     @_cudf_nvtx_annotate
     @applyutils.doc_applychunks()
     def apply_chunks(
