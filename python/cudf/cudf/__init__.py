@@ -87,8 +87,8 @@ from cudf.io import (
 from cudf.options import (
     describe_option,
     get_option,
-    set_option,
     option_context,
+    set_option,
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import clear_cache, set_allocator
