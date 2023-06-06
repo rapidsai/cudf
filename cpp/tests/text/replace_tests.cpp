@@ -32,7 +32,7 @@ struct TextReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextReplaceTest, ReplaceTokens)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "is theme of the thesis",
                                      nullptr,
                                      "",
@@ -44,7 +44,7 @@ TEST_F(TextReplaceTest, ReplaceTokens)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::test::strings_column_wrapper targets({"is", "the"});
   cudf::test::strings_column_wrapper repls({"___", ""});
-  std::vector<const char*> h_expected{" fox jumped over  dog",
+  std::vector<char const*> h_expected{" fox jumped over  dog",
                                       "___ theme of  thesis",
                                       nullptr,
                                       "",
