@@ -154,10 +154,8 @@ def _is_scalar_or_zero_d_array(val):
         Return True if given object is scalar.
     """
     return (
-        (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or is_scalar(val)
-    )
+        isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0
+    ) or is_scalar(val)
 
 
 # TODO: We should be able to reuse the pandas function for this, need to figure
