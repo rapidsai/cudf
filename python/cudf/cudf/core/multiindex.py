@@ -1674,7 +1674,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             raise ValueError(
                 f"{method=} is unsupported, only supported values are: "
-                f"{['ffill', 'bfill', None]}"
+                "{['ffill'/'pad', 'bfill'/'backfill', None]}"
             )
 
         return result_series.to_cupy()

@@ -1195,7 +1195,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         else:
             raise ValueError(
                 f"{method=} is unsupported, only supported values are: "
-                f"{['ffill', 'bfill', 'nearest', None]}"
+                "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
         return result_series.to_cupy()
