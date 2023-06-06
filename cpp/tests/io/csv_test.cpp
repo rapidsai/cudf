@@ -2488,6 +2488,7 @@ TEST_F(CsvReaderTest, UTF8BOM)
   auto const result      = cudf::io::read_csv(in_opts);
   auto const result_view = result.tbl->view();
   EXPECT_EQ(result_view.num_rows(), 3);
+  EXPECT_EQ(result.metadata.schema_info.front().name, "Month");
 
   auto col1     = cudf::test::strings_column_wrapper({"June", "August", "May"});
   auto col2     = cudf::test::fixed_width_column_wrapper<int64_t>({6, 25, 1});
