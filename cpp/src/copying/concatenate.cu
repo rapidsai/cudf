@@ -250,7 +250,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto const output_size  = std::get<3>(device_views);
 
   CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range",
+               "Total number of concatenated rows exceeds the column size limit",
                std::overflow_error);
 
   // Allocate output
@@ -388,9 +388,9 @@ class traverse_children {
                       std::size_t{},
                       [](size_t a, auto const& b) -> size_t { return a + b.size(); }) +
       1;
-    // note:  output text must include "exceeds size_type range" for python error handling
     CUDF_EXPECTS(total_offset_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-                 "Total number of concatenated offsets exceeds size_type range");
+                 "Total number of concatenated offsets exceeds the column size limit",
+                 std::overflow_error);
   }
 };
 
@@ -418,9 +418,8 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
                     ? scv.chars_size()
                     : cudf::detail::get_value<offset_type>(scv.offsets(), scv.size(), stream));
     });
-  // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated chars exceeds size_type range",
+               "Total number of concatenated chars exceeds the column size limit",
                std::overflow_error);
 }
 
@@ -490,9 +489,8 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
     std::accumulate(cols.begin(), cols.end(), std::size_t{}, [](size_t a, auto const& b) {
       return a + static_cast<size_t>(b.size());
     });
-  // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range",
+               "Total number of concatenated rows exceeds the column size limit",
                std::overflow_error);
 
   // traverse children

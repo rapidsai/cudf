@@ -11,6 +11,7 @@ import cudf
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -137,7 +138,8 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
+    # hash returns in the semi-open interval [-2**63, 2**63)
+    funcid = f"queryexpr_{(hash(expr) + 2**63):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
@@ -247,6 +249,7 @@ def query_execute(df, expr, callenv):
     out = column_empty(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
-    kernel.forall(nrows)(*args)
+    with _CUDFNumbaConfig():
+        kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
     return out.set_mask(out_mask).fillna(False)

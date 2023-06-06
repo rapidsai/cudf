@@ -1706,18 +1706,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // fragments with a (potentially) varying number of fragments per column.
 
   // first figure out the total number of fragments and calculate the start offset for each column
-  std::vector<size_type> frag_offsets;
-  size_type const total_frags = [&]() {
-    if (frags_per_column.size() > 0) {
-      std::exclusive_scan(frags_per_column.data(),
-                          frags_per_column.data() + num_columns + 1,
-                          std::back_inserter(frag_offsets),
-                          0);
-      return frag_offsets[num_columns];
-    } else {
-      return 0;
-    }
-  }();
+  std::vector<size_type> frag_offsets(num_columns, 0);
+  std::exclusive_scan(frags_per_column.begin(), frags_per_column.end(), frag_offsets.begin(), 0);
+  size_type const total_frags =
+    frags_per_column.empty() ? 0 : frag_offsets.back() + frags_per_column.back();
 
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
@@ -1779,10 +1771,15 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
   }
 
+  // Batch processing is no longer supported.
+  // This line disables batch processing (so batch size will no longer be limited at 1GB as before).
+  // TODO: All the relevant code will be removed in the follow-up work:
+  // https://github.com/rapidsai/cudf/issues/13440
+  auto const max_bytes_in_batch = std::numeric_limits<size_t>::max();
+
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<size_type> batch_list;
   size_type num_pages          = 0;
-  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
   size_t max_uncomp_bfr_size   = 0;
   size_t max_comp_bfr_size     = 0;
   size_t max_chunk_bfr_size    = 0;
@@ -1926,12 +1923,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_write_size = std::max(max_write_size, ck.compressed_size);
 
         if (ck.ck_stat_size != 0) {
-          column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-          CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
-                                        dev_bfr,
-                                        ck.ck_stat_size,
-                                        cudaMemcpyDefault,
-                                        stream.value()));
+          std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
+            device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
+          cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
+          cp.read(&column_chunk_meta.statistics);
           need_sync = true;
         }
 
@@ -2345,9 +2340,15 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   }
   // Reader doesn't currently populate column_order, so infer it here
   if (md.row_groups.size() != 0) {
+    auto const is_valid_stats = [](auto const& stats) {
+      return stats.max.size() != 0 || stats.min.size() != 0 || stats.null_count != -1 ||
+             stats.distinct_count != -1 || stats.max_value.size() != 0 ||
+             stats.min_value.size() != 0;
+    };
+
     uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
     md.column_order_listsize =
-      (num_columns > 0 && md.row_groups[0].columns[0].meta_data.statistics_blob.size())
+      (num_columns > 0 && is_valid_stats(md.row_groups[0].columns[0].meta_data.statistics))
         ? num_columns
         : 0;
   }

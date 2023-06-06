@@ -1151,7 +1151,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             # Apply a Series method if one exists.
             if cudf_func := getattr(Series, func.__name__, None):
-                return cudf_func(*args, **kwargs)
+                result = cudf_func(*args, **kwargs)
+                if func.__name__ == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Series.unique.
+                    result = result.sort_values()
+                return result
 
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
@@ -1718,20 +1723,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         to be sorted.
 
         >>> s.drop_duplicates()
-        3    beetle
-        1       cow
-        5     hippo
         0      lama
+        1       cow
+        3    beetle
+        5     hippo
         Name: animal, dtype: object
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
 
         >>> s.drop_duplicates(keep='last')
-        3    beetle
         1       cow
-        5     hippo
+        3    beetle
         4      lama
+        5     hippo
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
@@ -1740,8 +1745,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         >>> s.drop_duplicates(keep=False, inplace=True)
         >>> s
-        3    beetle
         1       cow
+        3    beetle
         5     hippo
         Name: animal, dtype: object
         """
@@ -2887,9 +2892,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         6       c
         dtype: object
         >>> series.unique()
-        0    <NA>
-        1       a
-        2       b
+        0       a
+        1       b
+        2    <NA>
         3       c
         dtype: object
         """

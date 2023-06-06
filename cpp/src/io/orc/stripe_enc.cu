@@ -1108,11 +1108,10 @@ __global__ void __launch_bounds__(compact_streams_block_size)
       for (uint32_t i = t; i < len; i += blockDim.x) {
         dst_ptr[i] = src_ptr[i];
       }
-
       __syncthreads();
-      if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
-      dst_ptr += len;
     }
+    if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
+    dst_ptr += len;
   }
 }
 
