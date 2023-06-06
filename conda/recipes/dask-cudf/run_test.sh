@@ -18,18 +18,18 @@ if [ "${ARCH}" = "aarch64" ]; then
 fi
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=0
+export INSTALL_DASK_MAIN=1
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2023.3.2"
+export DASK_STABLE_VERSION="2023.5.1"
 
 # Install the conda-forge or nightly version of dask and distributed
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     rapids-logger "rapids-mamba-retry install -c dask/label/dev 'dask/label/dev::dask' 'dask/label/dev::distributed'"
     rapids-mamba-retry install -c dask/label/dev "dask/label/dev::dask" "dask/label/dev::distributed"
 else
-    rapids-logger "rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed==2023.3.2.1 conda-forge::dask-core==2023.3.2 --force-reinstall"
-    rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=="2023.3.2.1" conda-forge::dask-core=="2023.3.2" --force-reinstall
+    rapids-logger "rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+    rapids-mamba-retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
 fi
 
 logger "python -c 'import dask_cudf'"

@@ -75,14 +75,24 @@ sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/dask_cudf/source/conf.py
 sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/dask_cudf/source/conf.py
 
-
-# bump rmm & dask-cuda
-for FILE in conda/environments/*.yaml dependencies.yaml; do
-  sed_runner "s/cudf==${CURRENT_SHORT_TAG_PEP440}/cudf==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
-  sed_runner "s/cudf_kafka==${CURRENT_SHORT_TAG_PEP440}/cudf_kafka==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
-  sed_runner "s/dask-cuda==${CURRENT_SHORT_TAG_PEP440}/dask-cuda==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
-  sed_runner "s/kvikio==${CURRENT_SHORT_TAG_PEP440}/kvikio==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
-  sed_runner "s/rmm==${CURRENT_SHORT_TAG_PEP440}/rmm==${NEXT_SHORT_TAG_PEP440}/g" ${FILE};
+DEPENDENCIES=(
+  cudf
+  cudf_kafka
+  custreamz
+  dask-cuda
+  dask-cudf
+  kvikio
+  libkvikio
+  librmm
+  rmm
+)
+for DEP in "${DEPENDENCIES[@]}"; do
+  for FILE in dependencies.yaml conda/environments/*.yaml; do
+    sed_runner "/-.* ${DEP}==/ s/==.*/==${NEXT_SHORT_TAG_PEP440}.*/g" ${FILE}
+  done
+  for FILE in python/*/pyproject.toml; do
+    sed_runner "/\"${DEP}==/ s/==.*\"/==${NEXT_SHORT_TAG_PEP440}.*\"/g" ${FILE}
+  done
 done
 
 # Doxyfile update
@@ -95,10 +105,6 @@ sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md
 # Libcudf examples update
 sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/basic/CMakeLists.txt
 sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/strings/CMakeLists.txt
-
-# Dependency versions in pyproject.toml
-sed_runner "s/rmm==.*\",/rmm==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/cudf/pyproject.toml
-sed_runner "s/cudf==.*\",/cudf==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/dask_cudf/pyproject.toml
 
 # CI files
 for FILE in .github/workflows/*.yaml; do
