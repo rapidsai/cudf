@@ -109,7 +109,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
   template <typename T_output>
   void evaluate(T_output expected,
                 rmm::device_uvector<T_output> const& dev_result,
-                const char* msg = nullptr)
+                char const* msg = nullptr)
   {
     auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
 
@@ -118,7 +118,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
   template <typename T_output>
   void values_equal_test(thrust::host_vector<T_output> const& expected,
-                         const cudf::column_device_view& col)
+                         cudf::column_device_view const& col)
   {
     if (col.nullable()) {
       auto it_dev = cudf::detail::make_null_replacement_iterator(

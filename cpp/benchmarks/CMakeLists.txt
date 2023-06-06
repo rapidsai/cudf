@@ -283,19 +283,16 @@ ConfigureNVBench(
 ConfigureBench(
   STRINGS_BENCH
   string/combine.cpp
-  string/contains.cpp
   string/convert_datetime.cpp
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
   string/copy.cu
-  string/extract.cpp
   string/factory.cu
   string/filter.cpp
   string/find.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/replace_re.cpp
   string/slice.cpp
   string/split.cpp
   string/translate.cpp
@@ -303,8 +300,18 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/join_strings.cpp string/lengths.cpp
-  string/like.cpp string/reverse.cpp
+  STRINGS_NVBENCH
+  string/case.cpp
+  string/char_types.cpp
+  string/contains.cpp
+  string/count.cpp
+  string/extract.cpp
+  string/join_strings.cpp
+  string/lengths.cpp
+  string/like.cpp
+  string/replace_re.cpp
+  string/reverse.cpp
+  string/split_re.cpp
 )
 
 # ##################################################################################################
