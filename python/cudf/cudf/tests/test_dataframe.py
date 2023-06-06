@@ -8394,8 +8394,17 @@ def test_describe_misc_exclude(df, exclude):
 )
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
-def test_dataframe_mode(df, numeric_only, dropna):
+def test_dataframe_mode(request, df, numeric_only, dropna):
     pdf = df.to_pandas()
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_200
+            and numeric_only is False
+            and "b" in df.columns
+            and df["b"].dtype == np.dtype("timedelta64[s]"),
+            reason="https://github.com/pandas-dev/pandas/issues/53497",
+        )
+    )
 
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
