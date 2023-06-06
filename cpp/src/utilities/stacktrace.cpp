@@ -80,7 +80,7 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame)
 #ifdef CUDF_BUILD_STACKTRACE_DEBUG
   return "Stacktrace is only supported when built with a GNU compiler.";
 #else
-  return "libcudf was not build with stacktrace support.";
+  return "libcudf was not built with stacktrace support.";
 #endif  // CUDF_BUILD_STACKTRACE_DEBUG
 #endif  // __GNUC__
 }
