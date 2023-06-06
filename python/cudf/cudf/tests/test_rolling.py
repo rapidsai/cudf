@@ -8,14 +8,14 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.testing._utils import _create_pandas_series, assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
 @contextmanager
 def _hide_pandas_rolling_min_periods_warning(agg):
-    if agg == "count":
+    if not PANDAS_GE_200 and agg == "count":
         with pytest.warns(
             FutureWarning,
             match="min_periods=None will default to the size of window "

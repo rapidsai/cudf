@@ -1775,7 +1775,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
         midx.names = self.names if self.names == other.names else None
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return midx.sort_values()
         return midx
 
@@ -1798,7 +1798,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         result_df = cudf.merge(self_df, other_df, how="inner")
         midx = self.__class__.from_frame(result_df, names=res_name)
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return midx.sort_values()
         return midx
 

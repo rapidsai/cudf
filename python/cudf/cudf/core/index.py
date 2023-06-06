@@ -694,7 +694,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             ):
                 result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
             if result is not None:
-                if sort is None and not result.is_monotonic_increasing:
+                if sort in {None, True} and not result.is_monotonic_increasing:
                     return result.sort_values()
                 else:
                     return result
@@ -705,7 +705,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index()._union(other, sort=sort)
 
     @_cudf_nvtx_annotate
-    def _intersection(self, other, sort=False):
+    def _intersection(self, other, sort=None):
         if not isinstance(other, RangeIndex):
             return super()._intersection(other, sort=sort)
 
@@ -745,7 +745,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
             new_index = new_index[::-1]
-        if sort is None:
+        if sort in {None, True}:
             new_index = new_index.sort_values()
 
         return new_index
