@@ -30,8 +30,8 @@ struct StringsStripTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsStripTest, StripLeft)
 {
-  std::vector<const char*> h_strings{"  aBc  ", "   ", nullptr, "aaaa ", "b", "\tccc ddd"};
-  std::vector<const char*> h_expected{"aBc  ", "", nullptr, "aaaa ", "b", "ccc ddd"};
+  std::vector<char const*> h_strings{"  aBc  ", "   ", nullptr, "aaaa ", "b", "\tccc ddd"};
+  std::vector<char const*> h_expected{"aBc  ", "", nullptr, "aaaa ", "b", "ccc ddd"};
 
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -50,8 +50,8 @@ TEST_F(StringsStripTest, StripLeft)
 
 TEST_F(StringsStripTest, StripRight)
 {
-  std::vector<const char*> h_strings{"  aBc  ", "   ", nullptr, "aaaa ", "b", "\tccc ddd"};
-  std::vector<const char*> h_expected{"  aBc", "", nullptr, "", "b", "\tccc ddd"};
+  std::vector<char const*> h_strings{"  aBc  ", "   ", nullptr, "aaaa ", "b", "\tccc ddd"};
+  std::vector<char const*> h_expected{"  aBc", "", nullptr, "", "b", "\tccc ddd"};
 
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -71,8 +71,8 @@ TEST_F(StringsStripTest, StripRight)
 
 TEST_F(StringsStripTest, StripBoth)
 {
-  std::vector<const char*> h_strings{"  aBc  ", "   ", nullptr, "ééé ", "b", " ccc dddé"};
-  std::vector<const char*> h_expected{"aBc", "", nullptr, "", "b", "ccc ddd"};
+  std::vector<char const*> h_strings{"  aBc  ", "   ", nullptr, "ééé ", "b", " ccc dddé"};
+  std::vector<char const*> h_expected{"aBc", "", nullptr, "", "b", "ccc ddd"};
 
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -102,7 +102,7 @@ TEST_F(StringsStripTest, EmptyStringsColumn)
 
 TEST_F(StringsStripTest, InvalidParameter)
 {
-  std::vector<const char*> h_strings{"string left intentionally blank"};
+  std::vector<char const*> h_strings{"string left intentionally blank"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto strings_view = cudf::strings_column_view(strings);
   EXPECT_THROW(cudf::strings::strip(

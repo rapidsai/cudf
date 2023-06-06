@@ -33,41 +33,41 @@
 #include <type_traits>
 #include <vector>
 
-static const auto test_timestamps_D = std::vector<int32_t>{
+static auto const test_timestamps_D = std::vector<int32_t>{
   -1528,  // 1965-10-26 GMT
   17716,  // 2018-07-04 GMT
   19382,  // 2023-01-25 GMT
 };
 
-static const auto test_timestamps_s = std::vector<int64_t>{
+static auto const test_timestamps_s = std::vector<int64_t>{
   -131968728,  // 1965-10-26 14:01:12 GMT
   1530705600,  // 2018-07-04 12:00:00 GMT
   1674631932,  // 2023-01-25 07:32:12 GMT
 };
 
-static const auto test_timestamps_ms = std::vector<int64_t>{
+static auto const test_timestamps_ms = std::vector<int64_t>{
   -131968727238,  // 1965-10-26 14:01:12.762 GMT
   1530705600000,  // 2018-07-04 12:00:00.000 GMT
   1674631932929,  // 2023-01-25 07:32:12.929 GMT
 };
 
-static const auto test_timestamps_us = std::vector<int64_t>{
+static auto const test_timestamps_us = std::vector<int64_t>{
   -131968727238000,  // 1965-10-26 14:01:12.762000000 GMT
   1530705600000000,  // 2018-07-04 12:00:00.000000000 GMT
   1674631932929000,  // 2023-01-25 07:32:12.929000000 GMT
 };
 
-static const auto test_timestamps_ns = std::vector<int64_t>{
+static auto const test_timestamps_ns = std::vector<int64_t>{
   -131968727238000000,  // 1965-10-26 14:01:12.762000000 GMT
   1530705600000000000,  // 2018-07-04 12:00:00.000000000 GMT
   1674631932929000000,  // 2023-01-25 07:32:12.929000000 GMT
 };
 
-static const auto test_durations_D  = test_timestamps_D;
-static const auto test_durations_s  = test_timestamps_s;
-static const auto test_durations_ms = test_timestamps_ms;
-static const auto test_durations_us = test_timestamps_us;
-static const auto test_durations_ns = test_timestamps_ns;
+static auto const test_durations_D  = test_timestamps_D;
+static auto const test_durations_s  = test_timestamps_s;
+static auto const test_durations_ms = test_timestamps_ms;
+static auto const test_durations_us = test_timestamps_us;
+static auto const test_durations_ns = test_timestamps_ns;
 
 template <typename T, typename R>
 inline auto make_column(std::vector<R> data)
