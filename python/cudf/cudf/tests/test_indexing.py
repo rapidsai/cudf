@@ -1914,6 +1914,46 @@ def test_iloc_13267(indexer):
     assert_eq(expect, actual)
 
 
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        0,
+        (slice(None), 0),
+        pytest.param(
+            ([0, 2], 1),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13515"
+            ),
+        ),
+        (slice(None), slice(None)),
+        (slice(None), [1, 0]),
+        (0, 0),
+        (1, [1, 0]),
+        pytest.param(
+            ([1, 0], 0),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13515"
+            ),
+        ),
+        pytest.param(
+            ([1, 2], [0, 1]),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13515"
+            ),
+        ),
+    ],
+)
+def test_iloc_multiindex_13515(indexer):
+    df = pd.DataFrame(
+        {"a": [1, 1, 3], "b": [2, 3, 4], "c": [1, 6, 7], "d": [1, 8, 9]}
+    ).set_index(["a", "b"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.iloc[indexer]
+    actual = cdf.iloc[indexer]
+    assert_eq(expect, actual)
+
+
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12833")
 def test_loc_12833_unordered():
     df = pd.DataFrame({"a": [1, 2, 3]}, index=[7, 0, 4])
