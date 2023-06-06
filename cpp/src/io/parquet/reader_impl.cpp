@@ -43,11 +43,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto is_string_col = [](gpu::ColumnChunkDesc const& chunk) {
-    return (chunk.data_type & 7) == BYTE_ARRAY && (chunk.data_type >> 3) != 4 &&
-           chunk.converted_type != DECIMAL;
-  };
-  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), is_string_col);
+  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), gpu::is_string_col);
 
   std::vector<size_type> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
