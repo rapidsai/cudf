@@ -392,6 +392,12 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns
                            device_span<uint32_t const> str_col_indexes,
                            rmm::cuda_stream_view stream);
 
+void rowgroup_char_counts(device_2dspan<size_type> counts,
+                          device_span<orc_column_device_view const> orc_columns,
+                          device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                          device_span<uint32_t const> str_col_indexes,
+                          rmm::cuda_stream_view stream);
+
 /**
  * @brief Launches kernel for building stripe dictionaries
  *

@@ -16,6 +16,7 @@
 
 #include "orc_gpu.hpp"
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
@@ -285,8 +286,8 @@ __global__ void __launch_bounds__(block_size, 2)
     auto const& offsets = s->chunk.leaf_column->child(strings_column_view::offsets_column_index);
     // Compute total length from the offsets
     chunks[group_id][str_col_idx].string_char_count =
-      offsets.element<size_type>(s->chunk.start_row + s->chunk.num_rows) -
-      offsets.element<size_type>(s->chunk.start_row);
+      offsets.element<size_type>(start_row + s->chunk.num_rows) -
+      offsets.element<size_type>(start_row);
     chunks[group_id][str_col_idx].num_dict_strings = nnz - s->total_dupes;
     chunks[group_id][str_col_idx].dict_char_count  = dict_char_count;
     chunks[group_id][str_col_idx].leaf_column      = s->chunk.leaf_column;
@@ -296,6 +297,52 @@ __global__ void __launch_bounds__(block_size, 2)
     chunks[group_id][str_col_idx].start_row  = s->chunk.start_row;  // used?
     chunks[group_id][str_col_idx].num_rows   = s->chunk.num_rows;   // used?
   }
+}
+
+/**
+ * @brief Counts the number of characters in each rowgroup of each string column.
+ */
+__global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts,
+                                            device_span<orc_column_device_view const> orc_columns,
+                                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                                            device_span<uint32_t const> str_col_indexes)
+{
+  // Index of the column in the `str_col_indexes` array
+  uint32_t const str_col_idx = blockIdx.y;
+  // Index of the column in the `orc_columns` array
+  auto const col_idx     = str_col_indexes[str_col_idx];
+  uint32_t row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row_group_idx >= rowgroup_bounds.size().first) { return; }
+
+  auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin;
+  auto const num_rows  = rowgroup_bounds[row_group_idx][col_idx].size();
+
+  auto const& offsets = orc_columns[col_idx].child(strings_column_view::offsets_column_index);
+  char_counts[str_col_idx][row_group_idx] =
+    offsets.element<size_type>(start_row + num_rows) - offsets.element<size_type>(start_row);
+}
+
+void rowgroup_char_counts(device_2dspan<size_type> counts,
+                          device_span<orc_column_device_view const> orc_columns,
+                          device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                          device_span<uint32_t const> str_col_indexes,
+                          rmm::cuda_stream_view stream)
+{
+  if (rowgroup_bounds.count() == 0) { return; }
+
+  auto const num_rowgroups = rowgroup_bounds.size().first;
+  auto const num_str_cols  = str_col_indexes.size();
+
+  int block_size    = 0;  // suggested thread count to use
+  int min_grid_size = 0;  // minimum block count required
+  CUDF_CUDA_TRY(
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, rowgroup_char_counts_kernel));
+  auto const grid_size =
+    dim3(cudf::util::div_rounding_up_unsafe<unsigned int>(num_rowgroups, block_size),
+         static_cast<unsigned int>(num_str_cols));
+
+  rowgroup_char_counts_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+    counts, orc_columns, rowgroup_bounds, str_col_indexes);
 }
 
 /**
