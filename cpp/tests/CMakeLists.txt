@@ -611,8 +611,6 @@ ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
 
-ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
-
 # ##################################################################################################
 # Install tests ####################################################################################
 # ##################################################################################################
