@@ -32,12 +32,12 @@ namespace detail {
  * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
  * copied.
  *
- * @param buffer Device buffer to copy to.
- * @param input Data to copy from.
- * @param bytes Number of bytes to copy.
- * @return Pointer to the end of the output buffer after the copy.
+ * @param buffer Device buffer to copy to
+ * @param input Data to copy from
+ * @param bytes Number of bytes to copy
+ * @return Pointer to the end of the output buffer after the copy
  */
-__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
+__device__ inline char* copy_and_increment(char* buffer, char const* input, size_type bytes)
 {
   // this can be slightly faster than memcpy
   thrust::copy_n(thrust::seq, input, bytes, buffer);
