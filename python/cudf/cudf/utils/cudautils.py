@@ -41,6 +41,8 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
             if arr.dtype in ("float32", "float64"):
                 if np.isnan(val):
                     locations = is_non_nan(arr)
+                else:
+                    locations = arr != val
             else:
                 locations = arr != val
 
