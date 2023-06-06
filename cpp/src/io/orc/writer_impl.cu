@@ -246,6 +246,10 @@ class orc_column_view {
   {
     return rowgroup_char_counts[rg_idx];
   }
+  [[nodiscard]] auto char_count() const
+  {
+    return std::accumulate(rowgroup_char_counts.begin(), rowgroup_char_counts.end(), size_type{0});
+  }
 
   [[nodiscard]] auto const& decimal_offsets() const { return d_decimal_offsets; }
   void attach_decimal_offsets(uint32_t* sizes_ptr) { d_decimal_offsets = sizes_ptr; }
@@ -764,15 +768,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
           }
         }
 
-        auto const direct_data_size =
-          segmentation.num_stripes() == 0
-            ? 0
-            : std::accumulate(segmentation.stripes.front().cbegin(),
-                              segmentation.stripes.back().cend(),
-                              size_t{0},
-                              [&](auto data_size, auto rg_idx) {
-                                return data_size + column.rowgroup_char_count(rg_idx);
-                              });
+        size_t const direct_data_size = column.char_count();
         if (enable_dict) {
           uint32_t dict_bits = 0;
           for (dict_bits = 1; dict_bits < 32; dict_bits <<= 1) {
