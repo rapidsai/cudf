@@ -29,6 +29,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuco/static_map.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -38,6 +39,19 @@ namespace gpu {
 
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
+
+auto constexpr KEY_SENTINEL   = size_type{-1};
+auto constexpr VALUE_SENTINEL = size_type{-1};
+
+using map_type = cuco::static_map<size_type, size_type>;
+
+/**
+ * @brief The alias of `map_type::pair_atomic_type` class.
+ *
+ * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
+ * declaration of this struct somewhere else.
+ */
+struct slot_type : public map_type::pair_atomic_type {};
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;

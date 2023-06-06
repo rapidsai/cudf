@@ -2278,6 +2278,25 @@ auto convert_table_to_orc_data(table_view const& input,
   }
 
   // TODO Build new stripe dictionaries and replace old dictionaries one info piece at a time
+  std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
+    orc_table.string_column_indices.size());
+  size_type str_col_idx = 0;
+  for (auto col_idx : orc_table.string_column_indices) {
+    auto& str_column = orc_table.column(col_idx);
+    for (auto const& stripe : segmentation.stripes) {
+      // TODO use the number of valid rows in the stripe
+      auto const stripe_num_rows =
+        stripe.size == 0 ? 0
+                         : segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end -
+                             segmentation.rowgroups[stripe.first][col_idx].begin;
+      hash_maps_storage[str_col_idx].emplace_back(stripe_num_rows * 1.43, stream);
+    }
+    ++str_col_idx;
+  }
+
+  // gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
+  // gpu::populate_chunk_hash_maps(frags, stream);
+  // why chunks in one and frags in the other?
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
