@@ -31,26 +31,22 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     compare: str ('gt', 'lt', or 'eq' (default))
     """
     arr = cudf.core.column.as_column(arr, nan_as_null=False)
-    target = cudf.core.column.arange(0, arr.size, dtype="int32")
     if arr.size > 0:
         if compare == "gt":
             locations = arr <= val
         elif compare == "lt":
             locations = arr >= val
         else:
-            if arr.dtype in ("float32", "float64"):
-                if np.isnan(val):
-                    locations = is_non_nan(arr)
-                else:
-                    locations = arr != val
-            else:
-                locations = arr != val
+            locations = is_non_nan(arr) if np.isnan(val) else arr != val
 
+        target = cudf.core.column.column.arange(0, arr.size, dtype="int32")
         found = cudf._lib.copying._boolean_mask_scatter_scalar(
             [cudf.Scalar(arr.size, dtype="int32").device_value],
             [target],
             locations,
         )[0]
+    else:
+        found = cudf.core.column.column.column_empty(0, dtype="int32")
     return cudf.core.column.column.as_column(found).set_mask(mask)
 
 
