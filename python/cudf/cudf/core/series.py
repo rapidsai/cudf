@@ -181,6 +181,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
+    _frame: cudf.Series
+
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
