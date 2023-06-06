@@ -159,8 +159,8 @@ struct struct_scatter_strings_fn {
     auto const d_str_null = tbl.column(col).is_null(row);
     auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
     // prefix
-    d_strviews[this_index - 1] =
-      (col == 0) ? row_prefix : (include_nulls ? value_separator : string_view{});
+    if (col == 0) d_strviews[this_index - 1] = row_prefix;
+    if (col != 0) d_strviews[this_index - 1] = include_nulls ? value_separator : string_view{};
     if (!include_nulls && d_str_null) {
       d_strviews[this_index]     = string_view{};
       d_strviews[this_index + 1] = string_view{};
