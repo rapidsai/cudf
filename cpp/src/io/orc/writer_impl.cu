@@ -578,18 +578,18 @@ void build_dictionaries(orc_table_view& orc_table,
         size_t direct     = 0;
         size_t dictionary = 0;
       };
+      auto const& col = orc_table.string_column(dict_idx);
       auto const col_cost =
         std::accumulate(stripe_bounds.front().cbegin(),
                         stripe_bounds.back().cend(),
                         string_column_cost{},
                         [&](auto cost, auto rg_idx) -> string_column_cost {
                           const auto& dt = dict[rg_idx][dict_idx];
-                          return {cost.direct + dt.string_char_count,
+                          return {cost.direct + col.rowgroup_char_count(rg_idx),
                                   cost.dictionary + dt.dict_char_count + dt.num_dict_strings};
                         });
       // Disable dictionary if it does not reduce the output size
-      if (!dictionary_enabled[orc_table.string_column(dict_idx).index()] ||
-          col_cost.dictionary >= col_cost.direct) {
+      if (!dictionary_enabled[col.index()] || col_cost.dictionary >= col_cost.direct) {
         for (auto const& stripe : stripe_bounds) {
           stripe_dict[stripe.id][dict_idx].dict_data = nullptr;
         }
@@ -2276,6 +2276,8 @@ auto convert_table_to_orc_data(table_view const& input,
                        enable_dictionary,
                        stream);
   }
+
+  // TODO Build new stripe dictionaries and replace old dictionaries one info piece at a time
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
