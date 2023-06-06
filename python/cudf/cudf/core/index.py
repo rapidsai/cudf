@@ -592,28 +592,33 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, limit=None, method=None, tolerance=None):
-        if method is None:
-            if self.step > 0:
-                start, stop, step = self.start, self.stop, self.step
-            else:
-                # Reversed
-                reverse = self._range[::-1]
-                start, stop, step = reverse.start, reverse.stop, reverse.step
-
-            target_array = cupy.asarray(target)
-            locs = target_array - start
-            valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
-            locs[~valid] = -1
-            locs[valid] = locs[valid] / step
-
-            if step != self.step:
-                # Reversed
-                locs[valid] = len(self) - 1 - locs[valid]
-            return locs
-        else:
+        target_col = cudf.core.column.as_column(target)
+        if method is not None or not isinstance(
+            target_col, cudf.core.column.NumericalColumn
+        ):
+            # TODO: See if we can implement this without converting to
+            # Integer index.
             return self._as_int_index().get_indexer(
                 target=target, limit=limit, method=method, tolerance=tolerance
             )
+
+        if self.step > 0:
+            start, stop, step = self.start, self.stop, self.step
+        else:
+            # Reversed
+            reverse = self._range[::-1]
+            start, stop, step = reverse.start, reverse.stop, reverse.step
+
+        target_array = target_col.values
+        locs = target_array - start
+        valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+        locs[~valid] = -1
+        locs[valid] = locs[valid] / step
+
+        if step != self.step:
+            # Reversed
+            locs[valid] = len(self) - 1 - locs[valid]
+        return locs
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1167,9 +1172,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         haystack_table = cudf.DataFrame(
             {"None": self._column, "order": arange(0, len(self))}
         )
-        merged_table = haystack_table.merge(
-            needle_table, on="None", how="outer"
-        )
+        try:
+            merged_table = haystack_table.merge(
+                needle_table, on="None", how="outer"
+            )
+        except ValueError:
+            return cupy.full(len(needle_table), -1, dtype="int64")
         result_series = (
             merged_table.sort_values(by="order_y")
             .head(len(target))["order_x"]

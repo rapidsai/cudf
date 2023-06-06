@@ -2397,6 +2397,42 @@ def test_get_indexer_multi_string(idx, key, method):
 
 
 @pytest.mark.parametrize(
+    "idx1",
+    [
+        lambda: cudf.Index(["a", "b", "c"]),
+        lambda: cudf.RangeIndex(0, 10),
+        lambda: cudf.Index([1, 2, 3], dtype="category"),
+        lambda: cudf.Index(["a", "b", "c", "d"], dtype="category"),
+        lambda: cudf.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "idx2",
+    [
+        lambda: cudf.Index(["a", "b", "c"]),
+        lambda: cudf.RangeIndex(0, 10),
+        lambda: cudf.Index([1, 2, 3], dtype="category"),
+        lambda: cudf.Index(["a", "b", "c", "d"], dtype="category"),
+    ],
+)
+def test_get_indexer_invalid(idx1, idx2):
+    idx1 = idx1()
+    idx2 = idx2()
+    assert_eq(
+        idx1.get_indexer(idx2), idx1.to_pandas().get_indexer(idx2.to_pandas())
+    )
+
+
+@pytest.mark.parametrize(
     "objs",
     [
         [pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)],

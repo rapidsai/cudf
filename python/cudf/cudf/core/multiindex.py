@@ -1647,15 +1647,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 f"{method=} is not supported yet for MultiIndex."
             )
 
-        target = cudf.MultiIndex.from_tuples(target)
+        try:
+            target = cudf.MultiIndex.from_tuples(target)
+        except TypeError:
+            return cp.full(len(target), -1, dtype="int64")
         needle_table = target.to_frame(index=False)
         col_names = list(range(0, self.nlevels))
         needle_table["order"] = needle_table.index
         haystack_table = self.copy(deep=True).to_frame(index=False)
         haystack_table["order"] = haystack_table.index
-        merged_table = haystack_table.merge(
-            needle_table, on=col_names, how="outer"
-        )
+        try:
+            merged_table = haystack_table.merge(
+                needle_table, on=col_names, how="outer"
+            )
+        except ValueError:
+            return cp.full(len(needle_table), -1, dtype="int64")
+
         result_series = (
             merged_table.sort_values(by="order_y")
             .head(len(target))["order_x"]
