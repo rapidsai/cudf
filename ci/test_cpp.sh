@@ -13,7 +13,7 @@ rapids-logger "Run gtests"
 cd $CONDA_PREFIX/bin/gtests/libcudf/
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
-ctest -j20 --output-on-failure
+ctest -j20 --output-on-failure -VV
 
 SUITEERROR=$?
 
