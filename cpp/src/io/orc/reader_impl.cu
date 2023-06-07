@@ -932,7 +932,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
 table_with_metadata reader::impl::read(int64_t skip_rows,
                                        std::optional<size_type> num_rows,
-                                       const std::vector<std::vector<size_type>>& stripes,
+                                       std::vector<std::vector<size_type>> const& stripes,
                                        rmm::cuda_stream_view stream)
 {
   // Selected columns at different levels of nesting are stored in different elements

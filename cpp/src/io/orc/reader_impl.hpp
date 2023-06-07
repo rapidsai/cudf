@@ -106,7 +106,7 @@ class reader::impl {
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> num_rows,
-                           const std::vector<std::vector<size_type>>& stripes,
+                           std::vector<std::vector<size_type>> const& stripes,
                            rmm::cuda_stream_view stream);
 
  private:
