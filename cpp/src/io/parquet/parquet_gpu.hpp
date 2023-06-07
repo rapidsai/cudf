@@ -504,7 +504,7 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
  */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            std::vector<size_type>& col_sizes,
+                            std::vector<size_t>& col_sizes,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,

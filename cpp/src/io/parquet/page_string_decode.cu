@@ -1011,7 +1011,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 }
 
 __global__ void __launch_bounds__(preprocess_block_size)
-  gpuComputePageOffsets(device_span<ColumnChunkDesc const> chunks, device_span<size_type> col_sizes)
+  gpuComputePageOffsets(device_span<ColumnChunkDesc const> chunks, device_span<size_t> col_sizes)
 {
   using block_scan = cub::BlockScan<size_type, preprocess_block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
@@ -1054,7 +1054,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
  */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            std::vector<size_type>& col_sizes,
+                            std::vector<size_t>& col_sizes,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
@@ -1070,11 +1070,11 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   }
 
-  rmm::device_uvector<size_type> d_col_sizes(col_sizes.size(), stream);
+  rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), stream);
   gpuComputePageOffsets<<<col_sizes.size(), dim_block, 0, stream.value()>>>(chunks, d_col_sizes);
   cudaMemcpyAsync(col_sizes.data(),
                   d_col_sizes.data(),
-                  sizeof(size_type) * col_sizes.size(),
+                  sizeof(size_t) * col_sizes.size(),
                   cudaMemcpyDeviceToHost,
                   stream);
   stream.synchronize();

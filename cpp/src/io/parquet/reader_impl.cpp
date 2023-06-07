@@ -45,10 +45,16 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // chunked reader).
   auto const has_strings = std::any_of(chunks.begin(), chunks.end(), gpu::is_string_col);
 
-  std::vector<size_type> col_sizes(_input_columns.size(), 0L);
+  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
       pages, chunks, col_sizes, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
+    // check for overflow
+    if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
+          return sz > std::numeric_limits<size_type>::max();
+        })) {
+      CUDF_FAIL("String column exceeds 2GB limit");
+    }
   }
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
@@ -187,7 +193,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
-        size_type const sz = col_sizes[idx];
+        size_type const sz = static_cast<size_type>(col_sizes[idx]);
         cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
                         &sz,
                         sizeof(size_type),
