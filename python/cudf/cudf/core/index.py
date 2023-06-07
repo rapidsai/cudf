@@ -623,7 +623,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def get_loc(self, key):
         if not is_scalar(key):
-            raise TypeError("Should be a sequence")
+            raise TypeError("Should be a scalar-like")
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
         if idx > idx_int_upper_bound or idx < 0:
@@ -1212,22 +1212,20 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
-        if is_scalar(key):
-            target = [key]
-        else:
-            target = key
+        if not is_scalar(key):
+            raise TypeError("Should be a scalar-like")
 
         is_sorted = (
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
 
-        target_as_table = cudf.core.frame.Frame({"None": as_column(target)})
+        target_as_table = cudf.core.frame.Frame({"None": as_column([key])})
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, target_as_table, is_sorted
         )
 
         if lower_bound == upper_bound:
-            raise KeyError(target)
+            raise KeyError(key)
 
         if lower_bound + 1 == upper_bound:
             # Search result is unique, return int.
