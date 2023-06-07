@@ -19,8 +19,9 @@
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
-#include <cuda/std/tuple>
 #include <io/utilities/block_utils.cuh>
+
+#include <cuda/std/tuple>
 
 namespace cudf::io::parquet::gpu {
 
