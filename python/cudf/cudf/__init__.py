@@ -83,7 +83,7 @@ cupy.cuda.set_allocator(rmm_cupy_allocator)
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = "23.06.00"
+__version__ = "23.08.00"
 
 __all__ = [
     "BaseIndex",

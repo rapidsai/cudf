@@ -8,6 +8,7 @@ import operator
 import string
 import textwrap
 from decimal import Decimal
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -586,6 +587,25 @@ def test_groupby_apply_caching():
     run_groupby_apply_jit_test(data, f, ["a"])
 
     assert precompiled.currsize == 3
+
+
+def test_groupby_apply_no_bytecode_fallback():
+    # tests that a function which contains no bytecode
+    # attribute, but would still be executable using
+    # the iterative groupby apply approach, still works.
+
+    gdf = cudf.DataFrame({"a": [0, 1, 1], "b": [1, 2, 3]})
+    pdf = gdf.to_pandas()
+
+    def f(group):
+        return group.sum()
+
+    part = partial(f)
+
+    expect = pdf.groupby("a").apply(part)
+    got = gdf.groupby("a").apply(part, engine="auto")
+
+    assert_groupby_results_equal(expect, got)
 
 
 @pytest.mark.parametrize("func", [lambda group: group.x + group.y])

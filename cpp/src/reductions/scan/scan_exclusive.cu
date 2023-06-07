@@ -52,7 +52,7 @@ struct scan_dispatcher {
    */
   template <typename T, std::enable_if_t<cuda::std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     null_policy,
+                                     bitmask_type const*,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -86,14 +86,18 @@ std::unique_ptr<column> scan_exclusive(const column_view& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
+  auto [mask, null_count] = [&] {
+    if (null_handling == null_policy::EXCLUDE) {
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream, mr)), input.null_count());
+    } else if (input.nullable()) {
+      return mask_scan(input, scan_type::EXCLUSIVE, stream, mr);
+    }
+    return std::make_pair(rmm::device_buffer{}, size_type{0});
+  }();
 
-  if (null_handling == null_policy::EXCLUDE) {
-    output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
-  } else if (input.nullable()) {
-    auto [mask, null_count] = mask_scan(input, scan_type::EXCLUSIVE, stream, mr);
-    output->set_null_mask(mask, null_count);
-  }
+  auto output = scan_agg_dispatch<scan_dispatcher>(
+    input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
+  output->set_null_mask(mask, null_count);
 
   return output;
 }
