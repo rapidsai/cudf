@@ -66,6 +66,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
     INSTALL_COMPONENT_SET testing
   )
 
+  # TODO: Will this work both inside the build directory and when the libcudf/libcudf-tests packages
+  # are installed from conda?
   set_tests_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES
