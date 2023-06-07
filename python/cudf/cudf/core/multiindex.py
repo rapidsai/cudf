@@ -1650,27 +1650,31 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         try:
             target = cudf.MultiIndex.from_tuples(target)
         except TypeError:
-            return cp.full(len(target), -1, dtype="int64")
+            return cp.full(
+                len(target), -1, dtype=libcudf.types.size_type_dtype
+            )
+
         needle_table = target.to_frame(index=False)
         col_names = list(range(0, self.nlevels))
-        needle_table["order"] = needle_table.index
         haystack_table = self.copy(deep=True).to_frame(index=False)
-        haystack_table["order"] = haystack_table.index
-        try:
-            merged_table = haystack_table.merge(
-                needle_table, on=col_names, how="outer"
-            )
-        except ValueError:
-            return cp.full(len(needle_table), -1, dtype="int64")
-
-        result_series = (
-            merged_table.sort_values(by="order_y")
-            .head(len(target))["order_x"]
-            .reset_index(drop=True)
+        result = cudf.core.column.full(
+            len(needle_table),
+            fill_value=-1 if method is None else None,
+            dtype=libcudf.types.size_type_dtype,
         )
-        if method is None:
-            result_series = result_series.fillna(-1)
-        elif method in {"ffill", "bfill", "pad", "backfill"}:
+        scatter_map, indices = libcudf.join.join(
+            list(needle_table._data.columns),
+            list(haystack_table._data.columns),
+            how="inner",
+        )
+        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
+        result_series = cudf.Series(result)
+        if not len(self):
+            return cp.full(
+                len(needle_table), -1, dtype=libcudf.types.size_type_dtype
+            )
+
+        if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
@@ -1678,7 +1682,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 target_col=needle_table[col_names],
                 tolerance=tolerance,
             )
-        else:
+        elif method is not None:
             raise ValueError(
                 f"{method=} is unsupported, only supported values are: "
                 "{['ffill'/'pad', 'bfill'/'backfill', None]}"

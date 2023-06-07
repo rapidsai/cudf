@@ -23,6 +23,7 @@ from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
+from cudf import _lib as libcudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
@@ -52,6 +53,7 @@ from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
+from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring, doc_apply
@@ -1166,43 +1168,43 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "is specified."
             )
 
-        needle_table = cudf.DataFrame(
-            {"None": as_column(target), "order": arange(0, len(target))}
+        needle = as_column(target)
+        haystack = self._column
+        result = cudf.core.column.full(
+            len(needle),
+            fill_value=-1 if method is None else None,
+            dtype=libcudf.types.size_type_dtype,
         )
-        haystack_table = cudf.DataFrame(
-            {"None": self._column, "order": arange(0, len(self))}
-        )
-        if not len(self):
-            return cupy.full(len(needle_table), -1, dtype="int64")
         try:
-            merged_table = haystack_table.merge(
-                needle_table, on="None", how="outer"
-            )
+            lcol, rcol = _match_join_keys(needle, haystack, "inner")
         except ValueError:
-            return cupy.full(len(needle_table), -1, dtype="int64")
-        result_series = (
-            merged_table.sort_values(by="order_y")
-            .head(len(target))["order_x"]
-            .reset_index(drop=True)
-        )
-        if method is None:
-            result_series = result_series.fillna(-1)
-        elif method in {"ffill", "bfill", "pad", "backfill"}:
+            return cupy.full(
+                len(needle), -1, dtype=libcudf.types.size_type_dtype
+            )
+        scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
+        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
+        result_series = cudf.Series(result)
+        if not len(self):
+            return cupy.full(
+                len(needle), -1, dtype=libcudf.types.size_type_dtype
+            )
+
+        if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=needle_table["None"],
+                target_col=cudf.Series(needle),
                 tolerance=tolerance,
             )
         elif method == "nearest":
             result_series = _get_nearest_indexer(
                 index=self,
                 positions=result_series,
-                target_col=needle_table["None"],
+                target_col=cudf.Series(needle),
                 tolerance=tolerance,
             )
-        else:
+        elif method is not None:
             raise ValueError(
                 f"{method=} is unsupported, only supported values are: "
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"

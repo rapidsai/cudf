@@ -126,7 +126,7 @@ class BaseIndex(Serializable):
         >>> index
         Index(['c', 'a', 'b'], dtype='object')
         >>> index.get_indexer(['a', 'b', 'x'])
-        array([ 1,  2, -1])
+        array([ 1,  2, -1], dtype=int32)
         """
         raise NotImplementedError
 
