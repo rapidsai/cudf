@@ -20,6 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+namespace cudf::detail {
+
 template <typename T>
 class hostdevice_span {
  public:
@@ -173,3 +175,5 @@ class hostdevice_span {
   T* _device_data{};  ///< Pointer to device memory containing elements
   T* _host_data{};    ///< Pointer to host memory containing elements
 };
+
+}  // namespace cudf::detail

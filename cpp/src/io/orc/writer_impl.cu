@@ -1261,8 +1261,8 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
-hostdevice_vector<uint8_t> allocate_and_encode_blobs(
-  hostdevice_vector<statistics_merge_group>& stats_merge_groups,
+cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
+  cudf::detail::hostdevice_vector<statistics_merge_group>& stats_merge_groups,
   rmm::device_uvector<statistics_chunk>& stat_chunks,
   int num_stat_blobs,
   rmm::cuda_stream_view stream)
@@ -1272,7 +1272,8 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
   auto max_blobs = stats_merge_groups.element(num_stat_blobs - 1, stream);
 
-  hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks, stream);
+  cudf::detail::hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks,
+                                                 stream);
   gpu::orc_encode_statistics(blobs.device_ptr(),
                              stats_merge_groups.device_ptr(),
                              stat_chunks.data(),
@@ -1304,9 +1305,10 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
     return intermediate_statistics{stream};
   }
 
-  hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
-  hostdevice_vector<statistics_merge_group> rowgroup_merge(num_rowgroup_blobs, stream);
-  hostdevice_vector<statistics_merge_group> stripe_merge(num_stripe_blobs, stream);
+  cudf::detail::hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
+  cudf::detail::hostdevice_vector<statistics_merge_group> rowgroup_merge(num_rowgroup_blobs,
+                                                                         stream);
+  cudf::detail::hostdevice_vector<statistics_merge_group> stripe_merge(num_stripe_blobs, stream);
   std::vector<statistics_dtype> col_stats_dtypes;
   std::vector<data_type> col_types;
   auto rowgroup_stat_merge = rowgroup_merge.host_ptr();
@@ -1400,7 +1402,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
     if (not is_granularity_rowgroup) { return {}; }
 
-    hostdevice_vector<uint8_t> blobs =
+    cudf::detail::hostdevice_vector<uint8_t> blobs =
       allocate_and_encode_blobs(rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, stream);
 
     std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
@@ -1444,7 +1446,7 @@ encoded_footer_statistics finish_statistic_blobs(int num_stripes,
 
   // merge the stripe persisted data and add file data
   rmm::device_uvector<statistics_chunk> stat_chunks(num_blobs, stream);
-  hostdevice_vector<statistics_merge_group> stats_merge(num_blobs, stream);
+  cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_blobs, stream);
 
   // we need to merge the stat arrays from the persisted data.
   // this needs to be done carefully because each array can contain
@@ -1496,7 +1498,7 @@ encoded_footer_statistics finish_statistic_blobs(int num_stripes,
   detail::merge_group_statistics<detail::io_file_format::ORC>(
     file_stat_chunks, stat_chunks.data(), d_file_stats_merge, num_file_blobs, stream);
 
-  hostdevice_vector<uint8_t> blobs =
+  cudf::detail::hostdevice_vector<uint8_t> blobs =
     allocate_and_encode_blobs(stats_merge, stat_chunks, num_blobs, stream);
 
   auto stripe_stat_merge = stats_merge.host_ptr();
@@ -2278,8 +2280,8 @@ auto convert_table_to_orc_data(table_view const& input,
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
                       std::move(orc_table),
-                      rmm::device_uvector<uint8_t>{0, stream},  // compressed_data
-                      hostdevice_vector<compression_result>{},  // comp_results
+                      rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
+                      cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{stream},
                       std::optional<writer_compression_statistics>{},
@@ -2326,7 +2328,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
-  hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
+  cudf::detail::hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
   std::optional<writer_compression_statistics> compression_stats;
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),

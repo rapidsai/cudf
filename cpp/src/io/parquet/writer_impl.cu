@@ -998,7 +998,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      Compression compression_codec,
                      rmm::cuda_stream_view stream)
 {
-  if (chunks.is_empty()) { return hostdevice_vector<size_type>{}; }
+  if (chunks.is_empty()) { return cudf::detail::hostdevice_vector<size_type>{}; }
 
   chunks.host_to_device_async(stream);
   // Calculate number of pages and store in respective chunks
@@ -1025,7 +1025,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
   // Now that we know the number of pages, allocate an array to hold per page size and get it
   // populated
-  hostdevice_vector<size_type> page_sizes(num_pages, stream);
+  cudf::detail::hostdevice_vector<size_type> page_sizes(num_pages, stream);
   gpu::InitEncoderPages(chunks,
                         {},
                         page_sizes,
@@ -1041,7 +1041,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   page_sizes.device_to_host_sync(stream);
 
   // Get per-page max compressed size
-  hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
+  cudf::detail::hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
   std::transform(page_sizes.begin(),
                  page_sizes.end(),
                  comp_page_sizes.begin(),
@@ -1201,7 +1201,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         device_span<gpu::parquet_column_device_view const> col_desc,
                         device_span<gpu::EncPage> pages,
-                        hostdevice_vector<size_type>& comp_page_sizes,
+                        cudf::detail::hostdevice_vector<size_type>& comp_page_sizes,
                         statistics_chunk* page_stats,
                         statistics_chunk* frag_stats,
                         uint32_t num_columns,
@@ -1470,7 +1470,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 
   // Initialize column description
-  hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
+  cudf::detail::hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(),
+                                                                            stream);
   std::transform(
     parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const& pcol) {
       return pcol.get_device_view(stream);
@@ -1712,7 +1713,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     frags_per_column.empty() ? 0 : frag_offsets.back() + frags_per_column.back();
 
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
-  hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
+  cudf::detail::hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
 
   // update fragments and/or prepare for fragment statistics calculation if necessary
   if (total_frags != 0) {
@@ -1762,7 +1763,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
+  cudf::detail::hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
     chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression, stream);
 
   // Find which partition a rg belongs to

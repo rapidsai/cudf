@@ -71,9 +71,10 @@ class SingleSymbolSmemLUT {
    * @return
    */
   template <typename SymbolGroupItT>
-  static void InitDeviceSymbolGroupIdLut(hostdevice_vector<KernelParameter>& sgid_init,
-                                         SymbolGroupItT const& symbol_strings,
-                                         rmm::cuda_stream_view stream)
+  static void InitDeviceSymbolGroupIdLut(
+    cudf::detail::hostdevice_vector<KernelParameter>& sgid_init,
+    SymbolGroupItT const& symbol_strings,
+    rmm::cuda_stream_view stream)
   {
     // The symbol group index to be returned if none of the given symbols match
     SymbolGroupIdT no_match_id = symbol_strings.size();
@@ -173,7 +174,7 @@ class TransitionTable {
 
   template <typename StateIdT>
   static void InitDeviceTransitionTable(
-    hostdevice_vector<KernelParameter>& transition_table_init,
+    cudf::detail::hostdevice_vector<KernelParameter>& transition_table_init,
     std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
     rmm::cuda_stream_view stream)
   {
@@ -321,7 +322,7 @@ class TransducerLookupTable {
    * of the thread block to call the constructor
    */
   static void InitDeviceTranslationTable(
-    hostdevice_vector<KernelParameter>& translation_table_init,
+    cudf::detail::hostdevice_vector<KernelParameter>& translation_table_init,
     std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
       translation_table,
     rmm::cuda_stream_view stream)
@@ -486,9 +487,11 @@ class Dfa {
   {
     constexpr std::size_t single_item = 1;
 
-    sgid_init              = hostdevice_vector<SymbolGroupIdInitT>{single_item, stream};
-    transition_table_init  = hostdevice_vector<TransitionTableInitT>{single_item, stream};
-    translation_table_init = hostdevice_vector<TranslationTableInitT>{single_item, stream};
+    sgid_init = cudf::detail::hostdevice_vector<SymbolGroupIdInitT>{single_item, stream};
+    transition_table_init =
+      cudf::detail::hostdevice_vector<TransitionTableInitT>{single_item, stream};
+    translation_table_init =
+      cudf::detail::hostdevice_vector<TranslationTableInitT>{single_item, stream};
 
     // Initialize symbol group id lookup table
     SymbolGroupIdLookupT::InitDeviceSymbolGroupIdLut(sgid_init, symbol_vec, stream);
@@ -567,9 +570,9 @@ class Dfa {
   }
 
  private:
-  hostdevice_vector<SymbolGroupIdInitT> sgid_init{};
-  hostdevice_vector<TransitionTableInitT> transition_table_init{};
-  hostdevice_vector<TranslationTableInitT> translation_table_init{};
+  cudf::detail::hostdevice_vector<SymbolGroupIdInitT> sgid_init{};
+  cudf::detail::hostdevice_vector<TransitionTableInitT> transition_table_init{};
+  cudf::detail::hostdevice_vector<TranslationTableInitT> translation_table_init{};
 };
 
 }  // namespace cudf::io::fst::detail

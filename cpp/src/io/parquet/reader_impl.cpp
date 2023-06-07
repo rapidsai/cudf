@@ -40,9 +40,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
-  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, _stream);
-  auto chunk_offsets       = std::vector<size_t>();
+  auto chunk_nested_valids =
+    cudf::detail::hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
+  auto chunk_nested_data = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_offsets     = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, chunk_off = 0; c < chunks.size(); c++) {

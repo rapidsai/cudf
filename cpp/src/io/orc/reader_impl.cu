@@ -287,12 +287,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   rmm::cuda_stream_view stream)
 {
   // For checking whether we decompress successfully
-  hostdevice_vector<bool> any_block_failure(1, stream);
+  cudf::detail::hostdevice_vector<bool> any_block_failure(1, stream);
   any_block_failure[0] = false;
   any_block_failure.host_to_device_async(stream);
 
   // Parse the columns' compressed info
-  hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
+    0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
     compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,

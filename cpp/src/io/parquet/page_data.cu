@@ -2169,8 +2169,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageSizes
  */
-void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
-                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                      cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
                       size_t min_row,
                       size_t num_rows,
                       bool compute_num_rows,
@@ -2199,8 +2199,8 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodePageData
  */
-void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
-                             hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,

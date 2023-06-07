@@ -31,6 +31,8 @@
 
 #include <variant>
 
+namespace cudf::detail {
+
 inline bool hostdevice_vector_uses_pageable_buffer()
 {
   static bool const use_pageable =
@@ -193,9 +195,6 @@ class hostdevice_vector {
   rmm::device_uvector<T> d_data;
 };
 
-namespace cudf {
-namespace detail {
-
 /**
  * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
  *
@@ -255,5 +254,4 @@ class hostdevice_2dvector {
   typename host_2dspan<T>::size_type _size;
 };
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
