@@ -166,7 +166,7 @@ TEST_F(JsonTest, StackContext)
   cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host_async(stream);
 
   // Make sure we copied back the stack context
   stream.synchronize();
@@ -214,7 +214,7 @@ TEST_F(JsonTest, StackContextUtf8)
   cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host_async(stream);
 
   // Make sure we copied back the stack context
   stream.synchronize();

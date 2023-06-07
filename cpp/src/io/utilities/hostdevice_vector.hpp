@@ -137,18 +137,28 @@ class hostdevice_vector {
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_sync(rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
+
+  void device_to_host_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+  }
+
+  void device_to_host_sync(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
   }
 
   /**
@@ -234,15 +244,11 @@ class hostdevice_2dvector {
 
   size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.host_to_device(stream, synchronize);
-  }
+  void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.device_to_host(stream, synchronize);
-  }
+  void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
 
  private:
   hostdevice_vector<T> _data;

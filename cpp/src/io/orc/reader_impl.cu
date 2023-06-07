@@ -289,7 +289,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // For checking whether we decompress successfully
   hostdevice_vector<bool> any_block_failure(1, stream);
   any_block_failure[0] = false;
-  any_block_failure.host_to_device(stream);
+  any_block_failure.host_to_device_async(stream);
 
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
@@ -298,14 +298,14 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
-  compinfo.host_to_device(stream);
+  compinfo.host_to_device_async(stream);
 
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor.GetBlockSize(),
                                  decompressor.GetLog2MaxCompressionRatio(),
                                  stream);
-  compinfo.device_to_host(stream, true);
+  compinfo.device_to_host_sync(stream);
 
   // Count the exact number of compressed blocks
   size_t num_compressed_blocks   = 0;
@@ -350,7 +350,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     max_uncomp_block_size =
       std::max(max_uncomp_block_size, compinfo[i].max_uncompressed_block_size);
   }
-  compinfo.host_to_device(stream);
+  compinfo.host_to_device_async(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor.GetBlockSize(),
@@ -416,9 +416,9 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 
-  any_block_failure.device_to_host(stream);
+  any_block_failure.device_to_host_async(stream);
 
-  compinfo.device_to_host(stream, true);
+  compinfo.device_to_host_sync(stream);
 
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
@@ -443,8 +443,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
 
   if (row_groups.size().first) {
-    chunks.host_to_device(stream);
-    row_groups.host_to_device(stream);
+    chunks.host_to_device_async(stream);
+    row_groups.host_to_device_async(stream);
     gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
                             compinfo.device_ptr(),
                             chunks.base_device_ptr(),
@@ -485,7 +485,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
       if (not is_mask_updated) {
-        chunks.device_to_host(stream, true);
+        chunks.device_to_host_sync(stream);
         is_mask_updated = true;
       }
 
@@ -543,7 +543,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
       });
     });
-    chunks.host_to_device(stream, true);
+    chunks.host_to_device_sync(stream);
   }
 }
 
@@ -617,7 +617,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
   // Allocate global dictionary for deserializing
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
-  chunks.host_to_device(stream, true);
+  chunks.host_to_device_sync(stream);
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
@@ -640,7 +640,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            level,
                            error_count.data(),
                            stream);
-  chunks.device_to_host(stream);
+  chunks.device_to_host_async(stream);
   // `value` synchronizes
   auto const num_errors = error_count.value(stream);
   CUDF_EXPECTS(num_errors == 0, "ORC data decode failed");
@@ -1200,8 +1200,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           stripe_data.push_back(std::move(decomp_data));
         } else {
           if (row_groups.size().first) {
-            chunks.host_to_device(stream);
-            row_groups.host_to_device(stream);
+            chunks.host_to_device_async(stream);
+            row_groups.host_to_device_async(stream);
             gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
                                     nullptr,
                                     chunks.base_device_ptr(),
@@ -1247,7 +1247,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           if (not is_level_data_empty) {
             scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           }
-          row_groups.device_to_host(stream, true);
+          row_groups.device_to_host_sync(stream);
           aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }
 

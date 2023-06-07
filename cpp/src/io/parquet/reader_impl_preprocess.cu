@@ -296,9 +296,9 @@ template <typename T = uint8_t>
 {
   size_t total_pages = 0;
 
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host_sync(stream);
 
   for (size_t c = 0; c < chunks.size(); c++) {
     total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -339,7 +339,7 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
     page_count += chunks[c].max_num_pages;
   }
 
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
 
   // compute max bytes needed for level data
@@ -357,7 +357,7 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                             thrust::maximum<int>());
   auto const level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
-  pages.device_to_host(stream, true);
+  pages.device_to_host_sync(stream);
 
   // validate page encodings
   CUDF_EXPECTS(std::all_of(pages.begin(),
@@ -555,7 +555,7 @@ int decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
-  pages.host_to_device(stream);
+  pages.host_to_device_async(stream);
 
   return decomp_pages;
 }
@@ -682,8 +682,8 @@ void reader::impl::allocate_nesting_info()
   }
 
   // copy nesting info to the device
-  page_nesting_info.host_to_device(_stream);
-  page_nesting_decode_info.host_to_device(_stream);
+  page_nesting_info.host_to_device_async(_stream);
+  page_nesting_decode_info.host_to_device_async(_stream);
 }
 
 void reader::impl::allocate_level_decode_space()
@@ -853,7 +853,7 @@ void reader::impl::load_and_decompress_data(
     // std::vector<output_column_info> output_info = build_output_column_info();
 
     // the following two allocate functions modify the page data
-    pages.device_to_host(_stream, true);
+    pages.device_to_host_sync(_stream);
     {
       // nesting information (sizes, etc) stored -per page-
       // note : even for flat schemas, we allocate 1 level of "nesting" info
@@ -862,7 +862,7 @@ void reader::impl::load_and_decompress_data(
       // level decode space
       allocate_level_decode_space();
     }
-    pages.host_to_device(_stream);
+    pages.host_to_device_async(_stream);
   }
 }
 
@@ -877,7 +877,7 @@ struct cumulative_row_info {
 #if defined(PREPROCESS_DEBUG)
 void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
-  pages.device_to_host(_stream, true);
+  pages.device_to_host_sync(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto const& p = pages[idx];
     // skip dictionary pages
@@ -900,7 +900,7 @@ void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
                                 rmm::device_uvector<cumulative_row_info> const& c_info,
                                 rmm::cuda_stream_view stream)
 {
-  pages.device_to_host(stream, true);
+  pages.device_to_host_sync(stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -1598,7 +1598,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     }
 
     if (total_str_dict_indexes > 0) {
-      chunks.host_to_device(_stream);
+      chunks.host_to_device_async(_stream);
       gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
     }
   }
@@ -1616,7 +1616,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // - we will be doing a chunked read
     gpu::ComputePageSizes(pages,
                           chunks,
-                          0,                     // 0-max size_t. process all possible rows
+                          0,  // 0-max size_t. process all possible rows
                           std::numeric_limits<size_t>::max(),
                           true,                  // compute num_rows
                           chunk_read_limit > 0,  // compute string sizes
@@ -1640,7 +1640,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     _chunk_itm_data.page_index = std::move(page_index);
 
     // retrieve pages back
-    pages.device_to_host(_stream, true);
+    pages.device_to_host_sync(_stream);
 
     // print_pages(pages, _stream);
   }
@@ -1760,7 +1760,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       start_offset_output_iterator{
         pages.device_ptr(), page_index.begin(), 0, d_cols_info.data(), max_depth, pages.size()});
 
-    sizes.device_to_host(_stream, true);
+    sizes.device_to_host_sync(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
       auto const& input_col = _input_columns[idx];
       auto* cols            = &_output_buffers;

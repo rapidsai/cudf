@@ -923,7 +923,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragmen
   auto d_partitions = cudf::detail::make_device_uvector_async(
     partitions, stream, rmm::mr::get_current_device_resource());
   gpu::InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
-  frag.device_to_host(stream, true);
+  frag.device_to_host_sync(stream);
 }
 
 /**
@@ -1000,7 +1000,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 {
   if (chunks.is_empty()) { return hostdevice_vector<size_type>{}; }
 
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   // Calculate number of pages and store in respective chunks
   gpu::InitEncoderPages(chunks,
                         {},
@@ -1014,14 +1014,14 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         nullptr,
                         nullptr,
                         stream);
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host_sync(stream);
 
   int num_pages = 0;
   for (auto& chunk : chunks.host_view().flat_view()) {
     chunk.first_page = num_pages;
     num_pages += chunk.num_pages;
   }
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
 
   // Now that we know the number of pages, allocate an array to hold per page size and get it
   // populated
@@ -1038,7 +1038,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         nullptr,
                         nullptr,
                         stream);
-  page_sizes.device_to_host(stream, true);
+  page_sizes.device_to_host_sync(stream);
 
   // Get per-page max compressed size
   hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
@@ -1048,7 +1048,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                  [compression_codec](auto page_size) {
                    return max_compression_output_size(compression_codec, page_size);
                  });
-  comp_page_sizes.host_to_device(stream);
+  comp_page_sizes.host_to_device_async(stream);
 
   // Use per-page max compressed size to calculate chunk.compressed_size
   gpu::InitEncoderPages(chunks,
@@ -1063,7 +1063,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         nullptr,
                         nullptr,
                         stream);
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host_sync(stream);
   return comp_page_sizes;
 }
 
@@ -1103,7 +1103,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   if (dict_policy == dictionary_policy::NEVER) {
     thrust::for_each(
       h_chunks.begin(), h_chunks.end(), [](auto& chunk) { chunk.use_dictionary = false; });
-    chunks.host_to_device(stream);
+    chunks.host_to_device_async(stream);
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
@@ -1125,12 +1125,12 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
     }
   }
 
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
   gpu::populate_chunk_hash_maps(frags, stream);
 
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
   for (auto& ck : h_chunks) {
@@ -1174,7 +1174,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
     chunk.dict_data           = inserted_dict_data.data();
     chunk.dict_index          = inserted_dict_index.data();
   }
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
   gpu::get_dictionary_indices(frags, stream);
 
@@ -1213,7 +1213,7 @@ void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<statistics_merge_group> page_stats_mrg(num_stats_bfr, stream);
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   InitEncoderPages(chunks,
                    pages,
                    {},
@@ -1557,7 +1557,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   if (num_fragments != 0) {
     // Move column info to device
-    col_desc.host_to_device(stream);
+    col_desc.host_to_device_async(stream);
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
@@ -1687,7 +1687,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     }
   }
 
-  row_group_fragments.host_to_device(stream);
+  row_group_fragments.host_to_device_async(stream);
   [[maybe_unused]] auto dict_info_owner = build_chunk_dictionaries(
     chunks, col_desc, row_group_fragments, compression, dict_policy, max_dictionary_size, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
@@ -1746,10 +1746,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       }
     }
 
-    chunks.host_to_device(stream);
+    chunks.host_to_device_async(stream);
 
     // re-initialize page fragments
-    page_fragments.host_to_device(stream);
+    page_fragments.host_to_device_async(stream);
     calculate_page_fragments(page_fragments, column_frag_size, stream);
 
     // and gather fragment statistics

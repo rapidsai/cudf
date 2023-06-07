@@ -179,9 +179,9 @@ TEST_F(FstTest, GroundTruth)
                    stream.value());
 
   // Async copy results from device to host
-  output_gpu.device_to_host(stream.view());
-  out_indexes_gpu.device_to_host(stream.view());
-  output_gpu_size.device_to_host(stream.view());
+  output_gpu.device_to_host_async(stream.view());
+  out_indexes_gpu.device_to_host_async(stream.view());
+  output_gpu_size.device_to_host_async(stream.view());
 
   // Prepare CPU-side results for verification
   std::string output_cpu{};

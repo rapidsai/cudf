@@ -104,7 +104,7 @@ class SingleSymbolSmemLUT {
     // Alias memory / return memory requirements
     sgid_init.host_ptr()->num_valid_entries = max_base_match_val + 1;
 
-    sgid_init.host_to_device(stream);
+    sgid_init.host_to_device_async(stream);
   }
 
   _TempStorage& temp_storage;
@@ -190,7 +190,7 @@ class TransitionTable {
     }
 
     // Copy transition table to device
-    transition_table_init.host_to_device(stream);
+    transition_table_init.host_to_device_async(stream);
   }
 
   constexpr CUDF_HOST_DEVICE TransitionTable(const KernelParameter& kernel_param,
@@ -364,7 +364,7 @@ class TransducerLookupTable {
               translation_table_init.host_ptr()->d_out_symbols);
 
     // Copy data to device
-    translation_table_init.host_to_device(stream);
+    translation_table_init.host_to_device_async(stream);
   }
 
  private:

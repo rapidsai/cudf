@@ -525,7 +525,7 @@ void init_dictionaries(orc_table_view& orc_table,
                              rowgroup_bounds,
                              orc_table.d_string_column_indices,
                              stream);
-  dict->device_to_host(stream, true);
+  dict->device_to_host_sync(stream);
 }
 
 /**
@@ -593,9 +593,9 @@ void build_dictionaries(orc_table_view& orc_table,
     }
   }
 
-  stripe_dict.host_to_device(stream);
+  stripe_dict.host_to_device_async(stream);
   gpu::BuildStripeDictionaries(stripe_dict, stripe_dict, dict, stream);
-  stripe_dict.device_to_host(stream, true);
+  stripe_dict.device_to_host_sync(stream);
 }
 
 /**
@@ -952,7 +952,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       }
     });
 
-  aligned_rgs.device_to_host(stream, true);
+  aligned_rgs.device_to_host_sync(stream);
 
   std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
   h_aligned_rgs.reserve(segmentation.num_rowgroups());
@@ -1011,7 +1011,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
       }
     }
   }
-  chunks.host_to_device(stream);
+  chunks.host_to_device_async(stream);
   // TODO (future): pass columns separately from chunks (to skip this step)
   // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
@@ -1142,7 +1142,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     }
   }
 
-  chunk_streams.host_to_device(stream);
+  chunk_streams.host_to_device_async(stream);
 
   if (orc_table.num_rows() > 0) {
     if (orc_table.num_string_columns() != 0) {
@@ -1159,7 +1159,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   }
   dictionaries.data.clear();
   dictionaries.index.clear();
-  chunk_streams.device_to_host(stream, true /* device sync */);
+  chunk_streams.device_to_host_sync(stream);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
@@ -1234,11 +1234,11 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
                            segmentation.rowgroups[stripe.first][0].begin;
   }
 
-  strm_desc->host_to_device(stream);
+  strm_desc->host_to_device_async(stream);
   // TODO: use cub::DeviceMemcpy::Batched
   gpu::CompactOrcDataStreams(*strm_desc, enc_data->streams, stream);
-  strm_desc->device_to_host(stream);
-  enc_data->streams.device_to_host(stream, true);
+  strm_desc->device_to_host_async(stream);
+  enc_data->streams.device_to_host_sync(stream);
 
   // move the gathered stripes to encoded_data.data for lifetime management
   for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
@@ -1278,8 +1278,8 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
                              stat_chunks.data(),
                              num_stat_blobs,
                              stream);
-  stats_merge_groups.device_to_host(stream);
-  blobs.device_to_host(stream, true);
+  stats_merge_groups.device_to_host_async(stream);
+  blobs.device_to_host_sync(stream);
   return blobs;
 }
 
@@ -1361,9 +1361,9 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
       }
     }
   }
-  stat_desc.host_to_device(stream);
-  rowgroup_merge.host_to_device(stream);
-  stripe_merge.host_to_device(stream);
+  stat_desc.host_to_device_async(stream);
+  rowgroup_merge.host_to_device_async(stream);
+  stripe_merge.host_to_device_async(stream);
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
   // The rowgroup stat chunks are written out in each stripe. The stripe and file-level chunks are
@@ -1996,7 +1996,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           }
         });
     });
-  rowgroup_bounds.device_to_host(stream, true);
+  rowgroup_bounds.device_to_host_sync(stream);
 
   return rowgroup_bounds;
 }
@@ -2333,7 +2333,7 @@ auto convert_table_to_orc_data(table_view const& input,
                comp_results.d_end(),
                compression_result{0, compression_status::FAILURE});
   if (compression_kind != NONE) {
-    strm_descs.host_to_device(stream);
+    strm_descs.host_to_device_async(stream);
     compression_stats = gpu::CompressOrcDataStreams(compressed_data,
                                                     num_compressed_blocks,
                                                     compression_kind,
@@ -2349,8 +2349,8 @@ auto convert_table_to_orc_data(table_view const& input,
     // deallocate encoded data as it is not needed anymore
     enc_data.data.clear();
 
-    strm_descs.device_to_host(stream);
-    comp_results.device_to_host(stream, true);
+    strm_descs.device_to_host_async(stream);
+    comp_results.device_to_host_sync(stream);
   }
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);

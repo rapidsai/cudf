@@ -513,17 +513,17 @@ size_t decompress_zstd(host_span<uint8_t const> src,
     cudf::detail::make_device_uvector_async(src, stream, rmm::mr::get_current_device_resource());
   auto hd_srcs = hostdevice_vector<device_span<uint8_t const>>(1, stream);
   hd_srcs[0]   = d_src;
-  hd_srcs.host_to_device(stream);
+  hd_srcs.host_to_device_async(stream);
 
   // Init device span of spans (temporary destination)
   auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
   auto hd_dsts = hostdevice_vector<device_span<uint8_t>>(1, stream);
   hd_dsts[0]   = d_dst;
-  hd_dsts.host_to_device(stream);
+  hd_dsts.host_to_device_async(stream);
 
   auto hd_stats = hostdevice_vector<compression_result>(1, stream);
   hd_stats[0]   = compression_result{0, compression_status::FAILURE};
-  hd_stats.host_to_device(stream);
+  hd_stats.host_to_device_async(stream);
   auto const max_uncomp_page_size = dst.size();
   nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                              hd_srcs,
@@ -533,7 +533,7 @@ size_t decompress_zstd(host_span<uint8_t const> src,
                              max_uncomp_page_size,
                              stream);
 
-  hd_stats.device_to_host(stream, true);
+  hd_stats.device_to_host_sync(stream);
   CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
 
   // Copy temporary output to `dst`
