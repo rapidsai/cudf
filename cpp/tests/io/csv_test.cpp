@@ -2480,4 +2480,22 @@ TEST_F(CsvReaderTest, NullCount)
   EXPECT_EQ(result_view.column(2).null_count(), 8);
 }
 
+TEST_F(CsvReaderTest, UTF8BOM)
+{
+  std::string buffer = "\xEF\xBB\xBFMonth,Day,Year\nJune,6,2023\nAugust,25,1990\nMay,1,2000\n";
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()});
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+  EXPECT_EQ(result_view.num_rows(), 3);
+  EXPECT_EQ(result.metadata.schema_info.front().name, "Month");
+
+  auto col1     = cudf::test::strings_column_wrapper({"June", "August", "May"});
+  auto col2     = cudf::test::fixed_width_column_wrapper<int64_t>({6, 25, 1});
+  auto col3     = cudf::test::fixed_width_column_wrapper<int64_t>({2023, 1990, 2000});
+  auto expected = cudf::table_view({col1, col2, col3});
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result_view, expected);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
