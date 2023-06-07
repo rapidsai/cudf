@@ -269,12 +269,12 @@ void decompress_check(device_span<compression_result> results,
 }  // namespace
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-  const std::vector<rmm::device_buffer>& stripe_data,
   OrcDecompressor const& decompressor,
-  std::vector<orc_stream_info>& stream_info,
-  size_t num_stripes,
+  host_span<rmm::device_buffer const> stripe_data,
+  host_span<orc_stream_info> stream_info,
+  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+  size_t num_stripes,
   size_t row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
@@ -1215,12 +1215,12 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
         // Setup row group descriptors if using indexes
         if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and
             not is_level_data_empty) {
-          auto decomp_data = decompress_stripe_data(chunks,
+          auto decomp_data = decompress_stripe_data(*_metadata.per_file_metadata[0].decompressor,
                                                     stripe_data,
-                                                    *_metadata.per_file_metadata[0].decompressor,
                                                     stream_info,
-                                                    total_num_stripes,
+                                                    chunks,
                                                     row_groups,
+                                                    total_num_stripes,
                                                     _metadata.get_row_index_stride(),
                                                     level == 0,
                                                     stream);

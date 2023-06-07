@@ -113,12 +113,12 @@ class reader::impl {
   /**
    * @brief Decompresses the stripe data, at stream granularity
    *
-   * @param chunks Vector of list of column chunk descriptors
-   * @param stripe_data List of source stripe column data
    * @param decompressor Block decompressor
+   * @param stripe_data List of source stripe column data
    * @param stream_info List of stream to column mappings
-   * @param num_stripes Number of stripes making up column chunks
+   * @param chunks Vector of list of column chunk descriptors
    * @param row_groups Vector of list of row index descriptors
+   * @param num_stripes Number of stripes making up column chunks
    * @param row_index_stride Distance between each row index
    * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -126,12 +126,12 @@ class reader::impl {
    * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_stripe_data(
-    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-    std::vector<rmm::device_buffer> const& stripe_data,
     OrcDecompressor const& decompressor,
-    std::vector<orc_stream_info>& stream_info,
-    size_t num_stripes,
+    host_span<rmm::device_buffer const> stripe_data,
+    host_span<orc_stream_info> stream_info,
+    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
     cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+    size_t num_stripes,
     size_t row_index_stride,
     bool use_base_stride,
     rmm::cuda_stream_view stream);
