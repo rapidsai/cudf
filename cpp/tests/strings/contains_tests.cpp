@@ -31,8 +31,7 @@
 #include <algorithm>
 #include <vector>
 
-struct StringsContainsTests : public cudf::test::BaseFixture {
-};
+struct StringsContainsTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsContainsTests, ContainsTest)
 {
@@ -302,7 +301,7 @@ TEST_F(StringsContainsTests, HexTest)
     ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto d_offsets = cudf::detail::make_device_uvector_sync(
     offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto input = cudf::make_strings_column(d_chars, d_offsets);
+  auto input = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
 
   auto strings_view = cudf::strings_column_view(input->view());
   for (auto ch : ascii_chars) {
@@ -516,7 +515,7 @@ TEST_F(StringsContainsTests, OverlappedClasses)
 TEST_F(StringsContainsTests, NegatedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
-  auto sv    = cudf::strings_column_view(input);
+  auto sv = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[^a-f]");

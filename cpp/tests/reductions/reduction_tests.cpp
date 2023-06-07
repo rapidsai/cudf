@@ -120,8 +120,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct MinMaxReductionTest : public ReductionTest<T> {
-};
+struct MinMaxReductionTest : public ReductionTest<T> {};
 
 using MinMaxTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
@@ -250,8 +249,7 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
 }
 
 template <typename T>
-struct SumReductionTest : public ReductionTest<T> {
-};
+struct SumReductionTest : public ReductionTest<T> {};
 using SumTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(SumReductionTest, SumTypes);
 
@@ -382,8 +380,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 }
 
 template <typename T>
-struct ReductionAnyAllTest : public ReductionTest<bool> {
-};
+struct ReductionAnyAllTest : public ReductionTest<bool> {};
 using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
 TYPED_TEST_SUITE(ReductionAnyAllTest, AnyAllTypes);
 
@@ -516,8 +513,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 // ----------------------------------------------------------------------------
 
 template <typename T>
-struct MultiStepReductionTest : public ReductionTest<T> {
-};
+struct MultiStepReductionTest : public ReductionTest<T> {};
 using MultiStepReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MultiStepReductionTest, MultiStepReductionTypes);
 
@@ -861,8 +857,7 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionEmptyTest : public cudf::test::BaseFixture {
-};
+struct ReductionEmptyTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
 TEST_F(ReductionEmptyTest, empty_column)
@@ -917,8 +912,7 @@ TEST_F(ReductionEmptyTest, empty_column)
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {
-};
+                            public ::testing::WithParamInterface<cudf::size_type> {};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -1004,10 +998,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType                     = cudf::scalar_type_t<cudf::string_view>;
       auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
@@ -1033,10 +1027,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType = cudf::scalar_type_t<cudf::string_view>;
       auto result1     = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
@@ -1361,8 +1355,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
@@ -1778,8 +1771,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 2, 3, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
@@ -1799,8 +1792,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{10, 20, 20, 30, 30, 40}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
@@ -1820,8 +1813,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 3, 4, 5}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
@@ -1844,8 +1837,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
     auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
@@ -1862,8 +1855,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {
-};
+struct Decimal128Only : public cudf::test::BaseFixture {};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -2029,8 +2021,7 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {
-};
+struct DictionaryStringReductionTest : public StringReductionTest {};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
@@ -2072,8 +2063,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 }
 
 template <typename T>
-struct DictionaryAnyAllTest : public ReductionTest<bool> {
-};
+struct DictionaryAnyAllTest : public ReductionTest<bool> {};
 using DictionaryAnyAllTypes = cudf::test::Types<int16_t, int32_t, float, double, bool>;
 TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
@@ -2173,8 +2163,7 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 }
 
 template <typename T>
-struct DictionaryReductionTest : public ReductionTest<T> {
-};
+struct DictionaryReductionTest : public ReductionTest<T> {};
 
 using DictionaryTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);

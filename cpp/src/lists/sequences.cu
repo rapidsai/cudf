@@ -19,6 +19,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -127,16 +128,6 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
   }
 };
 
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
-{
-  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
-  auto child   = make_empty_column(child_type);
-  return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr), stream, mr);
-}
-
 std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
@@ -169,8 +160,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
 
   auto const n_elements = cudf::detail::sizes_to_offsets(
     sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
-  CUDF_EXPECTS(n_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit",
+  CUDF_EXPECTS(n_elements <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
                std::overflow_error);
 
   auto child = type_dispatcher(starts.type(),

@@ -90,7 +90,7 @@ size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
 column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 {
   auto sliced_key_sorted_order = [stream, this]() {
-    return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream));
+    return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream), stream);
   };
 
   if (_key_sorted_order) { return sliced_key_sorted_order(); }
@@ -215,8 +215,11 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
   column_ptr temp_labels = make_numeric_column(
     data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
 
-  auto group_labels_view = cudf::column_view(
-    data_type(type_to_id<size_type>()), group_labels(stream).size(), group_labels(stream).data());
+  auto group_labels_view = cudf::column_view(data_type(type_to_id<size_type>()),
+                                             group_labels(stream).size(),
+                                             group_labels(stream).data(),
+                                             nullptr,
+                                             0);
 
   auto scatter_map = key_sort_order(stream);
 
@@ -261,7 +264,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
                                       mr);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
-  column_view gather_map = cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));
+  column_view gather_map =
+    cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream), stream);
 
   auto sorted_values_table = cudf::detail::gather(table_view({values}),
                                                   gather_map,

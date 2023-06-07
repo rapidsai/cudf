@@ -16,17 +16,18 @@
 
 #pragma once
 
-#include <cudf/detail/timezone.cuh>
-
 #include "orc.hpp"
 
-#include <cudf/io/orc_types.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 #include <io/comp/gpuinflate.hpp>
 #include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
+
+#include <cudf/detail/timezone.cuh>
+#include <cudf/io/orc_types.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -141,7 +142,7 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t* dict_index;              // dictionary index from row index
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };
@@ -159,6 +160,7 @@ struct encoder_chunk_streams {
  * @brief Struct to describe a column stream within a stripe
  */
 struct StripeStream {
+  uint8_t* data_ptr;        // encoded and gathered output
   size_t bfr_offset;        // Offset of this stream in compressed buffer
   uint32_t stream_size;     // Size of stream in bytes
   uint32_t first_chunk_id;  // First chunk of the stripe
@@ -179,9 +181,9 @@ struct DictionaryChunk {
   uint32_t num_rows;     // num rows in this chunk
   uint32_t num_strings;  // number of strings in this chunk
   uint32_t
-    string_char_count;  // total size of string data (NOTE: assumes less than 4G bytes per chunk)
-  uint32_t num_dict_strings;  // number of strings in dictionary
-  uint32_t dict_char_count;   // size of dictionary string data for this chunk
+    string_char_count;   // total size of string data (NOTE: assumes less than 4G bytes per chunk)
+  uint32_t num_dict_strings;                  // number of strings in dictionary
+  uint32_t dict_char_count;                   // size of dictionary string data for this chunk
 
   orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
@@ -349,21 +351,26 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
  * @param[in] comp_block_align Required alignment for compressed blocks
+ * @param[in] collect_statistics Whether to collect compression statistics
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_res Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Compression statistics (if requested)
  */
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream);
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  device_span<uint8_t> compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks

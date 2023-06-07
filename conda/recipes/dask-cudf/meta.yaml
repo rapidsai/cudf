@@ -16,7 +16,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
@@ -32,6 +32,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=dask-cudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=dask-cudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   host:

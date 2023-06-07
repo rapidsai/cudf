@@ -73,23 +73,19 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct CsvWriterTest : public cudf::test::BaseFixture {
-};
+struct CsvWriterTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct CsvFixedPointWriterTest : public CsvWriterTest {
-};
+struct CsvFixedPointWriterTest : public CsvWriterTest {};
 
 TYPED_TEST_SUITE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
-struct CsvReaderTest : public cudf::test::BaseFixture {
-};
+struct CsvReaderTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for timestamp type tests
 template <typename T>
-struct CsvReaderNumericTypeTest : public CsvReaderTest {
-};
+struct CsvReaderNumericTypeTest : public CsvReaderTest {};
 
 // Declare typed test cases
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
@@ -173,7 +169,8 @@ void check_float_column(cudf::column_view const& col_lhs,
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
                                                 (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col_lhs.null_count() == 0, "All elements should be valid");
+  CUDF_EXPECTS(col_lhs.null_count() == 0 and col_rhs.null_count() == 0,
+               "All elements should be valid");
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
 }
@@ -1358,6 +1355,22 @@ TEST_F(CsvReaderTest, nullHandling)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
+
+  // Filter enabled, but no NA values
+  {
+    cudf::io::csv_reader_options in_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+        .keep_default_na(false)
+        .dtypes({dtype<cudf::string_view>()})
+        .header(-1)
+        .skip_blank_lines(false);
+    const auto result = cudf::io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
+  }
 }
 
 TEST_F(CsvReaderTest, FailCases)
@@ -2011,21 +2024,21 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
 {
   std::vector<int64_t> small_int               = {0, -10, 20, -30};
   std::vector<int64_t> less_equal_int64_max    = {std::numeric_limits<int64_t>::max() - 3,
-                                               std::numeric_limits<int64_t>::max() - 2,
-                                               std::numeric_limits<int64_t>::max() - 1,
-                                               std::numeric_limits<int64_t>::max()};
+                                                  std::numeric_limits<int64_t>::max() - 2,
+                                                  std::numeric_limits<int64_t>::max() - 1,
+                                                  std::numeric_limits<int64_t>::max()};
   std::vector<int64_t> greater_equal_int64_min = {std::numeric_limits<int64_t>::min() + 3,
                                                   std::numeric_limits<int64_t>::min() + 2,
                                                   std::numeric_limits<int64_t>::min() + 1,
                                                   std::numeric_limits<int64_t>::min()};
   std::vector<uint64_t> greater_int64_max      = {uint64_t{std::numeric_limits<int64_t>::max()} - 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()},
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 1,
-                                             uint64_t{std::numeric_limits<int64_t>::max()} + 2};
+                                                  uint64_t{std::numeric_limits<int64_t>::max()},
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 1,
+                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 2};
   std::vector<uint64_t> less_equal_uint64_max  = {std::numeric_limits<uint64_t>::max() - 3,
-                                                 std::numeric_limits<uint64_t>::max() - 2,
-                                                 std::numeric_limits<uint64_t>::max() - 1,
-                                                 std::numeric_limits<uint64_t>::max()};
+                                                  std::numeric_limits<uint64_t>::max() - 2,
+                                                  std::numeric_limits<uint64_t>::max() - 1,
+                                                  std::numeric_limits<uint64_t>::max()};
   auto input_small_int = column_wrapper<int64_t>(small_int.begin(), small_int.end());
   auto input_less_equal_int64_max =
     column_wrapper<int64_t>(less_equal_int64_max.begin(), less_equal_int64_max.end());
@@ -2450,6 +2463,21 @@ TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
     const auto result_table = result.tbl->view();
     ASSERT_EQ(result_table.num_columns(), 3);
   }
+}
+
+TEST_F(CsvReaderTest, NullCount)
+{
+  std::string buffer = "0,,\n1,1.,\n2,,\n3,,\n4,4.,\n5,5.,\n6,6.,\n7,7.,\n";
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1);
+  const auto result      = cudf::io::read_csv(in_opts);
+  const auto result_view = result.tbl->view();
+
+  EXPECT_EQ(result_view.num_rows(), 8);
+  EXPECT_EQ(result_view.column(0).null_count(), 0);
+  EXPECT_EQ(result_view.column(1).null_count(), 3);
+  EXPECT_EQ(result_view.column(2).null_count(), 8);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

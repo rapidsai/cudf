@@ -277,7 +277,6 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
   CUDF_EXPECTS(percentage != rank_percentage::NONE, "Percentage cannot be NONE");
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
-  ranks->set_null_mask(copy_bitmask(rank, stream, mr));
   auto mutable_ranks = ranks->mutable_view();
 
   auto one_normalized = [] __device__(auto const rank, auto const group_size) {
@@ -321,6 +320,8 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                                 : one_normalized(r, count);
                      });
   }
+
+  ranks->set_null_count(0);
   return ranks;
 }
 

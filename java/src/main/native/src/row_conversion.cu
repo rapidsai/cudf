@@ -1885,12 +1885,13 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   std::transform(counting_iter, counting_iter + batch_info.row_batches.size(),
                  std::back_inserter(ret), [&](auto batch) {
                    auto const offset_count = batch_info.row_batches[batch].row_offsets.size();
-                   auto offsets = std::make_unique<column>(
-                       data_type{type_id::INT32}, (size_type)offset_count,
-                       batch_info.row_batches[batch].row_offsets.release());
-                   auto data = std::make_unique<column>(data_type{type_id::INT8},
-                                                        batch_info.row_batches[batch].num_bytes,
-                                                        std::move(output_buffers[batch]));
+                   auto offsets =
+                       std::make_unique<column>(data_type{type_id::INT32}, (size_type)offset_count,
+                                                batch_info.row_batches[batch].row_offsets.release(),
+                                                rmm::device_buffer{}, 0);
+                   auto data = std::make_unique<column>(
+                       data_type{type_id::INT8}, batch_info.row_batches[batch].num_bytes,
+                       std::move(output_buffers[batch]), rmm::device_buffer{}, 0);
 
                    return make_lists_column(
                        batch_info.row_batches[batch].row_count, std::move(offsets), std::move(data),
@@ -2257,16 +2258,20 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     for (int i = 0; i < static_cast<int>(schema.size()); ++i) {
       if (schema[i].id() == type_id::STRING) {
         // stuff real string column
+        auto const null_count = string_row_offset_columns[string_idx]->null_count();
         auto string_data = string_row_offset_columns[string_idx].release()->release();
-        output_columns[i] = make_strings_column(num_rows, std::move(string_col_offsets[string_idx]),
-                                                std::move(string_data_cols[string_idx]),
-                                                std::move(*string_data.null_mask.release()),
-                                                cudf::UNKNOWN_NULL_COUNT);
+        output_columns[i] =
+            make_strings_column(num_rows, std::move(string_col_offsets[string_idx]),
+                                std::move(string_data_cols[string_idx]),
+                                std::move(*string_data.null_mask.release()), null_count);
         string_idx++;
       }
     }
   }
 
+  for (auto &col : output_columns) {
+    col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
+  }
   return std::make_unique<table>(std::move(output_columns));
 }
 
@@ -2322,6 +2327,9 @@ std::unique_ptr<table> convert_from_rows_fixed_width_optimized(
         num_rows, num_columns, size_per_row, dev_column_start.data(), dev_column_size.data(),
         dev_output_data.data(), dev_output_nm.data(), child.data<int8_t>());
 
+    for (auto &col : output_columns) {
+      col->set_null_count(cudf::null_count(col->view().null_mask(), 0, col->size()));
+    }
     return std::make_unique<table>(std::move(output_columns));
   } else {
     CUDF_FAIL("Only fixed width types are currently supported");

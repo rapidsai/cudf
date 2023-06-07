@@ -52,6 +52,35 @@ def test_tokenize():
     assert_eq(expected, actual)
 
 
+def test_tokenize_delimiter():
+    strings = cudf.Series(
+        [
+            "the quick fox jumped over the lazy dog",
+            "the siamésé cat jumped under the sofa",
+            None,
+            "",
+        ]
+    )
+
+    expected_values = cudf.Series(
+        [
+            "the quick f",
+            "x jumped ",
+            "ver the lazy d",
+            "g",
+            "the siamésé cat jumped under the s",
+            "fa",
+        ]
+    )
+    expected_index = strings.index.repeat(strings.str.token_count("o"))
+    expected = cudf.Series(expected_values, index=expected_index)
+
+    actual = strings.str.tokenize(delimiter="o")
+
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 def test_detokenize():
     strings = cudf.Series(
         [
@@ -548,7 +577,7 @@ def test_character_tokenize_index():
     assert_eq(expected, actual)
 
     sr = cudf.Index([""])
-    expected = cudf.StringIndex([], dtype="object")
+    expected = cudf.Index([], dtype="object")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -787,6 +816,32 @@ def test_is_vowel_consonant():
     actual = strings.str.is_consonant(indices)
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
+
+
+def test_minhash():
+    strings = cudf.Series(["this is my", "favorite book", None, ""])
+    expected = cudf.Series([21141582, 962346254, None, 0], dtype=np.uint32)
+    actual = strings.str.minhash()
+    assert_eq(expected, actual)
+    seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+    expected = cudf.Series(
+        [
+            cudf.Series([1305480167, 668155704, 34311509], dtype=np.uint32),
+            cudf.Series([32665384, 3470118, 363147162], dtype=np.uint32),
+            None,
+            cudf.Series([0, 0, 0], dtype=np.uint32),
+        ]
+    )
+    actual = strings.str.minhash(seeds=seeds, n=5)
+    assert_eq(expected, actual)
+
+    with pytest.raises(ValueError):
+        strings.str.minhash(seeds=7)
+    with pytest.raises(ValueError):
+        strings.str.minhash(seeds=seeds, method="md5")
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.int32)
+        strings.str.minhash(seeds=seeds)
 
 
 def test_read_text(datadir):

@@ -144,8 +144,7 @@ struct JSONToStackOp {
 }  // namespace
 
 // Base test fixture for tests
-struct LogicalStackTest : public cudf::test::BaseFixture {
-};
+struct LogicalStackTest : public cudf::test::BaseFixture {};
 
 TEST_F(LogicalStackTest, GroundTruth)
 {

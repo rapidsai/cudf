@@ -45,9 +45,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     CUDF_EXPECTS(nullptr != upstream, "Unexpected null upstream resource pointer.");
   }
 
-  stream_checking_resource_adaptor()                                        = delete;
-  ~stream_checking_resource_adaptor() override                              = default;
-  stream_checking_resource_adaptor(stream_checking_resource_adaptor const&) = delete;
+  stream_checking_resource_adaptor()                                                   = delete;
+  ~stream_checking_resource_adaptor() override                                         = default;
+  stream_checking_resource_adaptor(stream_checking_resource_adaptor const&)            = delete;
   stream_checking_resource_adaptor& operator=(stream_checking_resource_adaptor const&) = delete;
   stream_checking_resource_adaptor(stream_checking_resource_adaptor&&) noexcept        = default;
   stream_checking_resource_adaptor& operator=(stream_checking_resource_adaptor&&) noexcept =

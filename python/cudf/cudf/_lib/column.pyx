@@ -8,7 +8,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.api.types import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
     CopyOnWriteBuffer,
@@ -16,6 +16,7 @@ from cudf.core.buffer import (
     acquire_spill_lock,
     as_buffer,
 )
+from cudf.utils.dtypes import _get_base_dtype
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -37,6 +38,7 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.null_mask cimport null_count as c_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -62,7 +64,6 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
-
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -155,6 +156,7 @@ cdef class Column:
             )
 
         if value is not None:
+            # bitmask size must be relative to offset = 0 data.
             required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
@@ -308,14 +310,26 @@ cdef class Column:
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
         with acquire_spill_lock():
-            return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
+            if not self.nullable:
+                return 0
+            return c_null_count(
+                <libcudf_types.bitmask_type*><uintptr_t>(
+                    self.base_mask.get_ptr(mode="read")
+                ),
+                self.offset,
+                self.offset + self.size
+            )
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
+            data_dtype = col.dtype
+        elif is_datetime64tz_dtype(self.dtype):
+            col = self
+            data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
-        data_dtype = col.dtype
+            data_dtype = col.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
@@ -345,7 +359,7 @@ cdef class Column:
         null_count = self._null_count
 
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
 
         self._mask = None
@@ -365,7 +379,7 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+            null_count = 0
         cdef libcudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
@@ -373,9 +387,12 @@ cdef class Column:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
+        elif is_datetime64tz_dtype(self.dtype):
+            col = self
+            data_dtype = _get_base_dtype(col.dtype)
         else:
             col = self
-            data_dtype = self.dtype
+            data_dtype = col.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
@@ -592,7 +609,7 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(size+offset)
+                            size=bitmask_allocation_size_bytes(base_size)
                         )
                     )
             else:

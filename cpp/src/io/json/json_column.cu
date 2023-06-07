@@ -169,7 +169,7 @@ reduce_to_column_tree(tree_meta_t& tree,
     });
 
   // 4. unique_copy parent_node_ids, ranges
-  rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
+  rmm::device_uvector<TreeDepthT> column_levels(0, stream);                 // not required
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   rmm::device_uvector<SymbolOffsetT> col_range_begin(num_columns, stream);  // Field names
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
@@ -349,7 +349,8 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   auto d_column_names     = experimental::detail::parse_data(string_views.begin(),
                                                          num_strings,
                                                          data_type{type_id::STRING},
-                                                         rmm::device_buffer{0, stream},
+                                                         rmm::device_buffer{},
+                                                         0,
                                                          options_view,
                                                          stream,
                                                          rmm::mr::get_current_device_resource());
@@ -790,12 +791,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         target_type = cudf::io::detail::infer_data_type(
           options.json_view(), d_input, string_ranges_it, col_size, stream);
       }
-      validity_size_check(json_col);
+
+      auto [result_bitmask, null_count] = make_validity(json_col);
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  json_col.validity.release(),
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   options.view(),
                                                   stream,
                                                   mr);
@@ -810,10 +813,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), {{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
-      return {std::move(col), {}};
+      return {std::move(col), std::vector<column_name_info>{}};
     }
     case json_col_t::StructColumn: {
       std::vector<std::unique_ptr<column>> child_columns;
@@ -846,8 +849,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
       // Note: json_col modified here, reuse the memory
-      auto offsets_column = std::make_unique<column>(
-        data_type{type_id::INT32}, num_rows + 1, json_col.child_offsets.release());
+      auto offsets_column = std::make_unique<column>(data_type{type_id::INT32},
+                                                     num_rows + 1,
+                                                     json_col.child_offsets.release(),
+                                                     rmm::device_buffer{},
+                                                     0);
       // Create children column
       auto [child_column, names] =
         json_col.child_columns.empty()
@@ -856,8 +862,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                       std::vector<column_name_info>>{std::make_unique<column>(
                                                        data_type{type_id::INT8},
                                                        0,
-                                                       rmm::device_buffer{0, stream, mr}),
-                                                     {}}
+                                                       rmm::device_buffer{},
+                                                       rmm::device_buffer{},
+                                                       0),
+                                                     std::vector<column_name_info>{}}
           : device_json_column_to_cudf_column(
               json_col.child_columns.begin()->second,
               d_input,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ bool CompactProtocolReader::read(LogicalType* l)
                     ParquetFieldUnion(2, l->isset.MAP, l->MAP),
                     ParquetFieldUnion(3, l->isset.LIST, l->LIST),
                     ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
-                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
+                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),      // read the struct
                     ParquetFieldUnion(6, l->isset.DATE, l->DATE),
                     ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
                     ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
