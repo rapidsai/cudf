@@ -129,24 +129,23 @@ class option_context(ContextDecorator):
     """  # noqa: E501
 
     def __init__(self, *args) -> None:
-        if len(args) % 2 != 0 or len(args) < 2:
+        if len(args) % 2 != 0:
             raise ValueError(
                 "Need to invoke as option_context(pat, val, "
                 "[(pat, val), ...])."
             )
 
-        self.ops = list(zip(args[::2], args[1::2]))
+        self.ops = tuple(zip(args[::2], args[1::2]))
 
     def __enter__(self) -> None:
-        self.undo = [(pat, get_option(pat)) for pat, _ in self.ops]
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
 
         for pat, val in self.ops:
             set_option(pat, val)
 
     def __exit__(self, *args) -> None:
-        if self.undo:
-            for pat, val in self.undo:
-                set_option(pat, val)
+        for pat, val in self.undo:
+            set_option(pat, val)
 
 
 def _build_option_description(name, opt):
