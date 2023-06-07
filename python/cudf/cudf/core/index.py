@@ -1172,6 +1172,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         haystack_table = cudf.DataFrame(
             {"None": self._column, "order": arange(0, len(self))}
         )
+        if not len(self):
+            return cupy.full(len(needle_table), -1, dtype="int64")
         try:
             merged_table = haystack_table.merge(
                 needle_table, on="None", how="outer"
@@ -2871,20 +2873,16 @@ def _get_indexer_basic(index, positions, method, target_col, tolerance):
     return positions
 
 
-def _get_nearest_indexer(index, positions, target_col, tolerance):
+def _get_nearest_indexer(
+    index: Index,
+    positions: cudf.Series,
+    target_col: cudf.core.column.ColumnBase,
+    tolerance: Union[int, float],
+):
     """
     Get the indexer for the nearest index labels; requires an index with
     values that can be subtracted from each other.
     """
-    if not len(index):
-        return _get_indexer_basic(
-            index=index,
-            positions=positions.copy(deep=True),
-            method="pad",
-            targe_col=target_col,
-            tolerance=tolerance,
-        )
-
     left_indexer = _get_indexer_basic(
         index=index,
         positions=positions.copy(deep=True),
