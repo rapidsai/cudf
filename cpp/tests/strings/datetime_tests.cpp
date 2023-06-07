@@ -33,7 +33,7 @@ struct StringsDatetimeTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDatetimeTest, ToTimestamp)
 {
-  std::vector<const char*> h_strings{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_strings{"1974-02-28T01:23:45Z",
                                      "2019-07-17T21:34:37Z",
                                      nullptr,
                                      "",
@@ -330,7 +330,7 @@ TEST_F(StringsDatetimeTest, FromTimestamp)
 {
   std::vector<cudf::timestamp_s::rep> h_timestamps{
     131246625, 1563399277, 0, 1553085296, 1582934400, -1545730073, -86399};
-  std::vector<const char*> h_expected{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_expected{"1974-02-28T01:23:45Z",
                                       "2019-07-17T21:34:37Z",
                                       nullptr,
                                       "2019-03-20T12:34:56Z",
