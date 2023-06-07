@@ -8,6 +8,7 @@ from numba import cuda
 from numba.np import numpy_support
 
 import cudf
+from cudf._lib.unary import is_non_nan
 from cudf.utils._numba import _CUDFNumbaConfig
 
 #
@@ -16,56 +17,6 @@ from cudf.utils._numba import _CUDFNumbaConfig
 
 
 # Find segments
-
-
-@cuda.jit
-def gpu_mark_found_int(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] == val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_found_float(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        # TODO: Remove val typecast to float(val)
-        # once numba minimum version is pinned
-        # at 0.51.1, this will have a very slight
-        # performance improvement. Related
-        # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        val = float(val)
-
-        # NaN-aware equality comparison.
-        if (arr[i] == val) or (arr[i] != arr[i] and val != val):
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_gt(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] > val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_lt(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] < val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
 def find_index_of_val(arr, val, mask=None, compare="eq"):
     """
     Returns the indices of the occurrence of *val* in *arr*
@@ -79,23 +30,23 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array(shape=(arr.shape), dtype="int32")
-    if found.size > 0:
-        with _CUDFNumbaConfig():
-            if compare == "gt":
-                gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
-            elif compare == "lt":
-                gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
-            else:
-                if arr.dtype in ("float32", "float64"):
-                    gpu_mark_found_float.forall(found.size)(
-                        arr, val, found, arr.size
-                    )
-                else:
-                    gpu_mark_found_int.forall(found.size)(
-                        arr, val, found, arr.size
-                    )
+    arr = cudf.core.column.as_column(arr, nan_as_null=False)
+    if arr.size > 0:
+        if compare == "gt":
+            locations = arr <= val
+        elif compare == "lt":
+            locations = arr >= val
+        else:
+            locations = is_non_nan(arr) if np.isnan(val) else arr != val
 
+        target = cudf.core.column.column.arange(0, arr.size, dtype="int32")
+        found = cudf._lib.copying._boolean_mask_scatter_scalar(
+            [cudf.Scalar(arr.size, dtype="int32").device_value],
+            [target],
+            locations,
+        )[0]
+    else:
+        found = cudf.core.column.column.column_empty(0, dtype="int32")
     return cudf.core.column.column.as_column(found).set_mask(mask)
 
 
@@ -112,7 +63,6 @@ def find_first(arr, val, mask=None, compare="eq"):
     mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-
     found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
     found_col = found_col.find_and_replace([arr.size], [None], True)
 
