@@ -645,8 +645,8 @@ TEST_F(SearchTest, contains_nullable_column_false)
 
 TEST_F(SearchTest, empty_table_string)
 {
-  std::vector<const char*> h_col_strings{};
-  std::vector<const char*> h_val_strings{"0", "10", "11", "30", "32", "40", "47", "50", "7", "90"};
+  std::vector<char const*> h_col_strings{};
+  std::vector<char const*> h_val_strings{"0", "10", "11", "30", "32", "40", "47", "50", "7", "90"};
 
   cudf::test::strings_column_wrapper column(
     h_col_strings.begin(),
@@ -674,8 +674,8 @@ TEST_F(SearchTest, empty_table_string)
 
 TEST_F(SearchTest, empty_values_string)
 {
-  std::vector<const char*> h_col_strings{"10", "20", "30", "40", "50"};
-  std::vector<const char*> h_val_strings{};
+  std::vector<char const*> h_col_strings{"10", "20", "30", "40", "50"};
+  std::vector<char const*> h_val_strings{};
 
   cudf::test::strings_column_wrapper column(
     h_col_strings.begin(),
@@ -703,8 +703,8 @@ TEST_F(SearchTest, empty_values_string)
 
 TEST_F(SearchTest, non_null_column__find_first_string)
 {
-  std::vector<const char*> h_col_strings{"10", "20", "30", "40", "50"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"10", "20", "30", "40", "50"};
+  std::vector<char const*> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -733,8 +733,8 @@ TEST_F(SearchTest, non_null_column__find_first_string)
 
 TEST_F(SearchTest, non_null_column__find_last_string)
 {
-  std::vector<const char*> h_col_strings{"10", "20", "30", "40", "50"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"10", "20", "30", "40", "50"};
+  std::vector<char const*> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -763,8 +763,8 @@ TEST_F(SearchTest, non_null_column__find_last_string)
 
 TEST_F(SearchTest, non_null_column_desc__find_first_string)
 {
-  std::vector<const char*> h_col_strings{"50", "40", "30", "20", "10"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"50", "40", "30", "20", "10"};
+  std::vector<char const*> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -793,8 +793,8 @@ TEST_F(SearchTest, non_null_column_desc__find_first_string)
 
 TEST_F(SearchTest, non_null_column_desc__find_last_string)
 {
-  std::vector<const char*> h_col_strings{"50", "40", "30", "20", "10"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"50", "40", "30", "20", "10"};
+  std::vector<char const*> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -823,8 +823,8 @@ TEST_F(SearchTest, non_null_column_desc__find_last_string)
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
 {
-  std::vector<const char*> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
+  std::vector<char const*> h_val_strings{
     nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -853,8 +853,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
 {
-  std::vector<const char*> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
+  std::vector<char const*> h_val_strings{
     nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90"};
 
   cudf::test::strings_column_wrapper column(
@@ -883,8 +883,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
 {
-  std::vector<const char*> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
+  std::vector<char const*> h_val_strings{
     "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr};
 
   cudf::test::strings_column_wrapper column(
@@ -932,8 +932,8 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
 {
-  std::vector<const char*> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
-  std::vector<const char*> h_val_strings{
+  std::vector<char const*> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
+  std::vector<char const*> h_val_strings{
     "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr};
 
   cudf::test::strings_column_wrapper column(
@@ -962,13 +962,13 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
 
 TEST_F(SearchTest, table__find_first_string)
 {
-  std::vector<const char*> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
-  std::vector<const char*> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
+  std::vector<char const*> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
+  std::vector<char const*> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
 
-  std::vector<const char*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
+  std::vector<char const*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
                                            "10", "10", "10", "11", "20", "20", "20", "20", "20",
                                            "20", "20", "20", "20", "20", "20", "30", "50", "60"};
-  std::vector<const char*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
+  std::vector<char const*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
                                            "80", "90", "91", "91", "00", "76", "77", "78", "30",
                                            "65", "77", "78", "80", "62", "78", "64", "41", "20"};
 
@@ -1031,13 +1031,13 @@ TEST_F(SearchTest, table__find_first_string)
 
 TEST_F(SearchTest, table__find_last_string)
 {
-  std::vector<const char*> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
-  std::vector<const char*> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
+  std::vector<char const*> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
+  std::vector<char const*> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
 
-  std::vector<const char*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
+  std::vector<char const*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
                                            "10", "10", "10", "11", "20", "20", "20", "20", "20",
                                            "20", "20", "20", "20", "20", "20", "30", "50", "60"};
-  std::vector<const char*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
+  std::vector<char const*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
                                            "80", "90", "91", "91", "00", "76", "77", "78", "30",
                                            "65", "77", "78", "80", "62", "78", "64", "41", "20"};
 
@@ -1100,13 +1100,13 @@ TEST_F(SearchTest, table__find_last_string)
 
 TEST_F(SearchTest, table_partial_desc__find_first_string)
 {
-  std::vector<const char*> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
-  std::vector<const char*> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
+  std::vector<char const*> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
+  std::vector<char const*> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
 
-  std::vector<const char*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
+  std::vector<char const*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
                                            "10", "10", "10", "11", "20", "20", "20", "20", "20",
                                            "20", "20", "20", "20", "20", "20", "30", "50", "60"};
-  std::vector<const char*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
+  std::vector<char const*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
                                            "80", "90", "91", "91", "00", "76", "77", "78", "30",
                                            "65", "77", "78", "80", "62", "78", "64", "41", "20"};
 
@@ -1169,13 +1169,13 @@ TEST_F(SearchTest, table_partial_desc__find_first_string)
 
 TEST_F(SearchTest, table_partial_desc__find_last_string)
 {
-  std::vector<const char*> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
-  std::vector<const char*> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
+  std::vector<char const*> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
+  std::vector<char const*> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
 
-  std::vector<const char*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
+  std::vector<char const*> h_val_0_strings{"0",  "0",  "0",  "0",  "10", "10", "10", "10", "10",
                                            "10", "10", "10", "11", "20", "20", "20", "20", "20",
                                            "20", "20", "20", "20", "20", "20", "30", "50", "60"};
-  std::vector<const char*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
+  std::vector<char const*> h_val_2_strings{"0",  "91", "0",  "91", "0",  "79", "90", "91", "77",
                                            "80", "90", "91", "91", "00", "76", "77", "78", "30",
                                            "65", "77", "78", "80", "62", "78", "64", "41", "20"};
 
@@ -1239,13 +1239,13 @@ TEST_F(SearchTest, table_partial_desc__find_last_string)
 
 TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
 {
-  std::vector<const char*> h_col_0_strings{
+  std::vector<char const*> h_col_0_strings{
     nullptr, "10", "10", "20", "20", "20", "20", "20", "20", "20", "50"};
-  std::vector<const char*> h_col_2_strings{
+  std::vector<char const*> h_col_2_strings{
     "50", "95", "90", nullptr, nullptr, "77", "78", "61", "62", "63", "41"};
 
-  std::vector<const char*> h_val_0_strings{"10", nullptr, "20"};
-  std::vector<const char*> h_val_2_strings{"95", "50", nullptr};
+  std::vector<char const*> h_val_0_strings{"10", nullptr, "20"};
+  std::vector<char const*> h_val_2_strings{"95", "50", nullptr};
 
   fixed_width_column_wrapper<float> column_1{{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7},
                                              {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
@@ -1306,13 +1306,13 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
 
 TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
 {
-  std::vector<const char*> h_col_0_strings{
+  std::vector<char const*> h_col_0_strings{
     nullptr, "10", "10", "20", "20", "20", "20", "20", "20", "20", "50"};
-  std::vector<const char*> h_col_2_strings{
+  std::vector<char const*> h_col_2_strings{
     "50", "90", "95", nullptr, nullptr, "77", "78", "61", "62", "63", "41"};
 
-  std::vector<const char*> h_val_0_strings{"10", nullptr, "20"};
-  std::vector<const char*> h_val_2_strings{"95", "50", nullptr};
+  std::vector<char const*> h_val_0_strings{"10", nullptr, "20"};
+  std::vector<char const*> h_val_2_strings{"95", "50", nullptr};
 
   fixed_width_column_wrapper<float> column_1{{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7},
                                              {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
@@ -1373,13 +1373,13 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
 
 TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
 {
-  std::vector<const char*> h_col_0_strings{
+  std::vector<char const*> h_col_0_strings{
     "10", "10", "20", "20", "20", "20", "20", "20", "20", "50", nullptr};
-  std::vector<const char*> h_col_2_strings{
+  std::vector<char const*> h_col_2_strings{
     "90", "95", "77", "78", nullptr, nullptr, "61", "62", "63", "41", "50"};
 
-  std::vector<const char*> h_val_0_strings{"10", nullptr, "20"};
-  std::vector<const char*> h_val_2_strings{"95", "50", nullptr};
+  std::vector<char const*> h_val_0_strings{"10", nullptr, "20"};
+  std::vector<char const*> h_val_2_strings{"95", "50", nullptr};
 
   fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
                                              {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
@@ -1440,13 +1440,13 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
 
 TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
 {
-  std::vector<const char*> h_col_0_strings{
+  std::vector<char const*> h_col_0_strings{
     "10", "10", "20", "20", "20", "20", "20", "20", "20", "50", nullptr};
-  std::vector<const char*> h_col_2_strings{
+  std::vector<char const*> h_col_2_strings{
     "90", "95", "77", "78", nullptr, nullptr, "61", "62", "63", "41", "50"};
 
-  std::vector<const char*> h_val_0_strings{"10", nullptr, "20"};
-  std::vector<const char*> h_val_2_strings{"95", "50", nullptr};
+  std::vector<char const*> h_val_0_strings{"10", nullptr, "20"};
+  std::vector<char const*> h_val_2_strings{"95", "50", nullptr};
 
   fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
                                              {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
@@ -1507,7 +1507,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
 
 TEST_F(SearchTest, contains_true_string)
 {
-  std::vector<const char*> h_col_strings{"00", "01", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_col_strings{"00", "01", "17", "19", "23", "29", "71"};
   string_scalar scalar{"23"};
 
   cudf::test::strings_column_wrapper column(
@@ -1526,7 +1526,7 @@ TEST_F(SearchTest, contains_true_string)
 
 TEST_F(SearchTest, contains_false_string)
 {
-  std::vector<const char*> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
   string_scalar scalar{"24"};
 
   cudf::test::strings_column_wrapper column(
@@ -1545,7 +1545,7 @@ TEST_F(SearchTest, contains_false_string)
 
 TEST_F(SearchTest, contains_empty_value_string)
 {
-  std::vector<const char*> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
   string_scalar scalar{"23", false};
 
   cudf::test::strings_column_wrapper column(
@@ -1564,7 +1564,7 @@ TEST_F(SearchTest, contains_empty_value_string)
 
 TEST_F(SearchTest, contains_empty_column_string)
 {
-  std::vector<const char*> h_col_strings{};
+  std::vector<char const*> h_col_strings{};
   string_scalar scalar{"24"};
 
   cudf::test::strings_column_wrapper column(
@@ -1583,7 +1583,7 @@ TEST_F(SearchTest, contains_empty_column_string)
 
 TEST_F(SearchTest, contains_nullable_column_true_string)
 {
-  std::vector<const char*> h_col_strings{nullptr, nullptr, "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_col_strings{nullptr, nullptr, "17", "19", "23", "29", "71"};
   string_scalar scalar{"23"};
 
   cudf::test::strings_column_wrapper column(
@@ -1602,7 +1602,7 @@ TEST_F(SearchTest, contains_nullable_column_true_string)
 
 TEST_F(SearchTest, contains_nullable_column_false_string)
 {
-  std::vector<const char*> h_col_strings{nullptr, nullptr, "17", "19", nullptr, "29", "71"};
+  std::vector<char const*> h_col_strings{nullptr, nullptr, "17", "19", nullptr, "29", "71"};
   string_scalar scalar{"23"};
 
   cudf::test::strings_column_wrapper column(
@@ -1649,8 +1649,8 @@ TEST_F(SearchTest, multi_contains_none)
 
 TEST_F(SearchTest, multi_contains_some_string)
 {
-  std::vector<const char*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
-  std::vector<const char*> h_needles_strings{"17", "19", "45", "72"};
+  std::vector<char const*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_needles_strings{"17", "19", "45", "72"};
 
   cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(), h_haystack_strings.end());
 
@@ -1665,8 +1665,8 @@ TEST_F(SearchTest, multi_contains_some_string)
 
 TEST_F(SearchTest, multi_contains_none_string)
 {
-  std::vector<const char*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
-  std::vector<const char*> h_needles_strings{"2", "3"};
+  std::vector<char const*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_needles_strings{"2", "3"};
 
   cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(), h_haystack_strings.end());
 
@@ -1711,8 +1711,8 @@ TEST_F(SearchTest, multi_contains_none_with_nulls)
 
 TEST_F(SearchTest, multi_contains_some_string_with_nulls)
 {
-  std::vector<const char*> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
-  std::vector<const char*> h_needles_strings{"17", "23", nullptr, "72"};
+  std::vector<char const*> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
+  std::vector<char const*> h_needles_strings{"17", "23", nullptr, "72"};
 
   fixed_width_column_wrapper<bool> expect{{0, 1, 0, 0}, {1, 1, 0, 1}};
 
@@ -1735,8 +1735,8 @@ TEST_F(SearchTest, multi_contains_some_string_with_nulls)
 
 TEST_F(SearchTest, multi_contains_none_string_with_nulls)
 {
-  std::vector<const char*> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
-  std::vector<const char*> h_needles_strings{"2", nullptr};
+  std::vector<char const*> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
+  std::vector<char const*> h_needles_strings{"2", nullptr};
 
   fixed_width_column_wrapper<bool> expect{{0, 0}, {1, 0}};
 
@@ -1773,8 +1773,8 @@ TEST_F(SearchTest, multi_contains_empty_column)
 
 TEST_F(SearchTest, multi_contains_empty_column_string)
 {
-  std::vector<const char*> h_haystack_strings{};
-  std::vector<const char*> h_needles_strings{"17", "19", "45", "72"};
+  std::vector<char const*> h_haystack_strings{};
+  std::vector<char const*> h_needles_strings{"17", "19", "45", "72"};
 
   cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(), h_haystack_strings.end());
 
@@ -1803,8 +1803,8 @@ TEST_F(SearchTest, multi_contains_empty_input_set)
 
 TEST_F(SearchTest, multi_contains_empty_input_set_string)
 {
-  std::vector<const char*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
-  std::vector<const char*> h_needles_strings{};
+  std::vector<char const*> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
+  std::vector<char const*> h_needles_strings{};
 
   cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(), h_haystack_strings.end());
 

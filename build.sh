@@ -32,7 +32,7 @@ HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [li
    custreamz                     - build the custreamz Python package
    -v                            - verbose build mode
    -g                            - build for debug
-   -n                            - no install step
+   -n                            - no install step (does not affect Python)
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --opensource_nvcomp           - disable use of proprietary nvcomp extensions
@@ -332,10 +332,9 @@ fi
 if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
-    python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    fi
+    SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS}" \
+        SKBUILD_BUILD_OPTIONS="-j${PARALLEL_LEVEL:-1}" \
+        python -m pip install .
 fi
 
 
@@ -343,12 +342,7 @@ fi
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-    fi
+    python -m pip install .
 fi
 
 if hasArg cudfjar; then
@@ -375,21 +369,15 @@ fi
 # build cudf_kafka Python package
 if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR}" \
+        SKBUILD_BUILD_OPTIONS="-j${PARALLEL_LEVEL:-1}" \
+        python -m pip install .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
     cd ${REPODIR}/python/custreamz
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    SKBUILD_CONFIGURE_OPTIONS="-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR}" \
+        SKBUILD_BUILD_OPTIONS="-j${PARALLEL_LEVEL:-1}" \
+        python -m pip install .
 fi
