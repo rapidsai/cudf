@@ -36,10 +36,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/device_scalar.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -66,10 +66,10 @@ namespace {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  */
-constexpr type_id to_type_id(orc::TypeKind kind,
-                             bool use_np_dtypes,
-                             type_id timestamp_type_id,
-                             type_id decimal_type_id)
+constexpr type_id to_cudf_type(orc::TypeKind kind,
+                               bool use_np_dtypes,
+                               type_id timestamp_type_id,
+                               type_id decimal_type_id)
 {
   switch (kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -103,6 +103,28 @@ constexpr type_id to_type_id(orc::TypeKind kind,
 }
 
 /**
+ * @brief Determines cuDF type of an ORC Decimal column.
+ */
+type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
+                             cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+                             int column_index)
+{
+  if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
+
+  if (std::find(decimal128_columns.begin(),
+                decimal128_columns.end(),
+                metadata.column_path(0, column_index)) != decimal128_columns.end()) {
+    return type_id::DECIMAL128;
+  }
+
+  auto const precision = metadata.get_col_type(column_index)
+                           .precision.value_or(cuda::std::numeric_limits<int64_t>::digits10);
+  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) { return type_id::DECIMAL32; }
+  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) { return type_id::DECIMAL64; }
+  return type_id::DECIMAL128;
+}
+
+/**
  * @brief struct to store buffer data and size of list buffer
  */
 struct list_buffer_data {
@@ -111,10 +133,10 @@ struct list_buffer_data {
 };
 
 // Generates offsets for list buffer from number of elements in a row.
-void generate_offsets_for_list(rmm::device_uvector<list_buffer_data> const& buff_data,
+void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
                                rmm::cuda_stream_view stream)
 {
-  auto transformer = [] __device__(list_buffer_data list_data) {
+  auto const transformer = [] __device__(list_buffer_data const list_data) {
     thrust::exclusive_scan(
       thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
   };
@@ -126,7 +148,6 @@ void generate_offsets_for_list(rmm::device_uvector<list_buffer_data> const& buff
  * @brief Struct that maps ORC streams to columns
  */
 struct orc_stream_info {
-  orc_stream_info() = default;
   explicit orc_stream_info(
     uint64_t offset_, size_t dst_pos_, uint32_t length_, uint32_t gdf_idx_, uint32_t stripe_idx_)
     : offset(offset_),
@@ -146,16 +167,16 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(const size_t stripe_index,
-                          const orc::StripeInformation* stripeinfo,
-                          const orc::StripeFooter* stripefooter,
-                          const std::vector<int>& orc2gdf,
-                          const std::vector<orc::SchemaType> types,
+size_t gather_stream_info(size_t stripe_index,
+                          orc::StripeInformation const* stripeinfo,
+                          orc::StripeFooter const* stripefooter,
+                          host_span<int const> orc2gdf,
+                          host_span<orc::SchemaType const> types,
                           bool use_index,
+                          bool apply_struct_map,
                           size_t* num_dictionary_entries,
-                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           std::vector<orc_stream_info>& stream_info,
-                          bool apply_struct_map)
+                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -227,28 +248,6 @@ size_t gather_stream_info(const size_t stripe_index,
   }
 
   return dst_offset;
-}
-
-/**
- * @brief Determines cuDF type of an ORC Decimal column.
- */
-auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
-                         cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-                         int column_index)
-{
-  if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
-
-  if (std::find(decimal128_columns.cbegin(),
-                decimal128_columns.cend(),
-                metadata.column_path(0, column_index)) != decimal128_columns.end()) {
-    return type_id::DECIMAL128;
-  }
-
-  auto const precision = metadata.get_col_type(column_index)
-                           .precision.value_or(cuda::std::numeric_limits<int64_t>::digits10);
-  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) { return type_id::DECIMAL32; }
-  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) { return type_id::DECIMAL64; }
-  return type_id::DECIMAL128;
 }
 
 }  // namespace
@@ -786,10 +785,10 @@ std::unique_ptr<column> create_empty_column(
 {
   schema_info.name = metadata.column_name(0, orc_col_id);
   auto const kind  = metadata.get_col_type(orc_col_id).kind;
-  auto const type  = to_type_id(kind,
-                               use_np_dtypes,
-                               timestamp_type.id(),
-                               decimal_column_type(decimal128_columns, metadata, orc_col_id));
+  auto const type  = to_cudf_type(kind,
+                                 use_np_dtypes,
+                                 timestamp_type.id(),
+                                 to_cudf_decimal_type(decimal128_columns, metadata, orc_col_id));
 
   switch (kind) {
     case orc::LIST: {
@@ -991,10 +990,10 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      auto col_type = to_type_id(_metadata.get_col_type(col.id).kind,
-                                 _use_np_dtypes,
-                                 _timestamp_type.id(),
-                                 decimal_column_type(_decimal128_columns, _metadata, col.id));
+      auto col_type = to_cudf_type(_metadata.get_col_type(col.id).kind,
+                                   _use_np_dtypes,
+                                   _timestamp_type.id(),
+                                   to_cudf_decimal_type(_decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -1091,10 +1090,10 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                                                           _col_meta.orc_col_map[level],
                                                           _metadata.get_types(),
                                                           use_index,
+                                                          level == 0,
                                                           &num_dict_entries,
-                                                          chunks,
                                                           stream_info,
-                                                          level == 0);
+                                                          chunks);
 
           auto const is_stripe_data_empty = total_data_size == 0;
           if (not is_stripe_data_empty) { is_level_data_empty = false; }
