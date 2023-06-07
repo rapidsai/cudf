@@ -250,29 +250,23 @@ size_t gather_stream_info(size_t stripe_index,
   return dst_offset;
 }
 
-}  // namespace
-
-__global__ void decompress_check_kernel(device_span<compression_result const> results,
-                                        bool* any_block_failure)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < results.size()) {
-    if (results[tid].status != compression_status::SUCCESS) {
-      *any_block_failure = true;  // Doesn't need to be atomic
-    }
-  }
-}
-
 void decompress_check(device_span<compression_result> results,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
-  if (results.empty()) { return; }  // early exit for empty results
+  if (results.empty()) { return; }
 
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(results.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(results, any_block_failure);
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(std::size_t{0}),
+                   thrust::make_counting_iterator(results.size()),
+                   [results, any_block_failure] __device__(auto const idx) {
+                     if (results[idx].status != compression_status::SUCCESS) {
+                       *any_block_failure = true;  // Doesn't need to be atomic
+                     }
+                   });
 }
+
+}  // namespace
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
