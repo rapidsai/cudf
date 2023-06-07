@@ -101,10 +101,11 @@ struct characters_tokenizer {
       auto const chr_width = cudf::strings::detail::to_char_utf8(src_ptr + current_position, ch);
       if (spaces == is_delimiter(ch)) {
         current_position += chr_width;
-        if (spaces)
+        if (spaces) {
           start_position = current_position;
-        else
+        } else {
           end_position = current_position;
+        }
         continue;
       }
       spaces = !spaces;
@@ -133,8 +134,8 @@ struct characters_tokenizer {
   cudf::string_view const d_delimiter;  ///< delimiter characters
   bool spaces;                          ///< true if current position is delimiter
   cudf::size_type current_position;     ///< current position in d_str
-  cudf::size_type start_position;       ///< starting character position of token found
-  cudf::size_type end_position;         ///< ending character position (excl) of token found
+  cudf::size_type start_position;       ///< starting byte position of token found
+  cudf::size_type end_position;         ///< ending byte position (exclusive) of token found
 };
 
 /**
