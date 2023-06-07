@@ -83,7 +83,7 @@ def test_empty_option_context():
     prev_setting = cudf.get_option("default_integer_bitwidth")
     cudf.set_option("default_integer_bitwidth", 32)
     with cudf.option_context():
-        assert cudf.get_option("default_integer_bitwidth") is None
+        assert cudf.get_option("default_integer_bitwidth") == 32
         assert cudf.get_option("default_float_bitwidth") is None
         assert cudf.get_option("spill") is os.getenv("CUDF_SPILL", False)
         assert cudf.get_option("copy_on_write") is os.getenv(
