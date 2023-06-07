@@ -1013,7 +1013,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
 __global__ void __launch_bounds__(preprocess_block_size)
   gpuComputePageOffsets(device_span<ColumnChunkDesc const> chunks, device_span<size_t> col_sizes)
 {
-  using block_scan = cub::BlockScan<size_type, preprocess_block_size>;
+  using block_scan = cub::BlockScan<size_t, preprocess_block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
 
   auto const t         = threadIdx.x;
@@ -1025,16 +1025,16 @@ __global__ void __launch_bounds__(preprocess_block_size)
       // short circuit return if this is not a string column
       if (not is_string_col(chunk)) { return; }
 
-      size_type cumulative_offset = col_sizes[col_index];
+      size_t cumulative_offset = col_sizes[col_index];
 
       for (int i = 0; i < chunk.max_num_pages; i += preprocess_block_size) {
-        int idx       = i + t;
-        size_type len = idx < chunk.max_num_pages and
-                            (chunk.page_info[idx].flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0
-                          ? chunk.page_info[idx].str_bytes
-                          : 0;
+        int const idx    = i + t;
+        size_t const len = idx < chunk.max_num_pages and
+                               (chunk.page_info[idx].flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0
+                             ? chunk.page_info[idx].str_bytes
+                             : 0;
 
-        size_type offset, block_total;
+        size_t offset, block_total;
         block_scan(scan_storage).ExclusiveSum(len, offset, block_total);
         if (idx < chunk.max_num_pages) {
           chunk.page_info[idx].str_offset = offset + cumulative_offset;
