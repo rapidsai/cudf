@@ -422,7 +422,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
       buffer_size -= sizeof(UTF8_BOM);
     }
 
-    auto h_data = host_span<char const>(reinterpret_cast<const char*>(buffer_data), buffer_size);
+    auto h_data = host_span<char const>(reinterpret_cast<char const*>(buffer_data), buffer_size);
 
     std::vector<uint8_t> h_uncomp_data_owner;
 
