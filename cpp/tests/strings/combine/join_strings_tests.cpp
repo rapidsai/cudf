@@ -30,7 +30,7 @@ struct JoinStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(JoinStringsTest, Join)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "zzzz", "", "aaa", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "zzzz", "", "aaa", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

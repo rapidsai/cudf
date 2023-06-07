@@ -465,7 +465,7 @@ TEST_F(GroupedRollingErrorTest, NegativeMinPeriods)
     col_data.begin(), col_data.end(), col_valid.begin()};
 
   // Construct Grouping keys table-view.
-  const auto N_ELEMENTS{col_data.size()};
+  auto const N_ELEMENTS{col_data.size()};
   const std::vector<cudf::size_type> grouping_key_vec(N_ELEMENTS, 0);
   cudf::test::fixed_width_column_wrapper<cudf::size_type> grouping_keys_col(
     grouping_key_vec.begin(), grouping_key_vec.end(), col_valid.begin());
@@ -535,7 +535,7 @@ TYPED_TEST_SUITE(GroupedRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoin
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
-  const auto col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  auto const col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
   const cudf::size_type DATA_SIZE{static_cast<cudf::size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, true);
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input(
@@ -565,7 +565,7 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowWithNoGroupKeys)
 {
-  const auto col_data =
+  auto const col_data =
     cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const cudf::size_type DATA_SIZE{static_cast<cudf::size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, true);
@@ -585,7 +585,7 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowWithNoGroupKeys)
 // all rows are invalid
 TYPED_TEST(GroupedRollingTest, AllInvalid)
 {
-  const auto col_data =
+  auto const col_data =
     cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const cudf::size_type DATA_SIZE{static_cast<cudf::size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, false);
@@ -617,7 +617,7 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
 // window = following_window = 0
 TYPED_TEST(GroupedRollingTest, ZeroWindow)
 {
-  const auto col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  auto const col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
   const cudf::size_type DATA_SIZE{static_cast<cudf::size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, true);
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input(

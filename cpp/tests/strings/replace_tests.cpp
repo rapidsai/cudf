@@ -34,7 +34,7 @@ using algorithm = cudf::strings::detail::replace_algorithm;
 struct StringsReplaceTest : public cudf::test::BaseFixture {
   cudf::test::strings_column_wrapper build_corpus()
   {
-    std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+    std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                        "the fat cat lays next to the other accénted cat",
                                        "a slow moving turtlé cannot catch the bird",
                                        "which can be composéd together to form a more complete",
@@ -54,7 +54,7 @@ TEST_F(StringsReplaceTest, Replace)
   auto input        = build_corpus();
   auto strings_view = cudf::strings_column_view(input);
   // replace all occurrences of 'the ' with '++++ '
-  std::vector<const char*> h_expected{"++++ quick brown fox jumps over ++++ lazy dog",
+  std::vector<char const*> h_expected{"++++ quick brown fox jumps over ++++ lazy dog",
                                       "++++ fat cat lays next to ++++ other accénted cat",
                                       "a slow moving turtlé cannot catch ++++ bird",
                                       "which can be composéd together to form a more complete",
@@ -86,7 +86,7 @@ TEST_F(StringsReplaceTest, ReplaceReplLimit)
   auto mr           = rmm::mr::get_current_device_resource();
 
   // only remove the first occurrence of 'the '
-  std::vector<const char*> h_expected{"quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_expected{"quick brown fox jumps over the lazy dog",
                                       "fat cat lays next to the other accénted cat",
                                       "a slow moving turtlé cannot catch bird",
                                       "which can be composéd together to form a more complete",
@@ -110,7 +110,7 @@ TEST_F(StringsReplaceTest, ReplaceReplLimitInputSliced)
 {
   auto input = build_corpus();
   // replace first two occurrences of ' ' with '--'
-  std::vector<const char*> h_expected{"the--quick--brown fox jumps over the lazy dog",
+  std::vector<char const*> h_expected{"the--quick--brown fox jumps over the lazy dog",
                                       "the--fat--cat lays next to the other accénted cat",
                                       "a--slow--moving turtlé cannot catch the bird",
                                       "which--can--be composéd together to form a more complete",
@@ -147,7 +147,7 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlap)
     corpus_view, cudf::string_scalar("the "), cudf::string_scalar("++++++++ "));
   auto strings_view = cudf::strings_column_view(*input);
   // replace all occurrences of '+++' with 'plus '
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "plus plus ++ quick brown fox jumps over plus plus ++ lazy dog",
     "plus plus ++ fat cat lays next to plus plus ++ other accénted cat",
     "a slow moving turtlé cannot catch plus plus ++ bird",
@@ -195,7 +195,7 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
 
 TEST_F(StringsReplaceTest, ReplaceNullInput)
 {
-  std::vector<const char*> h_null_strings(128);
+  std::vector<char const*> h_null_strings(128);
   auto input = cudf::test::strings_column_wrapper(
     h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
   auto strings_view = cudf::strings_column_view(input);
@@ -222,7 +222,7 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
   auto mr           = rmm::mr::get_current_device_resource();
 
   // replace all occurrences of 'in' with  ' '
-  std::vector<const char*> h_expected{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_expected{"the quick brown fox jumps over the lazy dog",
                                       "the fat cat lays next to the other accénted cat",
                                       "a slow mov g turtlé cannot catch the bird",
                                       "which can be composéd together to form a more complete",
@@ -248,7 +248,7 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
 
 TEST_F(StringsReplaceTest, ReplaceSlice)
 {
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -258,7 +258,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
 
   {
     auto results = cudf::strings::replace_slice(strings_view, cudf::string_scalar("___"), 2, 3);
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "Hé___lo", "th___sé", nullptr, "AR___ THE", "té___t strings", "___"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -268,7 +268,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
   }
   {
     auto results = cudf::strings::replace_slice(strings_view, cudf::string_scalar("||"), 3, 3);
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "Hél||lo", "the||sé", nullptr, "ARE|| THE", "tés||t strings", "||"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -278,7 +278,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
   }
   {
     auto results = cudf::strings::replace_slice(strings_view, cudf::string_scalar("x"), -1, -1);
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "Héllox", "theséx", nullptr, "ARE THEx", "tést stringsx", "x"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -310,7 +310,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
 
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
 
-    std::vector<const char*> h_expected{"_ quick brown fox jumps over _ lazy dog",
+    std::vector<char const*> h_expected{"_ quick brown fox jumps over _ lazy dog",
                                         "_ fat cat lays next 2 _ other accénted cat",
                                         "A slow moving turtlé cannot catch _ bird",
                                         "which can be composéd together 2 form A more complete",
@@ -330,7 +330,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
 
     auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
 
-    std::vector<const char*> h_expected{"* quick brown fox jumps over * lazy dog",
+    std::vector<char const*> h_expected{"* quick brown fox jumps over * lazy dog",
                                         "* fat cat lays next * * other accénted cat",
                                         "* slow moving turtlé cannot catch * bird",
                                         "which can be composéd together * form * more complete",
