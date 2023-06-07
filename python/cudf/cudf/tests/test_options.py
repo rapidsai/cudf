@@ -107,3 +107,13 @@ def test_option_context():
         assert cudf.get_option("mode.pandas_compatible") is True
     assert cudf.get_option("mode.pandas_compatible") is True
     cudf.set_option("mode.pandas_compatible", prev_setting)
+
+
+def test_options_context_error():
+    with pytest.raises(ValueError):
+        with cudf.option_context("mode.pandas_compatible"):
+            print("A")
+
+    with pytest.raises(ValueError):
+        with cudf.option_context("mode.pandas_compatible", 1, 2):
+            print("A")
