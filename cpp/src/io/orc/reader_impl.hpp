@@ -152,7 +152,7 @@ class reader::impl {
                           std::size_t skip_rows,
                           std::size_t row_index_stride,
                           std::size_t level,
-                          table_device_view const& tz_table,
+                          table_view const& tz_table,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
                           std::vector<column_buffer>& out_buffers,
