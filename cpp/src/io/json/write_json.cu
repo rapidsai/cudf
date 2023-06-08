@@ -253,7 +253,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                    scatter_fn);
   if (!include_nulls) {
     // if previous column was null, then we skip the value separator
-    rmm::device_uvector<bool> d_str_seperator(total_rows, stream);
+    rmm::device_uvector<bool> d_str_separator(total_rows, stream);
     auto row_num = cudf::detail::make_counting_transform_iterator(
       0, [tbl = *tbl_device_view] __device__(auto idx) -> size_type {
         return idx / tbl.num_columns();
@@ -264,14 +264,14 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                   row_num,
                                   row_num + total_rows,
                                   validity_iterator,
-                                  d_str_seperator.begin(),
+                                  d_str_separator.begin(),
                                   false,
                                   thrust::equal_to<size_type>{},
                                   thrust::logical_or<bool>{});
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(total_rows),
-                     [write_seperator = d_str_seperator.begin(),
+                     [write_separator = d_str_separator.begin(),
                       d_strviews      = d_strviews.begin(),
                       value_separator,
                       tbl = *tbl_device_view,
@@ -281,7 +281,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                        auto const col = idx % tbl.num_columns();
                        auto const this_index =
                          row * num_strviews_per_row + col * strviews_per_column + 1;
-                       if (write_seperator[idx] && tbl.column(col).is_valid(row)) {
+                       if (write_separator[idx] && tbl.column(col).is_valid(row)) {
                          d_strviews[this_index - 1] = value_separator;
                        }
                      });
