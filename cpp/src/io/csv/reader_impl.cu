@@ -237,7 +237,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   size_t buffer_size               = std::min(max_chunk_bytes, data.size());
   size_t max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
-  hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
+  cudf::detail::hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
   size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), data.size());
   size_t pos         = std::min(range_begin, data.size());
   size_t header_rows = (reader_opts.get_header() >= 0) ? reader_opts.get_header() + 1 : 0;
@@ -413,9 +413,16 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
     auto buffer    = source->host_read(range_offset, data_size);
 
-    auto h_data = host_span<char const>(  //
-      reinterpret_cast<const char*>(buffer->data()),
-      buffer->size());
+    // check for and skip UTF-8 BOM
+    auto buffer_data         = buffer->data();
+    auto buffer_size         = buffer->size();
+    uint8_t const UTF8_BOM[] = {0xEF, 0xBB, 0xBF};
+    if (buffer_size > sizeof(UTF8_BOM) && memcmp(buffer_data, UTF8_BOM, sizeof(UTF8_BOM)) == 0) {
+      buffer_data += sizeof(UTF8_BOM);
+      buffer_size -= sizeof(UTF8_BOM);
+    }
+
+    auto h_data = host_span<char const>(reinterpret_cast<char const*>(buffer_data), buffer_size);
 
     std::vector<uint8_t> h_uncomp_data_owner;
 

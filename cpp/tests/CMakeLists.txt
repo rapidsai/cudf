@@ -582,13 +582,6 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
-# Note that this only works when the test is invoked via ctest. At the moment CI is running all
-# tests by manually invoking the executable, so we'll have to manually pass this environment
-# variable in that setup.
-set_tests_properties(
-  STREAM_IDENTIFICATION_TEST
-  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
-)
 
 # ##################################################################################################
 # Install tests ####################################################################################
