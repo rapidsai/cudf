@@ -413,9 +413,16 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     auto data_size = (range_size_padded != 0) ? range_size_padded : source->size();
     auto buffer    = source->host_read(range_offset, data_size);
 
-    auto h_data = host_span<char const>(  //
-      reinterpret_cast<const char*>(buffer->data()),
-      buffer->size());
+    // check for and skip UTF-8 BOM
+    auto buffer_data         = buffer->data();
+    auto buffer_size         = buffer->size();
+    uint8_t const UTF8_BOM[] = {0xEF, 0xBB, 0xBF};
+    if (buffer_size > sizeof(UTF8_BOM) && memcmp(buffer_data, UTF8_BOM, sizeof(UTF8_BOM)) == 0) {
+      buffer_data += sizeof(UTF8_BOM);
+      buffer_size -= sizeof(UTF8_BOM);
+    }
+
+    auto h_data = host_span<char const>(reinterpret_cast<char const*>(buffer_data), buffer_size);
 
     std::vector<uint8_t> h_uncomp_data_owner;
 
