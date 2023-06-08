@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import enum
 import itertools
-from typing import TYPE_CHECKING, Any, List, Tuple, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, List, Tuple, Union
 
 import numpy as np
+from typing_extensions import TypeAlias
 
 import cudf
 import cudf._lib as libcudf
