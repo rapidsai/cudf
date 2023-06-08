@@ -99,13 +99,13 @@ class reader::impl {
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read
+   * @param num_rows_opt Optional number of rows to read
    * @param stripes Indices of individual stripes to load if non-empty
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int64_t skip_rows,
-                           std::optional<size_type> num_rows,
+  table_with_metadata read(uint64_t skip_rows,
+                           std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
 
  private:

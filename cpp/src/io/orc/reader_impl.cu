@@ -904,8 +904,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 {
 }
 
-table_with_metadata reader::impl::read(int64_t skip_rows,
-                                       std::optional<size_type> num_rows,
+table_with_metadata reader::impl::read(uint64_t skip_rows,
+                                       std::optional<size_type> const& num_rows_opt,
                                        std::vector<std::vector<size_type>> const& stripes)
 {
   // Selected columns at different levels of nesting are stored in different elements
@@ -927,7 +927,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
   // Select only stripes required (aka row groups)
   auto const [rows_to_skip, rows_to_read, selected_stripes] =
-    _metadata.select_stripes(stripes, skip_rows, num_rows, _stream);
+    _metadata.select_stripes(skip_rows, num_rows_opt, stripes, _stream);
 
   // Setup table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
