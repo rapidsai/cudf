@@ -1745,7 +1745,8 @@ def test_boolean_mask_columns_iloc_series():
 
 
 @pytest.mark.parametrize("index_type", ["single", "slice"])
-def test_loc_timestamp_8585(index_type):
+def test_loc_timestamp_issue_8585(index_type):
+    # https://github.com/rapidsai/cudf/issues/8585
     start = pd.Timestamp(
         datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")
     )
@@ -1785,7 +1786,8 @@ def test_loc_timestamp_8585(index_type):
         ),
     ],
 )
-def test_loc_multiindex_timestamp_8585(index_type):
+def test_loc_multiindex_timestamp_issue_8585(index_type):
+    # https://github.com/rapidsai/cudf/issues/8585
     start = pd.Timestamp(
         datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")
     )
@@ -1818,7 +1820,8 @@ def test_loc_multiindex_timestamp_8585(index_type):
 
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/8693")
-def test_loc_8693():
+def test_loc_repeated_index_label_issue_8693():
+    # https://github.com/rapidsai/cudf/issues/8693
     s = pd.Series([1, 2, 3, 4], index=[0, 1, 1, 2])
     cs = cudf.from_pandas(s)
     expect = s.loc[1]
@@ -1830,7 +1833,8 @@ def test_loc_8693():
 @pytest.mark.parametrize(
     "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
 )
-def test_loc_13268(indexer):
+def test_loc_ellipsis_as_slice_issue_13268(indexer):
+    # https://github.com/rapidsai/cudf/issues/13268
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
 
@@ -1843,7 +1847,9 @@ def test_loc_13268(indexer):
     reason="https://github.com/rapidsai/cudf/issues/13269 "
     "and https://github.com/rapidsai/cudf/issues/13273"
 )
-def test_iloc_13269():
+def test_loc_repeated_column_label_issue_13269():
+    # https://github.com/rapidsai/cudf/issues/13269
+    # https://github.com/rapidsai/cudf/issues/13273
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
 
@@ -1852,7 +1858,8 @@ def test_iloc_13269():
     assert_eq(expect, actual)
 
 
-def test_loc_13270():
+def test_loc_column_boolean_mask_issue_13270():
+    # https://github.com/rapidsai/cudf/issues/13270
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
     expect = df.loc[:, [True, True]]
@@ -1862,7 +1869,8 @@ def test_loc_13270():
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13013")
 @pytest.mark.parametrize("indexer", [[1], [0, 2]])
-def test_iloc_13013(indexer):
+def test_iloc_integer_categorical_issue_13013(indexer):
+    # https://github.com/rapidsai/cudf/issues/13013
     s = pd.Series([0, 1, 2])
     index = pd.Categorical(indexer)
     expect = s.iloc[index]
@@ -1871,7 +1879,8 @@ def test_iloc_13013(indexer):
     assert_eq(expect, actual)
 
 
-def test_iloc_13015():
+def test_iloc_incorrect_boolean_mask_length_issue_13015():
+    # https://github.com/rapidsai/cudf/issues/13015
     s = pd.Series([0, 1, 2])
     with pytest.raises(IndexError):
         s.iloc[[True, False]]
@@ -1880,7 +1889,8 @@ def test_iloc_13015():
         c.iloc[[True, False]]
 
 
-def test_iloc_13265():
+def test_iloc_column_boolean_mask_issue_13265():
+    # https://github.com/rapidsai/cudf/issues/13265
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
     expect = df.iloc[:, [True, True]]
@@ -1892,7 +1902,9 @@ def test_iloc_13265():
     reason="https://github.com/rapidsai/cudf/issues/13266 "
     "and https://github.com/rapidsai/cudf/issues/13273"
 )
-def test_iloc_13266():
+def test_iloc_repeated_column_label_issue_13266():
+    # https://github.com/rapidsai/cudf/issues/13266
+    # https://github.com/rapidsai/cudf/issues/13273
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
 
@@ -1905,7 +1917,8 @@ def test_iloc_13266():
 @pytest.mark.parametrize(
     "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
 )
-def test_iloc_13267(indexer):
+def test_iloc_ellipsis_as_slice_issue_13267(indexer):
+    # https://github.com/rapidsai/cudf/issues/13267
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
 
@@ -1943,7 +1956,8 @@ def test_iloc_13267(indexer):
         ),
     ],
 )
-def test_iloc_multiindex_13515(indexer):
+def test_iloc_multiindex_lookup_as_label_issue_13515(indexer):
+    # https://github.com/rapidsai/cudf/issues/13515
     df = pd.DataFrame(
         {"a": [1, 1, 3], "b": [2, 3, 4], "c": [1, 6, 7], "d": [1, 8, 9]}
     ).set_index(["a", "b"])
@@ -1955,7 +1969,8 @@ def test_iloc_multiindex_13515(indexer):
 
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12833")
-def test_loc_12833_unordered():
+def test_loc_unsorted_index_slice_lookup_keyerror_issue_12833():
+    # https://github.com/rapidsai/cudf/issues/12833
     df = pd.DataFrame({"a": [1, 2, 3]}, index=[7, 0, 4])
     cdf = cudf.from_pandas(df)
 
@@ -1969,7 +1984,8 @@ def test_loc_12833_unordered():
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13379")
 @pytest.mark.parametrize("index", [range(5), list(range(5))])
-def test_loc_13379_keyerror_missing(index):
+def test_loc_missing_label_keyerror_issue_13379(index):
+    # https://github.com/rapidsai/cudf/issues/13379
     df = pd.DataFrame({"a": index}, index=index)
     cdf = cudf.from_pandas(df)
     # Check that pandas don't change their mind
@@ -1981,6 +1997,7 @@ def test_loc_13379_keyerror_missing(index):
 
 
 class TestLocIndexWithOrder:
+    # https://github.com/rapidsai/cudf/issues/12833
     @pytest.fixture(params=["increasing", "decreasing", "neither"])
     def order(self, request):
         return request.param
