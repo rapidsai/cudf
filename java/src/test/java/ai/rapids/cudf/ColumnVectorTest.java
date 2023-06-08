@@ -2099,7 +2099,7 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, trimmed);
     }
   }
-  
+
   @Test
   void testAppendStrings() {
     try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
