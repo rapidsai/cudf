@@ -254,8 +254,6 @@ void decompress_check(device_span<compression_result> results,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
-  if (results.empty()) { return; }
-
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator(std::size_t{0}),
                    thrust::make_counting_iterator(results.size()),
