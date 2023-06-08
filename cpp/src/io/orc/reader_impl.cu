@@ -893,7 +893,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _mr(mr),
+  : _stream(stream),
+    _mr(mr),
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
@@ -906,8 +907,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
 table_with_metadata reader::impl::read(int64_t skip_rows,
                                        std::optional<size_type> num_rows,
-                                       std::vector<std::vector<size_type>> const& stripes,
-                                       rmm::cuda_stream_view stream)
+                                       std::vector<std::vector<size_type>> const& stripes)
 {
   // Selected columns at different levels of nesting are stored in different elements
   // of `selected_columns`; thus, size == 1 means no nested columns
@@ -928,7 +928,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
   // Select only stripes required (aka row groups)
   auto const [rows_to_skip, rows_to_read, selected_stripes] =
-    _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
+    _metadata.select_stripes(stripes, skip_rows, num_rows, _stream);
 
   // Setup table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
@@ -943,7 +943,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
     return has_timestamp_column
              ? cudf::detail::make_timezone_transition_table(
-                 {}, selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
+                 {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
              : std::make_unique<cudf::table>();
   }();
 
@@ -993,7 +993,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                                                   _use_np_dtypes,
                                                   _timestamp_type,
                                                   schema_info.back(),
-                                                  stream);
+                                                  _stream);
                      });
       break;
     } else {
@@ -1007,7 +1007,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                         });
       const auto num_columns = columns_level.size();
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
-        total_num_stripes, num_columns, stream);
+        total_num_stripes, num_columns, _stream);
       memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
       const bool use_index =
@@ -1032,7 +1032,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                       _selected_columns.levels[level].size(),
                       [&]() {
                         return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-                          total_num_stripes, stream, rmm::mr::get_current_device_resource());
+                          total_num_stripes, _stream, rmm::mr::get_current_device_resource());
                       });
 
       // Tracker for eventually deallocating compressed and uncompressed data
@@ -1068,7 +1068,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                        "Invalid index rowgroup stream data");
 
-          stripe_data.emplace_back(total_data_size, stream);
+          stripe_data.emplace_back(total_data_size, _stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
@@ -1087,7 +1087,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                   .source->is_device_read_preferred(len)) {
               read_tasks.push_back(
                 std::pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                            .source->device_read_async(offset, len, d_dst, stream),
+                            .source->device_read_async(offset, len, d_dst, _stream),
                           len));
 
             } else {
@@ -1096,8 +1096,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                   offset, len);
               CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
               CUDF_CUDA_TRY(
-                cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, stream.value()));
-              stream.synchronize();
+                cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, _stream.value()));
+              _stream.synchronize();
             }
           }
 
@@ -1169,7 +1169,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
       // Process dataset chunk pages into output columns
       if (stripe_data.size() != 0) {
         auto row_groups =
-          cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_columns, stream);
+          cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_columns, _stream);
         if (level > 0 and row_groups.size().first) {
           cudf::host_span<gpu::RowGroup> row_groups_span(row_groups.base_host_ptr(),
                                                          num_rowgroups * num_columns);
@@ -1197,13 +1197,13 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                                                     total_num_stripes,
                                                     _metadata.get_row_index_stride(),
                                                     level == 0,
-                                                    stream);
+                                                    _stream);
           stripe_data.clear();
           stripe_data.push_back(std::move(decomp_data));
         } else {
           if (row_groups.size().first) {
-            chunks.host_to_device_async(stream);
-            row_groups.host_to_device_async(stream);
+            chunks.host_to_device_async(_stream);
+            row_groups.host_to_device_async(_stream);
             gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
                                     nullptr,
                                     chunks.base_device_ptr(),
@@ -1212,7 +1212,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                                     num_rowgroups,
                                     _metadata.get_row_index_stride(),
                                     level == 0,
-                                    stream);
+                                    _stream);
           }
         }
 
@@ -1228,11 +1228,11 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           auto n_rows       = (level == 0) ? rows_to_read : _col_meta.num_child_rows[i];
           // For list column, offset column will be always size + 1
           if (is_list_type) n_rows++;
-          out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
+          out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
         }
 
         if (not is_level_data_empty) {
-          auto const tz_table_dview = table_device_view::create(tz_table->view(), stream);
+          auto const tz_table_dview = table_device_view::create(tz_table->view(), _stream);
           decode_stream_data(num_dict_entries,
                              rows_to_skip,
                              _metadata.get_row_index_stride(),
@@ -1241,15 +1241,15 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                              chunks,
                              row_groups,
                              out_buffers[level],
-                             stream);
+                             _stream);
         }
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
           if (not is_level_data_empty) {
-            scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+            scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
           }
-          row_groups.device_to_host_sync(stream);
+          row_groups.device_to_host_sync(_stream);
           aggregate_child_meta(level,
                                _selected_columns,
                                chunks,
@@ -1272,8 +1272,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
           if (buff_data.size()) {
             auto const dev_buff_data = cudf::detail::make_device_uvector_async(
-              buff_data, stream, rmm::mr::get_current_device_resource());
-            generate_offsets_for_list(dev_buff_data, stream);
+              buff_data, _stream, rmm::mr::get_current_device_resource());
+            generate_offsets_for_list(dev_buff_data, _stream);
           }
         }
       }
@@ -1289,8 +1289,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
       [&](auto const col_meta) {
         schema_info.emplace_back("");
         auto col_buffer = assemble_buffer(
-          col_meta.id, 0, _col_meta, _metadata, _selected_columns, out_buffers, stream, _mr);
-        return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
+          col_meta.id, 0, _col_meta, _metadata, _selected_columns, out_buffers, _stream, _mr);
+        return make_column(col_buffer, &schema_info.back(), std::nullopt, _stream);
       });
   }
 
@@ -1328,10 +1328,9 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(orc_reader_options const& options, rmm::cuda_stream_view stream)
+table_with_metadata reader::read(orc_reader_options const& options)
 {
-  return _impl->read(
-    options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
+  return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
 }
 
 }  // namespace orc

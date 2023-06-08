@@ -87,6 +87,7 @@ class reader::impl {
    *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
@@ -100,14 +101,12 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
    * @param stripes Indices of individual stripes to load if non-empty
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> num_rows,
-                           std::vector<std::vector<size_type>> const& stripes,
-                           rmm::cuda_stream_view stream);
+                           std::vector<std::vector<size_type>> const& stripes);
 
  private:
   /**
@@ -160,6 +159,7 @@ class reader::impl {
                           rmm::cuda_stream_view stream);
 
  private:
+  rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for others
