@@ -137,7 +137,9 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 {
   if (_group_offsets) return *_group_offsets;
 
-  auto const size    = num_keys(stream);
+  auto const size = num_keys(stream);
+  // Create a temporary variable and only set _group_offsets right before the return.
+  // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto group_offsets = std::make_unique<index_vector>(size + 1, stream);
 
   auto const comparator = cudf::experimental::row::equality::self_comparator{_keys, stream};
@@ -173,8 +175,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
                                      permuted_row_equality_comparator(d_key_equal, sorted_order));
   }
 
-  size_type num_groups = thrust::distance(group_offsets->begin(), result_end);
-  group_offsets->set_element(num_groups, size, stream);
+  auto const num_groups = thrust::distance(group_offsets->begin(), result_end);
+  group_offsets->set_element_async(num_groups, size, stream);
   group_offsets->resize(num_groups + 1, stream);
 
   _group_offsets = std::move(group_offsets);
@@ -190,11 +192,9 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   auto group_labels = std::make_unique<index_vector>(num_keys(stream), stream);
 
   if (num_keys(stream)) {
-    cudf::detail::label_segments(group_offsets(stream).begin(),
-                                 group_offsets(stream).end(),
-                                 group_labels->begin(),
-                                 group_labels->end(),
-                                 stream);
+    auto const& offsets = group_offsets(stream);
+    cudf::detail::label_segments(
+      offsets.begin(), offsets.end(), group_labels->begin(), group_labels->end(), stream);
   }
 
   _group_labels = std::move(group_labels);
