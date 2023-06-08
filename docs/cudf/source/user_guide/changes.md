@@ -51,27 +51,6 @@ Out[36]: Index([0, 1, 2], dtype='int8')
 ```
 
 
-### Series.rank
-
-
-`Series.rank` will now throw an error for non-numeric data when `numeric_only=True` is passed:
-
-Old behavior:
-
-```python
-In [4]: s = cudf.Series(["a", "b", "c"])
-   ...: s.rank(numeric_only=True)
-Out[4]: Series([], dtype: float64)
-```
-
-New behavior:
-
-```python
-In [4]: s = cudf.Series(["a", "b", "c"])
-   ...: s.rank(numeric_only=True)
-TypeError: Series.rank does not allow numeric_only=True with non-numeric dtype.
-```
-
 ### Binary operations between datetime & timedelta & scalars
 
 Binary operations between scalars & Series, will result in preservation of the Series dtype.
@@ -99,7 +78,6 @@ Out[3]:
 2   2000-02-29 00:00:00.012345
 dtype: datetime64[us]
 ```
-
 
 ### Change in bitwise operation results
 
@@ -228,6 +206,56 @@ Out[9]:
 ```
 
 
+### `to_datetime` switched to consistent datetime format parsing
+
+
+In the past, `to_datetime()` guessed the format for each element independently. This was appropriate for some cases where elements had mixed date formats - however, it would regularly cause problems when users expected a consistent format but the function would switch formats between elements. As of this version, parsing will use a consistent format, determined by the first non-NA value (unless the user specifies a format, in which case that is used).
+
+
+Old behavior:
+
+```python
+In [7]: ser = cudf.Series(['13-01-2000', '12-01-2000'])
+
+In [8]: cudf.to_datetime(ser)
+Out[8]:
+0   2000-01-13
+1   2000-01-12
+dtype: datetime64[ns]
+```
+
+New behavior:
+```python
+In [8]: cudf.to_datetime(ser)
+Out[8]:
+0   2000-01-13
+1   2000-01-12
+dtype: datetime64[ns]
+```
+
+
+### Series.rank
+
+
+`Series.rank` will now throw an error for non-numeric data when `numeric_only=True` is passed:
+
+Old behavior:
+
+```python
+In [4]: s = cudf.Series(["a", "b", "c"])
+   ...: s.rank(numeric_only=True)
+Out[4]: Series([], dtype: float64)
+```
+
+New behavior:
+
+```python
+In [4]: s = cudf.Series(["a", "b", "c"])
+   ...: s.rank(numeric_only=True)
+TypeError: Series.rank does not allow numeric_only=True with non-numeric dtype.
+```
+
+
 
 ### Value counts sets the results name to `count`/`proportion`
 
@@ -313,32 +341,6 @@ std         1.0    0.167047            0 days 00:00:00                          
 ```
 
 
-### `to_datetime` switched to consistent datetime format parsing
-
-
-In the past, `to_datetime()` guessed the format for each element independently. This was appropriate for some cases where elements had mixed date formats - however, it would regularly cause problems when users expected a consistent format but the function would switch formats between elements. As of this version, parsing will use a consistent format, determined by the first non-NA value (unless the user specifies a format, in which case that is used).
-
-
-Old behavior:
-
-```python
-In [7]: ser = cudf.Series(['13-01-2000', '12-01-2000'])
-
-In [8]: cudf.to_datetime(ser)
-Out[8]:
-0   2000-01-13
-1   2000-01-12
-dtype: datetime64[ns]
-```
-
-New behavior:
-```python
-In [8]: cudf.to_datetime(ser)
-Out[8]:
-0   2000-01-13
-1   2000-01-12
-dtype: datetime64[ns]
-```
 
 ### Converting a datetime to timezone-unaware dtype is not allowed.
 
