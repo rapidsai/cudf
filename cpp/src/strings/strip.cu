@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ struct strip_transform_fn {
   {
     if (d_strings.is_null(idx)) { return string_index_pair{nullptr, 0}; }
     auto const d_str      = d_strings.element<string_view>(idx);
-    auto const d_stripped = strip(d_str, d_to_strip, side);
+    auto const d_stripped = d_str.empty() ? string_view{} : strip(d_str, d_to_strip, side);
     return string_index_pair{d_stripped.data(), d_stripped.size_bytes()};
   }
 };
