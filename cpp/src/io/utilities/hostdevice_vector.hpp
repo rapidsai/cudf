@@ -31,6 +31,8 @@
 
 #include <variant>
 
+namespace cudf::detail {
+
 inline bool hostdevice_vector_uses_pageable_buffer()
 {
   static bool const use_pageable =
@@ -137,18 +139,28 @@ class hostdevice_vector {
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_sync(rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
+
+  void device_to_host_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+  }
+
+  void device_to_host_sync(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
   }
 
   /**
@@ -182,9 +194,6 @@ class hostdevice_vector {
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
-
-namespace cudf {
-namespace detail {
 
 /**
  * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
@@ -234,20 +243,15 @@ class hostdevice_2dvector {
 
   size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.host_to_device(stream, synchronize);
-  }
+  void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.device_to_host(stream, synchronize);
-  }
+  void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
 
  private:
   hostdevice_vector<T> _data;
   typename host_2dspan<T>::size_type _size;
 };
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

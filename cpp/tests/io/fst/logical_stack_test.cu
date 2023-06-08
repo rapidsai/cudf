@@ -200,7 +200,7 @@ TEST_F(LogicalStackTest, GroundTruth)
 
   rmm::device_uvector<SymbolT> d_stack_ops{stack_symbols.size(), stream_view};
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes{stack_op_indexes.size(), stream_view};
-  hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
+  cudf::detail::hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
   cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_ops.data(),
@@ -226,7 +226,7 @@ TEST_F(LogicalStackTest, GroundTruth)
                                                     stream.value());
 
   // Async copy results from device to host
-  top_of_stack_gpu.device_to_host(stream_view);
+  top_of_stack_gpu.device_to_host_async(stream_view);
 
   // Get CPU-side results for verification
   std::string top_of_stack_cpu{};
