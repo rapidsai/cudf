@@ -160,7 +160,7 @@ TEST_F(JsonTest, StackContext)
   cudf::string_scalar const d_scalar(input, true, stream);
   auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
   cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
@@ -208,7 +208,7 @@ TEST_F(JsonTest, StackContextUtf8)
   cudf::string_scalar const d_scalar(input, true, stream);
   auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
+  cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
   cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);

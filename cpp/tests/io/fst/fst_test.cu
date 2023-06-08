@@ -162,9 +162,9 @@ TEST_F(FstTest, GroundTruth)
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
-  hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
-  hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-  hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
+  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
 
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
