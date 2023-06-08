@@ -131,8 +131,8 @@ class reader::impl {
     host_span<orc_stream_info> stream_info,
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
     cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-    size_t num_stripes,
-    size_t row_index_stride,
+    std::size_t num_stripes,
+    std::size_t row_index_stride,
     bool use_base_stride,
     rmm::cuda_stream_view stream);
 
@@ -150,13 +150,13 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          size_t num_dicts,
-                          size_t skip_rows,
+                          std::size_t num_dicts,
+                          std::size_t skip_rows,
                           table_device_view tz_table,
                           cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-                          size_t row_index_stride,
+                          std::size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
-                          size_t level,
+                          std::size_t level,
                           rmm::cuda_stream_view stream);
 
  private:

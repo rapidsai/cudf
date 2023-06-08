@@ -148,8 +148,11 @@ void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
  * @brief Struct that maps ORC streams to columns
  */
 struct orc_stream_info {
-  explicit orc_stream_info(
-    uint64_t offset_, size_t dst_pos_, uint32_t length_, uint32_t gdf_idx_, uint32_t stripe_idx_)
+  explicit orc_stream_info(uint64_t offset_,
+                           std::size_t dst_pos_,
+                           uint32_t length_,
+                           uint32_t gdf_idx_,
+                           uint32_t stripe_idx_)
     : offset(offset_),
       dst_pos(dst_pos_),
       length(length_),
@@ -158,8 +161,8 @@ struct orc_stream_info {
   {
   }
   uint64_t offset;      // offset in file
-  size_t dst_pos;       // offset in memory relative to start of compressed stripe data
-  size_t length;        // length in file
+  std::size_t dst_pos;  // offset in memory relative to start of compressed stripe data
+  std::size_t length;   // length in file
   uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
@@ -167,16 +170,16 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(size_t stripe_index,
-                          orc::StripeInformation const* stripeinfo,
-                          orc::StripeFooter const* stripefooter,
-                          host_span<int const> orc2gdf,
-                          host_span<orc::SchemaType const> types,
-                          bool use_index,
-                          bool apply_struct_map,
-                          size_t* num_dictionary_entries,
-                          std::vector<orc_stream_info>& stream_info,
-                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
+std::size_t gather_stream_info(std::size_t stripe_index,
+                               orc::StripeInformation const* stripeinfo,
+                               orc::StripeFooter const* stripefooter,
+                               host_span<int const> orc2gdf,
+                               host_span<orc::SchemaType const> types,
+                               bool use_index,
+                               bool apply_struct_map,
+                               std::size_t* num_dictionary_entries,
+                               std::vector<orc_stream_info>& stream_info,
+                               cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -264,6 +267,133 @@ void decompress_check(device_span<compression_result> results,
                    });
 }
 
+/**
+ * @brief Updates null mask of columns whose parent is a struct column.
+ *
+ * If struct column has null element, that row would be skipped while writing child column in ORC,
+ * so we need to insert the missing null elements in child column. There is another behavior from
+ * pyspark, where if the child column doesn't have any null elements, it will not have present
+ * stream, so in that case parent null mask need to be copied to child column.
+ *
+ * @param chunks Vector of list of column chunk descriptors
+ * @param out_buffers Output columns' device buffers
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                      host_span<column_buffer> out_buffers,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
+{
+  const auto num_stripes = chunks.size().first;
+  const auto num_columns = chunks.size().second;
+  bool is_mask_updated   = false;
+
+  for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
+      if (not is_mask_updated) {
+        chunks.device_to_host_sync(stream);
+        is_mask_updated = true;
+      }
+
+      auto parent_valid_map_base = chunks[0][col_idx].parent_validity_info.valid_map_base;
+      auto child_valid_map_base  = out_buffers[col_idx].null_mask();
+      auto child_mask_len =
+        chunks[0][col_idx].column_num_rows - chunks[0][col_idx].parent_validity_info.null_count;
+      auto parent_mask_len = chunks[0][col_idx].column_num_rows;
+
+      if (child_valid_map_base != nullptr) {
+        rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
+        // Copy indexes at which the parent has valid value.
+        thrust::copy_if(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(0) + parent_mask_len,
+                        dst_idx.begin(),
+                        [parent_valid_map_base] __device__(auto idx) {
+                          return bit_is_set(parent_valid_map_base, idx);
+                        });
+
+        auto merged_null_mask = cudf::detail::create_null_mask(
+          parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
+        auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
+        uint32_t* dst_idx_ptr = dst_idx.data();
+        // Copy child valid bits from child column to valid indexes, this will merge both child
+        // and parent null masks
+        thrust::for_each(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(0) + dst_idx.size(),
+                         [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
+                           if (bit_is_set(child_valid_map_base, idx)) {
+                             cudf::set_bit(merged_mask, dst_idx_ptr[idx]);
+                           };
+                         });
+
+        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
+
+      } else {
+        // Since child column doesn't have a mask, copy parent null mask
+        auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
+        out_buffers[col_idx]._null_mask =
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
+      }
+    }
+  }
+
+  if (is_mask_updated) {
+    // Update chunks with pointers to column data which might have been changed.
+    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+      for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+        auto& chunk          = chunks[stripe_idx][col_idx];
+        chunk.valid_map_base = out_buffers[col_idx].null_mask();
+      }
+    }
+    chunks.host_to_device_sync(stream);
+  }
+}
+
+/**
+ * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
+ * layer.
+ */
+void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                      rmm::cuda_stream_view stream)
+{
+  auto const num_stripes = chunks.size().first;
+  if (num_stripes == 0) return;
+
+  auto const num_columns = chunks.size().second;
+  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
+  for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
+    // Null counts sums are only needed for children of struct columns
+    if (chunks[0][col_idx].type_kind == STRUCT) {
+      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
+    }
+  }
+  auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
+    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
+
+  thrust::for_each(rmm::exec_policy(stream),
+                   d_prefix_sums_to_update.begin(),
+                   d_prefix_sums_to_update.end(),
+                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
+                     auto const& idx_psums) {
+                     auto const col_idx = idx_psums.first;
+                     auto const psums   = idx_psums.second;
+
+                     thrust::transform(
+                       thrust::seq,
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(0) + psums.size(),
+                       psums.begin(),
+                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+
+                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
+                   });
+  // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
+  stream.synchronize();
+}
+
 }  // namespace
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
@@ -272,8 +402,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   host_span<orc_stream_info> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-  size_t num_stripes,
-  size_t row_index_stride,
+  std::size_t num_stripes,
+  std::size_t row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
@@ -300,10 +430,10 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   compinfo.device_to_host_sync(stream);
 
   // Count the exact number of compressed blocks
-  size_t num_compressed_blocks   = 0;
-  size_t num_uncompressed_blocks = 0;
-  size_t total_decomp_size       = 0;
-  for (size_t i = 0; i < compinfo.size(); ++i) {
+  std::size_t num_compressed_blocks   = 0;
+  std::size_t num_uncompressed_blocks = 0;
+  std::size_t total_decomp_size       = 0;
+  for (std::size_t i = 0; i < compinfo.size(); ++i) {
     num_compressed_blocks += compinfo[i].num_compressed_blocks;
     num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
     total_decomp_size += compinfo[i].max_uncompressed_size;
@@ -322,11 +452,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                compression_result{0, compression_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
-  size_t decomp_offset           = 0;
+  std::size_t decomp_offset      = 0;
   uint32_t max_uncomp_block_size = 0;
   uint32_t start_pos             = 0;
   auto start_pos_uncomp          = (uint32_t)num_compressed_blocks;
-  for (size_t i = 0; i < compinfo.size(); ++i) {
+  for (std::size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
@@ -417,15 +547,15 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  const size_t num_columns = chunks.size().second;
+  const std::size_t num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  for (size_t i = 0; i < num_stripes; ++i) {
-    for (size_t j = 0; j < num_columns; ++j) {
+  for (std::size_t i = 0; i < num_stripes; ++i) {
+    for (std::size_t j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
         if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
@@ -453,145 +583,14 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   return decomp_data;
 }
 
-/**
- * @brief Updates null mask of columns whose parent is a struct column.
- *        If struct column has null element, that row would be
- *        skipped while writing child column in ORC, so we need to insert the missing null
- *        elements in child column.
- *        There is another behavior from pyspark, where if the child column doesn't have any null
- *        elements, it will not have present stream, so in that case parent null mask need to be
- *        copied to child column.
- *
- * @param chunks Vector of list of column chunk descriptors
- * @param out_buffers Output columns' device buffers
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource to use for device memory allocation
- */
-void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                      std::vector<column_buffer>& out_buffers,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
-{
-  const auto num_stripes = chunks.size().first;
-  const auto num_columns = chunks.size().second;
-  bool is_mask_updated   = false;
-
-  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-    if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
-      if (not is_mask_updated) {
-        chunks.device_to_host_sync(stream);
-        is_mask_updated = true;
-      }
-
-      auto parent_valid_map_base = chunks[0][col_idx].parent_validity_info.valid_map_base;
-      auto child_valid_map_base  = out_buffers[col_idx].null_mask();
-      auto child_mask_len =
-        chunks[0][col_idx].column_num_rows - chunks[0][col_idx].parent_validity_info.null_count;
-      auto parent_mask_len = chunks[0][col_idx].column_num_rows;
-
-      if (child_valid_map_base != nullptr) {
-        rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
-        // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(0) + parent_mask_len,
-                        dst_idx.begin(),
-                        [parent_valid_map_base] __device__(auto idx) {
-                          return bit_is_set(parent_valid_map_base, idx);
-                        });
-
-        auto merged_null_mask = cudf::detail::create_null_mask(
-          parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
-        auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
-        uint32_t* dst_idx_ptr = dst_idx.data();
-        // Copy child valid bits from child column to valid indexes, this will merge both child
-        // and parent null masks
-        thrust::for_each(rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0),
-                         thrust::make_counting_iterator(0) + dst_idx.size(),
-                         [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
-                           if (bit_is_set(child_valid_map_base, idx)) {
-                             cudf::set_bit(merged_mask, dst_idx_ptr[idx]);
-                           };
-                         });
-
-        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
-
-      } else {
-        // Since child column doesn't have a mask, copy parent null mask
-        auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[col_idx]._null_mask =
-          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
-      }
-    }
-  }
-
-  thrust::counting_iterator<int> col_idx_it(0);
-  thrust::counting_iterator<int> stripe_idx_it(0);
-
-  if (is_mask_updated) {
-    // Update chunks with pointers to column data which might have been changed.
-    std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
-      std::for_each(col_idx_it, col_idx_it + num_columns, [&](auto col_idx) {
-        auto& chunk          = chunks[stripe_idx][col_idx];
-        chunk.valid_map_base = out_buffers[col_idx].null_mask();
-      });
-    });
-    chunks.host_to_device_sync(stream);
-  }
-}
-
-/**
- * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
- * layer.
- */
-void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
-                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
-                      rmm::cuda_stream_view stream)
-{
-  auto const num_stripes = chunks.size().first;
-  if (num_stripes == 0) return;
-
-  auto const num_columns = chunks.size().second;
-  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
-  for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
-    // Null counts sums are only needed for children of struct columns
-    if (chunks[0][col_idx].type_kind == STRUCT) {
-      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
-    }
-  }
-  auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
-    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
-
-  thrust::for_each(rmm::exec_policy(stream),
-                   d_prefix_sums_to_update.begin(),
-                   d_prefix_sums_to_update.end(),
-                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
-                     auto const& idx_psums) {
-                     auto const col_idx = idx_psums.first;
-                     auto const psums   = idx_psums.second;
-
-                     thrust::transform(
-                       thrust::seq,
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(0) + psums.size(),
-                       psums.begin(),
-                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
-
-                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
-                   });
-  // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
-  stream.synchronize();
-}
-
 void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                                      size_t num_dicts,
-                                      size_t skip_rows,
+                                      std::size_t num_dicts,
+                                      std::size_t skip_rows,
                                       table_device_view tz_table,
                                       cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-                                      size_t row_index_stride,
+                                      std::size_t row_index_stride,
                                       std::vector<column_buffer>& out_buffers,
-                                      size_t level,
+                                      std::size_t level,
                                       rmm::cuda_stream_view stream)
 {
   const auto num_stripes = chunks.size().first;
@@ -701,13 +700,13 @@ void aggregate_child_meta(cudf::io::orc::detail::column_hierarchy const& selecte
     auto start_row            = 0;
     auto processed_row_groups = 0;
 
-    for (size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {
+    for (std::size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {
       // Aggregate num_rows and start_row from processed parent columns per row groups
       if (num_of_rowgroups) {
         auto stripe_num_row_groups = chunks[stripe_id][parent_col_idx].num_rowgroups;
         auto processed_child_rows  = 0;
 
-        for (size_t rowgroup_id = 0; rowgroup_id < stripe_num_row_groups;
+        for (std::size_t rowgroup_id = 0; rowgroup_id < stripe_num_row_groups;
              rowgroup_id++, processed_row_groups++) {
           const auto child_rows = row_groups[processed_row_groups][parent_col_idx].num_child_rows;
           for (size_type id = 0; id < p_col.num_children; id++) {
@@ -754,7 +753,7 @@ void aggregate_child_meta(cudf::io::orc::detail::column_hierarchy const& selecte
   });
 }
 
-std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
+std::string get_map_child_col_name(std::size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
 /**
  * @brief Create empty columns and respective schema information from the buffer.
@@ -808,7 +807,7 @@ std::unique_ptr<column> create_empty_column(
       const auto child_column_ids = metadata.get_col_type(orc_col_id).subtypes;
       auto& children_schema       = schema_info.children.back().children;
       std::vector<std::unique_ptr<column>> child_columns;
-      for (size_t idx = 0; idx < metadata.get_col_type(orc_col_id).subtypes.size(); idx++) {
+      for (std::size_t idx = 0; idx < metadata.get_col_type(orc_col_id).subtypes.size(); idx++) {
         children_schema.emplace_back("");
         child_columns.push_back(create_empty_column(child_column_ids[idx],
                                                     schema_info.children.back().children.back(),
@@ -868,7 +867,7 @@ column_buffer assemble_buffer(size_type const orc_col_id,
                               reader_column_meta const& col_meta,
                               cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
                               cudf::io::orc::detail::column_hierarchy const& selected_columns,
-                              size_t const level,
+                              std::size_t const level,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
@@ -891,7 +890,7 @@ column_buffer assemble_buffer(size_type const orc_col_id,
       std::vector<column_buffer> child_col_buffers;
       // Get child buffers
       auto const& children_indices = selected_columns.children.at(orc_col_id);
-      for (size_t idx = 0; idx < children_indices.size(); idx++) {
+      for (std::size_t idx = 0; idx < children_indices.size(); idx++) {
         auto name      = get_map_child_col_name(idx);
         auto const col = children_indices[idx];
         child_col_buffers.emplace_back(assemble_buffer(
@@ -976,7 +975,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
-  for (size_t level = 0; level < _selected_columns.num_levels(); level++) {
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); level++) {
     auto& columns_level = _selected_columns.levels[level];
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
@@ -1025,11 +1024,11 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
       break;
     } else {
       // Get the total number of stripes across all input files.
-      size_t total_num_stripes =
+      std::size_t total_num_stripes =
         std::accumulate(selected_stripes.begin(),
                         selected_stripes.end(),
                         0,
-                        [](size_t sum, auto& stripe_source_mapping) {
+                        [](std::size_t sum, auto& stripe_source_mapping) {
                           return sum + stripe_source_mapping.stripe_info.size();
                         });
       const auto num_columns = columns_level.size();
@@ -1065,13 +1064,13 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
       // Tracker for eventually deallocating compressed and uncompressed data
       auto& stripe_data = lvl_stripe_data[level];
 
-      size_t stripe_start_row = 0;
-      size_t num_dict_entries = 0;
-      size_t num_rowgroups    = 0;
-      int stripe_idx          = 0;
+      std::size_t stripe_start_row = 0;
+      std::size_t num_dict_entries = 0;
+      std::size_t num_rowgroups    = 0;
+      int stripe_idx               = 0;
 
       bool is_level_data_empty = true;
-      std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
+      std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
         for (auto const& stripe : stripe_source_mapping.stripe_info) {
@@ -1136,7 +1135,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                                    _metadata.get_row_index_stride();
           }
           // Update chunks to reference streams pointers
-          for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+          for (std::size_t col_idx = 0; col_idx < num_columns; col_idx++) {
             auto& chunk = chunks[stripe_idx][col_idx];
             // start row, number of rows in a each stripe and total number of rows
             // may change in lower levels of nesting
@@ -1243,9 +1242,9 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           }
         }
 
-        for (size_t i = 0; i < column_types.size(); ++i) {
+        for (std::size_t i = 0; i < column_types.size(); ++i) {
           bool is_nullable = false;
-          for (size_t j = 0; j < total_num_stripes; ++j) {
+          for (std::size_t j = 0; j < total_num_stripes; ++j) {
             if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
               is_nullable = true;
               break;
