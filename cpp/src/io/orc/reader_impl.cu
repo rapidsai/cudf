@@ -668,11 +668,10 @@ void aggregate_child_meta(size_type level,
                           host_span<column_buffer> out_buffers,
                           reader_column_meta& col_meta)
 {
-  const auto num_of_stripes         = chunks.size().first;
-  const auto num_of_rowgroups       = row_groups.size().first;
-  const auto num_parent_cols        = selected_columns.levels[level].size();
-  const auto num_child_cols         = selected_columns.levels[level + 1].size();
-  const auto number_of_child_chunks = num_child_cols * num_of_stripes;
+  auto const num_of_stripes         = chunks.size().first;
+  auto const num_of_rowgroups       = row_groups.size().first;
+  auto const num_child_cols         = selected_columns.levels[level + 1].size();
+  auto const number_of_child_chunks = num_child_cols * num_of_stripes;
   auto& num_child_rows              = col_meta.num_child_rows;
   auto& parent_column_data          = col_meta.parent_column_data;
 
@@ -891,11 +890,10 @@ column_buffer assemble_buffer(size_type const orc_col_id,
       // Get child buffers
       auto const& children_indices = selected_columns.children.at(orc_col_id);
       for (std::size_t idx = 0; idx < children_indices.size(); idx++) {
-        auto name      = get_map_child_col_name(idx);
         auto const col = children_indices[idx];
         child_col_buffers.emplace_back(assemble_buffer(
           col, col_buffers, col_meta, metadata, selected_columns, level + 1, stream, mr));
-        child_col_buffers.back().name = std::move(name);
+        child_col_buffers.back().name = get_map_child_col_name(idx);
       }
       // Create a struct buffer
       auto num_rows = child_col_buffers[0].size;
