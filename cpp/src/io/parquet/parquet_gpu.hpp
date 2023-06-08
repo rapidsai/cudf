@@ -286,10 +286,10 @@ struct ColumnChunkDesc {
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
   rmm::device_buffer decomp_page_data;
-  hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
-  hostdevice_vector<gpu::PageInfo> pages_info{};
-  hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
-  hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
+  cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
+  cudf::detail::hostdevice_vector<gpu::PageInfo> pages_info{};
+  cudf::detail::hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  cudf::detail::hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
 
   rmm::device_buffer level_decode_data;
   int level_type_size;
@@ -463,8 +463,8 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param level_type_size Size in bytes of the type for level decoding
  * @param stream CUDA stream to use, default 0
  */
-void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
-                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                      cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
                       size_t min_row,
                       size_t num_rows,
                       bool compute_num_rows,
@@ -485,8 +485,8 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecodePageData(hostdevice_vector<PageInfo>& pages,
-                    hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                    cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
