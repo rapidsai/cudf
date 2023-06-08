@@ -1340,9 +1340,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         elif tag is indexing_utils.IndexTag.SLICE:
             return self._slice(cast(slice, key))
         elif tag is indexing_utils.IndexTag.SCALAR:
-            return libcudf.copying.gather([self._column], key, nullify=False)[
-                0
-            ].element_indexing(0)
+            return self._gather(
+                key,
+                keep_index=False,
+                nullify=False,
+                normalize_and_check=False,
+            )._column.element_indexing(0)
         assert_never(tag)
 
     @_cudf_nvtx_annotate
