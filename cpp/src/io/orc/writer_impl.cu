@@ -272,6 +272,8 @@ class orc_column_view {
 
   // Index in the table
   [[nodiscard]] uint32_t index() const noexcept { return _index; }
+  // Index in the table, including only string columns
+  [[nodiscard]] uint32_t str_index() const noexcept { return _str_idx; }
   // Id in the ORC file
   [[nodiscard]] auto id() const noexcept { return _index + 1; }
 
@@ -2190,11 +2192,10 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
 
   auto const h_counts = cudf::detail::make_std_vector_sync(counts, stream);
 
-  auto str_col_idx = 0;
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     str_column.attach_rowgroup_char_counts(
-      {h_counts.data() + str_col_idx++ * num_rowgroups, num_rowgroups});
+      {h_counts.data() + str_column.str_index() * num_rowgroups, num_rowgroups});
   }
 
   return h_counts;
@@ -2276,7 +2277,6 @@ auto convert_table_to_orc_data(table_view const& input,
   // TODO Build new stripe dictionaries and replace old dictionaries one info piece at a time
   std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
     orc_table.string_column_indices.size());
-  size_type str_col_idx = 0;
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     for (auto const& stripe : segmentation.stripes) {
@@ -2285,12 +2285,29 @@ auto convert_table_to_orc_data(table_view const& input,
         stripe.size == 0 ? 0
                          : segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end -
                              segmentation.rowgroups[stripe.first][col_idx].begin;
-      hash_maps_storage[str_col_idx].emplace_back(stripe_num_rows * 1.43, stream);
+      hash_maps_storage[str_column.str_index()].emplace_back(stripe_num_rows * 1.43, stream);
     }
-    ++str_col_idx;
   }
 
-  // gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
+  hostdevice_2dvector<gpu::stripe_dictionary> stripe_dicts(
+    segmentation.num_stripes(), orc_table.num_string_columns(), stream);
+  for (auto col_idx : orc_table.string_column_indices) {
+    auto& str_column = orc_table.column(col_idx);
+    for (auto const& stripe : segmentation.stripes) {
+      auto const stripe_idx  = stripe.id;
+      auto const str_col_idx = str_column.str_index();
+      auto& sd               = stripe_dicts[str_col_idx][stripe_idx];
+
+      sd.dict_map_slots = hash_maps_storage[str_col_idx][stripe_idx];
+      sd.column_idx     = col_idx;
+      sd.start_row      = segmentation.rowgroups[stripe.first][col_idx].begin;
+      sd.num_rows =
+        segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end - sd.start_row;
+    }
+  }
+  stripe_dicts.host_to_device(stream, true);
+
+  gpu::initialize_dictionary_hash_maps(stripe_dicts, stream);
   // gpu::populate_chunk_hash_maps(frags, stream);
   // why chunks in one and frags in the other?
 

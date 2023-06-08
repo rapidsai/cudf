@@ -467,6 +467,20 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
+{
+  auto const dict_map = dictionaries[blockIdx.x].dict_map_slots;
+  auto const t        = threadIdx.x;
+  for (size_type i = 0; i < dict_map.size(); i += block_size) {
+    if (t + i < dict_map.size()) {
+      new (&dict_map[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
+      new (&dict_map[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
+    }
+  }
+}
+
 void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
                            device_2dspan<DictionaryChunk> chunks,
                            device_span<device_span<uint32_t>> dict_data,
@@ -516,6 +530,15 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
   }
   gpuBuildStripeDictionaries<1024>
     <<<dim_grid_build, dim_block, 0, stream.value()>>>(d_stripes_dicts);
+}
+
+void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
+                                     rmm::cuda_stream_view stream)
+{
+  std::cout << "dictionary count: " << dictionaries.count() << std::endl;
+  constexpr int block_size = 1024;
+  initialize_dictionary_hash_maps_kernel<block_size>
+    <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries.flat_view());
 }
 
 }  // namespace gpu

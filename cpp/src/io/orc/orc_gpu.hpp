@@ -214,6 +214,23 @@ struct StripeDictionary {
   orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
+struct stripe_dictionary {
+  // input
+  device_span<slot_type> dict_map_slots;
+  uint32_t column_idx;  // TODO why needed?
+  uint32_t start_row;   // first chunk in stripe
+  uint32_t num_rows;
+
+  // output
+  uint32_t* dict_data;   // row indices of corresponding string (row from dictionary index)
+  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t entry_count;
+  uint32_t char_count;
+};
+
+void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dict_map_slots,
+                                     rmm::cuda_stream_view stream);
+
 constexpr uint32_t encode_block_size = 512;
 
 /**
