@@ -139,24 +139,24 @@ class reader::impl {
   /**
    * @brief Converts the stripe column data and outputs to columns
    *
-   * @param chunks Vector of list of column chunk descriptors
    * @param num_dicts Number of dictionary entries required
    * @param skip_rows Number of rows to offset from start
-   * @param tz_table Local time to UTC conversion table
-   * @param row_groups Vector of list of row index descriptors
    * @param row_index_stride Distance between each row index
-   * @param out_buffers Output columns' device buffers
    * @param level Current nesting level being processed
+   * @param tz_table Local time to UTC conversion table
+   * @param chunks Vector of list of column chunk descriptors
+   * @param row_groups Vector of list of row index descriptors
+   * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          std::size_t num_dicts,
+  void decode_stream_data(std::size_t num_dicts,
                           std::size_t skip_rows,
-                          table_device_view tz_table,
-                          cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
                           std::size_t row_index_stride,
-                          std::vector<column_buffer>& out_buffers,
                           std::size_t level,
+                          table_device_view const& tz_table,
+                          cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
+                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                          std::vector<column_buffer>& out_buffers,
                           rmm::cuda_stream_view stream);
 
  private:

@@ -583,14 +583,14 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   return decomp_data;
 }
 
-void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                                      std::size_t num_dicts,
+void reader::impl::decode_stream_data(std::size_t num_dicts,
                                       std::size_t skip_rows,
-                                      table_device_view tz_table,
-                                      cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
                                       std::size_t row_index_stride,
-                                      std::vector<column_buffer>& out_buffers,
                                       std::size_t level,
+                                      table_device_view const& tz_table,
+                                      cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
+                                      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                                      std::vector<column_buffer>& out_buffers,
                                       rmm::cuda_stream_view stream)
 {
   const auto num_stripes = chunks.size().first;
@@ -651,7 +651,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 
 /**
  * @brief Aggregate child metadata from parent column chunks.
- * TODO
+ *
  * @param selected_columns
  * @param col_meta
  * @param chunks Vector of list of parent column chunks.
@@ -1259,14 +1259,14 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
         if (not is_level_data_empty) {
           auto const tz_table_dview = table_device_view::create(tz_table->view(), stream);
-          decode_stream_data(chunks,
-                             num_dict_entries,
+          decode_stream_data(num_dict_entries,
                              rows_to_skip,
+                             _metadata.get_row_index_stride(),
+                             level,
                              *tz_table_dview,
                              row_groups,
-                             _metadata.get_row_index_stride(),
+                             chunks,
                              out_buffers[level],
-                             level,
                              stream);
         }
 
