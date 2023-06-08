@@ -288,7 +288,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
     compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
   compinfo.host_to_device(stream);
@@ -400,6 +400,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     }
     decompress_check(inflate_res, any_block_failure.device_ptr(), stream);
   }
+
   if (num_uncompressed_blocks > 0) {
     device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
                                                          num_uncompressed_blocks};
@@ -407,10 +408,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                                     num_uncompressed_blocks};
     gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
   }
-  gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 
+  // Copy without stream sync, thus need to wait for stream sync below to access.
   any_block_failure.device_to_host(stream);
 
+  gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
   compinfo.device_to_host(stream, true);
 
   // We can check on host after stream synchronize
