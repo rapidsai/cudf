@@ -18,6 +18,7 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/orc_types.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
 
@@ -32,7 +33,8 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-constexpr int init_hash_bits = 12;
+constexpr int init_hash_bits     = 12;
+constexpr int DEFAULT_BLOCK_SIZE = 256;
 
 struct dictinit_state_s {
   uint32_t nnz;
@@ -471,13 +473,98 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
 {
-  auto const dict_map = dictionaries[blockIdx.x].dict_map_slots;
+  auto const dict_map = dictionaries[blockIdx.x].map_slots;
   auto const t        = threadIdx.x;
   for (size_type i = 0; i < dict_map.size(); i += block_size) {
     if (t + i < dict_map.size()) {
       new (&dict_map[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
       new (&dict_map[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
     }
+  }
+}
+
+struct equality_functor {
+  column_device_view const& col;
+  __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
+  {
+    // We don't call this for nulls so this is fine
+    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    return equal(col.element<string_view>(lhs_idx), col.element<string_view>(rhs_idx));
+  }
+};
+
+struct hash_functor {
+  column_device_view const& col;
+  __device__ auto operator()(size_type idx) const
+  {
+    return cudf::detail::MurmurHash3_32<string_view>{}(col.element<string_view>(idx));
+  }
+};
+
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
+                                       device_span<orc_column_device_view const> columns)
+{
+  using block_reduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage reduce_storage;
+  __shared__ size_type total_num_dict_entries;
+
+  auto col_idx = blockIdx.y;
+  // TODO currently only one block per stripe
+  auto stripe_idx = blockIdx.x;
+  auto t          = threadIdx.x;
+  auto dict       = dictionaries[col_idx][stripe_idx];
+  auto col        = columns[dict.column_idx];
+
+  auto const start_row = dict.start_row;
+  auto const end_row   = dict.start_row + dict.num_rows;
+
+  if (t == 0) {
+    auto const& offsets = col.child(strings_column_view::offsets_column_index);
+    dictionaries[col_idx][stripe_idx].direct_char_count =
+      offsets.element<size_type>(end_row) - offsets.element<size_type>(start_row);
+  }
+
+  // Make a view of the hash map
+  auto hash_map_mutable = map_type::device_mutable_view(dict.map_slots.data(),
+                                                        dict.map_slots.size(),
+                                                        cuco::empty_key{KEY_SENTINEL},
+                                                        cuco::empty_value{VALUE_SENTINEL});
+  auto cur_row          = start_row + t;
+  // all threads should loop over the same number of rows
+  while (cur_row - t < end_row) {
+    auto const is_valid = cur_row < end_row and cur_row < col.size() and col.is_valid(cur_row);
+
+    // insert element at cur_row to hash map and count successful insertions
+    size_type is_unique      = 0;
+    size_type uniq_elem_size = 0;
+
+    if (is_valid) {
+      auto hash_fn     = hash_functor{col};
+      auto equality_fn = equality_functor{col};
+      is_unique        = hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
+      if (is_unique) { uniq_elem_size = col.element<string_view>(cur_row).size_bytes(); }
+    }
+
+    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    __syncthreads();
+    auto char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
+    __syncthreads();
+
+    if (t == 0) {
+      auto dict_g            = &dictionaries[col_idx][stripe_idx];
+      total_num_dict_entries = atomicAdd(&dict_g->entry_count, num_unique);
+      total_num_dict_entries += num_unique;
+
+      atomicAdd(&dict_g->char_count, char_count);
+    }
+    __syncthreads();
+
+    // Check if the num unique values in chunk has already exceeded max dict size and early exit
+    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
+
+    cur_row += block_size;
   }
 }
 
@@ -535,10 +622,18 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
 void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
                                      rmm::cuda_stream_view stream)
 {
-  std::cout << "dictionary count: " << dictionaries.count() << std::endl;
   constexpr int block_size = 1024;
   initialize_dictionary_hash_maps_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries.flat_view());
+}
+
+void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
+                                   device_span<orc_column_device_view const> columns,
+                                   rmm::cuda_stream_view stream)
+{
+  dim3 const dim_grid(dictionaries.size().second, dictionaries.size().first);
+  populate_dictionary_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
+    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(dictionaries, columns);
 }
 
 }  // namespace gpu

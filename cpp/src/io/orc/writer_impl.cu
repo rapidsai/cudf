@@ -2274,13 +2274,13 @@ auto convert_table_to_orc_data(table_view const& input,
                        stream);
   }
 
-  // TODO Build new stripe dictionaries and replace old dictionaries one info piece at a time
+  // Build new stripe dictionaries and replace old dictionaries one info piece at a time
   std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
     orc_table.string_column_indices.size());
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     for (auto const& stripe : segmentation.stripes) {
-      // TODO use the number of valid rows in the stripe
+      // TODO use the number of valid rows in the stripe to save memory
       auto const stripe_num_rows =
         stripe.size == 0 ? 0
                          : segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end -
@@ -2298,18 +2298,52 @@ auto convert_table_to_orc_data(table_view const& input,
       auto const str_col_idx = str_column.str_index();
       auto& sd               = stripe_dicts[str_col_idx][stripe_idx];
 
-      sd.dict_map_slots = hash_maps_storage[str_col_idx][stripe_idx];
-      sd.column_idx     = col_idx;
-      sd.start_row      = segmentation.rowgroups[stripe.first][col_idx].begin;
+      sd.map_slots  = hash_maps_storage[str_col_idx][stripe_idx];
+      sd.column_idx = col_idx;
+      sd.start_row  = segmentation.rowgroups[stripe.first][col_idx].begin;
       sd.num_rows =
         segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end - sd.start_row;
+
+      sd.data              = nullptr;
+      sd.index             = nullptr;
+      sd.direct_char_count = 0;
+      sd.entry_count       = 0;
+      sd.char_count        = 0;
     }
   }
   stripe_dicts.host_to_device(stream, true);
 
   gpu::initialize_dictionary_hash_maps(stripe_dicts, stream);
-  // gpu::populate_chunk_hash_maps(frags, stream);
-  // why chunks in one and frags in the other?
+  gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
+  stripe_dicts.device_to_host(stream, true);
+  for (auto& sd : stripe_dicts.host_view().flat_view()) {
+    std::cout << "sd.entry_count: " << sd.entry_count << ' ';
+    std::cout << "sd.char_count: " << sd.char_count << ' ';
+    std::cout << "sd.direct_char_count: " << sd.direct_char_count << std::endl;
+  }
+
+  // Make decision about which chunks have dictionary
+  // TODO dict data owner
+  for (auto col_idx : orc_table.string_column_indices) {
+    auto& str_column = orc_table.column(col_idx);
+    for (auto const& stripe : segmentation.stripes) {
+      auto const stripe_idx     = stripe.id;
+      auto const str_col_idx    = str_column.str_index();
+      auto& sd                  = stripe_dicts[str_col_idx][stripe_idx];
+      auto const use_dictionary = [&]() {
+        // TODO multiplier for entry_count?
+        return sd.char_count + sd.entry_count < sd.direct_char_count;
+      }();
+      std::cout << "use_dictionary: " << use_dictionary << std::endl;
+      if (use_dictionary) {
+        // TODO allocate memory for dictionary data, assign to dict_data
+      } else {
+        // dealloc map_slots, reset map_slots
+      }
+    }
+  }
+
+  // TODO allocate dict_data and assign pointers to stripe_dicts
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 

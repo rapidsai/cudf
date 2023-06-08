@@ -45,6 +45,12 @@ auto constexpr VALUE_SENTINEL = size_type{-1};
 
 using map_type = cuco::static_map<size_type, size_type>;
 
+// Largest number of bits to use for dictionary keys
+constexpr int MAX_DICT_BITS = 24;
+
+// Total number of unsigned 24 bit values
+constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
+
 /**
  * @brief The alias of `map_type::pair_atomic_type` class.
  *
@@ -216,20 +222,27 @@ struct StripeDictionary {
 
 struct stripe_dictionary {
   // input
-  device_span<slot_type> dict_map_slots;
-  uint32_t column_idx;  // TODO why needed?
-  uint32_t start_row;   // first chunk in stripe
-  uint32_t num_rows;
+  device_span<slot_type> map_slots;
+  uint32_t column_idx;
+  size_type start_row;  // first chunk in stripe
+  size_type num_rows;
 
   // output
-  uint32_t* dict_data;   // row indices of corresponding string (row from dictionary index)
-  uint32_t* dict_index;  // dictionary index from row index
-  uint32_t entry_count;
-  uint32_t char_count;
+  uint32_t* data;               // row indices of corresponding string (row from dictionary index)
+  uint32_t* index;              // dictionary index from row index
+  size_type direct_char_count;  // TODO remove now that ranged for loop fell apart
+  size_type entry_count;
+  size_type char_count;
+
+  constexpr bool use_dictionary() const { return not map_slots.empty(); }
 };
 
-void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dict_map_slots,
+void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> map_slots,
                                      rmm::cuda_stream_view stream);
+
+void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
+                                   device_span<orc_column_device_view const> columns,
+                                   rmm::cuda_stream_view stream);
 
 constexpr uint32_t encode_block_size = 512;
 
