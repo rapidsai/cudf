@@ -320,6 +320,9 @@ dependencies:
               # so 11.2 uses 11.4 packages (the oldest available).
               - *libcufile_114
               - *libcufile_dev114
+          # Fallback matrix for aarch64, which doesn't support libcufile.
+          - matrix:
+            packages:
   develop:
     common:
       - output_types: [conda, requirements]
