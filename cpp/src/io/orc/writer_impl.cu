@@ -2316,11 +2316,6 @@ auto convert_table_to_orc_data(table_view const& input,
   gpu::initialize_dictionary_hash_maps(stripe_dicts, stream);
   gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
   stripe_dicts.device_to_host(stream, true);
-  for (auto& sd : stripe_dicts.host_view().flat_view()) {
-    std::cout << "sd.entry_count: " << sd.entry_count << ' ';
-    std::cout << "sd.char_count: " << sd.char_count << ' ';
-    std::cout << "sd.direct_char_count: " << sd.direct_char_count << std::endl;
-  }
 
   // Make decision about which chunks have dictionary
   // TODO dict data owner
@@ -2334,7 +2329,6 @@ auto convert_table_to_orc_data(table_view const& input,
         // TODO multiplier for entry_count?
         return sd.char_count + sd.entry_count < sd.direct_char_count;
       }();
-      std::cout << "use_dictionary: " << use_dictionary << std::endl;
       if (use_dictionary) {
         // TODO allocate memory for dictionary data, assign to dict_data
       } else {
