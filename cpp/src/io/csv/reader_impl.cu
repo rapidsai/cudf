@@ -237,7 +237,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   size_t buffer_size               = std::min(max_chunk_bytes, data.size());
   size_t max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
-  hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
+  cudf::detail::hostdevice_vector<uint64_t> row_ctx(max_blocks, stream);
   size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), data.size());
   size_t pos         = std::min(range_begin, data.size());
   size_t header_rows = (reader_opts.get_header() >= 0) ? reader_opts.get_header() + 1 : 0;
