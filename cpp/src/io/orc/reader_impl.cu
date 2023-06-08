@@ -652,21 +652,21 @@ void reader::impl::decode_stream_data(std::size_t num_dicts,
 /**
  * @brief Aggregate child metadata from parent column chunks.
  *
- * @param selected_columns
- * @param col_meta
- * @param chunks Vector of list of parent column chunks.
- * @param row_groups Vector of list of row index descriptors
- * @param out_buffers Column buffers for columns.
- * @param list_col Vector of column metadata of list type parent columns.
  * @param level Current nesting level being processed.
+ * @param selected_columns Columns selected by the reader options
+ * @param chunks Vector of list of parent column chunks
+ * @param row_groups Vector of list of row index descriptors
+ * @param list_col Vector of column metadata of list type parent columns
+ * @param out_buffers Column buffers for columns
+ * @param col_meta Metadata to keep track of orc mapping and child column details
  */
-void aggregate_child_meta(cudf::io::orc::detail::column_hierarchy const& selected_columns,
-                          reader_column_meta& col_meta,
+void aggregate_child_meta(size_type level,
+                          cudf::io::orc::detail::column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
-                          std::vector<column_buffer>& out_buffers,
-                          std::vector<orc_column_meta> const& list_col,
-                          const size_type level)
+                          host_span<orc_column_meta const> list_col,
+                          host_span<column_buffer> out_buffers,
+                          reader_column_meta& col_meta)
 {
   const auto num_of_stripes         = chunks.size().first;
   const auto num_of_rowgroups       = row_groups.size().first;
@@ -695,7 +695,7 @@ void aggregate_child_meta(cudf::io::orc::detail::column_hierarchy const& selecte
   int index = 0;  // number of child column processed
 
   // For each parent column, update its child column meta for each stripe.
-  std::for_each(list_col.cbegin(), list_col.cend(), [&](const auto p_col) {
+  std::for_each(list_col.begin(), list_col.end(), [&](const auto p_col) {
     const auto parent_col_idx = col_meta.orc_col_map[level][p_col.id];
     auto start_row            = 0;
     auto processed_row_groups = 0;
@@ -1276,13 +1276,13 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
             scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           }
           row_groups.device_to_host_sync(stream);
-          aggregate_child_meta(_selected_columns,
-                               _col_meta,
+          aggregate_child_meta(level,
+                               _selected_columns,
                                chunks,
                                row_groups,
-                               out_buffers[level],
                                nested_col,
-                               level);
+                               out_buffers[level],
+                               _col_meta);
         }
 
         // ORC stores number of elements at each row, so we need to generate offsets from that
