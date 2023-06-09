@@ -2526,22 +2526,11 @@ def test_parquet_writer_decimal(decimal_type, data):
     assert_eq(gdf.to_pandas(nullable=True), got)
 
 
-# TODO: Make use of set_option context manager
-# once https://github.com/rapidsai/cudf/issues/12736
-# is resolved.
-@contextmanager
-def pandas_compatible(on):
-    original_compat_setting = cudf.get_option("mode.pandas_compatible")
-    cudf.set_option("mode.pandas_compatible", on)
-    yield
-    cudf.set_option("mode.pandas_compatible", original_compat_setting)
-
-
 def test_parquet_writer_column_validation():
     df = cudf.DataFrame({1: [1, 2, 3], "a": ["a", "b", "c"]})
     pdf = df.to_pandas()
 
-    with pandas_compatible(on=True):
+    with cudf.option_context("mode.pandas_compatible", True):
         with pytest.warns(UserWarning):
             df.to_parquet("cudf.parquet")
 
@@ -2558,7 +2547,7 @@ def test_parquet_writer_column_validation():
             pd.read_parquet("pandas.parquet"),
         )
 
-    with pandas_compatible(on=False):
+    with cudf.option_context("mode.pandas_compatible", False):
         with pytest.raises(ValueError):
             df.to_parquet("cudf.parquet")
 
