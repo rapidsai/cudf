@@ -497,12 +497,14 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsNoNull)
 {
   using structs_col = cudf::test::structs_column_wrapper;
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using strings_col = cudf::test::strings_column_wrapper;
 
   auto const input = [] {
     auto child = [] {
       auto child1  = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
       auto child2  = int32s_col{11, 12, 13, 14, 15, 16, 17, 18, 19, 110};
-      auto structs = structs_col{{child1, child2}};
+      auto child3  = strings_col{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+      auto structs = structs_col{{child1, child2, child3}};
       auto offsets = int32s_col{0, 2, 3, 6, 6, 8, 10};
       return cudf::make_lists_column(6, offsets.release(), structs.release(), 0, {});
     }();
@@ -514,7 +516,8 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsNoNull)
   auto const expected = [] {
     auto child1  = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     auto child2  = int32s_col{11, 12, 13, 14, 15, 16, 17, 18, 19, 110};
-    auto structs = structs_col{{child1, child2}};
+    auto child3  = strings_col{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+    auto structs = structs_col{{child1, child2, child3}};
     auto offsets = int32s_col{0, 6, 6, 10};
     return cudf::make_lists_column(3, offsets.release(), structs.release(), 0, {});
   }();
@@ -527,17 +530,19 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
 {
   using structs_col = cudf::test::structs_column_wrapper;
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using strings_col = cudf::test::strings_column_wrapper;
 
   // Input:
-  // [ [{1, 11}, {null, null}], [{3, 13}], NULL ]
-  // [ [{4, 14}, {5, 15}, {null, null}] ]
-  // [ [{7, 17}, {null, null}], [{9, 19}, {10, 110}] ]
+  // [ [{1, 11, "1"}, {null, null, null}], [{3, 13, "3"}], NULL ]
+  // [ [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}] ]
+  // [ [{7, 17, "7"}, {null, null, null}], [{9, 19, "9"}, {10, 110, "10"}] ]
   //
   auto const input = [] {
     auto child = [] {
       auto child1                  = int32s_col{1, null, 3, 4, 5, null, 7, null, 9, 10};
       auto child2                  = int32s_col{11, null, 13, 14, 15, null, 17, null, 19, 110};
-      auto structs                 = structs_col{{child1, child2}, nulls_at({1, 5, 7})};
+      auto child3                  = strings_col{"1", "", "3", "4", "5", "", "7", "", "9", "10"};
+      auto structs                 = structs_col{{child1, child2, child3}, nulls_at({1, 5, 7})};
       auto offsets                 = int32s_col{0, 2, 3, 3, 6, 8, 10};
       auto const null_it           = null_at(2);  // null list
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 6);
@@ -551,14 +556,15 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
 
   {
     // Output:
-    // [{1, 11}, {null, null}, {3, 13}]
-    // [{4, 14}, {5, 15}, {null, null}]
-    // [{7, 17}, {null, null}, {9, 19}, {10, 110}]
+    // [{1, 11, "1"}, {null, null, null}, {3, 13, "3"}]
+    // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
+    // [{7, 17, "7"}, {null, null, null}, {9, 19, "9"}, {10, 110, "10"}]
     //
     auto const expected = [] {
       auto child1  = int32s_col{1, null, 3, 4, 5, null, 7, null, 9, 10};
       auto child2  = int32s_col{11, null, 13, 14, 15, null, 17, null, 19, 110};
-      auto structs = structs_col{{child1, child2}, nulls_at({1, 5, 7})};
+      auto child3  = strings_col{"1", "", "3", "4", "5", "", "7", "", "9", "10"};
+      auto structs = structs_col{{child1, child2, child3}, nulls_at({1, 5, 7})};
       auto offsets = int32s_col{0, 3, 6, 10};
       return cudf::make_lists_column(3, offsets.release(), structs.release(), 0, {});
     }();
@@ -569,13 +575,14 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
   {
     // Output:
     // NULL
-    // [{4, 14}, {5, 15}, {null, null}]
-    // [{7, 17}, {null, null}, {9, 19}, {10, 110}]
+    // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
+    // [{7, 17, "7"}, {null, null, null}, {9, 19, "9"}, {10, 110, "10"}]
     //
     auto const expected = [] {
       auto child1                  = int32s_col{4, 5, null, 7, null, 9, 10};
       auto child2                  = int32s_col{14, 15, null, 17, null, 19, 110};
-      auto structs                 = structs_col{{child1, child2}, nulls_at({2, 4})};
+      auto child3                  = strings_col{"4", "5", "", "7", "", "9", "10"};
+      auto structs                 = structs_col{{child1, child2, child3}, nulls_at({2, 4})};
       auto offsets                 = int32s_col{0, 0, 3, 7};
       auto const null_it           = null_at(0);  // null row
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 3);
