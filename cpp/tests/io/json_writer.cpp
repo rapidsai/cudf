@@ -18,6 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
@@ -434,6 +435,84 @@ TEST_F(JsonWriterTest, ChunkedNested)
 {"a":7,"b":-2,"c":{"d":49},"e":[{"f":7}]}
 {"a":8,"b":-2,"c":{"d":64},"e":[{"f":8}]}
 {"a":9,"b":-2,"c":{"d":81},"e":[{"f":9}]}
+)";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
+TEST_F(JsonWriterTest, StructAllNullCombinations)
+{
+  auto const_1_iter = thrust::make_constant_iterator(1);
+
+  auto col_a = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i / 16;
+    }));
+
+  auto col_b = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 8) % 2;
+    }));
+
+  auto col_c = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 4) % 2;
+    }));
+
+  auto col_d = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i / 2) % 2;
+    }));
+
+  auto col_e = cudf::test::fixed_width_column_wrapper<int>(
+    const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i % 2;
+    }));
+
+  // The table has 32 rows with validity from 00000 to 11111
+  cudf::table_view tbl_view = cudf::table_view({col_a, col_b, col_c, col_d, col_e});
+  cudf::io::table_metadata mt{{{"a"}, {"b"}, {"c"}, {"d"}, {"e"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(false)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected = R"({}
+{"e":1}
+{"d":1}
+{"d":1,"e":1}
+{"c":1}
+{"c":1,"e":1}
+{"c":1,"d":1}
+{"c":1,"d":1,"e":1}
+{"b":1}
+{"b":1,"e":1}
+{"b":1,"d":1}
+{"b":1,"d":1,"e":1}
+{"b":1,"c":1}
+{"b":1,"c":1,"e":1}
+{"b":1,"c":1,"d":1}
+{"b":1,"c":1,"d":1,"e":1}
+{"a":1}
+{"a":1,"e":1}
+{"a":1,"d":1}
+{"a":1,"d":1,"e":1}
+{"a":1,"c":1}
+{"a":1,"c":1,"e":1}
+{"a":1,"c":1,"d":1}
+{"a":1,"c":1,"d":1,"e":1}
+{"a":1,"b":1}
+{"a":1,"b":1,"e":1}
+{"a":1,"b":1,"d":1}
+{"a":1,"b":1,"d":1,"e":1}
+{"a":1,"b":1,"c":1}
+{"a":1,"b":1,"c":1,"e":1}
+{"a":1,"b":1,"c":1,"d":1}
+{"a":1,"b":1,"c":1,"d":1,"e":1}
 )";
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 }
