@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -53,8 +53,8 @@ def test_dt_series(data, field):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
     base = getattr(pdsr.dt, field)
-    test = getattr(dsr.dt, field).compute().to_pandas().astype("int64")
-    assert_series_equal(base, test)
+    test = getattr(dsr.dt, field).compute()
+    assert_eq(base, test, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
