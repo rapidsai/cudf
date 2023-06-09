@@ -133,7 +133,7 @@ struct device_json_column {
   rmm::device_uvector<row_offset_t> child_offsets;
 
   // Validity bitmap
-  rmm::device_uvector<bitmask_type> validity;
+  rmm::device_buffer validity;
 
   // Map of child columns, if applicable.
   // Following "element" as the default child column's name of a list column
