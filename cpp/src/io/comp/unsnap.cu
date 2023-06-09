@@ -75,7 +75,7 @@ struct unsnap_state_s {
   device_span<uint8_t> dst;        ///< output for current block
 };
 
-inline __device__ uint8_t volatile& byte_access(unsnap_state_s* s, uint32_t pos)
+inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
 {
   return s->q.buf[pos & (prefetch_size - 1)];
 }
@@ -286,7 +286,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 
   for (;;) {
     int32_t batch_len;
-    unsnap_batch_s volatile* b;
+    volatile unsnap_batch_s* b;
 
     // Wait for prefetcher
     if (t == 0) {
@@ -318,7 +318,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
       is_long_sym    = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
       short_sym_mask = ballot(is_long_sym);
       batch_len      = 0;
-      b = reinterpret_cast<unsnap_batch_s volatile*>(shuffle(reinterpret_cast<uintptr_t>(b)));
+      b = reinterpret_cast<volatile unsnap_batch_s*>(shuffle(reinterpret_cast<uintptr_t>(b)));
       if (!(short_sym_mask & 1)) {
         batch_len = shuffle((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
         if (batch_len != 0) {
@@ -503,7 +503,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
   int batch               = 0;
 
   do {
-    unsnap_batch_s volatile* b = &s->q.batch[batch * batch_size];
+    volatile unsnap_batch_s* b = &s->q.batch[batch * batch_size];
     int32_t batch_len, blen_t, dist_t;
 
     if (t == 0) {

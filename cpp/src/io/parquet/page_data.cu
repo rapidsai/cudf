@@ -331,8 +331,8 @@ __device__ void gpuDecodeStream(
  */
 template <bool sizes_only>
 __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
-  page_state_s volatile* s,
-  [[maybe_unused]] page_state_buffers_s volatile* sb,
+  volatile page_state_s* s,
+  [[maybe_unused]] volatile page_state_buffers_s* sb,
   int target_pos,
   int t)
 {
@@ -446,8 +446,8 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
  *
  * @return The new output position
  */
-__device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
-                                    page_state_buffers_s volatile* sb,
+__device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
+                                    volatile page_state_buffers_s* sb,
                                     int target_pos,
                                     int t)
 {
@@ -515,8 +515,8 @@ __device__ int gpuDecodeRleBooleans(page_state_s volatile* s,
  * @return Total length of strings processed
  */
 template <bool sizes_only>
-__device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
-                                              [[maybe_unused]] page_state_buffers_s volatile* sb,
+__device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
+                                              [[maybe_unused]] volatile page_state_buffers_s* sb,
                                               int target_pos,
                                               int t)
 {
@@ -597,8 +597,8 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
  * @param[in] src_pos Source position
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
-inline __device__ void gpuOutputString(page_state_s volatile* s,
-                                       page_state_buffers_s volatile* sb,
+inline __device__ void gpuOutputString(volatile page_state_s* s,
+                                       volatile page_state_buffers_s* sb,
                                        int src_pos,
                                        void* dstv)
 {
@@ -624,7 +624,7 @@ inline __device__ void gpuOutputString(page_state_s volatile* s,
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputBoolean(page_state_buffers_s volatile* sb,
+inline __device__ void gpuOutputBoolean(volatile page_state_buffers_s* sb,
                                         int src_pos,
                                         uint8_t* dst)
 {
@@ -699,8 +699,8 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @param[in] src_pos Source position
  * @param[out] dst Pointer to row output data
  */
-inline __device__ void gpuOutputInt96Timestamp(page_state_s volatile* s,
-                                               page_state_buffers_s volatile* sb,
+inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
+                                               volatile page_state_buffers_s* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -772,8 +772,8 @@ inline __device__ void gpuOutputInt96Timestamp(page_state_s volatile* s,
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  */
-inline __device__ void gpuOutputInt64Timestamp(page_state_s volatile* s,
-                                               page_state_buffers_s volatile* sb,
+inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
+                                               volatile page_state_buffers_s* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -854,8 +854,8 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @param[in] dst Pointer to row output data
  */
 template <typename T>
-__device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s volatile* s,
-                                                page_state_buffers_s volatile* sb,
+__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
+                                                volatile page_state_buffers_s* sb,
                                                 int src_pos,
                                                 T* dst)
 {
@@ -889,8 +889,8 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s volatile* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename T>
-inline __device__ void gpuOutputFast(page_state_s volatile* s,
-                                     page_state_buffers_s volatile* sb,
+inline __device__ void gpuOutputFast(volatile page_state_s* s,
+                                     volatile page_state_buffers_s* sb,
                                      int src_pos,
                                      T* dst)
 {
@@ -1647,7 +1647,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
     str_len = gpuInitStringDescriptors<true>(s, nullptr, target_pos, t);
   }
-  if (!t) { *(int32_t volatile*)&s->dict_pos = target_pos; }
+  if (!t) { *(volatile int32_t*)&s->dict_pos = target_pos; }
   return str_len;
 }
 
@@ -2071,7 +2071,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
-      if (t == 32) { *(int32_t volatile*)&s->dict_pos = src_target_pos; }
+      if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int dtype = s->col.data_type & 7;
@@ -2158,7 +2158,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
         }
       }
 
-      if (t == out_thread0) { *(int32_t volatile*)&s->src_pos = target_pos; }
+      if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
     }
     __syncthreads();
   }

@@ -291,7 +291,7 @@ __global__ void __launch_bounds__(128)
     s->copy_distance  = 0;
   }
   for (uint32_t i = t; i < sizeof(s->hash_map) / sizeof(uint32_t); i += 128) {
-    *reinterpret_cast<uint32_t volatile*>(&s->hash_map[i * 2]) = 0;
+    *reinterpret_cast<volatile uint32_t*>(&s->hash_map[i * 2]) = 0;
   }
   __syncthreads();
   src = s->src;

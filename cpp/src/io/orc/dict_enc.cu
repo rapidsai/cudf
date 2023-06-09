@@ -67,7 +67,7 @@ static inline __device__ uint32_t hash_string(string_view const val)
  * @param[in] temp_storage shared memory storage to scan non-null positions
  */
 template <int block_size, typename Storage>
-static __device__ void LoadNonNullIndices(dictinit_state_s volatile* s,
+static __device__ void LoadNonNullIndices(volatile dictinit_state_s* s,
                                           int t,
                                           Storage& temp_storage)
 {

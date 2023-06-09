@@ -108,9 +108,9 @@ struct prefetch_queue_s {
 };
 
 template <typename T>
-inline __device__ uint32_t volatile* prefetch_addr32(prefetch_queue_s volatile& q, T* ptr)
+inline __device__ volatile uint32_t* prefetch_addr32(volatile prefetch_queue_s& q, T* ptr)
 {
-  return reinterpret_cast<uint32_t volatile*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
+  return reinterpret_cast<volatile uint32_t*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
 }
 
 #endif  // ENABLE_PREFETCH
@@ -516,11 +516,11 @@ __device__ void decode_symbols(inflate_state_s* s)
   int32_t sym, batch_len;
 
   do {
-    uint32_t volatile* b = &s->x.u.symqueue[batch * batch_size];
+    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
     // Wait for the next batch entry to be empty
 #if ENABLE_PREFETCH
     // Wait for prefetcher to fetch a worst-case of 48 bits per symbol
-    while ((*(int32_t volatile*)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
+    while ((*(volatile int32_t*)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
            (s->x.batch_len[batch] != 0)) {}
 #else
     while (s->x.batch_len[batch] != 0) {}
@@ -663,7 +663,7 @@ __device__ void decode_symbols(inflate_state_s* s)
     } while (batch_len < batch_size - 1);
     s->x.batch_len[batch] = batch_len;
 #if ENABLE_PREFETCH
-    ((inflate_state_s volatile*)s)->cur = cur;
+    ((volatile inflate_state_s*)s)->cur = cur;
 #endif
     if (batch_len != 0) batch = (batch + 1) & (batch_count - 1);
   } while (sym != 256);
@@ -779,7 +779,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
   int batch              = 0;
 
   do {
-    uint32_t volatile* b = &s->x.u.symqueue[batch * batch_size];
+    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
     int batch_len        = 0;
     if (t == 0) {
       while ((batch_len = s->x.batch_len[batch]) == 0) {}

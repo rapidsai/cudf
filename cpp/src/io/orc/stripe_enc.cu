@@ -615,7 +615,7 @@ static __device__ void StoreStringData(uint8_t* dst,
  * @param[in] t thread id
  */
 template <class T>
-inline __device__ void lengths_to_positions(T volatile* vals, uint32_t numvals, unsigned int t)
+inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, unsigned int t)
 {
   for (uint32_t n = 1; n < numvals; n <<= 1) {
     __syncthreads();
