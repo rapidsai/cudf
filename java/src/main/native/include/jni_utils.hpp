@@ -799,7 +799,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_THROW_NEW(env, class_name, message, stacktrace, ret_val)                         \
+#define JNI_CHECK_THROW_NEW_CUDF(env, class_name, message, stacktrace, ret_val)                    \
   {                                                                                                \
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
@@ -895,8 +895,8 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
   }                                                                                                \
   catch (const cudf::data_type_error &e) {                                                         \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), e.stacktrace(),          \
-                        ret_val);                                                                  \
+    JNI_CHECK_THROW_NEW_CUDF(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), e.stacktrace(),     \
+                             ret_val);                                                             \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
@@ -911,9 +911,9 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     if (auto const cudf_ex = dynamic_cast<cudf::logic_error const *>(&e); cudf_ex != nullptr) {    \
-      JNI_CHECK_THROW_NEW(env, class_name, e.what(), cudf_ex->stacktrace(), ret_val);              \
+      JNI_CHECK_THROW_NEW_CUDF(env, class_name, e.what(), cudf_ex->stacktrace(), ret_val);         \
     } else {                                                                                       \
-      JNI_CHECK_THROW_NEW(env, class_name, e.what(), nullptr, ret_val);                            \
+      JNI_CHECK_THROW_NEW_CUDF(env, class_name, e.what(), nullptr, ret_val);                       \
     }                                                                                              \
   }
 
