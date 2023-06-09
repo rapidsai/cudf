@@ -112,8 +112,8 @@ def test_option_context():
 def test_options_context_error():
     with pytest.raises(ValueError):
         with cudf.option_context("mode.pandas_compatible"):
-            print("A")
+            pass
 
     with pytest.raises(ValueError):
         with cudf.option_context("mode.pandas_compatible", 1, 2):
-            print("A")
+            pass
