@@ -31,7 +31,7 @@ class DurationsToString : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_from_durations(benchmark::State& state)
 {
-  const cudf::size_type source_size = state.range(0);
+  cudf::size_type const source_size = state.range(0);
 
   // Every element is valid
   auto data = cudf::detail::make_counting_transform_iterator(
@@ -51,7 +51,7 @@ class StringToDurations : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_to_durations(benchmark::State& state)
 {
-  const cudf::size_type source_size = state.range(0);
+  cudf::size_type const source_size = state.range(0);
 
   // Every element is valid
   auto data = cudf::detail::make_counting_transform_iterator(

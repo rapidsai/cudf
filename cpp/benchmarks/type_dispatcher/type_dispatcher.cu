@@ -126,7 +126,7 @@ struct RowHandle {
 template <FunctorType functor_type>
 __global__ void device_dispatching_kernel(cudf::mutable_table_device_view source)
 {
-  const cudf::size_type n_rows = source.num_rows();
+  cudf::size_type const n_rows = source.num_rows();
   cudf::size_type index        = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (index < n_rows) {
@@ -141,8 +141,8 @@ __global__ void device_dispatching_kernel(cudf::mutable_table_device_view source
 template <FunctorType functor_type, DispatchingType dispatching_type, class T>
 void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_thread)
 {
-  const cudf::size_type n_rows = input.num_rows();
-  const cudf::size_type n_cols = input.num_columns();
+  cudf::size_type const n_rows = input.num_rows();
+  cudf::size_type const n_cols = input.num_columns();
 
   cudf::detail::grid_1d grid_config{n_rows, block_size};
   int grid_size = grid_config.num_blocks;

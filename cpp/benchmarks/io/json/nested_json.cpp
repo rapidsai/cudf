@@ -78,7 +78,7 @@ std::string generate_row(
   int num_columns, int max_depth, int max_list_size, int max_struct_size, size_t max_bytes)
 {
   std::string s = "{";
-  const std::vector<std::string> elems{
+  std::vector<std::string> const elems{
     R"(1)", R"(-2)", R"(3.4)", R"("5")", R"("abcdefghij")", R"(true)", R"(null)"};
   for (int i = 0; i < num_columns; i++) {
     s += R"("col)" + num_to_string(i) + R"(": )";
@@ -141,7 +141,7 @@ auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stre
                       {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
                       {"a": 1, "b": 8.0, "d": { "author": "Jean-Jacques Rousseau"}},)";
 
-  const cudf::size_type repeat_times = string_size / input.size();
+  cudf::size_type const repeat_times = string_size / input.size();
 
   auto d_input_scalar   = cudf::make_string_scalar(input, stream);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_input_scalar);

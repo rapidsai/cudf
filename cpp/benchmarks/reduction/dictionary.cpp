@@ -29,7 +29,7 @@ template <typename T>
 void BM_reduction_dictionary(benchmark::State& state,
                              std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
-  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
 
   // int column and encoded dictionary column
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(

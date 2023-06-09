@@ -29,7 +29,7 @@ class Groupby : public cudf::benchmark {};
 void BM_pre_sorted_nth(benchmark::State& state)
 {
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
 
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);

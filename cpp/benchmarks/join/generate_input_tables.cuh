@@ -40,7 +40,7 @@ __global__ static void init_curand(curandState* state, int const nstates)
 
 template <typename key_type, typename size_type>
 __global__ static void init_build_tbl(key_type* const build_tbl,
-                                      const size_type build_tbl_size,
+                                      size_type const build_tbl_size,
                                       int const multiplicity,
                                       curandState* state,
                                       int const num_states)
@@ -62,9 +62,9 @@ __global__ static void init_build_tbl(key_type* const build_tbl,
 
 template <typename key_type, typename size_type>
 __global__ void init_probe_tbl(key_type* const probe_tbl,
-                               const size_type probe_tbl_size,
-                               const size_type build_tbl_size,
-                               const key_type rand_max,
+                               size_type const probe_tbl_size,
+                               size_type const build_tbl_size,
+                               key_type const rand_max,
                                double const selectivity,
                                int const multiplicity,
                                curandState* state,
@@ -123,9 +123,9 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  */
 template <typename key_type, typename size_type>
 void generate_input_tables(key_type* const build_tbl,
-                           const size_type build_tbl_size,
+                           size_type const build_tbl_size,
                            key_type* const probe_tbl,
-                           const size_type probe_tbl_size,
+                           size_type const probe_tbl_size,
                            double const selectivity,
                            int const multiplicity)
 {
