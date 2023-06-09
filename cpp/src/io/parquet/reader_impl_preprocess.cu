@@ -1837,11 +1837,12 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
 
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
-  // page key is column index, but need to sort by key to make all pages for a column contiguous
+
+  // use page_index to fetch page string sizes in the proper order
   auto val_iter = thrust::make_transform_iterator(
     page_index.begin(), page_to_string_size{pages.device_ptr(), chunks.device_ptr()});
 
-  rmm::device_uvector<size_t> page_offsets(pages.size(), _stream);
+  // do scan by key to calculate string offsets for each page
   thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
                                 page_keys.begin(),
                                 page_keys.end(),
@@ -1849,12 +1850,12 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{pages.device_ptr(), page_index.data()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> red_keys(col_sizes.size(), _stream);
+  rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
   thrust::reduce_by_key(rmm::exec_policy(_stream),
                         page_keys.begin(),
                         page_keys.end(),
                         val_iter,
-                        red_keys.begin(),
+                        reduce_keys.begin(),
                         d_col_sizes.begin());
 
   cudaMemcpyAsync(col_sizes.data(),
