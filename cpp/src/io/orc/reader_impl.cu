@@ -921,23 +921,22 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
-  auto const make_user_data = [&agg_meta = _metadata](auto& out_meta) {
-    std::transform(agg_meta.per_file_metadata.cbegin(),
-                   agg_meta.per_file_metadata.cend(),
-                   std::back_inserter(out_meta.per_file_user_data),
-                   [](auto& meta) {
-                     std::unordered_map<std::string, std::string> kv_map;
-                     std::transform(meta.ff.metadata.cbegin(),
-                                    meta.ff.metadata.cend(),
-                                    std::inserter(kv_map, kv_map.end()),
-                                    [](auto const& kv) {
-                                      return std::pair{kv.name, kv.value};
-                                    });
-                     return kv_map;
-                   });
-    out_meta.user_data = {out_meta.per_file_user_data[0].begin(),
-                          out_meta.per_file_user_data[0].end()};
-  };
+  // Copy user data to the output metadata.
+  std::transform(_metadata.per_file_metadata.cbegin(),
+                 _metadata.per_file_metadata.cend(),
+                 std::back_inserter(out_metadata.per_file_user_data),
+                 [](auto& meta) {
+                   std::unordered_map<std::string, std::string> kv_map;
+                   std::transform(meta.ff.metadata.cbegin(),
+                                  meta.ff.metadata.cend(),
+                                  std::inserter(kv_map, kv_map.end()),
+                                  [](auto const& kv) {
+                                    return std::pair{kv.name, kv.value};
+                                  });
+                   return kv_map;
+                 });
+  out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   // Select only stripes required (aka row groups)
   auto const [rows_to_skip, rows_to_read, selected_stripes] =
@@ -958,7 +957,6 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
                                                 out_metadata.schema_info.back(),
                                                 _stream);
                    });
-    make_user_data(out_metadata);
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
@@ -1288,21 +1286,18 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
     }
   }
 
-  // If out_columns is empty, then create columns from buffer with respective schema information.
-  if (out_columns.empty()) {
-    std::transform(
-      _selected_columns.levels[0].begin(),
-      _selected_columns.levels[0].end(),
-      std::back_inserter(out_columns),
-      [&](auto const col_meta) {
-        out_metadata.schema_info.emplace_back("");
-        auto col_buffer = assemble_buffer(
-          col_meta.id, 0, _col_meta, _metadata, _selected_columns, out_buffers, _stream, _mr);
-        return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
-      });
-  }
+  // Create columns from buffer with respective schema information.
+  std::transform(
+    _selected_columns.levels[0].begin(),
+    _selected_columns.levels[0].end(),
+    std::back_inserter(out_columns),
+    [&](auto const col_meta) {
+      out_metadata.schema_info.emplace_back("");
+      auto col_buffer = assemble_buffer(
+        col_meta.id, 0, _col_meta, _metadata, _selected_columns, out_buffers, _stream, _mr);
+      return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
+    });
 
-  make_user_data(out_metadata);
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
