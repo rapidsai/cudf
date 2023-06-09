@@ -36,6 +36,8 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow==11.0.0.*
+- libcufile-dev=1.4.0.31
+- libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
 - libcurand=10.3.0.86
 - libkvikio==23.8.*
