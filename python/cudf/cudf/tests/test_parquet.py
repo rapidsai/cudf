@@ -31,6 +31,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
     set_random_null_mask_inplace,
 )
 
@@ -323,9 +324,12 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     assert os.path.exists(fname)
 
     if strings_to_categorical is not None:
-        gdf = cudf.read_parquet(
-            fname, engine="cudf", strings_to_categorical=strings_to_categorical
-        )
+        with expect_warning_if(strings_to_categorical is not False):
+            gdf = cudf.read_parquet(
+                fname,
+                engine="cudf",
+                strings_to_categorical=strings_to_categorical,
+            )
     else:
         gdf = cudf.read_parquet(fname, engine="cudf")
 

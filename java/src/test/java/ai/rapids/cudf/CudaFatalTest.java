@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public class CudaFatalTest {
       assertThrows(CudaFatalException.class, () -> {
         try (ColumnVector cv2 = cv.asLongs()) {
         } catch (CudaFatalException ex) {
-          assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
+          assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.getCudaError());
           throw ex;
         }
       });
@@ -47,7 +47,7 @@ public class CudaFatalTest {
     assertThrows(CudaFatalException.class, () -> {
       try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5)) {
       } catch (CudaFatalException ex) {
-        assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
+        assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.getCudaError());
         throw ex;
       }
     });
