@@ -747,6 +747,33 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Flatten each list of lists into a single list.
+   *
+   * The input column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @param input The input lists column in which each row is a list of lists
+   * @return A new column vector containing the flattened result
+   */
+  public static ColumnVector flattenLists(ColumnView input) {
+    return flattenLists(input, false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The input column must have rows that are lists of lists.
+   *
+   * @param input The input lists column in which each row is a list of lists
+   * @param ignoreNull Whether to ignore null list elements of input columns from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public static ColumnVector flattenLists(ColumnView input, boolean ignoreNull) {
+    return new ColumnVector(flattenLists(input.getNativeView(), ignoreNull));
+  }
+
+  /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
    * @param columns array of columns to hash, must have identical number of rows.
@@ -868,6 +895,8 @@ public final class ColumnVector extends ColumnView {
    * by the listConcatenateByRow method.
    */
   private static native long concatListByRow(long[] columnViews, boolean ignoreNull);
+
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
