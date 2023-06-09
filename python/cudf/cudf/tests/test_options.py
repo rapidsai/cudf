@@ -4,8 +4,6 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
-import os
-import random
 
 import cudf
 
@@ -80,56 +78,45 @@ class TestCleanOptions:
         assert expected == s.read()
 
 
-def test_empty_option_context():
+@pytest.mark.parametrize("default_integer_bitwidth", [32, 64, None])
+def test_empty_option_context(default_integer_bitwidth):
     prev_setting = cudf.get_option("default_integer_bitwidth")
-    set_default_integer_bitwidth = random.choice(
-        list({32, 64, None} - {prev_setting})
-    )
-    cudf.set_option("default_integer_bitwidth", set_default_integer_bitwidth)
+    cudf.set_option("default_integer_bitwidth", default_integer_bitwidth)
     with cudf.option_context():
-        assert cudf.get_option("default_integer_bitwidth") == 32
-        assert cudf.get_option("default_float_bitwidth") is None
-        assert cudf.get_option("spill") is os.getenv("CUDF_SPILL", False)
-        assert cudf.get_option("copy_on_write") is os.getenv(
-            "CUDF_COPY_ON_WRITE", False
+        assert (
+            cudf.get_option("default_integer_bitwidth")
+            == default_integer_bitwidth
         )
-        assert cudf.get_option("mode.pandas_compatible") is False
+
     assert (
-        cudf.get_option("default_integer_bitwidth")
-        == set_default_integer_bitwidth
+        cudf.get_option("default_integer_bitwidth") == default_integer_bitwidth
     )
     cudf.set_option("default_integer_bitwidth", prev_setting)
 
 
-def test_option_context():
+@pytest.mark.parametrize("pandas_compatible", [True, False])
+@pytest.mark.parametrize("default_integer_bitwidth", [32, 64])
+def test_option_context(pandas_compatible, default_integer_bitwidth):
     prev_pandas_compatible_setting = cudf.get_option("mode.pandas_compatible")
-    test_pandas_compatible_value = not prev_pandas_compatible_setting
-    cudf.set_option("mode.pandas_compatible", test_pandas_compatible_value)
-    assert (
-        cudf.get_option("mode.pandas_compatible")
-        is test_pandas_compatible_value
-    )
+    prev_width_setting = cudf.get_option("default_integer_bitwidth")
 
-    prev_bitwidth_setting = cudf.get_option("default_integer_bitwidth")
-    set_default_integer_bitwidth = random.choice(
-        list({32, 64, None} - {prev_bitwidth_setting})
-    )
     with cudf.option_context(
         "mode.pandas_compatible",
-        False,
+        pandas_compatible,
         "default_integer_bitwidth",
-        set_default_integer_bitwidth,
+        default_integer_bitwidth,
     ):
-        assert cudf.get_option("mode.pandas_compatible") is False
+        assert cudf.get_option("mode.pandas_compatible") is pandas_compatible
         assert (
             cudf.get_option("default_integer_bitwidth")
-            == set_default_integer_bitwidth
+            is default_integer_bitwidth
         )
-        cudf.set_option("mode.pandas_compatible", True)
-        assert cudf.get_option("mode.pandas_compatible") is True
-    assert cudf.get_option("mode.pandas_compatible") is True
-    cudf.set_option("mode.pandas_compatible", prev_pandas_compatible_setting)
-    assert cudf.get_option("default_integer_bitwidth") == prev_bitwidth_setting
+
+    assert (
+        cudf.get_option("mode.pandas_compatible")
+        is prev_pandas_compatible_setting
+    )
+    assert cudf.get_option("default_integer_bitwidth") is prev_width_setting
 
 
 def test_options_context_error():
