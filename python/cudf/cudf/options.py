@@ -3,6 +3,7 @@
 import os
 import textwrap
 from collections.abc import Container
+from contextlib import ContextDecorator
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -319,3 +320,36 @@ _register_option(
     ),
     _make_contains_validator([False, True]),
 )
+
+
+class option_context(ContextDecorator):
+    """
+    Context manager to temporarily set options in the `with` statement context.
+
+    You need to invoke as ``option_context(pat, val, [(pat, val), ...])``.
+
+
+    Examples
+    --------
+    >>> from cudf import option_context
+    >>> with option_context('mode.pandas_compatible', True, 'default_float_bitwidth', 32):
+    ...     pass
+    """  # noqa: E501
+
+    def __init__(self, *args) -> None:
+        if len(args) % 2 != 0:
+            raise ValueError(
+                "Need to invoke as option_context(pat, val, "
+                "[(pat, val), ...])."
+            )
+
+        self.ops = tuple(zip(args[::2], args[1::2]))
+
+    def __enter__(self) -> None:
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
+        for pat, val in self.ops:
+            set_option(pat, val)
+
+    def __exit__(self, *args) -> None:
+        for pat, val in self.undo:
+            set_option(pat, val)
