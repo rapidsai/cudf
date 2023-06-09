@@ -507,8 +507,8 @@ void make_device_json_column(device_span<SymbolT const> input,
       init_to_zero(col.child_offsets);
     }
     col.num_rows = max_row_offsets[i] + 1;
-    col.validity.resize(bitmask_allocation_size_bytes(max_row_offsets[i] + 1), stream);
-    init_to_zero(col.validity);
+    col.validity =
+      cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = to_json_col_type(column_categories[i]);
   };
 
@@ -600,7 +600,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
-                                            col.validity.data()};
+                                            static_cast<bitmask_type*>(col.validity.data())};
   }
 
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
@@ -736,10 +736,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   auto make_validity = [stream, validity_size_check](
                          device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
     validity_size_check(json_col);
-    auto null_count =
-      cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
+    auto null_count = cudf::detail::null_count(
+      static_cast<bitmask_type*>(json_col.validity.data()), 0, json_col.num_rows, stream);
     // full null_mask is always required for parse_data
-    return {json_col.validity.release(), null_count};
+    return {std::move(json_col.validity), null_count};
     // Note: json_col modified here, moves this memory
   };
 

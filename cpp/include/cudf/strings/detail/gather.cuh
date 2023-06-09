@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -32,9 +33,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/transform.h>
-#include <thrust/transform_reduce.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -294,59 +293,31 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto const output_count  = std::distance(begin, end);
-  auto const strings_count = strings.size();
+  auto const output_count = std::distance(begin, end);
   if (output_count == 0) return make_empty_column(type_id::STRING);
 
-  // allocate offsets column and use memory to compute string size in each output row
-  auto out_offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
-  auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
-  auto const d_strings     = column_device_view::create(strings.parent(), stream);
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    begin,
-    end,
-    d_out_offsets,
-    [d_strings = *d_strings, d_in_offsets, strings_count] __device__(size_type in_idx) {
-      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
-      if (not d_strings.is_valid(in_idx)) return 0;
-      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
+  // build offsets column
+  auto const d_strings    = column_device_view::create(strings.parent(), stream);
+  auto const d_in_offsets = !strings.is_empty() ? strings.offsets_begin() : nullptr;
+
+  auto offsets_itr = thrust::make_transform_iterator(
+    begin, [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
+      if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return 0; }
+      if (not d_strings.is_valid(idx)) { return 0; }
+      return d_in_offsets[idx + 1] - d_in_offsets[idx];
     });
-
-  // check total size is not too large
-  size_t const total_bytes = thrust::transform_reduce(
-    rmm::exec_policy_nosync(stream),
-    d_out_offsets,
-    d_out_offsets + output_count,
-    [] __device__(auto size) { return static_cast<size_t>(size); },
-    size_t{0},
-    thrust::plus{});
-  CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of output strings exceeds the column limit",
-               std::overflow_error);
-
-  // In-place convert output sizes into offsets
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         d_out_offsets,
-                         d_out_offsets + output_count + 1,
-                         d_out_offsets);
+  auto [out_offsets_column, total_bytes] =
+    cudf::detail::make_offsets_child_column(offsets_itr, offsets_itr + output_count, stream, mr);
 
   // build chars column
-  cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
-  auto out_chars_column = gather_chars(d_strings->begin<string_view>(),
-                                       begin,
-                                       end,
-                                       d_out_offsets_span,
-                                       static_cast<size_type>(total_bytes),
-                                       stream,
-                                       mr);
+  auto const offsets_view = out_offsets_column->view();
+  auto out_chars_column   = gather_chars(
+    d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
                              std::move(out_chars_column),
-                             0,
+                             0,  // caller sets these
                              rmm::device_buffer{});
 }
 
