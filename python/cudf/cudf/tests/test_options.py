@@ -87,7 +87,7 @@ def test_empty_option_context():
     )
     cudf.set_option("default_integer_bitwidth", set_default_integer_bitwidth)
     with cudf.option_context():
-        assert cudf.get_option("default_integer_bitwidth") is None
+        assert cudf.get_option("default_integer_bitwidth") == 32
         assert cudf.get_option("default_float_bitwidth") is None
         assert cudf.get_option("spill") is os.getenv("CUDF_SPILL", False)
         assert cudf.get_option("copy_on_write") is os.getenv(
@@ -135,8 +135,8 @@ def test_option_context():
 def test_options_context_error():
     with pytest.raises(ValueError):
         with cudf.option_context("mode.pandas_compatible"):
-            print("A")
+            pass
 
     with pytest.raises(ValueError):
         with cudf.option_context("mode.pandas_compatible", 1, 2):
-            print("A")
+            pass

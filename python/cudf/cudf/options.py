@@ -328,11 +328,6 @@ class option_context(ContextDecorator):
 
     You need to invoke as ``option_context(pat, val, [(pat, val), ...])``.
 
-    .. pandas-compat::
-            One notable difference from Pandas is when `option_context` is
-            created with an empty input i.e., `option_context()` all the
-            options of `cudf` are reset to default values with-in
-            the scope of the context.
 
     Examples
     --------
@@ -351,17 +346,9 @@ class option_context(ContextDecorator):
         self.ops = tuple(zip(args[::2], args[1::2]))
 
     def __enter__(self) -> None:
-        if len(self.ops) == 0:
-            self.undo = tuple(
-                (pat, option.value) for pat, option in _OPTIONS.items()
-            )
-            old_options_copy = _OPTIONS.copy()
-            for name, option in old_options_copy.items():
-                set_option(name, option.default)
-        else:
-            self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
-            for pat, val in self.ops:
-                set_option(pat, val)
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
+        for pat, val in self.ops:
+            set_option(pat, val)
 
     def __exit__(self, *args) -> None:
         for pat, val in self.undo:
