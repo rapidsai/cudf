@@ -859,13 +859,13 @@ TYPED_TEST_SUITE(TypedContainsNaNsTest, cudf::test::FloatingPointTypes);
 
 namespace {
 template <typename T>
-T get_nan(const char* nan_contents)
+T get_nan(char const* nan_contents)
 {
   return std::nan(nan_contents);
 }
 
 template <>
-float get_nan<float>(const char* nan_contents)
+float get_nan<float>(char const* nan_contents)
 {
   return std::nanf(nan_contents);
 }

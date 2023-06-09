@@ -31,14 +31,14 @@ struct StringsFindMultipleTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindMultipleTest, FindMultiple)
 {
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "lease", "test strings", ""};
+  std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "lease", "test strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_targets{"é", "a", "e", "i", "o", "u", "es"};
+  std::vector<char const*> h_targets{"é", "a", "e", "i", "o", "u", "es"};
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
   auto targets_view = cudf::strings_column_view(targets);
 
@@ -60,7 +60,7 @@ TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  std::vector<const char*> h_targets{""};
+  std::vector<char const*> h_targets{""};
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
   auto targets_view = cudf::strings_column_view(targets);
 
