@@ -61,13 +61,6 @@ struct range_scalar_constructor {
     return std::make_unique<fixed_point_scalar<T>>(
       static_cast<fixed_point_scalar<T> const&>(range_scalar_));
   }
-
-  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    return std::make_unique<fixed_point_scalar<T>>(
-      static_cast<fixed_point_scalar<T> const&>(range_scalar_));
-  }
 };
 }  // namespace
 
