@@ -161,9 +161,9 @@ void check_stream_and_error(cudaStream_t stream)
 #endif  // __GNUC__
     char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
     if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
-      std::cout << "Found unexpected stream!" << std::endl;
+      std::cout << "cudf_identify_stream_usage found unexpected stream!" << std::endl;
     } else {
-      throw std::runtime_error("Found unexpected stream!");
+      throw std::runtime_error("cudf_identify_stream_usage found unexpected stream!");
     }
   }
 }
