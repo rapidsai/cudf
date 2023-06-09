@@ -32,7 +32,7 @@ Each type should also implement a corresponding method `cdef ${cython_type} from
 Depending on the nature of the type, the function may need to accept a `unique_ptr` and take ownership (TODO: This will typically be the case for types that own GPU data, may want to codify further).
 
 For example, `libcudf::data_type` maps to `pylibcudf.DataType`, which looks like this (implementation omitted):
-```python
+```cython
 
 cdef class DataType:
     cdef data_type c_obj
@@ -72,7 +72,8 @@ pylibcudf algorithms should look almost exactly like libcudf algorithms.
 Any libcudf function should be mirrored in pylibcudf with an identical signature and libcudf types mapped to corresponding pylibcudf types.
 All calls to libcudf algorithms should perform any requisite Python preprocessing early, then release the GIL prior to calling libcudf.
 For example, here is the implementation of `gather`:
-```python
+```cython
+
 cpdef Table gather(
     Table source_table,
     Column gather_map,
