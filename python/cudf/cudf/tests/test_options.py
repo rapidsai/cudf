@@ -1,11 +1,11 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
+import os
+import random
 from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
-import os
-import random
 
 import cudf
 
