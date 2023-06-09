@@ -69,7 +69,7 @@ class MultiFragmentInRegArray {
 #if CUB_PTX_ARCH > 0
     return cub::BFE(data, bit_start, num_bits);
 #else
-    const uint32_t MASK = (1 << num_bits) - 1;
+    uint32_t const MASK = (1 << num_bits) - 1;
     return (data >> bit_start) & MASK;
 #endif
   }

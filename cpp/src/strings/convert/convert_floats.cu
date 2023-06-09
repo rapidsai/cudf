@@ -51,7 +51,7 @@ namespace {
  */
 template <typename FloatType>
 struct string_to_float_fn {
-  const column_device_view strings_column;  // strings to convert
+  column_device_view const strings_column;  // strings to convert
 
   __device__ FloatType operator()(size_type idx)
   {

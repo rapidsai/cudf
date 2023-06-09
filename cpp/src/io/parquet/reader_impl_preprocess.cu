@@ -236,12 +236,12 @@ template <typename T = uint8_t>
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    const size_t io_offset   = column_chunk_offsets[chunk];
+    size_t const io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
     size_t next_chunk        = chunk + 1;
     bool const is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
     while (next_chunk < end_chunk) {
-      const size_t next_offset = column_chunk_offsets[next_chunk];
+      size_t const next_offset = column_chunk_offsets[next_chunk];
       bool const is_next_compressed =
         (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
       if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
@@ -1436,8 +1436,8 @@ struct row_counts_different {
  */
 void detect_malformed_pages(cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
                             cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                            device_span<const int> page_keys,
-                            device_span<const int> page_index,
+                            device_span<int const> page_keys,
+                            device_span<int const> page_index,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {

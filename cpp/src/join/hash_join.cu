@@ -74,8 +74,8 @@ std::size_t compute_join_output_size(
   cudf::null_equality nulls_equal,
   rmm::cuda_stream_view stream)
 {
-  const size_type build_table_num_rows{build_table.num_rows()};
-  const size_type probe_table_num_rows{probe_table.num_rows()};
+  size_type const build_table_num_rows{build_table.num_rows()};
+  size_type const probe_table_num_rows{probe_table.num_rows()};
 
   // If the build table is empty, we know exactly how large the output
   // will be for the different types of joins and can return immediately

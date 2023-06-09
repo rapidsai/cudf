@@ -27,7 +27,7 @@ namespace gpu {
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
-static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
+static __device__ const __constant__ uint8_t g_list2struct[16] = {0,
                                                                   1,
                                                                   2,
                                                                   ST_FLD_BYTE,

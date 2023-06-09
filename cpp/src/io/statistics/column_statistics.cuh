@@ -193,7 +193,7 @@ struct merge_group_statistics_functor {
             std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
-                             const uint32_t num_chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     // No-op for unsupported aggregation types
@@ -205,7 +205,7 @@ struct merge_group_statistics_functor {
                               !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
-                             const uint32_t num_chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
@@ -228,7 +228,7 @@ struct merge_group_statistics_functor {
                              std::is_same_v<T, list_view>>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
-                             const uint32_t num_chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     operator()<statistics::byte_array_view>(s, chunks, num_chunks, t);
@@ -240,7 +240,7 @@ struct merge_group_statistics_functor {
                      not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
-                             const uint32_t num_chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);

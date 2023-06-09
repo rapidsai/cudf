@@ -1109,14 +1109,14 @@ __global__ void __launch_bounds__(block_size)
 
   orcdec_state_s* const s = &state_g;
   bool const is_nulldec   = (blockIdx.y >= num_stripes);
-  const uint32_t column   = blockIdx.x;
-  const uint32_t stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
-  const uint32_t chunk_id = stripe * num_columns + column;
+  uint32_t const column   = blockIdx.x;
+  uint32_t const stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
+  uint32_t const chunk_id = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
+  size_t const max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1404,7 +1404,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   // Struct doesn't have any data in itself, so skip
   bool const is_valid       = s->chunk.type_kind != STRUCT;
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  size_t const max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {

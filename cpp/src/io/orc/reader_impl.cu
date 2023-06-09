@@ -161,11 +161,11 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(const size_t stripe_index,
+size_t gather_stream_info(size_t const stripe_index,
                           orc::StripeInformation const* stripeinfo,
                           orc::StripeFooter const* stripefooter,
                           std::vector<int> const& orc2gdf,
-                          const std::vector<orc::SchemaType> types,
+                          std::vector<orc::SchemaType> const types,
                           bool use_index,
                           size_t* num_dictionary_entries,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
@@ -424,7 +424,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  const size_t num_columns = chunks.size().second;
+  size_t const num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
@@ -662,7 +662,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
                                         cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                                         std::vector<column_buffer>& out_buffers,
                                         std::vector<orc_column_meta> const& list_col,
-                                        const size_type level)
+                                        size_type const level)
 {
   auto const num_of_stripes         = chunks.size().first;
   auto const num_of_rowgroups       = row_groups.size().first;
@@ -751,7 +751,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
 std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
-std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_col_id,
+std::unique_ptr<column> reader::impl::create_empty_column(size_type const orc_col_id,
                                                           column_name_info& schema_info,
                                                           rmm::cuda_stream_view stream)
 {
@@ -823,9 +823,9 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
 }
 
 // Adds child column buffers to parent column
-column_buffer&& reader::impl::assemble_buffer(const size_type orc_col_id,
+column_buffer&& reader::impl::assemble_buffer(size_type const orc_col_id,
                                               std::vector<std::vector<column_buffer>>& col_buffers,
-                                              const size_t level,
+                                              size_t const level,
                                               rmm::cuda_stream_view stream)
 {
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];

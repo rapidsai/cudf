@@ -772,7 +772,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
         offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<const char*, std::size_t>{
+          return thrust::pair<char const*, std::size_t>{
             data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
         });
 

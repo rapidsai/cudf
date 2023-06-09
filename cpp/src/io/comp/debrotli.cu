@@ -496,7 +496,7 @@ static __device__ uint32_t BuildSimpleHuffmanTable(uint16_t* lut,
                                                    uint32_t num_symbols)
 {
   uint32_t table_size      = 1;
-  const uint32_t goal_size = 1U << root_bits;
+  uint32_t const goal_size = 1U << root_bits;
   switch (num_symbols) {
     case 0: lut[0] = huffcode(0, val[0]); break;
     case 1:
@@ -929,7 +929,7 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s* s,
     memset(&hs->code_length_histo[0], 0, 6 * sizeof(hs->code_length_histo));
     memset(&hs->code_length_code_lengths[0], 0, sizeof(hs->code_length_code_lengths));
     for (i = prefix_code_type; i < 18; i++) {
-      const uint8_t code_len_idx = kCodeLengthCodeOrder[i];
+      uint8_t const code_len_idx = kCodeLengthCodeOrder[i];
       uint32_t ix, v;
 
       ix = showbits(s, 4);
@@ -1744,10 +1744,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, brotli_dictionary_s 
                 int dist = distance_code << 1;
                 // kDistanceShortCodeIndexOffset has 2-bit values from LSB: 3, 2, 1, 0, 3, 3, 3, 3,
                 // 3, 3, 2, 2, 2, 2, 2, 2
-                const uint32_t kDistanceShortCodeIndexOffset = 0xAAAF'FF1B;
+                uint32_t const kDistanceShortCodeIndexOffset = 0xAAAF'FF1B;
                 // kDistanceShortCodeValueOffset has 2-bit values from LSB: -0, 0,-0, 0,-1, 1,-2,
                 // 2,-3, 3,-1, 1,-2, 2,-3, 3
-                const uint32_t kDistanceShortCodeValueOffset = 0xFA5F'A500;
+                uint32_t const kDistanceShortCodeValueOffset = 0xFA5F'A500;
                 int v         = (dist_rb_idx + (int)(kDistanceShortCodeIndexOffset >> dist)) & 0x3;
                 distance_code = s->dist_rb[v];
                 v             = (int)(kDistanceShortCodeValueOffset >> dist) & 0x3;

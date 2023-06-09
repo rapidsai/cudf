@@ -337,7 +337,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
                     rec_starts.begin(),
                     thrust::minus<uint64_t>());
 
-  const size_t bytes_to_upload = end_offset - start_offset;
+  size_t const bytes_to_upload = end_offset - start_offset;
   CUDF_EXPECTS(bytes_to_upload <= h_data.size(),
                "Error finding the record within the specified byte range.\n");
 

@@ -1507,7 +1507,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
     auto frag_size_fn = [&](auto const& col, size_type col_size) {
-      const int target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
+      int const target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
       auto const avg_len =
         target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
       if (avg_len > 0) {

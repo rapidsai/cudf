@@ -94,8 +94,8 @@ __global__ void count_and_set_positions(char const* data,
                                         T* positions)
 {
   // thread IDs range per block, so also need the block id
-  const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-  const uint64_t did = tid * bytes_per_find_thread;
+  uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
+  uint64_t const did = tid * bytes_per_find_thread;
 
   char const* raw = (data + did);
 
@@ -152,7 +152,7 @@ cudf::size_type find_all_from_set(host_span<char const> data,
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
 
-  const size_t chunk_count = divCeil(data.size(), max_chunk_bytes);
+  size_t const chunk_count = divCeil(data.size(), max_chunk_bytes);
   for (size_t ci = 0; ci < chunk_count; ++ci) {
     auto const chunk_offset = ci * max_chunk_bytes;
     auto const h_chunk      = data.data() + chunk_offset;

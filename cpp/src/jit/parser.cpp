@@ -103,7 +103,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
 {
   // I am assuming for an instruction statement the starting phrase is an
   // instruction.
-  const size_t length = src.size();
+  size_t const length = src.size();
   std::string output;
   std::string suffix;
 
@@ -381,7 +381,7 @@ std::string parse_single_function_cuda(std::string const& src, std::string const
 
   // For CUDA device function we just need to find the function
   // name and replace it with the specified one.
-  const size_t length = no_comments.size();
+  size_t const length = no_comments.size();
   size_t start        = 0;
   size_t stop         = start;
 

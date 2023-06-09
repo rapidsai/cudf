@@ -73,7 +73,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
 
 template <typename T>
 struct duration_to_string_size_fn {
-  const column_device_view d_durations;
+  column_device_view const d_durations;
 
   __device__ size_type operator()(size_type idx)
   {
@@ -92,7 +92,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   char* d_chars;
   using duration_to_string_size_fn<T>::d_durations;
 
-  duration_to_string_fn(const column_device_view d_durations,
+  duration_to_string_fn(column_device_view const d_durations,
                         int32_t const* d_offsets,
                         char* d_chars)
     : duration_to_string_size_fn<T>{d_durations}, d_offsets(d_offsets), d_chars(d_chars)

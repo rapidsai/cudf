@@ -23,7 +23,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
+uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
                                                           ST_FLD_BYTE,

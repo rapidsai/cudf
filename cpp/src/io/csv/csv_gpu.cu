@@ -758,7 +758,7 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
     rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
-    [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
+    [data = data, newline, comment, carriage] __device__(uint64_t const pos) {
       return ((pos != data.size()) &&
               (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
@@ -777,7 +777,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
     rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
-    [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
+    [data = data, d_size, newline, comment, carriage] __device__(uint64_t const pos) {
       return ((pos != d_size) &&
               (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });

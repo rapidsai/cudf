@@ -60,10 +60,10 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 5> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
-const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
+std::array<int, 5> const valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
+std::array<char, 5> const quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
-const std::array<char, 33> escapable_chars{
+std::array<char, 33> const escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
 

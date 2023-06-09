@@ -110,9 +110,9 @@ class selected_rows_offsets {
 string removeQuotes(string str, char quotechar)
 {
   // Exclude first and last quotation char
-  const size_t first_quote = str.find(quotechar);
+  size_t const first_quote = str.find(quotechar);
   if (first_quote != string::npos) { str.erase(first_quote, 1); }
-  const size_t last_quote = str.rfind(quotechar);
+  size_t const last_quote = str.rfind(quotechar);
   if (last_quote != string::npos) { str.erase(last_quote, 1); }
 
   return str;
@@ -159,7 +159,7 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
           --col_name_len;
         }
 
-        const string new_col_name(first_row.data() + prev, col_name_len);
+        string const new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
       } else {
         // This is the first data row, add the automatically generated name
@@ -366,7 +366,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   auto row_offsets = selected_rows_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
   // Remove header rows and extract header
-  const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
+  size_t const header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
@@ -869,8 +869,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place
         // during the conversion stage
-        const std::string quotechar(1, parse_opts.quotechar);
-        const std::string dblquotechar(2, parse_opts.quotechar);
+        std::string const quotechar(1, parse_opts.quotechar);
+        std::string const dblquotechar(2, parse_opts.quotechar);
         std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(
           cudf::strings::detail::replace(col->view(), dblquotechar, quotechar, -1, stream, mr));

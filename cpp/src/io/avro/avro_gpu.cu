@@ -102,7 +102,7 @@ avro_decode_row(schemadesc_s const* schema,
   // processing multiple blocks, i.e. this block could only have 10 rows, but
   // it's the 3rd block (where each block has 10 rows), so we need to write to
   // the 30th row in the destination array.
-  const ptrdiff_t dst_row =
+  ptrdiff_t const dst_row =
     (row >= first_row && row < end_row ? static_cast<ptrdiff_t>((row - first_row) + row_offset)
                                        : -1);
   // Critical invariant checks: dst_row should be -1 or greater, and

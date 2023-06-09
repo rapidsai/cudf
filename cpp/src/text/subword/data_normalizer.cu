@@ -137,7 +137,7 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
-  const uint8_t length_encoding_bits = utf8_blocks[0] >> 3;
+  uint8_t const length_encoding_bits = utf8_blocks[0] >> 3;
   // UTF-8 format is variable-width character encoding using up to 4 bytes.
   // If the first byte is:
   // - [x00-x7F] -- beginning of a 1-byte character (ASCII)

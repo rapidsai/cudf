@@ -90,7 +90,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(pair_type const* __res
 
 template <typename pair_type>
 __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ const ptr,
-                                                      const pair_type val)
+                                                      pair_type const val)
 {
   if (sizeof(uint4) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -131,11 +131,11 @@ __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ co
 
 template <typename value_type, typename size_type, typename key_type, typename elem_type>
 __global__ void init_hashtbl(value_type* __restrict__ const hashtbl_values,
-                             const size_type n,
-                             const key_type key_val,
-                             const elem_type elem_val)
+                             size_type const n,
+                             key_type const key_val,
+                             elem_type const elem_val)
 {
-  const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  size_type const idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < n) {
     store_pair_vectorized(hashtbl_values + idx, thrust::make_pair(key_val, elem_val));
   }

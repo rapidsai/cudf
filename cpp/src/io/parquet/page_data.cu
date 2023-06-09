@@ -419,7 +419,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
         if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
         if (dict_pos < (uint32_t)s->dict_size) {
-          const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+          const auto* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
           return src->second;
         }
         return 0;

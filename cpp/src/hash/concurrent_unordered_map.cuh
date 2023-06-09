@@ -160,8 +160,8 @@ class concurrent_unordered_map {
    */
   static auto create(size_type capacity,
                      rmm::cuda_stream_view stream,
-                     const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
-                     const key_type unused_key        = std::numeric_limits<key_type>::max(),
+                     mapped_type const unused_element = std::numeric_limits<mapped_type>::max(),
+                     key_type const unused_key        = std::numeric_limits<key_type>::max(),
                      Hasher const& hash_function      = hasher(),
                      Equality const& equal            = key_equal(),
                      allocator_type const& allocator  = allocator_type())
@@ -327,7 +327,7 @@ class concurrent_unordered_map {
    */
   __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair)
   {
-    const size_type key_hash{m_hf(insert_pair.first)};
+    size_type const key_hash{m_hf(insert_pair.first)};
     size_type index{key_hash % m_capacity};
 
     insert_result status{insert_result::CONTINUE};
@@ -510,8 +510,8 @@ class concurrent_unordered_map {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   concurrent_unordered_map(size_type capacity,
-                           const mapped_type unused_element,
-                           const key_type unused_key,
+                           mapped_type const unused_element,
+                           key_type const unused_key,
                            Hasher const& hash_function,
                            Equality const& equal,
                            allocator_type const& allocator,

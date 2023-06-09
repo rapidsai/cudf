@@ -181,7 +181,7 @@ struct extract_last_day_of_month {
   __device__ inline timestamp_D operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
-    const year_month_day ymd(floor<days>(ts));
+    year_month_day const ymd(floor<days>(ts));
     auto const ymdl = year_month_day_last{ymd.year() / ymd.month() / last};
     return timestamp_D{sys_days{ymdl}};
   }

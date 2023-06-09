@@ -81,7 +81,7 @@ class thread_pool {
    */
   [[nodiscard]] size_t get_tasks_queued() const
   {
-    const std::scoped_lock lock(queue_mutex);
+    std::scoped_lock const lock(queue_mutex);
     return tasks.size();
   }
 
@@ -158,7 +158,7 @@ class thread_pool {
   {
     tasks_total++;
     {
-      const std::scoped_lock lock(queue_mutex);
+      std::scoped_lock const lock(queue_mutex);
       tasks.push(std::function<void()>(task));
     }
   }
@@ -305,7 +305,7 @@ class thread_pool {
    */
   bool pop_task(std::function<void()>& task)
   {
-    const std::scoped_lock lock(queue_mutex);
+    std::scoped_lock const lock(queue_mutex);
     if (tasks.empty())
       return false;
     else {
