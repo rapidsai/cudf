@@ -63,9 +63,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids   = hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
-  auto chunk_nested_data     = hostdevice_vector<void*>(sum_max_depths, _stream);
-  auto chunk_nested_str_data = hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_nested_valids =
+    cudf::detail::hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
+  auto chunk_nested_data     = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_nested_str_data = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
   auto chunk_offsets         = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
@@ -149,10 +150,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     page_count += chunks[c].max_num_pages;
   }
 
-  chunks.host_to_device(_stream);
-  chunk_nested_valids.host_to_device(_stream);
-  chunk_nested_data.host_to_device(_stream);
-  chunk_nested_str_data.host_to_device(_stream);
+  chunks.host_to_device_async(_stream);
+  chunk_nested_valids.host_to_device_async(_stream);
+  chunk_nested_data.host_to_device_async(_stream);
+  chunk_nested_str_data.host_to_device_async(_stream);
 
   // TODO: explore launching these concurrently with a stream pool
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
@@ -161,9 +162,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
   }
 
-  pages.device_to_host(_stream);
-  page_nesting.device_to_host(_stream);
-  page_nesting_decode.device_to_host(_stream);
+  pages.device_to_host_async(_stream);
+  page_nesting.device_to_host_async(_stream);
+  page_nesting_decode.device_to_host_async(_stream);
   _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
