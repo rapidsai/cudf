@@ -56,7 +56,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
         })) {
-      CUDF_FAIL("String column exceeds 2GB limit");
+      CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
   }
 

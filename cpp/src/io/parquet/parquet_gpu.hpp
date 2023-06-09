@@ -499,6 +499,7 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] chunks All chunks to be decoded
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use, default 0
  */
 void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
@@ -538,6 +539,7 @@ void DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
  * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
