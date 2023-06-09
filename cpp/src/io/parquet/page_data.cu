@@ -563,7 +563,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
  * @return A pair containing a pointer to the string and its length
  */
 inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
-  page_state_s volatile* s, page_state_buffers_s volatile* sb, int src_pos)
+  volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos)
 {
   char const* ptr = nullptr;
   size_t len      = 0;
@@ -920,7 +920,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
  * @param[in] len Length of element
  */
 static __device__ void gpuOutputGeneric(
-  page_state_s volatile* s, page_state_buffers_s volatile* sb, int src_pos, uint8_t* dst8, int len)
+  volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos, uint8_t* dst8, int len)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;

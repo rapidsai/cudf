@@ -283,7 +283,7 @@ static __device__ uint32_t ByteRLE(
 /**
  * @brief Maps the symbol size in bytes to RLEv2 5-bit length code
  */
-static __device__ const __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
+static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
   0, 7, 15, 23, 27, 28, 29, 30, 31};
 
 /**

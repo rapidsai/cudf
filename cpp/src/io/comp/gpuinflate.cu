@@ -945,14 +945,14 @@ __device__ void init_prefetcher(inflate_state_s* s, int t)
   }
 }
 
-__device__ void prefetch_warp(inflate_state_s volatile* s, int t)
+__device__ void prefetch_warp(volatile inflate_state_s* s, int t)
 {
   uint8_t const* cur_p = s->pref.cur_p;
   uint8_t const* end   = s->end;
   while (shuffle((t == 0) ? s->pref.run : 0)) {
     auto cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      shuffle((t == 0) ? (cur_lo - *(int32_t volatile*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
       uint8_t const* p             = cur_p + 4 * t;
       *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<uint32_t const*>(p) : 0;

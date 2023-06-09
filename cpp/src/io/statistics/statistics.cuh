@@ -67,7 +67,7 @@ template <typename ReturnType, typename InternalType>
 struct t_array_stats {
   InternalType const* ptr;  //!< ptr to data
   size_type length;         //!< length of data
-  __host__ __device__ __forceinline__ t_array_stats volatile& operator=(
+  __host__ __device__ __forceinline__ volatile t_array_stats& operator=(
     ReturnType const& val) volatile
   {
     ptr    = val.data();

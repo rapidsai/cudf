@@ -142,7 +142,7 @@ struct orcdec_state_s {
  * @param[in] base Pointer to raw byte stream data
  * @param[in] len Stream length in bytes
  */
-static __device__ void bytestream_init(orc_bytestream_s volatile* bs,
+static __device__ void bytestream_init(volatile orc_bytestream_s* bs,
                                        uint8_t const* base,
                                        uint32_t len)
 {
@@ -1315,7 +1315,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       uint32_t valid = (t < nrows && r < rmax)
                          ? (((uint8_t const*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
                          : 0;
-      auto volatile* row_ofs_plus1 = (uint16_t volatile*)&s->u.rowdec.row[s->u.rowdec.nz_count];
+      volatile auto* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
       uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
       if (t < nrows) { row_ofs_plus1[t] = valid; }
       lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
