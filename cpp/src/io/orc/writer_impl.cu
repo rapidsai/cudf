@@ -72,6 +72,17 @@ namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
+template <typename T>
+[[nodiscard]] constexpr int varint_size(T val)
+{
+  auto len = 1u;
+  while (val > 0x7f) {
+    val >>= 7;
+    ++len;
+  }
+  return len;
+}
+
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
   int32_t blk_pos   = -1;  // Block Position
@@ -2026,7 +2037,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                          }();
 
                          if (col.is_null(idx) or not bit_value_or(pushdown_mask, idx, true))
-                           return 0u;
+                           return 0;
 
                          __int128_t const element =
                            col.type().id() == type_id::DECIMAL32   ? col.element<int32_t>(idx)
@@ -2036,12 +2047,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                          __int128_t const sign      = (element < 0) ? 1 : 0;
                          __uint128_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 
-                         uint32_t encoded_length = 1;
-                         while (zigzaged_value > 127) {
-                           zigzaged_value >>= 7u;
-                           ++encoded_length;
-                         }
-                         return encoded_length;
+                         return varint_size(zigzaged_value);
                        });
 
       // Compute element offsets within each row group
@@ -2326,8 +2332,8 @@ auto convert_table_to_orc_data(table_view const& input,
       auto const str_col_idx    = str_column.str_index();
       auto& sd                  = stripe_dicts[str_col_idx][stripe_idx];
       auto const use_dictionary = [&]() {
-        // TODO multiplier for entry_count?
-        return sd.char_count + sd.entry_count < sd.direct_char_count;
+        auto const dict_index_size = varint_size(sd.entry_count);
+        return sd.char_count + dict_index_size * sd.entry_count < sd.direct_char_count;
       }();
       if (use_dictionary) {
         // TODO allocate memory for dictionary data, assign to dict_data

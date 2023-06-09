@@ -28,6 +28,18 @@ namespace cudf {
 namespace io {
 namespace orc {
 
+namespace {
+[[nodiscard]] uint32_t varint_size(uint64_t val)
+{
+  auto len = 1u;
+  while (val > 0x7f) {
+    val >>= 7;
+    ++len;
+  }
+  return len;
+}
+}  // namespace
+
 uint32_t ProtobufReader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
