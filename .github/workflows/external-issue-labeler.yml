@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Triage outside issues
+
+on:
+  issues:
+    types:
+      - opened
+      
+env:
+  GITHUB_TOKEN: ${{ secrets.ISSUE_PR_WRITE_GITHUB_TOKEN }}
+
+jobs:
+  Label-Issue:
+    runs-on: ubuntu-latest
+    # Only run if the issue author is not part of RAPIDS
+    if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "CONTRIBUTOR", "COLLABORATOR"]'), github.event.issue.author_association)}}
+    steps: 
+      - name: add-external-labels
+        run: |
+          issue_url=${{ github.event.issue.html_url }}
+          gh issue edit ${issue_url} --add-label "Needs Triage,External"
+      
+      - name: add-comment-to-issue
+        run: |
+           issue_url=${{ github.event.issue.html_url }}
+           author=${{ github.event.issue.user.login }}
+           echo ${author}
+           gh issue comment ${issue_url} --body "Hi @${author}!
+             
+             Thanks for submitting this issue - our team has been notified and we'll get back to you as soon as we can!
+             In the mean time, feel free to add any relevant information to this issue."
