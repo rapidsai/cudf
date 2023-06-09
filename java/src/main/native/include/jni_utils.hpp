@@ -899,21 +899,21 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
                              ret_val);                                                             \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
+    char const *ex_class = class_name;                                                             \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
     /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */            \
     /* occurred if the second call doesn't return with cudaSuccess. */                             \
     cudaGetLastError();                                                                            \
     auto const last = cudaFree(0);                                                                 \
     if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
-      auto msg = e.what() == nullptr ? std::string{""} : e.what();                                 \
-      auto cuda_error = cudf::fatal_cuda_error{msg, last};                                         \
-      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, cuda_error, ret_val);           \
+      /* Throw CudaFatalException since the thrown exceptioni is unrecoverable CUDA error */       \
+      ex_class = cudf::jni::CUDA_FATAL_ERROR_CLASS;                                                \
     }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     if (auto const cudf_ex = dynamic_cast<cudf::logic_error const *>(&e); cudf_ex != nullptr) {    \
-      JNI_CHECK_THROW_NEW_CUDF(env, class_name, e.what(), cudf_ex->stacktrace(), ret_val);         \
+      JNI_CHECK_THROW_NEW_CUDF(env, ex_class, e.what(), cudf_ex->stacktrace(), ret_val);           \
     } else {                                                                                       \
-      JNI_CHECK_THROW_NEW_CUDF(env, class_name, e.what(), nullptr, ret_val);                       \
+      JNI_CHECK_THROW_NEW_CUDF(env, ex_class, e.what(), nullptr, ret_val);                         \
     }                                                                                              \
   }
 
