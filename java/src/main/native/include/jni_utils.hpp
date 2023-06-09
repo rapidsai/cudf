@@ -788,6 +788,13 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 } // namespace jni
 } // namespace cudf
 
+#define JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val)                                                 \
+  {                                                                                                \
+    if (env->ExceptionOccurred()) {                                                                \
+      return ret_val;                                                                              \
+    }                                                                                              \
+  }
+
 #define JNI_THROW_NEW(env, class_name, message, ret_val)                                           \
   {                                                                                                \
     jclass ex_class = env->FindClass(class_name);                                                  \
@@ -801,9 +808,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 // Throw a new exception only if one is not pending then always return with the specified value
 #define JNI_CHECK_THROW_CUDF_EXCEPTION(env, class_name, message, stacktrace, ret_val)              \
   {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
-      return ret_val;                                                                              \
-    }                                                                                              \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
     auto const ex_class = env->FindClass(class_name);                                              \
     if (ex_class == nullptr) {                                                                     \
       return ret_val;                                                                              \
@@ -834,9 +839,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 // Throw a new exception only if one is not pending then always return with the specified value
 #define JNI_CHECK_THROW_CUDA_EXCEPTION(env, class_name, message, stacktrace, error_code, ret_val)  \
   {                                                                                                \
-    if (env->ExceptionOccurred()) {                                                                \
-      return ret_val;                                                                              \
-    }                                                                                              \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
     auto const ex_class = env->FindClass(class_name);                                              \
     if (ex_class == nullptr) {                                                                     \
       return ret_val;                                                                              \
@@ -881,10 +884,8 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
 
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
   catch (const rmm::out_of_memory &e) {                                                            \
-    if (env->ExceptionOccurred()) {                                                                \
-      return ret_val;                                                                              \
-    }                                                                                              \
-    auto what =                                                                                    \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                    \
+    auto const what =                                                                              \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                               \
   }                                                                                                \
