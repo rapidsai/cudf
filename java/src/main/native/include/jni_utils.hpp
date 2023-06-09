@@ -906,7 +906,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     cudaGetLastError();                                                                            \
     auto const last = cudaFree(0);                                                                 \
     if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
-      /* Throw CudaFatalException since the thrown exceptioni is unrecoverable CUDA error */       \
+      /* Throw CudaFatalException since the thrown exception is unrecoverable CUDA error */        \
       ex_class = cudf::jni::CUDA_FATAL_ERROR_CLASS;                                                \
     }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
