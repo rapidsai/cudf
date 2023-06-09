@@ -901,7 +901,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
                                    e.stacktrace(), ret_val);                                       \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
-    char const *stacktrace = nullptr;                                                              \
+    char const *stacktrace = "No native stacktrace is available.";                                 \
     if (auto const cudf_ex = dynamic_cast<cudf::logic_error const *>(&e); cudf_ex != nullptr) {    \
       stacktrace = cudf_ex->stacktrace();                                                          \
     }                                                                                              \
