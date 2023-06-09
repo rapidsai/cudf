@@ -37,6 +37,9 @@ if (( ${SUITEERROR} == 0 )); then
     SUITEERROR=$?
 fi
 
+# Clear the LD_PRELOAD used by the stream testing utility
+unset LD_PRELOAD
+
 if (( ${SUITEERROR} == 0 )); then
     # Run a small Google benchmark to test that benchmarks are runnable
     pushd $CONDA_PREFIX/bin/benchmarks/libcudf
