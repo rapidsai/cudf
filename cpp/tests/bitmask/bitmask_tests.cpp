@@ -582,7 +582,7 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
@@ -605,7 +605,7 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
@@ -621,14 +621,15 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto gold_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end()));
+  auto [gold_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
   rmm::device_buffer copy_mask{gold_mask, cudf::get_default_stream()};
   cudf::column original{t,
                         num_elements,
                         rmm::device_buffer{num_elements * sizeof(int), cudf::get_default_stream()},
-                        std::move(copy_mask)};
+                        std::move(copy_mask),
+                        null_count};
   std::vector<cudf::size_type> indices{0,
                                        104,
                                        104,

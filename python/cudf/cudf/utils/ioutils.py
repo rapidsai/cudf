@@ -147,11 +147,12 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
-filters : list of tuple, list of lists of tuples default None
+filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
-    that do not match the given filter predicate are not read. The
-    predicate is expressed in disjunctive normal form (DNF) like
+    that do not match the given filter predicate are not read. The filters
+    will also be applied to the rows of the in-memory DataFrame after IO.
+    The predicate is expressed in disjunctive normal form (DNF) like
     `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
@@ -168,6 +169,11 @@ row_groups : int, or list, or a list of lists default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+
+    .. deprecated:: 23.08
+
+        This parameter is deprecated and will be removed in a future
+        version of cudf.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.

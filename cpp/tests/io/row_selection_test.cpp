@@ -127,7 +127,7 @@ TEST_F(FromOptsTest, OverFlowDetection)
 
   // Too many rows to read until the end of the file
   EXPECT_THROW(skip_rows_num_rows_from_options(0, std::nullopt, too_large_for_32bit),
-               cudf::logic_error);
+               std::overflow_error);
 
   // Should work fine with num_rows
   EXPECT_NO_THROW(

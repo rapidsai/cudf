@@ -85,7 +85,7 @@ repos:
                   (?x)^(
                     ^cpp/include/cudf_test/cxxopts.hpp|
                     ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
-                    ^python/cudf/cudf/tests/test_text.py
+                    ^python/cudf/cudf/tests/text/test_text_methods.py
                   )
       - repo: local
         hooks:

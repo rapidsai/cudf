@@ -29,6 +29,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -92,6 +93,33 @@ TEST_F(TransformTest, NullLiteral)
   auto expected = column_wrapper<int32_t>({-123, -123, -123, -123}, {0, 0, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, IsNull)
+{
+  auto c_0   = column_wrapper<int32_t>{{0, 1, 2, 0}, {0, 1, 1, 0}};
+  auto table = cudf::table_view{{c_0}};
+
+  // result of IS_NULL on literal, will be a column of table size, with all values set to
+  // !literal.is_valid(). The table values are irrelevant.
+  auto literal_value = cudf::numeric_scalar<int32_t>(-123);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto expression    = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, literal);
+
+  auto result    = cudf::compute_column(table, expression);
+  auto expected1 = column_wrapper<bool>({0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result->view(), verbosity);
+
+  literal_value.set_valid_async(false);
+  result         = cudf::compute_column(table, expression);
+  auto expected2 = column_wrapper<bool>({1, 1, 1, 1}, cudf::test::iterators::no_nulls());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result->view(), verbosity);
+
+  auto col_ref_0   = cudf::ast::column_reference(0);
+  auto expression2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+  result           = cudf::compute_column(table, expression2);
+  auto expected3   = column_wrapper<bool>({1, 0, 0, 1}, cudf::test::iterators::no_nulls());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result->view(), verbosity);
 }
 
 TEST_F(TransformTest, BasicAddition)
