@@ -1141,8 +1141,10 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
 
           if (s->col.column_data_base != nullptr) {
-            nesting_info->data_out   = static_cast<uint8_t*>(s->col.column_data_base[idx]);
-            nesting_info->string_out = static_cast<uint8_t*>(s->col.column_string_base[idx]);
+            nesting_info->data_out = static_cast<uint8_t*>(s->col.column_data_base[idx]);
+            if (s->col.column_string_base != nullptr) {
+              nesting_info->string_out = static_cast<uint8_t*>(s->col.column_string_base[idx]);
+            }
 
             nesting_info->data_out = static_cast<uint8_t*>(s->col.column_data_base[idx]);
 

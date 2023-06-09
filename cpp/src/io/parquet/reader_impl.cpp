@@ -65,9 +65,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
   auto chunk_nested_valids =
     cudf::detail::hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
-  auto chunk_nested_data     = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
-  auto chunk_nested_str_data = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
-  auto chunk_offsets         = std::vector<size_t>();
+  auto chunk_nested_data = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
+  auto chunk_offsets     = std::vector<size_t>();
+  auto chunk_nested_str_data =
+    cudf::detail::hostdevice_vector<void*>(has_strings ? sum_max_depths : 0, _stream);
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, chunk_off = 0; c < chunks.size(); c++) {
@@ -88,8 +89,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     auto data                  = chunk_nested_data.host_ptr(chunk_off);
     chunks[c].column_data_base = chunk_nested_data.device_ptr(chunk_off);
 
-    auto str_data                = chunk_nested_str_data.host_ptr(chunk_off);
-    chunks[c].column_string_base = chunk_nested_str_data.device_ptr(chunk_off);
+    auto str_data = has_strings ? chunk_nested_str_data.host_ptr(chunk_off) : nullptr;
+    chunks[c].column_string_base =
+      has_strings ? chunk_nested_str_data.device_ptr(chunk_off) : nullptr;
 
     chunk_off += max_depth;
 
@@ -137,7 +139,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         if (out_buf.string_size() == 0 && col_sizes[chunks[c].src_col_index] > 0) {
           out_buf.create_string_data(col_sizes[chunks[c].src_col_index], _stream);
         }
-        str_data[idx] = out_buf.string_data();
+        if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
           static_cast<uint32_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       } else {
@@ -153,11 +155,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
-  chunk_nested_str_data.host_to_device_async(_stream);
 
   // TODO: explore launching these concurrently with a stream pool
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
   if (has_strings) {
+    chunk_nested_str_data.host_to_device_async(_stream);
     gpu::DecodeStringPageData(
       pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
   }
