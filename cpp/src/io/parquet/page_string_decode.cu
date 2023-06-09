@@ -1010,43 +1010,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageDataV2(
   block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
 }
 
-__global__ void __launch_bounds__(preprocess_block_size)
-  gpuComputePageOffsets(device_span<ColumnChunkDesc const> chunks, device_span<size_t> col_sizes)
-{
-  using block_scan = cub::BlockScan<size_t, preprocess_block_size>;
-  __shared__ typename block_scan::TempStorage scan_storage;
-
-  auto const t         = threadIdx.x;
-  auto const col_index = blockIdx.x;
-  col_sizes[col_index] = 0;
-
-  for (auto const& chunk : chunks) {
-    if (chunk.src_col_index == col_index) {
-      // short circuit return if this is not a string column
-      if (not is_string_col(chunk)) { return; }
-
-      size_t cumulative_offset = col_sizes[col_index];
-
-      for (int i = 0; i < chunk.max_num_pages; i += preprocess_block_size) {
-        int const idx    = i + t;
-        size_t const len = idx < chunk.max_num_pages and
-                               (chunk.page_info[idx].flags & gpu::PAGEINFO_FLAGS_DICTIONARY) == 0
-                             ? chunk.page_info[idx].str_bytes
-                             : 0;
-
-        size_t offset, block_total;
-        block_scan(scan_storage).ExclusiveSum(len, offset, block_total);
-        if (idx < chunk.max_num_pages) {
-          chunk.page_info[idx].str_offset = offset + cumulative_offset;
-        }
-        cumulative_offset += block_total;
-      }
-      if (t == 0) { col_sizes[col_index] = cumulative_offset; }
-      __syncthreads();
-    }
-  }
-}
-
 }  // anonymous namespace
 
 /**
@@ -1054,7 +1017,6 @@ __global__ void __launch_bounds__(preprocess_block_size)
  */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            std::vector<size_t>& col_sizes,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,
@@ -1069,15 +1031,6 @@ void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
     gpuComputePageStringSizes<LEVEL_DECODE_BUF_SIZE, uint16_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   }
-
-  rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), stream);
-  gpuComputePageOffsets<<<col_sizes.size(), dim_block, 0, stream.value()>>>(chunks, d_col_sizes);
-  cudaMemcpyAsync(col_sizes.data(),
-                  d_col_sizes.data(),
-                  sizeof(size_t) * col_sizes.size(),
-                  cudaMemcpyDeviceToHost,
-                  stream);
-  stream.synchronize();
 }
 
 /**

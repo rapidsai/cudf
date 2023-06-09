@@ -221,6 +221,13 @@ class reader::impl {
   void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
 
   /**
+   * @brief Calculate per-page offsets for string data
+   *
+   * @return Vector of total string data sizes for each column
+   */
+  std::vector<size_t> calculate_page_string_offsets();
+
+  /**
    * @brief Converts the page data and outputs to columns.
    *
    * @param skip_rows Minimum number of rows from start

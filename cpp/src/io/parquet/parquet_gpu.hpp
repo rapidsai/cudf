@@ -497,14 +497,12 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
- * @param[out] col_sizes On output, contains total size of string data for each column
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] stream CUDA stream to use, default 0
  */
 void ComputePageStringSizes(hostdevice_vector<PageInfo>& pages,
                             hostdevice_vector<ColumnChunkDesc> const& chunks,
-                            std::vector<size_t>& col_sizes,
                             size_t min_row,
                             size_t num_rows,
                             int level_type_size,

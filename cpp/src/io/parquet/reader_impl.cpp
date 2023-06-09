@@ -48,7 +48,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     gpu::ComputePageStringSizes(
-      pages, chunks, col_sizes, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
+      pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
+
+    col_sizes = calculate_page_string_offsets();
+
     // check for overflow
     if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
