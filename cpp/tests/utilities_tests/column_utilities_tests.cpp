@@ -157,7 +157,7 @@ struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -171,7 +171,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 {
-  std::vector<const char*> h_strings{nullptr, nullptr, nullptr};
+  std::vector<char const*> h_strings{nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -184,7 +184,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 
 TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t> cudf_col({100, 0, 7, 140000});
 
@@ -195,7 +195,7 @@ TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
 
 TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
@@ -215,7 +215,7 @@ TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)
 
 TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnWithInvalids)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{{1, 2, 3, 4, 5}, {1, 0, 1, 0, 1}};
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
@@ -230,7 +230,7 @@ TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnWithInvalids)
 
 TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnNumeric)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
     {10001523.25, 2.0, 3.75, 0.000000034, 5.3});
@@ -244,7 +244,7 @@ TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnNumeric)
 
 TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
     {10001523.25, 2.0, 3.75, 0.000000034, 5.3}, {1, 0, 1, 0, 1});
@@ -258,9 +258,9 @@ TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToString)
 {
-  const char* delimiter = ",";
+  char const* delimiter = ",";
 
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(cudf_version 23.06.00)
+set(cudf_version 23.08.00)
 
 include(../../fetch_rapids.cmake)
 include(rapids-cuda)

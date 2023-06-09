@@ -32,7 +32,7 @@ TEST_F(StringsDurationsTest, FromToDurations)
   using T = cudf::duration_s;
   std::vector<cudf::duration_s> h_durations{
     T{131246625}, T{1563399277}, T{0}, T{1553085296}, T{1582934400}, T{-1545730073}, T{-86399}};
-  std::vector<const char*> h_expected{"1519 days 01:23:45",
+  std::vector<char const*> h_expected{"1519 days 01:23:45",
                                       "18094 days 21:34:37",
                                       nullptr,
                                       "17975 days 12:34:56",

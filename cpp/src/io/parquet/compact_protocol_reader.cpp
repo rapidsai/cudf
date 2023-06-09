@@ -245,7 +245,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
-                            ParquetFieldStructBlob(12, c->statistics_blob));
+                            ParquetFieldStruct(12, c->statistics));
   return function_builder(this, op);
 }
 

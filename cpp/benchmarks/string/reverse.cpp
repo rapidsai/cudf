@@ -51,6 +51,6 @@ static void bench_reverse(nvbench::state& state)
 }
 
 NVBENCH_BENCH(bench_reverse)
-  .set_name("strings_reverse")
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
-  .add_int64_axis("row_width", {8, 16, 32, 64, 128});
+  .set_name("reverse")
+  .add_int64_axis("row_width", {8, 16, 32, 64, 128})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});

@@ -163,7 +163,7 @@ struct SkipRowTest {
   int test_calls{0};
   SkipRowTest() {}
 
-  std::unique_ptr<table> get_expected_result(const std::string& filepath,
+  std::unique_ptr<table> get_expected_result(std::string const& filepath,
                                              int skip_rows,
                                              int file_num_rows,
                                              int read_num_rows)
@@ -491,9 +491,9 @@ TEST_F(OrcWriterTest, ReadZeroRows)
 
 TEST_F(OrcWriterTest, Strings)
 {
-  std::vector<const char*> strings{
+  std::vector<char const*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
-  const auto num_rows = strings.size();
+  auto const num_rows = strings.size();
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
@@ -527,9 +527,9 @@ TEST_F(OrcWriterTest, SlicedTable)
 {
   // This test checks for writing zero copy, offsetted views into existing cudf tables
 
-  std::vector<const char*> strings{
+  std::vector<char const*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
-  const auto num_rows = strings.size();
+  auto const num_rows = strings.size();
 
   auto seq_col0  = random_values<int32_t>(num_rows);
   auto seq_col2  = random_values<float>(num_rows);
@@ -578,7 +578,7 @@ TEST_F(OrcWriterTest, SlicedTable)
 TEST_F(OrcWriterTest, HostBuffer)
 {
   constexpr auto num_rows = 100 << 10;
-  const auto seq_col      = random_values<int>(num_rows);
+  auto const seq_col      = random_values<int>(num_rows);
   int32_col col(seq_col.begin(), seq_col.end());
 
   table_view expected{{col}};
@@ -596,7 +596,7 @@ TEST_F(OrcWriterTest, HostBuffer)
     cudf::io::orc_reader_options::builder(
       cudf::io::source_info(out_buffer.data(), out_buffer.size()))
       .use_index(false);
-  const auto result = cudf::io::read_orc(in_opts);
+  auto const result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -739,9 +739,9 @@ TEST_F(OrcChunkedWriterTest, ManyTables)
 
 TEST_F(OrcChunkedWriterTest, Metadata)
 {
-  std::vector<const char*> strings{
+  std::vector<char const*> strings{
     "Monday", "Tuesday", "THURSDAY", "Wednesday", "Friday", "Sunday", "Saturday"};
-  const auto num_rows = strings.size();
+  auto const num_rows = strings.size();
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
@@ -773,12 +773,12 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 TEST_F(OrcChunkedWriterTest, Strings)
 {
   bool mask1[] = {true, true, false, true, true, true, true};
-  std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
+  std::vector<char const*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   str_col strings1(h_strings1.begin(), h_strings1.end(), mask1);
   table_view tbl1({strings1});
 
   bool mask2[] = {false, true, true, true, true, true, true};
-  std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
+  std::vector<char const*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   str_col strings2(h_strings2.begin(), h_strings2.end(), mask2);
   table_view tbl2({strings2});
 
@@ -978,7 +978,7 @@ TEST_F(OrcStatisticsTest, Basic)
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
-  std::vector<const char*> strings{
+  std::vector<char const*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Wednesday", "Tuesday"};
   int num_rows = strings.size();
 
@@ -1050,7 +1050,7 @@ TEST_F(OrcStatisticsTest, Basic)
 
 TEST_F(OrcWriterTest, SlicedValidMask)
 {
-  std::vector<const char*> strings;
+  std::vector<char const*> strings;
   // Need more than 32 elements to reproduce the issue
   for (int i = 0; i < 34; ++i)
     strings.emplace_back("a long string to make sure overflow affects the output");
@@ -1117,7 +1117,7 @@ TEST_F(OrcReaderTest, zstdCompressionRegression)
     0x30, 0x09, 0x82, 0xf4, 0x03, 0x03, 0x4f, 0x52, 0x43, 0x17};
 
   auto source =
-    cudf::io::source_info(reinterpret_cast<const char*>(input_buffer), sizeof(input_buffer));
+    cudf::io::source_info(reinterpret_cast<char const*>(input_buffer), sizeof(input_buffer));
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(source).use_index(false);
 
@@ -1322,14 +1322,14 @@ TEST_P(OrcWriterTestStripes, StripeSize)
   constexpr auto num_rows            = 1000000;
   auto const [size_bytes, size_rows] = GetParam();
 
-  const auto seq_col = random_values<int>(num_rows);
-  const auto validity =
+  auto const seq_col = random_values<int>(num_rows);
+  auto const validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   column_wrapper<int64_t> col{seq_col.begin(), seq_col.end(), validity};
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  const auto expected = std::make_unique<table>(std::move(cols));
+  auto const expected = std::make_unique<table>(std::move(cols));
 
   auto validate = [&](std::vector<char> const& orc_buffer) {
     auto const expected_stripe_num =
@@ -1379,7 +1379,7 @@ INSTANTIATE_TEST_CASE_P(OrcWriterTest,
 
 TEST_F(OrcWriterTest, StripeSizeInvalid)
 {
-  const auto unused_table = std::make_unique<table>();
+  auto const unused_table = std::make_unique<table>();
   std::vector<char> out_buffer;
 
   EXPECT_THROW(

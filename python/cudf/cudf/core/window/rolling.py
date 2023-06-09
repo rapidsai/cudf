@@ -543,8 +543,6 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
