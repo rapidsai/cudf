@@ -37,5 +37,21 @@ if (( ${SUITEERROR} == 0 )); then
     SUITEERROR=$?
 fi
 
+if (( ${SUITEERROR} == 0 )); then
+    # Run a small Google benchmark to test that benchmarks are runnable
+    pushd $CONDA_PREFIX/bin/benchmarks/libcudf
+    ./MERGE_BENCH --benchmark_filter=/2/
+    SUITEERROR=$?
+    popd
+fi
+
+if (( ${SUITEERROR} == 0 )); then
+    # Run a small nvbench benchmark to test that benchmarks are runnable
+    pushd $CONDA_PREFIX/bin/benchmarks/libcudf
+    ./STRINGS_NVBENCH --run-once --benchmark 0
+    SUITEERROR=$?
+    popd
+fi
+
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
