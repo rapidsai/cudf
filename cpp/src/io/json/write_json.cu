@@ -159,18 +159,12 @@ struct struct_scatter_strings_fn {
     auto const d_str_null = tbl.column(col).is_null(row);
     auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
     // prefix
-    if (col == 0) { d_strviews[this_index - 1] = row_prefix; }
+    if (col == 0) d_strviews[this_index - 1] = row_prefix;
+    if (col != 0) d_strviews[this_index - 1] = include_nulls ? value_separator : string_view{};
     if (!include_nulls && d_str_null) {
-      if (col != 0) d_strviews[this_index - 1] = string_view{};
       d_strviews[this_index]     = string_view{};
       d_strviews[this_index + 1] = string_view{};
     } else {
-      // if previous column was null, then we skip the value separator
-      if (col != 0)
-        if (tbl.column(col - 1).is_null(row) && !include_nulls)
-          d_strviews[this_index - 1] = string_view{};
-        else
-          d_strviews[this_index - 1] = value_separator;
       auto const d_col_name = col_names.element<string_view>(col);
       auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
       // column_name: value
@@ -179,6 +173,16 @@ struct struct_scatter_strings_fn {
     }
     // suffix
     if (col == tbl.num_columns() - 1) { d_strviews[this_index + 2] = row_suffix; }
+  }
+};
+
+struct validity_fn {
+  table_device_view const tbl;
+  __device__ bool operator()(size_type idx) const
+  {
+    auto const row = idx / tbl.num_columns();
+    auto const col = idx % tbl.num_columns();
+    return tbl.column(col).is_valid(row);
   }
 };
 
@@ -247,6 +251,41 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(total_rows),
                    scatter_fn);
+  if (!include_nulls) {
+    // if previous column was null, then we skip the value separator
+    rmm::device_uvector<bool> d_str_separator(total_rows, stream);
+    auto row_num = cudf::detail::make_counting_transform_iterator(
+      0, [tbl = *tbl_device_view] __device__(auto idx) -> size_type {
+        return idx / tbl.num_columns();
+      });
+    auto validity_iterator =
+      cudf::detail::make_counting_transform_iterator(0, validity_fn{*tbl_device_view});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                  row_num,
+                                  row_num + total_rows,
+                                  validity_iterator,
+                                  d_str_separator.begin(),
+                                  false,
+                                  thrust::equal_to<size_type>{},
+                                  thrust::logical_or<bool>{});
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(total_rows),
+                     [write_separator = d_str_separator.begin(),
+                      d_strviews      = d_strviews.begin(),
+                      value_separator,
+                      tbl = *tbl_device_view,
+                      strviews_per_column,
+                      num_strviews_per_row] __device__(auto idx) {
+                       auto const row = idx / tbl.num_columns();
+                       auto const col = idx % tbl.num_columns();
+                       auto const this_index =
+                         row * num_strviews_per_row + col * strviews_per_column + 1;
+                       if (write_separator[idx] && tbl.column(col).is_valid(row)) {
+                         d_strviews[this_index - 1] = value_separator;
+                       }
+                     });
+  }
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
