@@ -267,7 +267,7 @@ struct DeviceXor {
  * @brief Operator for calculating Lead/Lag window function.
  */
 struct DeviceLeadLag {
-  const size_type row_offset;
+  size_type const row_offset;
 
   explicit CUDF_HOST_DEVICE inline DeviceLeadLag(size_type offset_) : row_offset(offset_) {}
 };

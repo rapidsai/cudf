@@ -56,15 +56,15 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
   constexpr cudf::size_type leader_lane{0};
   int const lane_id = threadIdx.x % warp_size;
 
-  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
   int const warp_id         = tid / warp_size;
 
-  const cudf::size_type offset         = target.offset();
-  const cudf::size_type begin_mask_idx = cudf::word_index(offset + target_begin);
-  const cudf::size_type end_mask_idx   = cudf::word_index(offset + target_end);
+  cudf::size_type const offset         = target.offset();
+  cudf::size_type const begin_mask_idx = cudf::word_index(offset + target_begin);
+  cudf::size_type const end_mask_idx   = cudf::word_index(offset + target_end);
 
   cudf::size_type mask_idx             = begin_mask_idx + warp_id;
-  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / warp_size;
+  cudf::size_type const masks_per_grid = gridDim.x * blockDim.x / warp_size;
 
   cudf::size_type target_offset = begin_mask_idx * warp_size - (offset + target_begin);
   cudf::size_type source_idx    = tid + target_offset;

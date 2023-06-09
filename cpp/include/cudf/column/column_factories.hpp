@@ -406,7 +406,7 @@ std::unique_ptr<column> make_strings_column(
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<string_view const> string_views,
-  const string_view null_placeholder,
+  string_view const null_placeholder,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

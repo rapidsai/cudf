@@ -434,8 +434,8 @@ class arrow_io_source : public datasource {
    */
   explicit arrow_io_source(std::string_view arrow_uri)
   {
-    const std::string uri_start_delimiter = "//";
-    const std::string uri_end_delimiter   = "?";
+    std::string const uri_start_delimiter = "//";
+    std::string const uri_end_delimiter   = "?";
 
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
       arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));

@@ -120,7 +120,7 @@ struct window_bounds {
   //         1. For time-based window functions, assume DAYS as before
   //         2. For all else, assume ROWS as before.
   bool const is_unbounded;  ///< Whether the window boundary is unbounded
-  const size_type value;    ///< Finite window boundary value (in days or rows)
+  size_type const value;    ///< Finite window boundary value (in days or rows)
 
  private:
   explicit window_bounds(bool is_unbounded_, size_type value_ = 0)
