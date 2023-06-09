@@ -188,7 +188,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
 {
   if (_group_labels) return *_group_labels;
 
-  // Get group labels for future use in segmented sorting
+  // Create a temporary variable and only set _group_labels right before the return.
+  // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto group_labels = std::make_unique<index_vector>(num_keys(stream), stream);
 
   if (num_keys(stream)) {
@@ -235,7 +236,9 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto [row_bitmask, null_count] =
     cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
 
-  auto const zero          = numeric_scalar<int8_t>(0);
+  auto const zero = numeric_scalar<int8_t>(0);
+  // Create a temporary variable and only set _keys_bitmask_column right before the return.
+  // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(
     _keys.num_rows(), zero, zero, stream, rmm::mr::get_current_device_resource());
   keys_bitmask_column->set_null_mask(std::move(row_bitmask), null_count);
