@@ -223,8 +223,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_flattenLists(JNIEnv *en
     auto const null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE :
                                            cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
     auto const input_cv = reinterpret_cast<cudf::column_view const *>(input_handle);
-    return release_as_jlong(
-        cudf::lists::concatenate_list_elements(cudf::table_view(input_cv), null_policy));
+    return release_as_jlong(cudf::lists::concatenate_list_elements(*input_cv, null_policy));
   }
   CATCH_STD(env, 0);
 }
