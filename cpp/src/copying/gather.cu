@@ -80,6 +80,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds_policy,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -87,8 +88,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
                                                      : detail::negative_index_policy::ALLOWED;
 
-  return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, cudf::get_default_stream(), mr);
+  return detail::gather(source_table, gather_map, bounds_policy, index_policy, stream, mr);
 }
 
 }  // namespace cudf

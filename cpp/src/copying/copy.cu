@@ -411,6 +411,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -420,6 +421,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -429,6 +431,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -438,6 +441,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
