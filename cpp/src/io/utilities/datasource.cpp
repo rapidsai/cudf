@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 
 #include "file_io_utilities.hpp"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
@@ -36,10 +38,12 @@ namespace {
  */
 class file_source : public datasource {
  public:
-  explicit file_source(const char* filepath) : _file(filepath, O_RDONLY)
+  explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
+      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
     }
@@ -54,8 +58,8 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    return !_kvikio_file.closed() ||
-           (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
+    if (size < _gds_read_preferred_threshold) { return false; }
+    return supports_device_read();
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -96,6 +100,8 @@ class file_source : public datasource {
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
+  // The read size above which GDS is faster then posix-read + h2d-copy
+  static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**
@@ -106,7 +112,7 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(const char* filepath, size_t offset, size_t size)
+  explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
     if (_file.size() != 0) map(_file.desc(), offset, size);
@@ -172,7 +178,7 @@ class memory_mapped_source : public file_source {
  */
 class direct_read_source : public file_source {
  public:
-  explicit direct_read_source(const char* filepath) : file_source(filepath) {}
+  explicit direct_read_source(char const* filepath) : file_source(filepath) {}
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
@@ -197,6 +203,70 @@ class direct_read_source : public file_source {
                  "read failed");
     return read_size;
   }
+};
+
+/**
+ * @brief Implementation class for reading from a device buffer source
+ */
+class device_buffer_source final : public datasource {
+ public:
+  explicit device_buffer_source(cudf::device_span<std::byte const> d_buffer) : _d_buffer{d_buffer}
+  {
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    stream.synchronize();
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    auto h_data       = cudf::detail::make_std_vector_async(
+      cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
+    stream.synchronize();
+    return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    return std::async(std::launch::deferred, [count] { return count; });
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    return device_read_async(offset, size, dst, stream).get();
+  }
+
+  std::unique_ptr<buffer> device_read(size_t offset,
+                                      size_t size,
+                                      rmm::cuda_stream_view stream) override
+  {
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), size);
+  }
+
+  [[nodiscard]] size_t size() const override { return _d_buffer.size(); }
+
+ private:
+  cudf::device_span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
 };
 
 /**
@@ -248,7 +318,7 @@ class user_datasource_wrapper : public datasource {
 
 }  // namespace
 
-std::unique_ptr<datasource> datasource::create(const std::string& filepath,
+std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -264,9 +334,20 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 {
+  return create(
+    cudf::host_span<std::byte const>{reinterpret_cast<std::byte const*>(buffer.data), buffer.size});
+}
+
+std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
+{
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
+    reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+}
+
+std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
+{
+  return std::make_unique<device_buffer_source>(buffer);
 }
 
 std::unique_ptr<datasource> datasource::create(datasource* source)

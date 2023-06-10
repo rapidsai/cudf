@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,7 +167,9 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
       column_view null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
-        static_cast<void const*>(argmin_result.template data<size_type>()));
+        static_cast<void const*>(argmin_result.template data<size_type>()),
+        nullptr,
+        0);
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
@@ -207,7 +209,9 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
       column_view null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
-        static_cast<void const*>(argmax_result.template data<size_type>()));
+        static_cast<void const*>(argmax_result.template data<size_type>()),
+        nullptr,
+        0);
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
@@ -615,7 +619,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   CUDF_EXPECTS(
     values.num_children() == 2,
     "Input to `groupby correlation` must be a structs column having 2 children columns.");
-  CUDF_EXPECTS(values.nullable() == false,
+  CUDF_EXPECTS(not values.nullable(),
                "Input to `groupby correlation` must be a non-nullable structs column.");
 
   auto const& corr_agg = dynamic_cast<cudf::detail::correlation_aggregation const&>(agg);
@@ -701,7 +705,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_tdigest(
+                   cudf::tdigest::detail::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -745,7 +749,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                   cudf::tdigest::detail::group_merge_tdigest(get_grouped_values(),
                                                               helper.group_offsets(stream),
                                                               helper.group_labels(stream),
                                                               helper.num_groups(stream),

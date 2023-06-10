@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -32,63 +33,72 @@ namespace detail {
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> sorted_order(
-  table_view const& input,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sorted_order(table_view const& input,
+                                     std::vector<order> const& column_order,
+                                     std::vector<null_order> const& null_precedence,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::stable_sorted_order
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> stable_sorted_order(
-  table_view const& input,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> stable_sorted_order(table_view const& input,
+                                            std::vector<order> const& column_order,
+                                            std::vector<null_order> const& null_precedence,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::sort_by_key
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> sort_by_key(
-  table_view const& values,
-  table_view const& keys,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> sort_by_key(table_view const& values,
+                                   table_view const& keys,
+                                   std::vector<order> const& column_order,
+                                   std::vector<null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::rank
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> rank(column_view const& input,
+                             rank_method method,
+                             order column_order,
+                             null_policy null_handling,
+                             null_order null_precedence,
+                             bool percentage,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::stable_sort_by_key
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> stable_sort_by_key(
-  table_view const& values,
-  table_view const& keys,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> stable_sort_by_key(table_view const& values,
+                                          table_view const& keys,
+                                          std::vector<order> const& column_order,
+                                          std::vector<null_order> const& null_precedence,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::segmented_sorted_order
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> segmented_sorted_order(
-  table_view const& keys,
-  column_view const& segment_offsets,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
+                                               column_view const& segment_offsets,
+                                               std::vector<order> const& column_order,
+                                               std::vector<null_order> const& null_precedence,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::stable_segmented_sorted_order
@@ -98,50 +108,47 @@ std::unique_ptr<column> segmented_sorted_order(
 std::unique_ptr<column> stable_segmented_sorted_order(
   table_view const& keys,
   column_view const& segment_offsets,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::segmented_sort_by_key
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> segmented_sort_by_key(
-  table_view const& values,
-  table_view const& keys,
-  column_view const& segment_offsets,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
+                                             table_view const& keys,
+                                             column_view const& segment_offsets,
+                                             std::vector<order> const& column_order,
+                                             std::vector<null_order> const& null_precedence,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::stable_segmented_sort_by_key
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> stable_segmented_sort_by_key(
-  table_view const& values,
-  table_view const& keys,
-  column_view const& segment_offsets,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> stable_segmented_sort_by_key(table_view const& values,
+                                                    table_view const& keys,
+                                                    column_view const& segment_offsets,
+                                                    std::vector<order> const& column_order,
+                                                    std::vector<null_order> const& null_precedence,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::sort
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> sort(
-  table_view const& values,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> sort(table_view const& values,
+                            std::vector<order> const& column_order,
+                            std::vector<null_order> const& null_precedence,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

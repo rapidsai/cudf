@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ FilesToCheck = [
 ]
 ExemptFiles = [
     re.compile(r"cpp/include/cudf_test/cxxopts.hpp"),
-    re.compile(r"versioneer[.]py"),
 ]
 
 # this will break starting at year 10000, which is probably OK :)
@@ -68,8 +67,8 @@ def modifiedFiles():
     we can read only the staged changes.
     """
     repo = git.Repo()
-    # Use the environment variable TARGET_BRANCH (defined in CI) if possible
-    target_branch = os.environ.get("TARGET_BRANCH")
+    # Use the environment variable TARGET_BRANCH or RAPIDS_BASE_BRANCH (defined in CI) if possible
+    target_branch = os.environ.get("TARGET_BRANCH", os.environ.get("RAPIDS_BASE_BRANCH"))
     if target_branch is None:
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 //
@@ -170,7 +170,7 @@ struct rpartition_fn : public partition_fn {
       --itr;
       pos = check_delimiter(idx, d_str, itr);
     }
-    if (pos < 0)  // delimiter not found
+    if (pos < 0)                                        // delimiter not found
     {
       d_indices_left[idx]  = string_index_pair{"", 0};  // two empty
       d_indices_delim[idx] = string_index_pair{"", 0};  // strings
@@ -181,11 +181,10 @@ struct rpartition_fn : public partition_fn {
 
 }  // namespace
 
-std::unique_ptr<table> partition(
-  strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> partition(strings_column_view const& strings,
+                                 string_scalar const& delimiter,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
@@ -209,11 +208,10 @@ std::unique_ptr<table> partition(
   return std::make_unique<table>(std::move(results));
 }
 
-std::unique_ptr<table> rpartition(
-  strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> rpartition(strings_column_view const& strings,
+                                  string_scalar const& delimiter,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();

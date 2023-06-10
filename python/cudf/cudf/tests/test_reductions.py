@@ -1,7 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 
-import re
 from decimal import Decimal
 from itertools import product
 
@@ -123,8 +122,10 @@ def test_sum_of_squares(dtype, nelem):
     sr = Series(data)
     df = cudf.DataFrame(sr)
 
-    got = sr.sum_of_squares()
-    got_df = df.sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got = sr.sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got_df = df.sum_of_squares()
     expect = (data**2).sum()
 
     if cudf.dtype(dtype).kind in {"u", "i"}:
@@ -157,7 +158,8 @@ def test_sum_of_squares_decimal(dtype):
     data = [str(x) for x in gen_rand("int8", 3) / 10]
 
     expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
-    got = cudf.Series(data).astype(dtype).sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got = cudf.Series(data).astype(dtype).sum_of_squares()
 
     assert_eq(expected, got)
 
@@ -287,11 +289,6 @@ def test_datetime_unsupported_reductions(op):
     utils.assert_exceptions_equal(
         lfunc=getattr(psr, op),
         rfunc=getattr(gsr, op),
-        expected_error_message=re.escape(
-            "cannot perform "
-            + ("kurtosis" if op == "kurt" else op)
-            + " with type datetime64[ns]"
-        ),
     )
 
 
@@ -303,11 +300,6 @@ def test_timedelta_unsupported_reductions(op):
     utils.assert_exceptions_equal(
         lfunc=getattr(psr, op),
         rfunc=getattr(gsr, op),
-        expected_error_message=re.escape(
-            "cannot perform "
-            + ("kurtosis" if op == "kurt" else op)
-            + " with type timedelta64[ns]"
-        ),
     )
 
 
@@ -316,6 +308,4 @@ def test_categorical_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="category")
     psr = gsr.to_pandas()
 
-    utils.assert_exceptions_equal(
-        getattr(psr, op), getattr(gsr, op), compare_error_message=False
-    )
+    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ struct ScanTest : public BaseScanTest<T> {
       auto expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       auto col_out          = scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
+      EXPECT_FALSE(cudf::has_nonempty_nulls(col_out->view()));
     }
   }
 
@@ -404,8 +405,7 @@ TYPED_TEST(ScanTest, LeadingNulls)
                   null_policy::INCLUDE);
 }
 
-class ScanStringsTest : public ScanTest<cudf::string_view> {
-};
+class ScanStringsTest : public ScanTest<cudf::string_view> {};
 
 TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
@@ -456,8 +456,7 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 }
 
 template <typename T>
-struct ScanChronoTest : public cudf::test::BaseFixture {
-};
+struct ScanChronoTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanChronoTest, cudf::test::ChronoTypes);
 
@@ -499,8 +498,7 @@ TYPED_TEST(ScanChronoTest, ChronoMinMax)
 }
 
 template <typename T>
-struct ScanDurationTest : public cudf::test::BaseFixture {
-};
+struct ScanDurationTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanDurationTest, cudf::test::DurationTypes);
 
@@ -526,8 +524,7 @@ TYPED_TEST(ScanDurationTest, Sum)
     cudf::logic_error);
 }
 
-struct StructScanTest : public cudf::test::BaseFixture {
-};
+struct StructScanTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructScanTest, StructScanMinMaxNoNull)
 {

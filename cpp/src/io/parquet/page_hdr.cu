@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,9 +45,9 @@ static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   ST_FLD_LIST};
 
 struct byte_stream_s {
-  const uint8_t* cur;
-  const uint8_t* end;
-  const uint8_t* base;
+  uint8_t const* cur;
+  uint8_t const* end;
+  uint8_t const* base;
   // Parsed symbols
   PageType page_type;
   PageInfo page;
@@ -228,7 +228,7 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
-                                    const int& field,
+                                    int const& field,
                                     thrust::tuple<Operator...>& ops)
   {
     if (field == thrust::get<index>(ops).field) {
@@ -244,7 +244,7 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
-                                    const int& field,
+                                    int const& field,
                                     thrust::tuple<Operator...>& ops)
   {
     if (field == thrust::get<0>(ops).field) {
@@ -365,8 +365,11 @@ __global__ void __launch_bounds__(128)
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row = 0;
-      bs->page.num_rows  = 0;
+      bs->page.chunk_row           = 0;
+      bs->page.num_rows            = 0;
+      bs->page.skipped_values      = -1;
+      bs->page.skipped_leaf_values = 0;
+      bs->page.str_bytes           = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -461,7 +464,7 @@ __global__ void __launch_bounds__(128)
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     string_index_pair* dict_index = ck->str_dict_index;
-    const uint8_t* dict           = ck->page_info[0].page_data;
+    uint8_t const* dict           = ck->page_info[0].page_data;
     int dict_size                 = ck->page_info[0].uncompressed_page_size;
     int num_entries               = ck->page_info[0].num_input_values;
     int pos = 0, cur = 0;
@@ -477,7 +480,7 @@ __global__ void __launch_bounds__(128)
         }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].first  = reinterpret_cast<const char*>(dict + pos + 4);
+      dict_index[i].first  = reinterpret_cast<char const*>(dict + pos + 4);
       dict_index[i].second = len;
     }
   }

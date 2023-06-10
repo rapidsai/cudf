@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,8 +43,8 @@ template <typename Element,
 class unordered_multiset_device_view {
  public:
   unordered_multiset_device_view(size_type hash_size,
-                                 const size_type* hash_begin,
-                                 const Element* hash_data)
+                                 size_type const* hash_begin,
+                                 Element const* hash_data)
     : hash_size{hash_size}, hash_begin{hash_begin}, hash_data{hash_data}, hasher(), equals()
   {
   }
@@ -64,8 +64,8 @@ class unordered_multiset_device_view {
   Hasher hasher;
   Equality equals;
   size_type hash_size;
-  const size_type* hash_begin;
-  const Element* hash_data;
+  size_type const* hash_begin;
+  Element const* hash_data;
 };
 
 /*
@@ -84,10 +84,10 @@ class unordered_multiset {
     auto d_column = column_device_view::create(col, stream);
     auto d_col    = *d_column;
 
-    auto hash_bins_start =
-      cudf::detail::make_zeroed_device_uvector_async<size_type>(2 * d_col.size() + 1, stream);
-    auto hash_bins_end =
-      cudf::detail::make_zeroed_device_uvector_async<size_type>(2 * d_col.size() + 1, stream);
+    auto hash_bins_start = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+      2 * d_col.size() + 1, stream, rmm::mr::get_current_device_resource());
+    auto hash_bins_end = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+      2 * d_col.size() + 1, stream, rmm::mr::get_current_device_resource());
     auto hash_data = rmm::device_uvector<Element>(d_col.size(), stream);
 
     Hasher hasher;

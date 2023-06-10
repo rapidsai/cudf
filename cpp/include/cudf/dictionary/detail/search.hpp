@@ -31,11 +31,10 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<scalar> get_index(
-  dictionary_column_view const& dictionary,
-  scalar const& key,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
+                                  scalar const& key,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Get the index for a key if it were added to the given dictionary.
@@ -56,11 +55,10 @@ std::unique_ptr<scalar> get_index(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Numeric scalar index value of the key within the dictionary
  */
-std::unique_ptr<scalar> get_insert_index(
-  dictionary_column_view const& dictionary,
-  scalar const& key,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
+                                         scalar const& key,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace dictionary

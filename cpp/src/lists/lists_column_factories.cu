@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -83,6 +86,32 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   return std::move(res->release()[0]);
 }
 
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
+  auto child   = make_empty_column(child_type);
+  return make_lists_column(
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
+}
+
+std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
+                                                    data_type child_type,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = [&] {
+    auto offsets_buff =
+      cudf::detail::make_zeroed_device_uvector_async<offset_type>(size + 1, stream, mr);
+    return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
+  }();
+  auto child     = make_empty_column(child_type);
+  auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  return make_lists_column(
+    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
+}
+
 }  // namespace detail
 }  // namespace lists
 
@@ -104,15 +133,28 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
   CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
+  // Save type_id of the child column for later use.
+  auto const child_type_id = child_column->type().id();
+
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
-  return std::make_unique<column>(cudf::data_type{type_id::LIST},
-                                  num_rows,
-                                  rmm::device_buffer{},
-                                  std::move(null_mask),
-                                  null_count,
-                                  std::move(children));
+
+  auto output = std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                         num_rows,
+                                         rmm::device_buffer{},
+                                         std::move(null_mask),
+                                         null_count,
+                                         std::move(children));
+
+  // We need to enforce all null lists to be empty.
+  // `has_nonempty_nulls` is less expensive than `purge_nonempty_nulls` and can save some
+  // run time if we don't have any non-empty nulls.
+  if (auto const output_cv = output->view(); detail::has_nonempty_nulls(output_cv, stream)) {
+    return detail::purge_nonempty_nulls(output_cv, stream, mr);
+  }
+
+  return output;
 }
 
 }  // namespace cudf

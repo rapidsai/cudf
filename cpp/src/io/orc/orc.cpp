@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 
-uint32_t ProtobufReader::read_field_size(const uint8_t* end)
+uint32_t ProtobufReader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
   CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
@@ -48,156 +48,154 @@ void ProtobufReader::skip_struct_field(int t)
 
 void ProtobufReader::read(PostScript& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.footerLength),
-                            make_field_reader(2, s.compression),
-                            make_field_reader(3, s.compressionBlockSize),
-                            make_packed_field_reader(4, s.version),
-                            make_field_reader(5, s.metadataLength),
-                            make_field_reader(8000, s.magic));
+  auto op = std::tuple(field_reader(1, s.footerLength),
+                       field_reader(2, s.compression),
+                       field_reader(3, s.compressionBlockSize),
+                       packed_field_reader(4, s.version),
+                       field_reader(5, s.metadataLength),
+                       field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(FileFooter& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.headerLength),
-                            make_field_reader(2, s.contentLength),
-                            make_field_reader(3, s.stripes),
-                            make_field_reader(4, s.types),
-                            make_field_reader(5, s.metadata),
-                            make_field_reader(6, s.numberOfRows),
-                            make_raw_field_reader(7, s.statistics),
-                            make_field_reader(8, s.rowIndexStride));
+  auto op = std::tuple(field_reader(1, s.headerLength),
+                       field_reader(2, s.contentLength),
+                       field_reader(3, s.stripes),
+                       field_reader(4, s.types),
+                       field_reader(5, s.metadata),
+                       field_reader(6, s.numberOfRows),
+                       raw_field_reader(7, s.statistics),
+                       field_reader(8, s.rowIndexStride));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeInformation& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.offset),
-                            make_field_reader(2, s.indexLength),
-                            make_field_reader(3, s.dataLength),
-                            make_field_reader(4, s.footerLength),
-                            make_field_reader(5, s.numberOfRows));
+  auto op = std::tuple(field_reader(1, s.offset),
+                       field_reader(2, s.indexLength),
+                       field_reader(3, s.dataLength),
+                       field_reader(4, s.footerLength),
+                       field_reader(5, s.numberOfRows));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(SchemaType& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            make_packed_field_reader(2, s.subtypes),
-                            make_field_reader(3, s.fieldNames),
-                            make_field_reader(4, s.maximumLength),
-                            make_field_reader(5, s.precision),
-                            make_field_reader(6, s.scale));
+  auto op = std::tuple(field_reader(1, s.kind),
+                       packed_field_reader(2, s.subtypes),
+                       field_reader(3, s.fieldNames),
+                       field_reader(4, s.maximumLength),
+                       field_reader(5, s.precision),
+                       field_reader(6, s.scale));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(UserMetadataItem& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.name), make_field_reader(2, s.value));
+  auto op = std::tuple(field_reader(1, s.name), field_reader(2, s.value));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeFooter& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.streams),
-                            make_field_reader(2, s.columns),
-                            make_field_reader(3, s.writerTimezone));
+  auto op = std::tuple(
+    field_reader(1, s.streams), field_reader(2, s.columns), field_reader(3, s.writerTimezone));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(Stream& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            make_field_reader(2, s.column_id),
-                            make_field_reader(3, s.length));
+  auto op =
+    std::tuple(field_reader(1, s.kind), field_reader(2, s.column_id), field_reader(3, s.length));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(ColumnEncoding& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.kind), make_field_reader(2, s.dictionarySize));
+  auto op = std::tuple(field_reader(1, s.kind), field_reader(2, s.dictionarySize));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(integer_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(double_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(string_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(bucket_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_packed_field_reader(1, s.count));
+  auto op = std::tuple(packed_field_reader(1, s.count));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(decimal_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
+  auto op =
+    std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum), field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(date_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum), make_field_reader(2, s.maximum));
+  auto op = std::tuple(field_reader(1, s.minimum), field_reader(2, s.maximum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(binary_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.sum));
+  auto op = std::tuple(field_reader(1, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(timestamp_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.minimum),
-                            make_field_reader(2, s.maximum),
-                            make_field_reader(3, s.minimum_utc),
-                            make_field_reader(4, s.maximum_utc));
+  auto op = std::tuple(field_reader(1, s.minimum),
+                       field_reader(2, s.maximum),
+                       field_reader(3, s.minimum_utc),
+                       field_reader(4, s.maximum_utc));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(column_statistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.number_of_values),
-                            make_field_reader(2, s.int_stats),
-                            make_field_reader(3, s.double_stats),
-                            make_field_reader(4, s.string_stats),
-                            make_field_reader(5, s.bucket_stats),
-                            make_field_reader(6, s.decimal_stats),
-                            make_field_reader(7, s.date_stats),
-                            make_field_reader(8, s.binary_stats),
-                            make_field_reader(9, s.timestamp_stats),
-                            make_field_reader(10, s.has_null));
+  auto op = std::tuple(field_reader(1, s.number_of_values),
+                       field_reader(2, s.int_stats),
+                       field_reader(3, s.double_stats),
+                       field_reader(4, s.string_stats),
+                       field_reader(5, s.bucket_stats),
+                       field_reader(6, s.decimal_stats),
+                       field_reader(7, s.date_stats),
+                       field_reader(8, s.binary_stats),
+                       field_reader(9, s.timestamp_stats),
+                       field_reader(10, s.has_null));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeStatistics& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_raw_field_reader(1, s.colStats));
+  auto op = std::tuple(raw_field_reader(1, s.colStats));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(Metadata& s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s.stripeStats));
+  auto op = std::tuple(field_reader(1, s.stripeStats));
   function_builder(s, maxlen, op);
 }
 
@@ -213,8 +211,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          TypeKind kind,
                                          ColStatsBlob const* stats)
 {
-  std::vector<uint8_t> positions_data;
-  ProtobufWriter position_writer(&positions_data);
+  ProtobufWriter position_writer;
   auto const positions_size_offset = position_writer.put_uint(
     encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
   position_writer.put_byte(0xcd);                   // positions size placeholder
@@ -246,19 +243,20 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
       positions_size += position_writer.put_byte(0);
     }
   }
+
   // size of the field 1
-  positions_data[positions_size_offset] = static_cast<uint8_t>(positions_size);
+  position_writer.buffer()[positions_size_offset] = static_cast<uint8_t>(positions_size);
 
   auto const stats_size = (stats == nullptr)
                             ? 0
                             : varint_size(encode_field_number<decltype(*stats)>(2)) +
                                 varint_size(stats->size()) + stats->size();
-  auto const entry_size = positions_data.size() + stats_size;
+  auto const entry_size = position_writer.size() + stats_size;
 
   // 1:RowIndex.entry
   put_uint(encode_field_number(1, ProtofType::FIXEDLEN));
   put_uint(entry_size);
-  put_bytes<uint8_t>(positions_data);
+  put_bytes<uint8_t>(position_writer.buffer());
 
   if (stats != nullptr) {
     put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
@@ -268,7 +266,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   }
 }
 
-size_t ProtobufWriter::write(const PostScript& s)
+size_t ProtobufWriter::write(PostScript const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.footerLength);
@@ -280,7 +278,7 @@ size_t ProtobufWriter::write(const PostScript& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const FileFooter& s)
+size_t ProtobufWriter::write(FileFooter const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.headerLength);
@@ -294,7 +292,7 @@ size_t ProtobufWriter::write(const FileFooter& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeInformation& s)
+size_t ProtobufWriter::write(StripeInformation const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.offset);
@@ -305,7 +303,7 @@ size_t ProtobufWriter::write(const StripeInformation& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const SchemaType& s)
+size_t ProtobufWriter::write(SchemaType const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -317,7 +315,7 @@ size_t ProtobufWriter::write(const SchemaType& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const UserMetadataItem& s)
+size_t ProtobufWriter::write(UserMetadataItem const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_blob(1, s.name);
@@ -325,7 +323,7 @@ size_t ProtobufWriter::write(const UserMetadataItem& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeFooter& s)
+size_t ProtobufWriter::write(StripeFooter const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.streams);
@@ -334,7 +332,7 @@ size_t ProtobufWriter::write(const StripeFooter& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Stream& s)
+size_t ProtobufWriter::write(Stream const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -343,7 +341,7 @@ size_t ProtobufWriter::write(const Stream& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const ColumnEncoding& s)
+size_t ProtobufWriter::write(ColumnEncoding const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
@@ -351,14 +349,14 @@ size_t ProtobufWriter::write(const ColumnEncoding& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(const StripeStatistics& s)
+size_t ProtobufWriter::write(StripeStatistics const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct_blob(1, s.colStats);
   return w.value();
 }
 
-size_t ProtobufWriter::write(const Metadata& s)
+size_t ProtobufWriter::write(Metadata const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.stripeStats);
@@ -383,7 +381,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_b
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
     case ZSTD:
-      m_log2MaxRatio = 11;
+      m_log2MaxRatio = 15;
       _compression   = compression_type::ZSTD;
       break;
     default: CUDF_FAIL("Invalid compression type");
@@ -443,13 +441,13 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
 
 metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source(src)
 {
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
+  auto const len         = source->size();
+  auto const max_ps_size = std::min(len, static_cast<size_t>(256));
 
   // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
+  size_t const ps_length = buffer->data()[max_ps_size - 1];
+  uint8_t const* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   ProtobufReader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 

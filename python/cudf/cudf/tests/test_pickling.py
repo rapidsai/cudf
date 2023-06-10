@@ -1,22 +1,16 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-import sys
+import pickle
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from cudf import DataFrame, GenericIndex, RangeIndex, Series
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 from cudf.testing._utils import assert_eq
 
-if sys.version_info < (3, 8):
-    try:
-        import pickle5 as pickle
-    except ImportError:
-        import pickle
-else:
-    import pickle
+pytestmark = pytest.mark.spilling
 
 
 def check_serialization(df):
@@ -31,15 +25,12 @@ def check_serialization(df):
     assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
-    if pickle.HIGHEST_PROTOCOL >= 5:
-        buffers = []
-        serialbytes = pickle.dumps(
-            df, protocol=5, buffer_callback=buffers.append
-        )
-        for b in buffers:
-            assert isinstance(b, pickle.PickleBuffer)
-        loaded = pickle.loads(serialbytes, buffers=buffers)
-        assert_eq(loaded, df)
+    buffers = []
+    serialbytes = pickle.dumps(df, protocol=5, buffer_callback=buffers.append)
+    for b in buffers:
+        assert isinstance(b, pickle.PickleBuffer)
+    loaded = pickle.loads(serialbytes, buffers=buffers)
+    assert_eq(loaded, df)
 
 
 def assert_frame_picklable(df):
@@ -97,7 +88,7 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10).view("|u1")
-    buf = as_device_buffer_like(arr)
+    buf = as_buffer(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)

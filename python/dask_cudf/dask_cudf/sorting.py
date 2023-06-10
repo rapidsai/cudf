@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from collections.abc import Iterator
 
@@ -48,7 +48,10 @@ def _quantile(a, q):
     n = len(a)
     if not len(a):
         return None, n
-    return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
+    return (
+        a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
+        n,
+    )
 
 
 @_dask_cudf_nvtx_annotate
@@ -133,7 +136,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantiles(q=q)
+    meta = df._meta_nonempty.quantile(q=q, method="table")
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
@@ -215,9 +218,11 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] += 1
                 divisions[col] = divisions[col].astype(dtype)
             else:
-                divisions[col].iloc[-1] = chr(
-                    ord(divisions[col].iloc[-1][0]) + 1
-                )
+                if last := divisions[col].iloc[-1]:
+                    val = chr(ord(last[0]) + 1)
+                else:
+                    val = "this string intentionally left empty"  # any but ""
+                divisions[col].iloc[-1] = val
         divisions = divisions.drop_duplicates().sort_index()
     return divisions
 

@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf.api.types import is_scalar
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
@@ -22,6 +23,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def replace(Column input_col, Column values_to_replace,
             Column replacement_values):
     """
@@ -48,6 +50,7 @@ def replace(Column input_col, Column values_to_replace,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_nulls_column(Column input_col, Column replacement_values):
     """
     Replaces null values in input_col with corresponding values from
@@ -70,6 +73,7 @@ def replace_nulls_column(Column input_col, Column replacement_values):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     """
     Replaces null values in input_col with replacement_value
@@ -92,6 +96,7 @@ def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_nulls_fill(Column input_col, object method):
     """
     Replaces null values in input_col with replacement_value
@@ -145,6 +150,7 @@ def replace_nulls(
         return replace_nulls_column(input_col, replacement)
 
 
+@acquire_spill_lock()
 def clamp(Column input_col, DeviceScalar lo, DeviceScalar lo_replace,
           DeviceScalar hi, DeviceScalar hi_replace):
     """
@@ -175,6 +181,7 @@ def clamp(Column input_col, DeviceScalar lo, DeviceScalar lo_replace,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def clamp(Column input_col, DeviceScalar lo, DeviceScalar hi):
     """
     Clip the input_col such that values < lo will be replaced by lo
@@ -198,6 +205,7 @@ def clamp(Column input_col, DeviceScalar lo, DeviceScalar hi):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def clip(Column input_col, object lo, object hi):
     """
     Clip the input_col such that values < lo will be replaced by lo
@@ -210,6 +218,7 @@ def clip(Column input_col, object lo, object hi):
     return clamp(input_col, lo_scalar, hi_scalar)
 
 
+@acquire_spill_lock()
 def normalize_nans_and_zeros_inplace(Column input_col):
     """
     Inplace normalizing
@@ -220,6 +229,7 @@ def normalize_nans_and_zeros_inplace(Column input_col):
         cpp_normalize_nans_and_zeros(input_col_view)
 
 
+@acquire_spill_lock()
 def normalize_nans_and_zeros_column(Column input_col):
     """
     Returns a new  normalized Column

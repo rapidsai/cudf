@@ -34,14 +34,12 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> concatenate(
-  table_view const& strings_columns,
-  string_scalar const& separator,
-  string_scalar const& narep,
-  separator_on_nulls separate_nulls = separator_on_nulls::YES,
-  // Move before separate_nulls?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> concatenate(table_view const& strings_columns,
+                                    string_scalar const& separator,
+                                    string_scalar const& narep,
+                                    separator_on_nulls separate_nulls,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
@@ -49,12 +47,11 @@ std::unique_ptr<column> concatenate(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> join_strings(
-  strings_column_view const& strings,
-  string_scalar const& separator,
-  string_scalar const& narep,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> join_strings(strings_column_view const& strings,
+                                     string_scalar const& separator,
+                                     string_scalar const& narep,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc join_list_elements(table_view const&,string_scalar const&,string_scalar

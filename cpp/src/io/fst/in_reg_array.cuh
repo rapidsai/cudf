@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ namespace cudf::io::fst::detail {
 
 /**
  * @brief A bit-packed array of items that can be backed by registers yet allows to be dynamically
- * addressed at runtime. The data struture is explained in greater detail in the paper <a
+ * addressed at runtime. The data structure is explained in greater detail in the paper <a
  * href="http://www.vldb.org/pvldb/vol13/p616-stehle.pdf">ParPaRaw: Massively Parallel Parsing of
  * Delimiter-Separated Raw Data</a>.
  *
@@ -62,14 +62,14 @@ class MultiFragmentInRegArray {
   /**
    * @brief Returns the \p num_bits bits starting at \p bit_start
    */
-  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(const uint32_t& data,
+  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(uint32_t const& data,
                                               uint32_t bit_start,
                                               uint32_t num_bits) const
   {
 #if CUB_PTX_ARCH > 0
     return cub::BFE(data, bit_start, num_bits);
 #else
-    const uint32_t MASK = (1 << num_bits) - 1;
+    uint32_t const MASK = (1 << num_bits) - 1;
     return (data >> bit_start) & MASK;
 #endif
   }

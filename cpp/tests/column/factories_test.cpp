@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -40,8 +41,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-class NumericFactoryTest : public ColumnFactoryTest {
-};
+class NumericFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
@@ -182,8 +182,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonNumericFactoryTest : public ColumnFactoryTest,
-                              public testing::WithParamInterface<cudf::type_id> {
-};
+                              public testing::WithParamInterface<cudf::type_id> {};
 
 // All non-numeric types should throw
 TEST_P(NonNumericFactoryTest, NonNumericThrow)
@@ -203,8 +202,7 @@ INSTANTIATE_TEST_CASE_P(NonNumeric,
                         testing::ValuesIn(cudf::test::non_numeric_type_ids));
 
 template <typename T>
-class FixedWidthFactoryTest : public ColumnFactoryTest {
-};
+class FixedWidthFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
@@ -219,8 +217,7 @@ TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 }
 
 template <typename T>
-class EmptyFactoryTest : public ColumnFactoryTest {
-};
+class EmptyFactoryTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(EmptyFactoryTest, cudf::test::AllTypes);
 
@@ -358,8 +355,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonFixedWidthFactoryTest : public ColumnFactoryTest,
-                                 public testing::WithParamInterface<cudf::type_id> {
-};
+                                 public testing::WithParamInterface<cudf::type_id> {};
 
 // All non-fixed types should throw
 TEST_P(NonFixedWidthFactoryTest, NonFixedWidthThrow)
@@ -468,8 +464,7 @@ TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
 }
 
 template <typename T>
-class ListsFixedWidthLeafTest : public ColumnFactoryTest {
-};
+class ListsFixedWidthLeafTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
@@ -506,8 +501,7 @@ TYPED_TEST(ListsFixedWidthLeafTest, FromNested)
 }
 
 template <typename T>
-class ListsDictionaryLeafTest : public ColumnFactoryTest {
-};
+class ListsDictionaryLeafTest : public ColumnFactoryTest {};
 
 TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 
@@ -561,8 +555,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
 }
 
-class ListsStringLeafTest : public ColumnFactoryTest {
-};
+class ListsStringLeafTest : public ColumnFactoryTest {};
 
 TEST_F(ListsStringLeafTest, FromNonNested)
 {
@@ -759,6 +752,41 @@ TEST_F(ListsZeroLengthColumnTest, MixedTypes)
                               cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *expected);
   }
+}
+
+TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
+{
+  using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using StringCW = cudf::test::strings_column_wrapper;
+  using LCW      = cudf::test::lists_column_wrapper<int32_t>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+
+  auto const lists = [&] {
+    auto child = this
+                   ->make_test_structs_column(FCW{1, 2, 3, 4, 5},
+                                              StringCW({"a", "b", "c", "d", "e"}),
+                                              LCW{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11}, {12}})
+                   .release();
+    auto offsets = offset_t{0, 3, 3, 5}.release();
+
+    auto const valid_iter        = cudf::test::iterators::null_at(2);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valid_iter, valid_iter + 3);
+
+    return cudf::make_lists_column(
+      3, std::move(offsets), std::move(child), null_count, std::move(null_mask));
+  }();
+
+  auto const expected_child =
+    this
+      ->make_test_structs_column(
+        FCW{1, 2, 3}, StringCW({"a", "b", "c"}), LCW{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}})
+      .release();
+  auto const expected_offsets = offset_t{0, 3, 3, 3}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_child,
+                                 lists->child(cudf::lists_column_view::child_column_index));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_offsets,
+                                 lists->child(cudf::lists_column_view::offsets_column_index));
 }
 
 void struct_from_scalar(bool is_valid)

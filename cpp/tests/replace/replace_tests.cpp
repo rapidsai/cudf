@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -38,8 +38,7 @@
 #include <iostream>
 #include <vector>
 
-struct ReplaceErrorTest : public cudf::test::BaseFixture {
-};
+struct ReplaceErrorTest : public cudf::test::BaseFixture {};
 
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceErrorTest, SizeMismatch)
@@ -78,8 +77,7 @@ TEST_F(ReplaceErrorTest, NullInOldValues)
                cudf::logic_error);
 }
 
-struct ReplaceStringsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceStringsTest : public cudf::test::BaseFixture {};
 
 // Strings test
 TEST_F(ReplaceStringsTest, Strings)
@@ -354,8 +352,8 @@ void test_replace(cudf::host_span<T const> input_column,
     expected_valid.assign(input_column.size(), true);
   }
 
-  const bool input_has_nulls       = (input_column_valid.size() > 0);
-  const bool replacement_has_nulls = (replacement_values_valid.size() > 0);
+  bool const input_has_nulls       = (input_column_valid.size() > 0);
+  bool const replacement_has_nulls = (replacement_values_valid.size() > 0);
 
   for (size_t i = 0; i < values_to_replace_column.size(); i++) {
     size_t k  = 0;
@@ -540,8 +538,7 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -574,8 +571,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReplace)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ReplaceDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceDictionaryTest, StringsKeys)
 {

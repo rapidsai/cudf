@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,8 +74,7 @@ struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::YES> {
 template <>
 struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_us>>;
+                           std::pair<cudf::duration_s, cudf::duration_ms>>;
 };
 
 /**
@@ -93,7 +92,7 @@ class type_conversion {
   using type = typename type_selector::template type<T>;
 
   template <typename T>
-  static constexpr __device__ typename type_selector::template type<T> convert(const T& elem)
+  static constexpr __device__ typename type_selector::template type<T> convert(T const& elem)
   {
     using Type = typename type_selector::template type<T>;
     if constexpr (cudf::is_duration<T>()) {
@@ -109,8 +108,7 @@ class type_conversion {
 };
 
 template <class T>
-struct dependent_false : std::false_type {
-};
+struct dependent_false : std::false_type {};
 
 /**
  * @brief Utility class to convert a leaf column element into its extrema type
@@ -155,7 +153,7 @@ class extrema_type {
   /**
    * @brief Function that converts an element of a leaf column into its extrema type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
                   std::is_same_v<T, byte_array_view>) {
@@ -217,7 +215,7 @@ class aggregation_type {
   /**
    * @brief Function that converts an element of a leaf column into its aggregate type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>) {
       return val.size_bytes();

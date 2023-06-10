@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ enum class parse_result {
 class parser {
  protected:
   CUDF_HOST_DEVICE inline parser() {}
-  CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
+  CUDF_HOST_DEVICE inline parser(char const* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
     parse_whitespace();
@@ -87,7 +87,7 @@ class parser {
   {
   }
 
-  CUDF_HOST_DEVICE inline bool eof(const char* p) { return p - input >= input_len; }
+  CUDF_HOST_DEVICE inline bool eof(char const* p) { return p - input >= input_len; }
   CUDF_HOST_DEVICE inline bool eof() { return eof(pos); }
 
   CUDF_HOST_DEVICE inline bool parse_whitespace()
@@ -160,7 +160,7 @@ class parser {
       if ((quote == 0 && (*pos == '\'' || *pos == '\"')) || (quote == *pos)) {
         quote = *pos;
 
-        const char* start = ++pos;
+        char const* start = ++pos;
         while (!eof()) {
           // handle escaped characters
           if (*pos == '\\') {
@@ -206,7 +206,7 @@ struct json_output {
   char* output;
   thrust::optional<size_t> output_len;
 
-  __device__ void add_output(const char* str, size_t len)
+  __device__ void add_output(char const* str, size_t len)
   {
     if (output != nullptr) { memcpy(output + output_len.value_or(0), str, len); }
     output_len = output_len.value_or(0) + len;
@@ -224,7 +224,7 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
 class json_state : private parser {
  public:
   __device__ json_state() : parser() {}
-  __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
+  __device__ json_state(char const* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
 
       options(_options)
@@ -483,7 +483,7 @@ class json_state : private parser {
     return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
 
-  const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
+  char const* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
                                       // current element - not the name
   string_view cur_el_name;            // name of the current element (if applicable)
   json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
@@ -524,7 +524,7 @@ struct path_operator {
  */
 class path_state : private parser {
  public:
-  path_state(const char* _path, size_t _path_len) : parser(_path, _path_len) {}
+  path_state(char const* _path, size_t _path_len) : parser(_path, _path_len) {}
 
   // get the next operator in the JSONPath string
   path_operator get_next_operator()
@@ -559,7 +559,7 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         string_view term{"]", 1};
-        bool const is_string = *pos == '\'' ? true : false;
+        bool const is_string = *pos == '\'';
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
@@ -570,9 +570,10 @@ class path_state : private parser {
               op.type          = path_operator_type::CHILD;
               op.expected_type = OBJECT;
             } else {
-              op.type  = path_operator_type::CHILD_INDEX;
-              op.index = cudf::io::parse_numeric<int>(
-                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts, -1);
+              op.type          = path_operator_type::CHILD_INDEX;
+              auto const value = cudf::io::parse_numeric<int>(
+                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts);
+              op.index = value.value_or(-1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
               op.expected_type = ARRAY;
             }
@@ -587,7 +588,7 @@ class path_state : private parser {
         return path_operator{path_operator_type::CHILD_WILDCARD};
       } break;
 
-      default: CUDF_FAIL("Unrecognized JSONPath operator"); break;
+      default: CUDF_FAIL("Unrecognized JSONPath operator", std::invalid_argument); break;
     }
     return {path_operator_type::ERROR};
   }
@@ -623,7 +624,8 @@ class path_state : private parser {
     }
 
     // an empty name is not valid
-    CUDF_EXPECTS(name.size_bytes() > 0, "Invalid empty name in JSONPath query string");
+    CUDF_EXPECTS(
+      name.size_bytes() > 0, "Invalid empty name in JSONPath query string", std::invalid_argument);
 
     return true;
   }
@@ -671,11 +673,10 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
   } while (op.type != path_operator_type::END);
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
-  return is_empty
-           ? std::pair(thrust::nullopt, 0)
-           : std::pair(
-               thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
-               max_stack_depth);
+  return is_empty ? std::pair(thrust::nullopt, 0)
+                  : std::pair(thrust::make_optional(cudf::detail::make_device_uvector_sync(
+                                h_operators, stream, rmm::mr::get_current_device_resource())),
+                              max_stack_depth);
 }
 
 #define PARSE_TRY(_x)                                                       \
@@ -969,6 +970,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
 
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
+
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
@@ -981,7 +984,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       col.size(),
       rmm::device_buffer{0, stream, mr},  // no data
       cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());  // null count
+      col.size());                        // null count
   }
 
   constexpr int block_size = 512;

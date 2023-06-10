@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -57,8 +58,7 @@ struct contains_fn {
 };
 
 std::unique_ptr<column> contains_impl(strings_column_view const& input,
-                                      std::string_view pattern,
-                                      regex_flags const flags,
+                                      regex_program const& prog,
                                       bool const beginning_only,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
@@ -71,7 +71,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
                                      mr);
   if (input.is_empty()) { return results; }
 
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto d_results       = results->mutable_view().data<bool>();
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -86,35 +86,29 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 
 }  // namespace
 
-std::unique_ptr<column> contains_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains_re(strings_column_view const& input,
+                                    regex_program const& prog,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
-  return contains_impl(input, pattern, flags, false, stream, mr);
+  return contains_impl(input, prog, false, stream, mr);
 }
 
-std::unique_ptr<column> matches_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> matches_re(strings_column_view const& input,
+                                   regex_program const& prog,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
-  return contains_impl(input, pattern, flags, true, stream, mr);
+  return contains_impl(input, prog, true, stream, mr);
 }
 
-std::unique_ptr<column> count_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_re(strings_column_view const& input,
+                                 regex_program const& prog,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
@@ -131,30 +125,27 @@ std::unique_ptr<column> count_re(
 // external APIs
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
-                                    std::string_view pattern,
-                                    regex_flags const flags,
+                                    regex_program const& prog,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, flags, cudf::get_default_stream(), mr);
+  return detail::contains_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
-                                   std::string_view pattern,
-                                   regex_flags const flags,
+                                   regex_program const& prog,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, flags, cudf::get_default_stream(), mr);
+  return detail::matches_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
-                                 std::string_view pattern,
-                                 regex_flags const flags,
+                                 regex_program const& prog,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, pattern, flags, cudf::get_default_stream(), mr);
+  return detail::count_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

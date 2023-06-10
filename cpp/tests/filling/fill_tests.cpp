@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
             bool value_is_valid                     = true,
             BitInitializerType destination_validity = all_valid)
   {
-    static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+    static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
@@ -276,8 +276,7 @@ TEST_F(FillStringTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture {
-};
+class FillErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
@@ -364,8 +363,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 }
 
 template <typename T>
-class FixedPointAllReps : public cudf::test::BaseFixture {
-};
+class FixedPointAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
 

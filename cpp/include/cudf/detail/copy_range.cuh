@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,11 +154,6 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
-    // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
-    // will scan the entire bitmask array, and this can be surprising
-    // in performance if the copy range is small and the column size is
-    // large).
     rmm::device_scalar<size_type> null_count(target.null_count(), stream);
 
     auto kernel =
@@ -203,14 +198,13 @@ void copy_range_in_place(column_view const& source,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> The result target column
  */
-std::unique_ptr<column> copy_range(
-  column_view const& source,
-  column_view const& target,
-  size_type source_begin,
-  size_type source_end,
-  size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin,
+                                   size_type source_end,
+                                   size_type target_begin,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

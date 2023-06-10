@@ -1,15 +1,16 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import re
 import warnings
-from typing import Sequence, Type, TypeVar, Union
+from typing import Sequence, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -373,9 +374,6 @@ def get_units(value):
     return value
 
 
-_T = TypeVar("_T", bound="DateOffset")
-
-
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -647,7 +645,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
+    def _from_freqstr(cls, freqstr: str) -> Self:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -669,9 +667,9 @@ class DateOffset:
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
-        cls: Type[_T],
+        cls,
         tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
-    ) -> _T:
+    ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
     def _maybe_as_fast_pandas_offset(self):
@@ -921,8 +919,8 @@ def date_range(
         # treating `start`, `stop` and `step` as ints:
         stop = end_estim.astype("int64")
         start = start.value.astype("int64")
-        step = int(_offset_to_nanoseconds_lower_bound(offset))
-        arr = cp.arange(start=start, stop=stop, step=step)
+        step = _offset_to_nanoseconds_lower_bound(offset)
+        arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
     return cudf.DatetimeIndex._from_data({name: res})
@@ -971,18 +969,18 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
     This utility is used to compute the upper bound of the count of timestamps
     given a range of datetime and an offset.
     """
-    nanoseconds_per_day = 24 * 60 * 60 * 1e9
+    nanoseconds_per_day = 24 * 60 * 60 * 10**9
     kwds = offset.kwds
     return (
         kwds.get("years", 0) * (365 * nanoseconds_per_day)
         + kwds.get("months", 0) * (28 * nanoseconds_per_day)
         + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
         + kwds.get("days", 0) * nanoseconds_per_day
-        + kwds.get("hours", 0) * 3600 * 1e9
-        + kwds.get("minutes", 0) * 60 * 1e9
-        + kwds.get("seconds", 0) * 1e9
-        + kwds.get("milliseconds", 0) * 1e6
-        + kwds.get("microseconds", 0) * 1e3
+        + kwds.get("hours", 0) * 3600 * 10**9
+        + kwds.get("minutes", 0) * 60 * 10**9
+        + kwds.get("seconds", 0) * 10**9
+        + kwds.get("milliseconds", 0) * 10**6
+        + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
 

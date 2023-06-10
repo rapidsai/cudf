@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -144,7 +144,7 @@ struct codepoint_to_utf8_fn {
     char* out_ptr = d_chars + d_offsets[idx];
     for (uint32_t jdx = 0; jdx < count; ++jdx) {
       uint32_t code_point = *str_cps++;
-      if (code_point < UTF8_1BYTE)  // ASCII range
+      if (code_point < UTF8_1BYTE)         // ASCII range
         *out_ptr++ = static_cast<char>(code_point);
       else if (code_point < UTF8_2BYTE) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy
@@ -170,10 +170,9 @@ struct codepoint_to_utf8_fn {
 }  // namespace
 
 // detail API
-std::unique_ptr<cudf::column> normalize_spaces(
-  cudf::strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
@@ -214,8 +213,9 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   }();
 
   CUDF_EXPECTS(
-    result.first->size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-    "output too large for strings column");
+    result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "output exceeds the column size limit",
+    std::overflow_error);
 
   // convert the result into a strings column
   // - the cp_chars are the new 4-byte code-point values for all the characters in the output

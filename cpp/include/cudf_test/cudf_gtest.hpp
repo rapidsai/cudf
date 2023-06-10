@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 /**
  * @file cudf_gtest.hpp
- * @brief Work around for GTests emulation of variadic templates in
+ * @brief Work around for GTests( <=v1.10 ) emulation of variadic templates in
  * @verbatim ::Testing::Types @endverbatim
  *
  * @note Instead of including `gtest/gtest.h`, all libcudf test files should
@@ -35,6 +35,10 @@
  */
 
 // @cond
+#if __has_include(<gtest/internal/gtest-type-util.h.pump>)
+// gtest doesn't provide a version header so we need to
+// use a file existence trick.
+// gtest-type-util.h.pump only exists in versions < 1.11
 #define Types      Types_NOT_USED
 #define Types0     Types0_NOT_USED
 #define TypeList   TypeList_NOT_USED
@@ -65,8 +69,7 @@ namespace internal {
 using Types0 = Types<>;
 
 template <GTEST_TEMPLATE_... TYPES>
-struct Templates {
-};
+struct Templates {};
 
 template <GTEST_TEMPLATE_ HEAD, GTEST_TEMPLATE_... TAIL>
 struct Templates<HEAD, TAIL...> {
@@ -90,6 +93,7 @@ struct TypeList<Types<TYPES...>> {
 
 }  // namespace internal
 }  // namespace testing
+#endif  // gtest < 1.11
 // @endcond
 
 #include <gmock/gmock.h>
@@ -109,58 +113,6 @@ struct TypeList<Types<TYPES...>> {
  * @param expr expression to be tested
  */
 #define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-/**
- * @brief Utility for testing the expectation that an expression x throws the specified
- * exception whose what() message ends with the msg
- *
- * @param x The expression to test
- * @param exception The exception type to test for
- * @param startswith The start of the expected message
- * @param endswith The end of the expected message
- */
-#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)    \
-  do {                                                              \
-    EXPECT_THROW(                                                   \
-      {                                                             \
-        try {                                                       \
-          x;                                                        \
-        } catch (const exception& e) {                              \
-          ASSERT_NE(nullptr, e.what());                             \
-          EXPECT_THAT(e.what(), testing::StartsWith((startswith))); \
-          EXPECT_THAT(e.what(), testing::EndsWith((endswith)));     \
-          throw;                                                    \
-        }                                                           \
-      },                                                            \
-      exception);                                                   \
-  } while (0)
-
-/**
- * @brief test macro to be expected to throw cudf::logic_error with a message
- *
- * @param x The statement to be tested
- * @param msg The message associated with the exception
- */
-#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
-
-/**
- * @brief test macro to be expected to throw cudf::cuda_error with a message
- *
- * @param x The statement to be tested
- * @param msg The message associated with the exception
- */
-#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
-
-/**
- * @brief test macro to be expected to throw cudf::fatal_logic_error with a message
- *
- * @param x The statement to be tested
- * @param msg The message associated with the exception
- */
-#define FATAL_CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::fatal_cuda_error, "Fatal CUDA error encountered at:", msg)
 
 /**
  * @brief test macro to be expected as no exception.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
+uint8_t const CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
                                                           ST_FLD_BYTE,
@@ -90,7 +90,7 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<index>(ops).field()) {
@@ -106,7 +106,7 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline bool run(CompactProtocolReader* cpr,
                          int field_type,
-                         const int& field,
+                         int const& field,
                          std::tuple<Operator...>& ops)
   {
     if (field == std::get<0>(ops).field()) {
@@ -168,7 +168,7 @@ bool CompactProtocolReader::read(LogicalType* l)
                     ParquetFieldUnion(2, l->isset.MAP, l->MAP),
                     ParquetFieldUnion(3, l->isset.LIST, l->LIST),
                     ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
-                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
+                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),      // read the struct
                     ParquetFieldUnion(6, l->isset.DATE, l->DATE),
                     ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
                     ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
@@ -245,7 +245,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData* c)
                             ParquetFieldInt64(9, c->data_page_offset),
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
-                            ParquetFieldStructBlob(12, c->statistics_blob));
+                            ParquetFieldStruct(12, c->statistics));
   return function_builder(this, op);
 }
 

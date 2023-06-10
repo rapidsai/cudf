@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -38,6 +37,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -279,14 +279,14 @@ detail::sort::sort_groupby_helper& groupby::helper()
 {
   if (_helper) return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-    _keys, _include_null_keys, _keys_are_sorted);
+    _keys, _include_null_keys, _keys_are_sorted, _null_precedence);
   return *_helper;
 };
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
   host_span<size_type const> offsets,
-  std::vector<std::reference_wrapper<const scalar>> const& fill_values,
+  std::vector<std::reference_wrapper<scalar const>> const& fill_values,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -306,7 +306,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     thrust::make_counting_iterator(values.num_columns()),
     std::back_inserter(results),
     [&](size_type i) {
-      auto grouped_values = helper().grouped_values(values.column(i), stream);
+      auto grouped_values =
+        helper().grouped_values(values.column(i), stream, rmm::mr::get_current_device_resource());
       return cudf::detail::segmented_shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });

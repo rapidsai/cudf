@@ -6,13 +6,13 @@ cudf.Decimal128Dtype
 .. autoclass:: Decimal128Dtype
    :members: precision, scale, itemsize, to_arrow, from_arrow
 
-   
-   
+
+
 ..
    HACK -- the point here is that we don't want this to appear in the output, but the autosummary should still generate the pages.
    .. autosummary::
       :toctree:
-      
+
       Decimal128Dtype.precision
       Decimal128Dtype.scale
       Decimal128Dtype.itemsize

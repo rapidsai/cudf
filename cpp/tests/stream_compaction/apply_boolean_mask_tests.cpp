@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 
-struct ApplyBooleanMask : public cudf::test::BaseFixture {
-};
+struct ApplyBooleanMask : public cudf::test::BaseFixture {};
 
 TEST_F(ApplyBooleanMask, NonNullBooleanMask)
 {
@@ -318,7 +317,7 @@ TEST_F(ApplyBooleanMask, ListOfStructsFiltering)
     cudf::make_lists_column(5,
                             fixed_width_column_wrapper<int32_t>{0, 2, 4, 6, 8, 10}.release(),
                             struct_column.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
+                            0,
                             {});
 
   auto filter_mask = fixed_width_column_wrapper<bool>{{1, 0, 1, 0, 1}};
@@ -340,7 +339,7 @@ TEST_F(ApplyBooleanMask, ListOfStructsFiltering)
     cudf::make_lists_column(3,
                             fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(),
                             expected_struct_column.release(),
-                            cudf::UNKNOWN_NULL_COUNT,
+                            0,
                             {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_list_column,

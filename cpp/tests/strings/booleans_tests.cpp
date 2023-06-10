@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,11 @@
 
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, ToBooleans)
 {
-  std::vector<const char*> h_strings{"false", nullptr, "", "true", "True", "False"};
+  std::vector<char const*> h_strings{"false", nullptr, "", "true", "True", "False"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -49,7 +48,7 @@ TEST_F(StringsConvertTest, ToBooleans)
 
 TEST_F(StringsConvertTest, FromBooleans)
 {
-  std::vector<const char*> h_strings{"true", nullptr, "false", "true", "true", "false"};
+  std::vector<char const*> h_strings{"true", nullptr, "false", "true", "true", "false"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

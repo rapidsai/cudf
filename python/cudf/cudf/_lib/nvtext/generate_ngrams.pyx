@@ -1,4 +1,6 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -15,6 +17,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def generate_ngrams(Column strings, int ngrams, object py_separator):
 
     cdef DeviceScalar separator = py_separator.device_value
@@ -37,6 +40,7 @@ def generate_ngrams(Column strings, int ngrams, object py_separator):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def generate_character_ngrams(Column strings, int ngrams):
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams

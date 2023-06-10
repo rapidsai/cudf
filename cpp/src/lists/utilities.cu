@@ -17,6 +17,7 @@
 #include "utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
 
 namespace cudf::lists::detail {
@@ -50,6 +51,28 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
                                   offsets_begin,
                                   offsets_begin + out_offsets->size(),
                                   stream);
+  return out_offsets;
+}
+
+std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) { return empty_like(input.offsets()); }
+
+  auto out_offsets = make_numeric_column(data_type(type_to_id<offset_type>()),
+                                         input.size() + 1,
+                                         cudf::mask_state::UNALLOCATED,
+                                         stream,
+                                         mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    input.offsets_begin(),
+                    input.offsets_end(),
+                    out_offsets->mutable_view().begin<offset_type>(),
+                    [d_offsets = input.offsets_begin()] __device__(auto const offset_val) {
+                      // The first offset value, used for zero-normalizing offsets.
+                      return offset_val - *d_offsets;
+                    });
   return out_offsets;
 }
 

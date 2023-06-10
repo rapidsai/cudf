@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ CUDF_HOST_DEVICE inline Result get_array_value(T const* devarr, size_type locati
 #if defined(__CUDA_ARCH__)
   result = devarr[location];
 #else
-  CUDF_CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDefault));
 #endif
   return static_cast<Result>(result);
 }
@@ -104,7 +104,9 @@ struct quantile_index {
   }
 };
 
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 /* @brief computes a quantile value.
  *
  * Computes a value for a quantile by interpolating between two values on either

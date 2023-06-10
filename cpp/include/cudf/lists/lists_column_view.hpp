@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Return first offset (accounting for column offset)
    *
-   * @return int32_t const* Pointer to the first offset
+   * @return Pointer to the first offset
    */
   [[nodiscard]] offset_iterator offsets_begin() const noexcept
   {
@@ -130,7 +130,7 @@ class lists_column_view : private column_view {
    * be computed using the size of the offsets() child column, which is also the offsets of the
    * entire original (non-sliced) lists column.
    *
-   * @return int32_t const* Pointer to one past the last offset
+   * @return Pointer to one past the last offset
    */
   [[nodiscard]] offset_iterator offsets_end() const noexcept
   {

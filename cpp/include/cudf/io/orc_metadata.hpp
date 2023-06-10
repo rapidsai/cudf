@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
 
 #include <optional>
@@ -91,14 +92,12 @@ struct sum_statistics {
 /**
  * @brief Statistics for integral columns.
  */
-struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
-};
+struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {};
 
 /**
  * @brief Statistics for floating point columns.
  */
-struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
-};
+struct double_statistics : minmax_statistics<double>, sum_statistics<double> {};
 
 /**
  * @brief Statistics for string columns.
@@ -107,8 +106,7 @@ struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
  * order. The `sum` is the total length of elements in the column.
  * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
  */
-struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {
-};
+struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {};
 
 /**
  * @brief Statistics for boolean columns.
@@ -122,8 +120,7 @@ struct bucket_statistics {
 /**
  * @brief Statistics for decimal columns.
  */
-struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
-};
+struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {};
 
 /**
  * @brief Statistics for date(time) columns.
@@ -180,7 +177,7 @@ struct column_statistics {
    *
    * @param detail_statistics The statistics to initialize the object with
    */
-  column_statistics(cudf::io::orc::column_statistics&& detail_statistics);
+  column_statistics(orc::column_statistics&& detail_statistics);
 };
 
 /**
@@ -206,6 +203,167 @@ struct parsed_orc_statistics {
  * @return Column names and decoded ORC statistics
  */
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
+
+/**
+ * @brief Schema of an ORC column, including the nested columns.
+ */
+struct orc_column_schema {
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param name column name
+   * @param type ORC type
+   * @param children child columns (empty for non-nested types)
+   */
+  orc_column_schema(std::string_view name,
+                    orc::TypeKind type,
+                    std::vector<orc_column_schema> children)
+    : _name{name}, _type_kind{type}, _children{std::move(children)}
+  {
+  }
+
+  /**
+   * @brief Returns ORC column name; can be empty.
+   *
+   * @return Column name
+   */
+  [[nodiscard]] auto name() const { return _name; }
+
+  /**
+   * @brief Returns ORC type of the column.
+   *
+   * @return Column ORC type
+   */
+  [[nodiscard]] auto type_kind() const { return _type_kind; }
+
+  /**
+   * @brief Returns schemas of all child columns.
+   *
+   * @return Children schemas
+   */
+  [[nodiscard]] auto const& children() const& { return _children; }
+
+  /** @copydoc children
+   * Children array is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto children() && { return std::move(_children); }
+
+  /**
+   * @brief Returns schema of the child with the given index.
+   *
+   * @param idx child index
+   *
+   * @return Child schema
+   */
+  [[nodiscard]] auto const& child(int idx) const& { return children().at(idx); }
+
+  /** @copydoc child
+   * Child is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto child(int idx) && { return std::move(children().at(idx)); }
+
+  /**
+   * @brief Returns the number of child columns.
+   *
+   * @return Children count
+   */
+  [[nodiscard]] auto num_children() const { return children().size(); }
+
+ private:
+  std::string _name;
+  orc::TypeKind _type_kind;
+  std::vector<orc_column_schema> _children;
+};
+
+/**
+ * @brief Schema of an ORC file.
+ */
+struct orc_schema {
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param root_column_schema root column
+   */
+  orc_schema(orc_column_schema root_column_schema) : _root{std::move(root_column_schema)} {}
+
+  /**
+   * @brief Returns the schema of the struct column that contains all columns as fields.
+   *
+   * @return Root column schema
+   */
+  [[nodiscard]] auto const& root() const& { return _root; }
+
+  /** @copydoc root
+   * Root column schema is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto root() && { return std::move(_root); }
+
+ private:
+  orc_column_schema _root;
+};
+
+/**
+ * @brief Information about content of an ORC file.
+ */
+class orc_metadata {
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param schema ORC schema
+   * @param num_rows number of rows
+   * @param num_stripes number of stripes
+   */
+  orc_metadata(orc_schema schema, size_type num_rows, size_type num_stripes)
+    : _schema{std::move(schema)}, _num_rows{num_rows}, _num_stripes{num_stripes}
+  {
+  }
+
+  /**
+   * @brief Returns the ORC schema.
+   *
+   * @return ORC schema
+   */
+  [[nodiscard]] auto const& schema() const { return _schema; }
+
+  ///< Number of rows in the root column; can vary for nested columns
+  /**
+   * @brief Returns the number of rows of the root column.
+   *
+   * If a file contains list columns, nested columns can have a different number of rows.
+   *
+   * @return Number of rows
+   */
+  [[nodiscard]] auto num_rows() const { return _num_rows; }
+
+  /**
+   * @brief Returns the number of stripes in the file.
+   *
+   * @return Number of stripes
+   */
+  [[nodiscard]] auto num_stripes() const { return _num_stripes; }
+
+ private:
+  orc_schema _schema;
+  size_type _num_rows;
+  size_type _num_stripes;
+};
+
+/**
+ * @brief Reads metadata of ORC dataset.
+ *
+ * @ingroup io_readers
+ *
+ * @param src_info Dataset source
+ *
+ * @return orc_metadata with ORC schema, number of rows and number of stripes.
+ */
+orc_metadata read_orc_metadata(source_info const& src_info);
 
 }  // namespace io
 }  // namespace cudf

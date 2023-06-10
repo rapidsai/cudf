@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,21 +89,13 @@ using thread_index_type = int64_t;   ///< Thread index type in kernels
  * @tparam T Iterator type
  * @param f "first" iterator
  * @param l "last" iterator
- * @return size_type The distance between first and last
+ * @return The distance between first and last
  */
 template <typename T>
 size_type distance(T f, T l)
 {
   return static_cast<size_type>(std::distance(f, l));
 }
-
-/**
- * @brief Indicates an unknown null count.
- *
- * Use this value when constructing any column-like object to indicate that
- * the null count should be computed on the first invocation of `null_count()`.
- */
-static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 /**
  * @brief Indicates the order in which elements should be sorted.

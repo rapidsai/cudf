@@ -1,14 +1,13 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
 import numpy as np
-import pandas as pd
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
@@ -20,8 +19,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -141,7 +138,6 @@ class SingleColumnFrame(Frame, NotIterable):
         return super().to_numpy(dtype, copy, na_value).flatten()
 
     def tolist(self):  # noqa: D102
-
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -235,6 +231,12 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property  # type: ignore
@@ -265,13 +267,26 @@ class SingleColumnFrame(Frame, NotIterable):
         return self._column.__cuda_array_interface__
 
     @_cudf_nvtx_annotate
-    def factorize(self, na_sentinel=-1):
+    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
         """Encode the input values as integer labels.
 
         Parameters
         ----------
-        na_sentinel : number
+        sort : bool, default True
+            Sort uniques and shuffle codes to maintain the relationship.
+        na_sentinel : number, default -1
             Value to indicate missing category.
+
+            .. deprecated:: 23.04
+
+               The na_sentinel argument is deprecated and will be removed in
+               a future version of cudf. Specify use_na_sentinel as
+               either True or False.
+        use_na_sentinel : bool, default True
+            If True, the sentinel -1 will be used for NA values.
+            If False, NA values will be encoded as non-negative
+            integers and will not drop the NA from the uniques
+            of the values.
 
         Returns
         -------
@@ -290,7 +305,12 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         StringIndex(['a' 'c'], dtype='object')
         """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
+        return cudf.core.algorithms.factorize(
+            self,
+            sort=sort,
+            na_sentinel=na_sentinel,
+            use_na_sentinel=use_na_sentinel,
+        )
 
     @_cudf_nvtx_annotate
     def _make_operands_for_binop(
@@ -326,29 +346,19 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if (
-            isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
-            and self.name != other.name
-        ):
+        if isinstance(other, SingleColumnFrame) and self.name != other.name:
             result_name = None
         else:
             result_name = self.name
 
-        # TODO: This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
-            if not hasattr(other, "__cuda_array_interface__"):
-                # TODO: When this deprecated behavior is removed, also change
-                # the above conditional to stop checking for pd.Series and
-                # pd.Index since we only need to support SingleColumnFrame.
-                warnings.warn(
-                    f"Binary operations between host objects such as "
-                    f"{type(other)} and {type(self)} are deprecated and will "
-                    "be removed in a future release. Please convert it to a "
-                    "cudf object before performing the operation.",
-                    FutureWarning,
-                )
+            if not hasattr(
+                other, "__cuda_array_interface__"
+            ) and not isinstance(other, cudf.RangeIndex):
+                return NotImplemented
+
             # Non-scalar right operands are valid iff they convert to columns.
             try:
                 other = as_column(other)
@@ -393,6 +403,10 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
+                if (bn := len(arg)) != (n := len(self)):
+                    raise IndexError(
+                        f"Boolean mask has wrong length: {bn} not {n}"
+                    )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 

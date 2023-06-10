@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-class ReductionScan : public cudf::benchmark {
-};
+class ReductionScan : public cudf::benchmark {};
 
 template <typename type>
 static void BM_reduction_scan(benchmark::State& state, bool include_nulls)

@@ -150,17 +150,17 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
   uint32_t codept = utf8_to_codepoint(ch);
   if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
-  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))                    // \w
     return true;
-  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
+  if ((builtins & CCLASS_S) && IS_SPACE(fl))                                        // \s
     return true;
-  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
+  if ((builtins & CCLASS_D) && IS_DIGIT(fl))                                        // \d
     return true;
   if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
     return true;
-  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
+  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))                                      // \S
     return true;
-  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
+  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))                    // \D
     return true;
   //
   return false;
@@ -317,7 +317,12 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             }
             break;
           case EOL:
-            if (last_character || (c == '\n' && inst.u1.c == '$')) {
+            // after the last character OR:
+            // - for MULTILINE, if current character is new-line
+            // - for non-MULTILINE, the very last character of the string can also be a new-line
+            if (last_character ||
+                ((c == '\n') && (inst.u1.c != 'Z') &&
+                 ((inst.u1.c == '$') || (itr.byte_offset() + 1 == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }

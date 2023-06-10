@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,14 +30,11 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-using namespace cudf;
-using namespace test;
-
+using cudf::test::strings_column_wrapper;
 // 😀 | F0 9F 98 80 | 11110000 10011111 10011000 10000000
 // 😎 | F0 9F 98 8E | 11110000 10011111 10011000 10001110
 
-struct MultibyteSplitTest : public BaseFixture {
-};
+struct MultibyteSplitTest : public cudf::test::BaseFixture {};
 
 TEST_F(MultibyteSplitTest, Simple)
 {
@@ -240,7 +237,7 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
     "another::|"
     "simple::|"
     "text::|"
-    "seperated::|"
+    "separated::|"
     "by::|"
     "emojis::|"
     "which::|"
@@ -258,21 +255,19 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
   auto expected = strings_column_wrapper{
     "aaa::|",         "bbb::|",      "ccc::|",       "ddd::|",  "eee::|",    "fff::|",
     "ggg::|",         "hhh::|",      "___::|",       "here::|", "is::|",     "another::|",
-    "simple::|",      "text::|",     "seperated::|", "by::|",   "emojis::|", "which::|",
+    "simple::|",      "text::|",     "separated::|", "by::|",   "emojis::|", "which::|",
     "are::|",         "multiple::|", "bytes::|",     "and::|",  "used::|",   "as::|",
     "delimiters.::|", "::|",         "::|",          "::|"};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
   }
@@ -290,14 +285,13 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += ".....";
   }
@@ -317,14 +311,13 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
   }
@@ -342,14 +335,13 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRangeSingleByte)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
+  auto host_input = std::string();
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += ".....";
   }
@@ -368,7 +360,8 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRangeSingleByte)
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
@@ -398,7 +391,8 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
 
       auto expected = multibyte_split(*source, delimiter);
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+        expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
     }
   }
 }
@@ -430,7 +424,8 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
 
       auto expected = multibyte_split(*source, delimiter);
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+        expected->view(), *out, cudf::test::debug_output_level::ALL_ERRORS);
     }
   }
 }
@@ -447,7 +442,7 @@ TEST_F(MultibyteSplitTest, SingletonRangeAtEnd)
 
   auto out = multibyte_split(*source, delimiter, byte_range_info{5, 1});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, EmptyInput)
@@ -460,7 +455,7 @@ TEST_F(MultibyteSplitTest, EmptyInput)
 
   auto out = multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, EmptyInputSingleByte)
@@ -473,7 +468,7 @@ TEST_F(MultibyteSplitTest, EmptyInputSingleByte)
 
   auto out = multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, EmptyRange)
@@ -486,7 +481,7 @@ TEST_F(MultibyteSplitTest, EmptyRange)
 
   auto out = multibyte_split(*source, delimiter, byte_range_info{4, 0});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
@@ -499,7 +494,7 @@ TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
 
   auto out = multibyte_split(*source, delimiter, byte_range_info{3, 0});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(MultibyteSplitTest, EmptySplitDeviceSpan)

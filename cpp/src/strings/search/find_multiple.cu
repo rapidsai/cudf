@@ -34,11 +34,10 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-std::unique_ptr<column> find_multiple(
-  strings_column_view const& input,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> find_multiple(strings_column_view const& input,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const targets_count = targets.size();

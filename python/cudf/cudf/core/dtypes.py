@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import decimal
 import operator
 import pickle
 import textwrap
+from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
@@ -18,9 +19,9 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
 
 if PANDAS_GE_150:
@@ -41,7 +42,11 @@ def dtype(arbitrary):
     -------
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
-    # first, try interpreting arbitrary as a NumPy dtype that we support:
+    #  first, check if `arbitrary` is one of our extension types:
+    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+        return arbitrary
+
+    # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
         if np_dtype.kind in ("OU"):
@@ -52,10 +57,6 @@ def dtype(arbitrary):
         if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
-
-    #  next, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
-        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
@@ -70,6 +71,8 @@ def dtype(arbitrary):
             return np.dtype("object")
         elif isinstance(pd_dtype, pd.IntervalDtype):
             return cudf.IntervalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+            return pd_dtype
         else:
             raise TypeError(
                 f"Cannot interpret {arbitrary} as a valid cuDF dtype"
@@ -159,7 +162,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> "cudf.core.index.GenericIndex":
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -343,7 +346,7 @@ class ListDtype(_BaseDtype):
             )
             self._typ = pa.list_(element_type)
 
-    @property
+    @cached_property
     def element_type(self) -> Dtype:
         """
         Returns the element type of the ``ListDtype``.
@@ -372,7 +375,7 @@ class ListDtype(_BaseDtype):
         else:
             return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
 
-    @property
+    @cached_property
     def leaf_type(self):
         """
         Returns the type of the leaf values.
@@ -592,7 +595,7 @@ class StructDtype(_BaseDtype):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[DeviceBufferLike] = []
+        frames: List[Buffer] = []
 
         fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 
@@ -626,6 +629,13 @@ class StructDtype(_BaseDtype):
             else:
                 fields[k] = pickle.loads(dtype)
         return cls(fields)
+
+    @cached_property
+    def itemsize(self):
+        return sum(
+            cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
+            for field in self._typ
+        )
 
 
 decimal_dtype_template = textwrap.dedent(
@@ -758,7 +768,7 @@ class DecimalDtype(_BaseDtype):
     @classmethod
     def _from_decimal(cls, decimal):
         """
-        Create a cudf.Decimal32Dtype from a decimal.Decimal object
+        Create a cudf.DecimalDtype from a decimal.Decimal object
         """
         metadata = decimal.as_tuple()
         precision = max(len(metadata.digits), -metadata.exponent)
@@ -860,23 +870,16 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
-
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        if PANDAS_GE_130:
-            return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
-        else:
-            return cls(subtype=pd_dtype.subtype)
+        return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
 
     def to_pandas(self) -> pd.IntervalDtype:
-        if PANDAS_GE_130:
-            return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
-        else:
-            return pd.IntervalDtype(subtype=self.subtype)
+        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other):
         if isinstance(other, str):
@@ -952,10 +955,11 @@ def is_categorical_dtype(obj):
         return False
     if isinstance(obj, str) and obj == "category":
         return True
+    if isinstance(obj, cudf.core.index.BaseIndex):
+        return obj._is_categorical()
     if isinstance(
         obj,
         (
-            cudf.Index,
             cudf.Series,
             cudf.core.column.ColumnBase,
             pd.Index,
@@ -1064,6 +1068,7 @@ def is_interval_dtype(obj):
             ),
         )
         or obj is cudf.core.dtypes.IntervalDtype
+        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )

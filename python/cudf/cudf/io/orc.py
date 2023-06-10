@@ -289,7 +289,8 @@ def read_orc(
     use_index=True,
     timestamp_type=None,
     use_python_file_object=True,
-    **kwargs,
+    storage_options=None,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
     from cudf import DataFrame
@@ -326,11 +327,13 @@ def read_orc(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
-        if ioutils.is_directory(source, **kwargs):
+        if ioutils.is_directory(
+            path_or_data=source, storage_options=storage_options
+        ):
             fs = ioutils._ensure_filesystem(
                 passed_filesystem=None,
                 path=source,
-                **kwargs,
+                storage_options=storage_options,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -339,7 +342,8 @@ def read_orc(
             path_or_data=source,
             compression=None,
             use_python_file_object=use_python_file_object,
-            **kwargs,
+            storage_options=storage_options,
+            bytes_per_thread=bytes_per_thread,
         )
         if compression is not None:
             raise ValueError(
@@ -413,7 +417,8 @@ def to_orc(
     stripe_size_rows=None,
     row_index_stride=None,
     cols_as_map_type=None,
-    **kwargs,
+    storage_options=None,
+    index=None,
 ):
     """{docstring}"""
 
@@ -434,7 +439,7 @@ def to_orc(
         raise TypeError("cols_as_map_type must be a list of column names.")
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=fname, mode="wb", **kwargs
+        path_or_data=fname, mode="wb", storage_options=storage_options
     )
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
@@ -448,6 +453,7 @@ def to_orc(
                 stripe_size_rows,
                 row_index_stride,
                 cols_as_map_type,
+                index,
             )
     else:
         liborc.write_orc(
@@ -459,6 +465,7 @@ def to_orc(
             stripe_size_rows,
             row_index_stride,
             cols_as_map_type,
+            index,
         )
 
 

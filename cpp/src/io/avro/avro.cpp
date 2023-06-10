@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@ template <>
 uint64_t container::get_encoded()
 {
   uint64_t val = 0;
-  for (uint64_t len = 0; len < 64; len += 7) {
-    auto const byte = get_raw<uint8_t>();
+  for (auto len = 0; len < 64; len += 7) {
+    // 64-bit int since shift left is upto 64.
+    uint64_t const byte = get_raw<uint8_t>();
     val |= (byte & 0x7f) << len;
     if (byte < 0x80) break;
   }
@@ -67,10 +68,8 @@ std::string container::get_encoded()
 bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
 {
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
-  uint32_t sig4, max_block_size;
-  size_t total_object_count;
 
-  sig4 = get_raw<uint8_t>();
+  uint32_t sig4 = get_raw<uint8_t>();
   sig4 |= get_raw<uint8_t>() << 8;
   sig4 |= get_raw<uint8_t>() << 16;
   sig4 |= get_raw<uint8_t>() << 24;
@@ -92,41 +91,138 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
       }
     }
   }
+  // Save the first sync markers in the metadata; we compare them to other
+  // sync markers that should be present at the end of a block.  If they
+  // differ, the data should be interpreted as corrupted.
   md->sync_marker[0] = get_raw<uint64_t>();
   md->sync_marker[1] = get_raw<uint64_t>();
 
+  // Initialize remaining metadata fields.
   md->metadata_size  = m_cur - m_base;
-  md->skip_rows      = 0;
-  max_block_size     = 0;
-  total_object_count = 0;
+  md->skip_rows      = first_row;
+  md->total_num_rows = 0;
+
+  // Enumerate the blocks in this file.  Each block starts with a count of
+  // objects (rows) in the block (uint64_t), and then the total size in bytes
+  // of the block (uint64_t).  We walk each block and do the following:
+  //    1. Capture the total number of rows present across all blocks.
+  //    2. Add each block to the metadata's list of blocks.
+  //    3. Handle the case where we've been asked to skip or limit rows.
+  //    4. Verify sync markers at the end of each block.
+  //
+  // A row offset is also maintained, and added to each block.  This reflects
+  // the absolute offset that needs to be added to any given row in order to
+  // get the row's index within the destination array.  See `dst_row` in
+  // `avro_decode_row()` for more information.
+  //
+  // N.B. "object" and "row" are used interchangeably here; "object" is
+  //      avro nomenclature, "row" is ours.
+  //
+  // N.B. If we're skipping rows, we ignore blocks (i.e. don't add them to
+  //      md->block_list) that precede the block containing the first row
+  //      we're interested in.
+  //
+
+  // Number of rows in the current block.
+  uint32_t num_rows = 0;
+
+  // Absolute row offset of the current block relative to all blocks selected by
+  // the skip rows/limit rows constraints, if any.  Otherwise, absolute row
+  // offset relative to all blocks.
+  uint32_t row_offset = 0;
+
+  // Maximum block size in bytes encountered whilst processing all blocks
+  // selected by the skip rows/limit rows constraints, if any.  Otherwise,
+  // maximum block size across all blocks.
+  uint32_t max_block_size = 0;
+
+  // Accumulates the total number of rows across all blocks selected by the skip
+  // rows/limit rows constraints, if any.  Otherwise, total number of rows across
+  // all blocks.
+  size_t total_object_count = 0;
+
+  // N.B. The 18 below is (presumably) intended to account for the two 64-bit
+  //      object count and block size integers (16 bytes total), and then an
+  //      additional two bytes to represent the smallest possible row size.
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
     auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
-    if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
-    if (object_count > first_row) {
-      auto block_row = static_cast<uint32_t>(total_object_count);
+    auto const next_end     = m_cur + block_size + 16;
+    // Abort on terminal conditions.  We keep these as separate lines instead of
+    // combining them into a single if in order to facilitate setting specific
+    // line breakpoints in the debugger.
+    if (block_size <= 0) { return false; }
+    if (object_count <= 0) { return false; }
+    if (next_end > m_end) { return false; }
+
+    // Update our total row count.  This is only captured for information
+    // purposes.
+    md->total_num_rows += object_count;
+
+    if (object_count <= first_row) {
+      // We've been asked to skip rows, and we haven't yet reached our desired
+      // number of rows to skip.  Subtract this block's rows (`object_count`)
+      // from the remaining rows to skip (`first_row`).  Do not add this block
+      // to our block list.
+      first_row -= object_count;
+    } else {
+      // Either we weren't asked to skip rows, or we were, but we've already hit
+      // our target number of rows to skip.  Add this block to our block list.
       max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
-        md->skip_rows = static_cast<uint32_t>(first_row);
+        // This is the first block, so add it to our list with the current value
+        // of `first_row`, which will reflect the number of rows to skip *in
+        // this block*.
+        m_start = m_cur;
         total_object_count -= first_row;
+        num_rows = total_object_count;
+        CUDF_EXPECTS(row_offset == 0, "Invariant check failed: row_offset != 0");
+        if ((max_num_rows > 0) && (max_num_rows < total_object_count)) { num_rows = max_num_rows; }
+        md->block_list.emplace_back(m_cur - m_base, block_size, row_offset, first_row, num_rows);
         first_row = 0;
+        row_offset += num_rows;
+      } else {
+        // Not our first block; `first_row` should always be zero here.
+        CUDF_EXPECTS(first_row == 0, "Invariant check failed: first_row != 0");
+
+        num_rows = object_count;
+        if ((max_num_rows > 0) && (max_num_rows < total_object_count)) {
+          num_rows -= (total_object_count - max_num_rows);
+        }
+
+        md->block_list.emplace_back(m_cur - m_base, block_size, row_offset, first_row, num_rows);
+        row_offset += num_rows;
       }
-      md->block_list.emplace_back(m_cur - m_base, block_size, block_row, object_count);
-    } else {
-      first_row -= object_count;
     }
     m_cur += block_size;
-    m_cur += 16;  // TODO: Validate sync marker
+    // Read the next sync markers and ensure they match the first ones we
+    // encountered.  If they don't, we have to assume the data is corrupted,
+    // and thus, we terminate processing immediately.
+    uint64_t const sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    bool valid_sync_markers =
+      ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
+    if (!valid_sync_markers) { return false; }
   }
-  md->max_block_size  = max_block_size;
-  md->num_rows        = total_object_count;
+  md->max_block_size = max_block_size;
+  // N.B. `total_object_count` has skip_rows applied to it at this point, i.e.
+  //      it represents the number of rows that will be returned *after* rows
+  //      have been skipped (if requested).
+  if ((max_num_rows <= 0) || (max_num_rows > total_object_count)) {
+    md->num_rows = total_object_count;
+  } else {
+    md->num_rows = max_num_rows;
+  }
   md->total_data_size = m_cur - (m_base + md->metadata_size);
+  CUDF_EXPECTS(m_cur > m_start, "Invariant check failed: `m_cur > m_start` is false.");
+  md->selected_data_size = m_cur - m_start;
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {
-    type_kind_e kind = md->schema[i].kind;
-    if (kind > type_null && kind < type_record) {
-      // Primitive type column
+    type_kind_e kind                = md->schema[i].kind;
+    logicaltype_kind_e logical_kind = md->schema[i].logical_kind;
+
+    bool is_supported_kind = ((kind > type_null) && (kind < type_record));
+    if (is_supported_logical_type(logical_kind) || is_supported_kind) {
       column_desc col;
       int parent_idx       = md->schema[i].parent_idx;
       col.schema_data_idx  = (int32_t)i;
@@ -141,7 +237,9 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
                  --num_children) {
               int skip = 1;
               if (pos == i) {
-                col.parent_union_idx = md->schema[parent_idx].num_children - num_children;
+                // parent_idx will always be pointing to our immediate parent
+                // union at this point.
+                col.parent_union_idx = parent_idx;
               } else if (md->schema[pos].kind == type_null) {
                 col.schema_null_idx = pos;
                 break;
@@ -152,7 +250,9 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
               } while (skip != 0);
             }
           }
-          // Ignore the root or array entries
+          // We want to "inherit" the column name from our parent union's
+          // name, as long as we're not dealing with the root (parent_idx == 0)
+          // or array entries.
           if ((parent_idx != 0 && md->schema[parent_idx].kind != type_array) ||
               col.name.length() == 0) {
             if (col.name.length() > 0) { col.name.insert(0, 1, '.'); }
@@ -179,13 +279,14 @@ enum json_state_e {
   state_nextsymbol,
 };
 
-enum {
+enum attrtype_e {
   attrtype_none = -1,
   attrtype_type = 0,
   attrtype_name,
   attrtype_fields,
   attrtype_symbols,
   attrtype_items,
+  attrtype_logicaltype,
 };
 
 /**
@@ -196,7 +297,7 @@ enum {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
@@ -205,26 +306,40 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
-  const std::unordered_map<std::string, type_kind_e> typenames = {{"null", type_null},
-                                                                  {"boolean", type_boolean},
-                                                                  {"int", type_int},
-                                                                  {"long", type_long},
-                                                                  {"float", type_float},
-                                                                  {"double", type_double},
-                                                                  {"bytes", type_bytes},
-                                                                  {"string", type_string},
-                                                                  {"record", type_record},
-                                                                  {"enum", type_enum},
-                                                                  {"array", type_array}};
-  const std::unordered_map<std::string, int> attrnames         = {{"type", attrtype_type},
-                                                          {"name", attrtype_name},
-                                                          {"fields", attrtype_fields},
-                                                          {"symbols", attrtype_symbols},
-                                                          {"items", attrtype_items}};
-  int cur_attr                                                 = attrtype_none;
-  m_base                                                       = json_str.c_str();
-  m_cur                                                        = m_base;
-  m_end                                                        = m_base + json_str.length();
+  std::unordered_map<std::string, type_kind_e> const typenames = {
+    {"null", type_null},
+    {"boolean", type_boolean},
+    {"int", type_int},
+    {"long", type_long},
+    {"float", type_float},
+    {"double", type_double},
+    {"bytes", type_bytes},
+    {"string", type_string},
+    {"record", type_record},
+    {"enum", type_enum},
+    {"array", type_array},
+    {"union", type_union},
+    {"fixed", type_fixed},
+    {"decimal", type_decimal},
+    {"date", type_date},
+    {"time-millis", type_time_millis},
+    {"time-micros", type_time_micros},
+    {"timestamp-millis", type_timestamp_millis},
+    {"timestamp-micros", type_timestamp_micros},
+    {"local-timestamp-millis", type_local_timestamp_millis},
+    {"local-timestamp-micros", type_local_timestamp_micros},
+    {"duration", type_duration}};
+  std::unordered_map<std::string, attrtype_e> const attrnames = {
+    {"type", attrtype_type},
+    {"name", attrtype_name},
+    {"fields", attrtype_fields},
+    {"symbols", attrtype_symbols},
+    {"items", attrtype_items},
+    {"logicalType", attrtype_logicaltype}};
+  attrtype_e cur_attr = attrtype_none;
+  m_base              = json_str.c_str();
+  m_cur               = m_base;
+  m_end               = m_base + json_str.length();
   while (more_data()) {
     int c = *m_cur++;
     switch (c) {
@@ -250,6 +365,10 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
             auto t = typenames.find(str);
             if (t == typenames.end()) return false;
             schema[entry_idx].kind = t->second;
+          } else if (cur_attr == attrtype_logicaltype) {
+            auto t = typenames.find(str);
+            if (t == typenames.end()) return false;
+            schema[entry_idx].logical_kind = static_cast<logicaltype_kind_e>(t->second);
           } else if (cur_attr == attrtype_name) {
             if (entry_idx < 0) return false;
             schema[entry_idx].name = std::move(str);
@@ -362,8 +481,8 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 std::string schema_parser::get_str()
 {
   std::string s;
-  const char* start = m_cur;
-  const char* cur   = start;
+  char const* start = m_cur;
+  char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
   int32_t len = static_cast<int32_t>(cur - start - 1);

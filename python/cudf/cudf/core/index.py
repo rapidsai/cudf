@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -64,8 +63,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-
-T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
@@ -258,25 +255,30 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _clean_nulls_from_index(self):
         return self
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return True
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
+        return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
         return False
 
     @property  # type: ignore
@@ -308,13 +310,37 @@ class RangeIndex(BaseIndex, BinaryOperand):
             Ignored for RangeIndex
         dtype : numpy dtype optional (default: None)
             Target dtype for underlying range data
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         names : list-like optional (default: False)
             Kept compatibility with MultiIndex. Should not be used.
+
+            .. deprecated:: 23.04
+
+               The parameter `names` is deprecated and will be removed in
+               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
         New RangeIndex instance with same range, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
+
+        if names is not None:
+            warnings.warn(
+                "parameter names is deprecated and will be removed in a "
+                "future version. Use the name parameter instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
 
@@ -337,6 +363,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
         return self
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        return cupy.zeros(len(self), dtype=bool)
 
     @_cudf_nvtx_annotate
     def __repr__(self):
@@ -468,7 +498,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return begin, end
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -514,6 +544,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         int
             Index of label.
         """
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.",
+                FutureWarning,
+            )
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
@@ -578,6 +614,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
+
         # Given an actual integer,
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
@@ -999,7 +1045,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def _binaryop(
         self,
-        other: T,
+        other: Frame,
         op: str,
         fill_value: Any = None,
         *args,
@@ -1062,7 +1108,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Returns
         -------
         out: bool
-            True if “other” is an Index and it has the same elements
+            True if "other" is an Index and it has the same elements
             as calling index; False otherwise.
         """
         if (
@@ -1104,13 +1150,37 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             With ``deep=False`` the original data is used
         dtype : numpy dtype, default None
             Target datatype to cast into, use original dtype when None
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         names : list-like, default False
             Kept compatibility with MultiIndex. Should not be used.
+
+            .. deprecated:: 23.04
+
+               The parameter `names` is deprecated and will be removed in
+               a future version of cudf. Use the `name` parameter instead.
 
         Returns
         -------
         New index instance, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
+
+        if names is not None:
+            warnings.warn(
+                "parameter names is deprecated and will be removed in a "
+                "future version. Use the name parameter instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
@@ -1164,9 +1234,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         >>> numeric_unique_index.get_loc(3)
         2
         """
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method not in {
             None,
@@ -1290,8 +1369,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only incase of non-StringIndex types,
-                # as we want to preserve single quotes incase
+                # to happen only in case of non-StringIndex types,
+                # as we want to preserve single quotes in case
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
@@ -1321,7 +1400,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @_cudf_nvtx_annotate
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
-        if not isinstance(index, int):
+        if isinstance(res, ColumnBase):
             res = as_index(res)
             res.name = self.name
         return res
@@ -1368,28 +1447,39 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.",
+                FutureWarning,
+            )
         return self._values.get_slice_bound(label, side, kind)
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return False
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return True
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        return self._column.has_nulls(include_nan=True)
 
     @_cudf_nvtx_annotate
     def argsort(
@@ -1414,8 +1504,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns
@@ -1461,8 +1551,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self):
-        return pd.Index(self._values.to_pandas(), name=self.name)
+    def to_pandas(self, nullable=False):
+        return pd.Index(
+            self._values.to_pandas(nullable=nullable), name=self.name
+        )
 
     def append(self, other):
         if is_list_like(other):
@@ -1543,6 +1635,12 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
 
         dtype = type(self)._dtype
         if copy:
@@ -1554,25 +1652,25 @@ class NumericIndex(GenericIndex):
 
         super().__init__(data, **kwargs)
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return True
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
 
@@ -1800,10 +1898,10 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return True
 
 
@@ -1831,10 +1929,10 @@ class Float64Index(NumericIndex):
 
     _dtype = np.float64
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return True
 
 
@@ -1853,7 +1951,7 @@ class DatetimeIndex(GenericIndex):
         This is not yet supported
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
-    ambiguous : ‘infer’, bool-ndarray, ‘NaT’, default ‘raise’
+    ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
         This is not yet supported
     name : object
         Name to be stored in the index.
@@ -2072,7 +2170,10 @@ class DatetimeIndex(GenericIndex):
         """  # noqa: E501
         return as_index(
             (
-                self._values.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self._values.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self._values.get_dt_field("microsecond"),
@@ -2234,7 +2335,7 @@ class DatetimeIndex(GenericIndex):
         Int8Index([2, 4], dtype='int8')
         """
         res = extract_quarter(self._values)
-        return Int8Index(res, dtype="int8")
+        return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
     def isocalendar(self):
@@ -2259,8 +2360,14 @@ class DatetimeIndex(GenericIndex):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
-        nanos = self._values.astype("datetime64[ns]")
+    def to_pandas(self, nullable=False):
+        # TODO: no need to convert to nanos with Pandas 2.x
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            nanos = self._values.astype(
+                pd.DatetimeTZDtype("ns", self.dtype.tz)
+            )
+        else:
+            nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     @_cudf_nvtx_annotate
@@ -2277,7 +2384,7 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
     @_cudf_nvtx_annotate
@@ -2386,6 +2493,98 @@ class DatetimeIndex(GenericIndex):
 
         return self.__class__._from_data({self.name: out_column})
 
+    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+        """
+        Localize timezone-naive data to timezone-aware data.
+
+        Parameters
+        ----------
+        tz : str
+            Timezone to convert timestamps to.
+
+        Returns
+        -------
+        DatetimeIndex containing timezone aware timestamps.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> tz_aware = tz_naive.tz_localize("America/New_York")
+        >>> tz_aware
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+
+        Ambiguous or nonexistent datetimes are converted to NaT.
+
+        >>> s = cudf.to_datetime(cudf.Series(['2018-10-28 01:20:00',
+        ...                                   '2018-10-28 02:36:00',
+        ...                                   '2018-10-28 03:46:00']))
+        >>> s.dt.tz_localize("CET")
+        0    2018-10-28 01:20:00.000000000
+        1                             <NA>
+        2    2018-10-28 03:46:00.000000000
+        dtype: datetime64[ns, CET]
+
+        Notes
+        -----
+        'NaT' is currently the only supported option for the
+        ``ambiguous`` and ``nonexistent`` arguments. Any
+        ambiguous or nonexistent timestamps are converted
+        to 'NaT'.
+        """
+        from cudf.core._internals.timezones import localize
+
+        if tz is None:
+            result_col = self._column._local_time
+        else:
+            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        return DatetimeIndex._from_data({self.name: result_col})
+
+    def tz_convert(self, tz):
+        """
+        Convert tz-aware datetimes from one time zone to another.
+
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the timezone
+            information.
+
+        Returns
+        -------
+        DatetimeIndex containing timestamps corresponding to the timezone
+        `tz`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
+        >>> dti = dti.tz_localize("America/New_York")
+        >>> dti
+        DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                       '2018-03-02 09:00:00-05:00',
+                       '2018-03-03 09:00:00-05:00'],
+                      dtype='datetime64[ns, America/New_York]')
+        >>> dti.tz_convert("Europe/London")
+        DatetimeIndex(['2018-03-01 14:00:00+00:00',
+                       '2018-03-02 14:00:00+00:00',
+                       '2018-03-03 14:00:00+00:00'],
+                      dtype='datetime64[ns, Europe/London]')
+        """
+        from cudf.core._internals.timezones import convert
+
+        if tz is None:
+            result_col = self._column._utc_time
+        else:
+            result_col = convert(self._column, tz)
+        return DatetimeIndex._from_data({self.name: result_col})
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -2440,7 +2639,6 @@ class TimedeltaIndex(GenericIndex):
         copy=False,
         name=None,
     ):
-
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
 
@@ -2465,7 +2663,7 @@ class TimedeltaIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
@@ -2525,7 +2723,7 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
 
@@ -2547,7 +2745,7 @@ class CategoricalIndex(GenericIndex):
         Whether or not this categorical is treated as an ordered categorical.
         If not given here or in dtype, the resulting categorical will be
         unordered.
-    dtype : CategoricalDtype or “category”, optional
+    dtype : CategoricalDtype or "category", optional
         If CategoricalDtype, cannot be used together with categories or
         ordered.
     copy : bool, default False
@@ -2643,10 +2841,10 @@ class CategoricalIndex(GenericIndex):
         """
         return as_index(self._values.categories)
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return True
 
 
@@ -2830,6 +3028,10 @@ class IntervalIndex(GenericIndex):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
+
+        if closed is None:
+            closed = "right"
+
         if isinstance(data, IntervalColumn):
             data = data
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
@@ -2897,15 +3099,18 @@ class IntervalIndex(GenericIndex):
             "Getting a scalar from an IntervalIndex is not yet supported"
         )
 
-    def is_interval(self):
+    def _is_interval(self):
         return True
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
+
+    .. deprecated:: 23.06
+        `StringIndex` is deprecated, use `Index` instead.
 
     Attributes
     ----------
@@ -2915,6 +3120,12 @@ class StringIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, values, copy=False, **kwargs):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
@@ -2930,9 +3141,11 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.Index(
-            self.to_numpy(na_value=None), name=self.name, dtype="object"
+            self.to_numpy(na_value=None),
+            name=self.name,
+            dtype=pd.StringDtype() if nullable else "object",
         )
 
     @_cudf_nvtx_annotate
@@ -2960,10 +3173,10 @@ class StringIndex(GenericIndex):
         else:
             return self
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return True
 
 
@@ -2974,7 +3187,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     Currently supported inputs are:
 
     * ``Column``
-    * ``DeviceBufferLike``
+    * ``Buffer``
     * ``Series``
     * ``Index``
     * numba device array
@@ -2999,7 +3212,10 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, ColumnBase):
-        return _index_from_data({kwargs.get("name", None): arbitrary})
+        res = _index_from_data({kwargs.get("name", None): arbitrary})
+        if (dtype := kwargs.get("dtype")) is not None:
+            res = res.astype(dtype)
+        return res
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):

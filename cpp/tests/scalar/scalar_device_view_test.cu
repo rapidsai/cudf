@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
 #include <thrust/sequence.h>
 
 template <typename T>
-struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
-};
+struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -112,11 +111,10 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
   EXPECT_FALSE(s.is_valid());
 }
 
-struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {
-};
+struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
 __global__ void test_string_value(cudf::string_scalar_device_view s,
-                                  const char* value,
+                                  char const* value,
                                   cudf::size_type size,
                                   bool* result)
 {
@@ -130,7 +128,8 @@ TEST_F(StringScalarDeviceViewTest, Value)
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result{cudf::get_default_stream()};
-  auto value_v = cudf::detail::make_device_uvector_sync(value, cudf::get_default_stream());
+  auto value_v = cudf::detail::make_device_uvector_sync(
+    value, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   test_string_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     scalar_device_view, value_v.data(), value.size(), result.data());

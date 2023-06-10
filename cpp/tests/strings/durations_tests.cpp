@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,14 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <vector>
 
-struct StringsDurationsTest : public cudf::test::BaseFixture {
-};
+struct StringsDurationsTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDurationsTest, FromToDurations)
 {
   using T = cudf::duration_s;
   std::vector<cudf::duration_s> h_durations{
     T{131246625}, T{1563399277}, T{0}, T{1553085296}, T{1582934400}, T{-1545730073}, T{-86399}};
-  std::vector<const char*> h_expected{"1519 days 01:23:45",
+  std::vector<char const*> h_expected{"1519 days 01:23:45",
                                       "18094 days 21:34:37",
                                       nullptr,
                                       "17975 days 12:34:56",
@@ -111,7 +110,8 @@ TEST_F(StringsDurationsTest, ISOFormatDaysOnly)
   auto new_durations1 = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
                                                     cudf::data_type(cudf::type_to_id<T>()),
                                                     "P%DDT%HH%MM%SS");
-  new_durations1      = cudf::strings::to_durations(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
+  new_durations1 = cudf::strings::to_durations(
     cudf::strings_column_view(expected1), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
   auto new_durations2 = cudf::strings::to_durations(
@@ -398,7 +398,7 @@ TEST_F(StringsDurationsTest, ParseSingle)
                                                 "-59",
                                                 "999",
                                                 "-999",
-                                                "",  // error
+                                                "",   // error
                                                 "01",
                                                 ""};  // error
   auto size = cudf::column_view(string_src).size();
@@ -449,7 +449,7 @@ TEST_F(StringsDurationsTest, ParseMultiple)
                                                 "-59:00:00",
                                                 "999:00:00",
                                                 "-999:00:00",
-                                                "",  // error
+                                                "",   // error
                                                 "01:01:01",
                                                 ""};  // error
   auto size = cudf::column_view(string_src).size();
@@ -503,7 +503,7 @@ TEST_F(StringsDurationsTest, ParseSubsecond)
                                                 "-59:00:00",
                                                 "999:00:00",
                                                 "-999:00:00",
-                                                "",  // error
+                                                "",   // error
                                                 "01:01:01",
                                                 ""};  // error
   auto size = cudf::column_view(string_src).size();
@@ -660,7 +660,7 @@ TEST_F(StringsDurationsTest, ParseCompoundSpecifier)
                                                  "09:00 AM",  // error
                                                  "",          // error
                                                  "01:01:01",
-                                                 ""};  // error
+                                                 ""};         // error
 
   cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t> expected_s3(
     {0,

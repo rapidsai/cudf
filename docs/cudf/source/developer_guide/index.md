@@ -23,6 +23,7 @@ Additionally, it includes longer sections on more specific topics like testing a
 library_design
 contributing_guide
 documentation
+testing
 benchmarking
 options
 ```

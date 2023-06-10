@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/detail/reduction.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -46,7 +46,7 @@ namespace detail {
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
-                                           cudf::size_type ddof,
+                                           size_type ddof,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -99,7 +99,7 @@ struct result_type_dispatcher {
   template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -109,7 +109,7 @@ struct result_type_dispatcher {
   template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -132,7 +132,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -143,7 +143,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {

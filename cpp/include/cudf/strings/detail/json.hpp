@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -30,12 +32,11 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-std::unique_ptr<cudf::column> get_json_object(
-  cudf::strings_column_view const& col,
-  cudf::string_scalar const& json_path,
-  get_json_object_options options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
+                                              cudf::string_scalar const& json_path,
+                                              cudf::strings::get_json_object_options options,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

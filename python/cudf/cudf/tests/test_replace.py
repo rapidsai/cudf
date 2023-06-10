@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import re
 from decimal import Decimal
@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_134, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -175,7 +175,7 @@ def test_series_replace_with_nulls():
                 dtype="category",
             ),
             marks=pytest.mark.xfail(
-                condition=not PANDAS_LT_140,
+                condition=not PANDAS_GE_150,
                 reason="https://github.com/pandas-dev/pandas/issues/46672",
             ),
         ),
@@ -944,8 +944,15 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = cudf.from_pandas(psr)
 
+    if sr.dtype.kind in "ui":
+        can_replace = np.array([replacement])[0].is_integer() and np.can_cast(
+            int(replacement), sr.dtype
+        )
+    else:
+        can_replace = np.can_cast(replacement, sr.dtype)
+
     # Both Scalar
-    if sr.dtype.type(replacement) != replacement:
+    if not can_replace:
         with pytest.raises(TypeError):
             sr.replace(1, replacement)
     else:
@@ -954,7 +961,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         assert_eq(expect, got)
 
     # to_replace is a list, replacement is a scalar
-    if sr.dtype.type(replacement) != replacement:
+    if not can_replace:
         with pytest.raises(TypeError):
 
             sr.replace([2, 3], replacement)
@@ -974,7 +981,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # Both lists of equal length
     if (
         np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
-    ) or (sr.dtype.type(replacement) != replacement):
+    ) or (not can_replace):
         with pytest.raises(TypeError):
             sr.replace([2, 3], [replacement, replacement])
     else:
@@ -1067,7 +1074,6 @@ def test_replace_df_error():
         rfunc=gdf.replace,
         lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
         rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
-        compare_error_message=False,
     )
 
 
@@ -1247,9 +1253,6 @@ def test_series_replace_errors():
         rfunc=gsr.replace,
         lfunc_args_and_kwargs=([[1, 2], [1]],),
         rfunc_args_and_kwargs=([[1, 2], [1]],),
-        expected_error_message=re.escape(
-            "Replacement lists must be of same length. " "Expected 2, got 1."
-        ),
     )
 
     assert_exceptions_equal(

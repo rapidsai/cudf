@@ -1,8 +1,9 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
+import warnings
 from collections import abc
 from functools import cached_property, reduce
 from typing import (
@@ -17,6 +18,8 @@ from typing import (
 )
 
 import pandas as pd
+from packaging.version import Version
+from pandas.api.types import is_bool
 
 import cudf
 from cudf.core import column
@@ -99,7 +102,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def __init__(
         self,
-        data: Union[abc.MutableMapping, ColumnAccessor] = None,
+        data: Union[abc.MutableMapping, ColumnAccessor, None] = None,
         multiindex: bool = False,
         level_names=None,
     ):
@@ -248,11 +251,21 @@ class ColumnAccessor(abc.MutableMapping):
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
             # (e.g., ''->NaT)
-            result = pd.MultiIndex.from_frame(
-                pd.DataFrame(
-                    self.names, columns=self.level_names, dtype="object"
-                ),
-            )
+            with warnings.catch_warnings():
+                # Specifying `dtype="object"` here and passing that to
+                # `from_frame` is deprecated in pandas, but we cannot remove
+                # that without also losing compatibility with other current
+                # pandas behaviors like the NaT inference above. For now we
+                # must catch the warnings internally, but we will need to
+                # remove this when we implement compatibility with pandas 2.0,
+                # which will remove these compatibility layers.
+                assert Version(pd.__version__) < Version("2.0.0")
+                warnings.simplefilter("ignore")
+                result = pd.MultiIndex.from_frame(
+                    pd.DataFrame(
+                        self.names, columns=self.level_names, dtype="object"
+                    ),
+                )
         else:
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
@@ -307,9 +320,9 @@ class ColumnAccessor(abc.MutableMapping):
         """
         Make a copy of this ColumnAccessor.
         """
-        if deep:
+        if deep or cudf.get_option("copy_on_write"):
             return self.__class__(
-                {k: v.copy(deep=True) for k, v in self._data.items()},
+                {k: v.copy(deep=deep) for k, v in self._data.items()},
                 multiindex=self.multiindex,
                 level_names=self.level_names,
             )
@@ -347,7 +360,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        index : integer, integer slice, or list-like of integers
+        index : integer, integer slice, boolean mask,
+            or list-like of integers
             The column indexes.
 
         Returns
@@ -359,6 +373,18 @@ class ColumnAccessor(abc.MutableMapping):
             return self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
             return (self.names[index],)
+        elif (bn := len(index)) > 0 and all(map(is_bool, index)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
+            if isinstance(index, (pd.Series, cudf.Series)):
+                # Don't allow iloc indexing with series
+                raise NotImplementedError(
+                    "Cannot use Series object for mask iloc indexing"
+                )
+            # TODO: Doesn't handle on-device columns
+            return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
             return tuple(self.names[i] for i in index)
 
@@ -369,7 +395,8 @@ class ColumnAccessor(abc.MutableMapping):
 
         Parameters
         ----------
-        key : integer, integer slice, or list-like of integers
+        key : integer, integer slice, boolean mask,
+            or list-like of integers
 
         Returns
         -------
@@ -450,7 +477,21 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
-        data = {k: self._grouped_data[k] for k in key}
+        # Might be a generator
+        key = tuple(key)
+        # Special-casing for boolean mask
+        if (bn := len(key)) > 0 and all(map(is_bool, key)):
+            if bn != (n := len(self.names)):
+                raise IndexError(
+                    f"Boolean mask has wrong length: {bn} not {n}"
+                )
+            data = dict(
+                item
+                for item, keep in zip(self._grouped_data.items(), key)
+                if keep
+            )
+        else:
+            data = {k: self._grouped_data[k] for k in key}
         if self.multiindex:
             data = _to_flat_dict(data)
         return self.__class__(

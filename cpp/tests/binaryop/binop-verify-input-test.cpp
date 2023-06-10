@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -17,43 +17,30 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/binaryop.hpp>
 
-#include <tests/binaryop/binop-fixture.hpp>
-
-namespace cudf {
-namespace test {
-namespace binop {
-struct BinopVerifyInputTest : public BinaryOperationTest {
-};
+struct BinopVerifyInputTest : public cudf::test::BaseFixture {};
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
 {
-  using TypeLhs = int64_t;
-  using TypeRhs = int64_t;
-
-  auto lhs = make_random_wrapped_scalar<TypeLhs>();
-  auto rhs = make_random_wrapped_column<TypeRhs>(10);
+  auto lhs = cudf::scalar_type_t<int64_t>(1);
+  auto rhs = cudf::test::fixed_width_column_wrapper<int64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   EXPECT_THROW(
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_id::NUM_TYPE_IDS)),
+    cudf::binary_operation(
+      lhs, rhs, cudf::binary_operator::ADD, cudf::data_type(cudf::type_id::NUM_TYPE_IDS)),
     cudf::logic_error);
 }
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
 {
-  using TypeOut = int64_t;
-  using TypeLhs = int64_t;
-  using TypeRhs = int64_t;
+  auto lhs = cudf::test::fixed_width_column_wrapper<int64_t>{1};
+  auto rhs = cudf::test::fixed_width_column_wrapper<int64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  auto lhs = make_random_wrapped_column<TypeLhs>(1);
-  auto rhs = make_random_wrapped_column<TypeRhs>(10);
-
-  EXPECT_THROW(
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>())),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::binary_operation(
+                 lhs, rhs, cudf::binary_operator::ADD, cudf::data_type(cudf::type_id::INT64)),
+               cudf::logic_error);
 }
-
-}  // namespace binop
-}  // namespace test
-}  // namespace cudf
