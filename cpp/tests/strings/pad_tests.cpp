@@ -33,7 +33,7 @@ struct StringsPadTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsPadTest, Padding)
 {
-  std::vector<const char*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "bbb", "ééé", "o"};
+  std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "bbb", "ééé", "o"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -45,7 +45,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::RIGHT, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "aa++++", "bbb+++", "ééé+++", "o+++++"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -56,7 +56,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::LEFT, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "+bb cc", nullptr, "++++++", "++++aa", "+++bbb", "+++ééé", "+++++o"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -67,7 +67,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::BOTH, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -132,7 +132,7 @@ INSTANTIATE_TEST_CASE_P(StringsPadTest,
 
 TEST_F(StringsPadTest, ZFill)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé", "+abé", "é+a", "100-"};
   cudf::test::strings_column_wrapper input(
     h_strings.begin(),
@@ -142,7 +142,7 @@ TEST_F(StringsPadTest, ZFill)
 
   auto results = cudf::strings::zfill(strings_view, 6);
 
-  std::vector<const char*> h_expected{"654321",
+  std::vector<char const*> h_expected{"654321",
                                       "-12345",
                                       nullptr,
                                       "000000",
@@ -163,7 +163,7 @@ TEST_F(StringsPadTest, ZFill)
 
 TEST_F(StringsPadTest, Wrap1)
 {
-  std::vector<const char*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -174,7 +174,7 @@ TEST_F(StringsPadTest, Wrap1)
 
   auto results = cudf::strings::wrap(strings_view, width);
 
-  std::vector<const char*> h_expected{"12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""};
+  std::vector<char const*> h_expected{"12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -184,7 +184,7 @@ TEST_F(StringsPadTest, Wrap1)
 
 TEST_F(StringsPadTest, Wrap2)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumped over the lazy brown dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumped over the lazy brown dog",
                                      "hello, world"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -196,7 +196,7 @@ TEST_F(StringsPadTest, Wrap2)
 
   auto results = cudf::strings::wrap(strings_view, width);
 
-  std::vector<const char*> h_expected{"the quick\nbrown fox\njumped over\nthe lazy\nbrown dog",
+  std::vector<char const*> h_expected{"the quick\nbrown fox\njumped over\nthe lazy\nbrown dog",
                                       "hello, world"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -207,7 +207,7 @@ TEST_F(StringsPadTest, Wrap2)
 
 TEST_F(StringsPadTest, WrapExpectFailure)
 {
-  std::vector<const char*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

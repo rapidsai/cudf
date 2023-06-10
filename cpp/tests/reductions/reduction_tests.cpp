@@ -145,9 +145,9 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_result      = *(std::min_element(v.begin(), v.end()));
   T expected_max_result      = *(std::max_element(v.begin(), v.end()));
   T expected_min_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::min<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::min<T>(a, b); });
   T expected_max_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::max<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::max<T>(a, b); });
 
   EXPECT_EQ(
     this->template reduction_test<T>(col, *cudf::make_min_aggregation<reduce_aggregation>()).first,
@@ -183,11 +183,11 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_null_result = *(std::min_element(r_min.begin(), r_min.end()));
   T expected_max_null_result = *(std::max_element(r_max.begin(), r_max.end()));
   T expected_min_init_null_result =
-    std::accumulate(r_min.begin(), r_min.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_min.begin(), r_min.end(), init_value, [](T const& a, T const& b) {
       return std::min<T>(a, b);
     });
   T expected_max_init_null_result =
-    std::accumulate(r_max.begin(), r_max.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_max.begin(), r_max.end(), init_value, [](T const& a, T const& b) {
       return std::max<T>(a, b);
     });
 

@@ -128,7 +128,7 @@ struct StringColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringColumnTest, ConcatenateColumnView)
 {
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
@@ -164,7 +164,7 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
 
 TEST_F(StringColumnTest, ConcatenateTooManyColumns)
 {
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
@@ -183,7 +183,7 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
                                      "oo",
                                      "ppp"};
 
-  std::vector<const char*> expected_strings;
+  std::vector<char const*> expected_strings;
   std::vector<cudf::test::strings_column_wrapper> wrappers;
   std::vector<cudf::column_view> strings_columns;
   for (int i = 0; i < 200; ++i) {
@@ -201,7 +201,7 @@ struct TableTest : public cudf::test::BaseFixture {};
 
 TEST_F(TableTest, ConcatenateTables)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit"};
 
   CVector cols_gold;
