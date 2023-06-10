@@ -112,8 +112,8 @@ struct escape_strings_fn {
     constexpr uint32_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
     if (d_buffer) {
       codepoint -= 0x1'0000;
-      auto hex_high = (codepoint >> 10) & 0x3FF + UTF16_HIGH_SURROGATE_BEGIN;
-      auto hex_low  = codepoint & 0x3FF + UTF16_LOW_SURROGATE_BEGIN;
+      auto hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
+      auto hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
       d_buffer[0]   = '\\';
       d_buffer[1]   = 'u';
       d_buffer[2]   = nibble_to_hex((hex_high >> 12) & 0x0F);
