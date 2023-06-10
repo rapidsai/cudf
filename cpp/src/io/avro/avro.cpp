@@ -199,7 +199,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     // Read the next sync markers and ensure they match the first ones we
     // encountered.  If they don't, we have to assume the data is corrupted,
     // and thus, we terminate processing immediately.
-    const uint64_t sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    uint64_t const sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
     bool valid_sync_markers =
       ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
     if (!valid_sync_markers) { return false; }
@@ -297,7 +297,7 @@ enum attrtype_e {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
@@ -306,7 +306,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
-  const std::unordered_map<std::string, type_kind_e> typenames = {
+  std::unordered_map<std::string, type_kind_e> const typenames = {
     {"null", type_null},
     {"boolean", type_boolean},
     {"int", type_int},
@@ -329,7 +329,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
     {"local-timestamp-millis", type_local_timestamp_millis},
     {"local-timestamp-micros", type_local_timestamp_micros},
     {"duration", type_duration}};
-  const std::unordered_map<std::string, attrtype_e> attrnames = {
+  std::unordered_map<std::string, attrtype_e> const attrnames = {
     {"type", attrtype_type},
     {"name", attrtype_name},
     {"fields", attrtype_fields},
@@ -481,8 +481,8 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 std::string schema_parser::get_str()
 {
   std::string s;
-  const char* start = m_cur;
-  const char* cur   = start;
+  char const* start = m_cur;
+  char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
   int32_t len = static_cast<int32_t>(cur - start - 1);

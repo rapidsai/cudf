@@ -105,7 +105,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                      size_type number_of_mask_words)
 {
   auto x                  = destination + word_index(begin_bit);
-  const auto last_word    = word_index(end_bit) - word_index(begin_bit);
+  auto const last_word    = word_index(end_bit) - word_index(begin_bit);
   bitmask_type fill_value = valid ? 0xffff'ffff : 0;
 
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -372,32 +372,32 @@ cudf::size_type null_count(bitmask_type const* bitmask,
 }
 
 // Count non-zero bits in the specified ranges of a bitmask
-std::vector<size_type> segmented_count_set_bits(const bitmask_type* bitmask,
-                                                host_span<const size_type> indices,
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream)
 {
   return detail::segmented_count_set_bits(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count zero bits in the specified ranges of a bitmask
-std::vector<size_type> segmented_count_unset_bits(const bitmask_type* bitmask,
-                                                  host_span<const size_type> indices,
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream)
 {
   return detail::segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count valid elements in the specified ranges of a validity bitmask
-std::vector<size_type> segmented_valid_count(const bitmask_type* bitmask,
-                                             host_span<const size_type> indices,
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
   return detail::segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count null elements in the specified ranges of a validity bitmask
-std::vector<size_type> segmented_null_count(const bitmask_type* bitmask,
-                                            host_span<const size_type> indices,
+std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
+                                            host_span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
   return detail::segmented_null_count(bitmask, indices.begin(), indices.end(), stream);

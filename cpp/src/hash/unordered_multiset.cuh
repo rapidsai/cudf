@@ -43,8 +43,8 @@ template <typename Element,
 class unordered_multiset_device_view {
  public:
   unordered_multiset_device_view(size_type hash_size,
-                                 const size_type* hash_begin,
-                                 const Element* hash_data)
+                                 size_type const* hash_begin,
+                                 Element const* hash_data)
     : hash_size{hash_size}, hash_begin{hash_begin}, hash_data{hash_data}, hasher(), equals()
   {
   }
@@ -64,8 +64,8 @@ class unordered_multiset_device_view {
   Hasher hasher;
   Equality equals;
   size_type hash_size;
-  const size_type* hash_begin;
-  const Element* hash_data;
+  size_type const* hash_begin;
+  Element const* hash_data;
 };
 
 /*
