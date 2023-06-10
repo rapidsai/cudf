@@ -330,7 +330,7 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
 {
   CUDF_FUNC_RANGE();
   auto const num_strings = node_range_begin.size();
-  rmm::device_uvector<thrust::pair<const char*, size_type>> string_views(num_strings, stream);
+  rmm::device_uvector<thrust::pair<char const*, size_type>> string_views(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
   thrust::transform(rmm::exec_policy(stream),
                     d_offset_pairs,
@@ -755,7 +755,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
       auto const col_size      = json_col.string_offsets.size();
-      using char_length_pair_t = thrust::pair<const char*, size_type>;
+      using char_length_pair_t = thrust::pair<char const*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
@@ -772,7 +772,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
         offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<const char*, std::size_t>{
+          return thrust::pair<char const*, std::size_t>{
             data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
         });
 
@@ -986,7 +986,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
-        [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
+        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
           return (static_cast<std::size_t>(column_index) < user_dtypes.size())
                    ? std::optional<schema_element>{{user_dtypes[column_index]}}
                    : std::optional<schema_element>{};
@@ -1012,7 +1012,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                 << "\n";
     };
     std::visit(
-      cudf::detail::visitor_overload{[column_index](const std::vector<data_type>&) {
+      cudf::detail::visitor_overload{[column_index](std::vector<data_type> const&) {
                                        std::cout << "Column by index: #" << column_index;
                                      },
                                      [col_name](std::map<std::string, data_type> const&) {
