@@ -55,8 +55,8 @@ __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
   __syncthreads();
   if (strm_id < num_streams) {
     // Walk through the compressed blocks
-    const uint8_t* cur                   = s->info.compressed_data;
-    const uint8_t* end                   = cur + s->info.compressed_data_size;
+    uint8_t const* cur                   = s->info.compressed_data;
+    uint8_t const* end                   = cur + s->info.compressed_data_size;
     uint8_t* uncompressed                = s->info.uncompressed_data;
     size_t max_uncompressed_size         = 0;
     uint32_t max_uncompressed_block_size = 0;
@@ -154,8 +154,8 @@ __global__ void __launch_bounds__(128, 8)
       s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 &&
       s->info.max_uncompressed_size > 0) {
     // Walk through the compressed blocks
-    const uint8_t* cur              = s->info.compressed_data;
-    const uint8_t* end              = cur + s->info.compressed_data_size;
+    uint8_t const* cur              = s->info.compressed_data;
+    uint8_t const* end              = cur + s->info.compressed_data_size;
     auto dec_out                    = s->info.dec_out_ctl;
     auto dec_result                 = s->info.dec_res;
     uint8_t* uncompressed_actual    = s->info.uncompressed_data;
@@ -267,7 +267,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
   auto const stream_order                = index_order_from_index_types(s->chunk.skip_count);
 
-  const uint8_t* cur      = start;
+  uint8_t const* cur      = start;
   row_entry_state_e state = NOT_FOUND;
   uint32_t length         = 0;
   uint32_t idx_id         = 0;
@@ -357,7 +357,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
  */
 static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s* s, int num_rowgroups)
 {
-  const uint8_t* index_data = s->chunk.streams[CI_INDEX];
+  uint8_t const* index_data = s->chunk.streams[CI_INDEX];
   int index_data_len        = s->chunk.strm_len[CI_INDEX];
   for (int i = 0; i < num_rowgroups; i++) {
     s->row_index_entry[0][0] = 0;
@@ -398,9 +398,9 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
     if (compressed_offset > 0) {
-      const uint8_t* start   = s->strm_info[ci_id].compressed_data;
-      const uint8_t* cur     = start;
-      const uint8_t* end     = cur + s->strm_info[ci_id].compressed_data_size;
+      uint8_t const* start   = s->strm_info[ci_id].compressed_data;
+      uint8_t const* cur     = start;
+      uint8_t const* end     = cur + s->strm_info[ci_id].compressed_data_size;
       auto dec_result        = s->strm_info[ci_id].dec_res.data();
       uint32_t uncomp_offset = 0;
       for (;;) {

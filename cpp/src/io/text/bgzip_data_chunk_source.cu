@@ -48,14 +48,14 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<const uint8_t>, device_span<uint8_t>> operator()(
+  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
     thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
     auto const compressed_begin   = thrust::get<0>(t);
     auto const compressed_end     = thrust::get<1>(t);
     auto const decompressed_begin = thrust::get<2>(t);
     auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<const uint8_t>{compressed_ptr + compressed_begin,
+    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
                                                          compressed_end - compressed_begin},
                               device_span<uint8_t>{decompressed_ptr + decompressed_begin,
                                                    decompressed_end - decompressed_begin});
@@ -88,7 +88,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<char> d_decompressed_blocks;
     rmm::device_uvector<std::size_t> d_compressed_offsets;
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
-    rmm::device_uvector<device_span<const uint8_t>> d_compressed_spans;
+    rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
     rmm::device_uvector<compression_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};

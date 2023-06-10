@@ -37,7 +37,7 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 //
