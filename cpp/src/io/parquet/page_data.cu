@@ -58,10 +58,10 @@ constexpr int rolling_lvl_index(int index)
 }
 
 struct page_state_s {
-  const uint8_t* data_start;
-  const uint8_t* data_end;
-  const uint8_t* lvl_end;
-  const uint8_t* dict_base;    // ptr to dictionary page data
+  uint8_t const* data_start;
+  uint8_t const* data_end;
+  uint8_t const* lvl_end;
+  uint8_t const* dict_base;    // ptr to dictionary page data
   int32_t dict_size;           // size of dictionary data
   int32_t first_row;           // First row in page to output
   int32_t num_rows;            // Rows in page to decode (including rows to be skipped)
@@ -88,9 +88,9 @@ struct page_state_s {
   int32_t input_value_count;                  // how many values of the input we've processed
   int32_t input_row_count;                    // how many rows of the input we've processed
   int32_t input_leaf_count;                   // how many leaf values of the input we've processed
-  const uint8_t* lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
-  const uint8_t* abs_lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
-  const uint8_t* abs_lvl_end[NUM_LEVEL_TYPES];    // [def,rep]
+  uint8_t const* lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
+  uint8_t const* abs_lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
+  uint8_t const* abs_lvl_end[NUM_LEVEL_TYPES];    // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES];             // how many of each of the streams we've decoded
   int32_t row_index_lower_bound;                  // lower bound of row indices we should process
 
@@ -164,8 +164,8 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return The length of the section
  */
 __device__ uint32_t InitLevelSection(page_state_s* s,
-                                     const uint8_t* cur,
-                                     const uint8_t* end,
+                                     uint8_t const* cur,
+                                     uint8_t const* end,
                                      level_type lvl)
 {
   int32_t len;
@@ -236,8 +236,8 @@ template <typename level_t>
 __device__ void gpuDecodeStream(
   level_t* output, page_state_s* s, int32_t target_count, int t, level_type lvl)
 {
-  const uint8_t* cur_def    = s->lvl_start[lvl];
-  const uint8_t* end        = s->lvl_end;
+  uint8_t const* cur_def    = s->lvl_start[lvl];
+  uint8_t const* end        = s->lvl_end;
   uint32_t level_run        = s->initial_rle_run[lvl];
   int32_t level_val         = s->initial_rle_value[lvl];
   int level_bits            = s->col.level_bits[lvl];
@@ -251,7 +251,7 @@ __device__ void gpuDecodeStream(
       // Get a new run symbol from the byte stream
       int sym_len = 0;
       if (!t) {
-        const uint8_t* cur = cur_def;
+        uint8_t const* cur = cur_def;
         if (cur < end) { level_run = get_vlq32(cur, end); }
         if (!(level_run & 1)) {
           if (cur < end) level_val = cur[0];
@@ -280,7 +280,7 @@ __device__ void gpuDecodeStream(
       batch_len8 = (batch_len + 7) >> 3;
       if (t < batch_len) {
         int bitpos         = t * level_bits;
-        const uint8_t* cur = cur_def + (bitpos >> 3);
+        uint8_t const* cur = cur_def + (bitpos >> 3);
         bitpos &= 7;
         if (cur < end) level_val = cur[0];
         cur++;
@@ -336,7 +336,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
   int target_pos,
   int t)
 {
-  const uint8_t* end = s->data_end;
+  uint8_t const* end = s->data_end;
   int dict_bits      = s->dict_bits;
   int pos            = s->dict_pos;
   int str_len        = 0;
@@ -345,7 +345,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
     int is_literal, batch_len;
     if (!t) {
       uint32_t run       = s->dict_run;
-      const uint8_t* cur = s->data_start;
+      uint8_t const* cur = s->data_start;
       if (run <= 1) {
         run = (cur < end) ? get_vlq32(cur, end) : 0;
         if (!(run & 1)) {
@@ -391,7 +391,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
       dict_idx = s->dict_val;
       if (is_literal) {
         int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
-        const uint8_t* p = s->data_start + (ofs >> 3);
+        uint8_t const* p = s->data_start + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
           uint32_t c = 8 - ofs;
@@ -419,7 +419,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(
         if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
         if (dict_pos < (uint32_t)s->dict_size) {
-          const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+          const auto* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
           return src->second;
         }
         return 0;
@@ -451,14 +451,14 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
                                     int target_pos,
                                     int t)
 {
-  const uint8_t* end = s->data_end;
+  uint8_t const* end = s->data_end;
   int pos            = s->dict_pos;
 
   while (pos < target_pos) {
     int is_literal, batch_len;
     if (!t) {
       uint32_t run       = s->dict_run;
-      const uint8_t* cur = s->data_start;
+      uint8_t const* cur = s->data_start;
       if (run <= 1) {
         run = (cur < end) ? get_vlq32(cur, end) : 0;
         if (!(run & 1)) {
@@ -491,7 +491,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s,
       int dict_idx;
       if (is_literal) {
         int32_t ofs      = t - ((batch_len + 7) & ~7);
-        const uint8_t* p = s->data_start + (ofs >> 3);
+        uint8_t const* p = s->data_start + (ofs >> 3);
         dict_idx         = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
       } else {
         dict_idx = s->dict_val;
@@ -525,7 +525,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
 
   // This step is purely serial
   if (!t) {
-    const uint8_t* cur = s->data_start;
+    uint8_t const* cur = s->data_start;
     int dict_size      = s->dict_size;
     int k              = s->dict_val;
 
@@ -562,10 +562,10 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s,
  *
  * @return A pair containing a pointer to the string and its length
  */
-inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(
+inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(
   volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos)
 {
-  const char* ptr = nullptr;
+  char const* ptr = nullptr;
   size_t len      = 0;
 
   if (s->dict_base) {
@@ -573,7 +573,7 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(
     uint32_t dict_pos =
       (s->dict_bits > 0) ? sb->dict_idx[rolling_index(src_pos)] * sizeof(string_index_pair) : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+      auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
       ptr             = src->first;
       len             = src->second;
     }
@@ -581,7 +581,7 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(
     // Plain encoding
     uint32_t dict_pos = sb->dict_idx[rolling_index(src_pos)];
     if (dict_pos <= (uint32_t)s->dict_size) {
-      ptr = reinterpret_cast<const char*>(s->data_start + dict_pos);
+      ptr = reinterpret_cast<char const*>(s->data_start + dict_pos);
       len = sb->str_len[rolling_index(src_pos)];
     }
   }
@@ -640,7 +640,7 @@ inline __device__ void gpuOutputBoolean(volatile page_state_buffers_s* sb,
  * @param[in] dict_size size of dictionary
  */
 inline __device__ void gpuStoreOutput(uint32_t* dst,
-                                      const uint8_t* src8,
+                                      uint8_t const* src8,
                                       uint32_t dict_pos,
                                       uint32_t dict_size)
 {
@@ -649,9 +649,9 @@ inline __device__ void gpuStoreOutput(uint32_t* dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    bytebuf = *reinterpret_cast<const uint32_t*>(src8 + dict_pos);
+    bytebuf = *reinterpret_cast<uint32_t const*>(src8 + dict_pos);
     if (ofs) {
-      uint32_t bytebufnext = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
+      uint32_t bytebufnext = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
       bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
     }
   } else {
@@ -669,7 +669,7 @@ inline __device__ void gpuStoreOutput(uint32_t* dst,
  * @param[in] dict_size size of dictionary
  */
 inline __device__ void gpuStoreOutput(uint2* dst,
-                                      const uint8_t* src8,
+                                      uint8_t const* src8,
                                       uint32_t dict_pos,
                                       uint32_t dict_size)
 {
@@ -678,10 +678,10 @@ inline __device__ void gpuStoreOutput(uint2* dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    v.x = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -706,7 +706,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
 {
   using cuda::std::chrono::duration_cast;
 
-  const uint8_t* src8;
+  uint8_t const* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
 
   if (s->dict_base) {
@@ -730,11 +730,11 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
 
   uint3 v;
   int64_t nanos, days;
-  v.x = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 0);
-  v.y = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
-  v.z = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 8);
+  v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
+  v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
+  v.z = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
   if (ofs) {
-    uint32_t next = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 12);
+    uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 12);
     v.x           = __funnelshift_r(v.x, v.y, ofs);
     v.y           = __funnelshift_r(v.y, v.z, ofs);
     v.z           = __funnelshift_r(v.z, next, ofs);
@@ -777,7 +777,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
                                                int src_pos,
                                                int64_t* dst)
 {
-  const uint8_t* src8;
+  uint8_t const* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
   int64_t ts;
 
@@ -798,10 +798,10 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
     uint2 v;
     int64_t val;
     int32_t ts_scale;
-    v.x = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -894,7 +894,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
                                      int src_pos,
                                      T* dst)
 {
-  const uint8_t* dict;
+  uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
   if (s->dict_base) {
@@ -922,7 +922,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
 static __device__ void gpuOutputGeneric(
   volatile page_state_s* s, volatile page_state_buffers_s* sb, int src_pos, uint8_t* dst8, int len)
 {
-  const uint8_t* dict;
+  uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
   if (s->dict_base) {
@@ -942,16 +942,16 @@ static __device__ void gpuOutputGeneric(
     }
   } else {
     // Copy 4 bytes at a time
-    const uint8_t* src8 = dict;
+    uint8_t const* src8 = dict;
     unsigned int ofs    = 3 & reinterpret_cast<size_t>(src8);
     src8 -= ofs;  // align to 32-bit boundary
     ofs <<= 3;    // bytes -> bits
     for (unsigned int i = 0; i < len; i += 4) {
       uint32_t bytebuf;
       if (dict_pos < dict_size) {
-        bytebuf = *reinterpret_cast<const uint32_t*>(src8 + dict_pos);
+        bytebuf = *reinterpret_cast<uint32_t const*>(src8 + dict_pos);
         if (ofs) {
-          uint32_t bytebufnext = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
+          uint32_t bytebufnext = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
           bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
         }
       } else {
@@ -1210,7 +1210,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           // RLE-packed dictionary indices, first byte indicates index length in bits
           if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
-            s->dict_base = reinterpret_cast<const uint8_t*>(s->col.str_dict_index);
+            s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.page_info[0].num_input_values * sizeof(string_index_pair);
           } else {
             s->dict_base =

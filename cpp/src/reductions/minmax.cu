@@ -274,7 +274,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 }  // namespace detail
 
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  const column_view& col, rmm::mr::device_memory_resource* mr)
+  column_view const& col, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minmax(col, cudf::get_default_stream(), mr);

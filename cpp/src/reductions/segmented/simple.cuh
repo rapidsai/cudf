@@ -82,7 +82,7 @@ std::unique_ptr<column> simple_segmented_reduction(
   ResultType initial_value = [&] {
     if (init.has_value() && init.value().get().is_valid()) {
       using ScalarType = cudf::scalar_type_t<InputType>;
-      auto input_value = static_cast<const ScalarType*>(&init.value().get())->value(stream);
+      auto input_value = static_cast<ScalarType const*>(&init.value().get())->value(stream);
       return static_cast<ResultType>(input_value);
     } else {
       return simple_op.template get_identity<ResultType>();
