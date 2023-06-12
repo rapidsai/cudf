@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,8 @@ class CompactProtocolReader {
   static const uint8_t g_list2struct[16];
 
  public:
-  explicit CompactProtocolReader(const uint8_t* base = nullptr, size_t len = 0) { init(base, len); }
-  void init(const uint8_t* base, size_t len)
+  explicit CompactProtocolReader(uint8_t const* base = nullptr, size_t len = 0) { init(base, len); }
+  void init(uint8_t const* base, size_t len)
   {
     m_base = m_cur = base;
     m_end          = base + len;
@@ -135,9 +135,9 @@ class CompactProtocolReader {
                  int max_rep_level = 0);
 
  protected:
-  const uint8_t* m_base = nullptr;
-  const uint8_t* m_cur  = nullptr;
-  const uint8_t* m_end  = nullptr;
+  uint8_t const* m_base = nullptr;
+  uint8_t const* m_cur  = nullptr;
+  uint8_t const* m_end  = nullptr;
 
   friend class ParquetFieldBool;
   friend class ParquetFieldBoolList;
@@ -383,7 +383,7 @@ class ParquetFieldString {
     if (field_type != ST_FLD_BINARY) return true;
     uint32_t n = cpr->get_u32();
     if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
-      val.assign((const char*)cpr->m_cur, n);
+      val.assign((char const*)cpr->m_cur, n);
       cpr->m_cur += n;
       return false;
     } else {
@@ -560,7 +560,7 @@ class ParquetFieldStringList {
     for (int32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
       if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
-        val[i].assign((const char*)cpr->m_cur, l);
+        val[i].assign((char const*)cpr->m_cur, l);
         cpr->m_cur += l;
       } else
         return true;
@@ -649,7 +649,7 @@ class ParquetFieldStructBlob {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) return true;
-    const uint8_t* start = cpr->m_cur;
+    uint8_t const* start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
     return false;

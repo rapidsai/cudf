@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
-  const uint8_t length_encoding_bits = utf8_blocks[0] >> 3;
+  uint8_t const length_encoding_bits = utf8_blocks[0] >> 3;
   // UTF-8 format is variable-width character encoding using up to 4 bytes.
   // If the first byte is:
   // - [x00-x7F] -- beginning of a 1-byte character (ASCII)
@@ -305,7 +305,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
 
   kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    reinterpret_cast<const unsigned char*>(d_strings),
+    reinterpret_cast<unsigned char const*>(d_strings),
     bytes_count,
     d_cp_metadata,
     d_aux_table,

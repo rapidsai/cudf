@@ -194,7 +194,7 @@ class TransitionTable {
     transition_table_init.host_to_device_async(stream);
   }
 
-  constexpr CUDF_HOST_DEVICE TransitionTable(const KernelParameter& kernel_param,
+  constexpr CUDF_HOST_DEVICE TransitionTable(KernelParameter const& kernel_param,
                                              TempStorage& temp_storage)
     : temp_storage(temp_storage.Alias())
   {
@@ -537,7 +537,7 @@ class Dfa {
                  TransducedOutItT d_out_it,
                  TransducedIndexOutItT d_out_idx_it,
                  TransducedCountOutItT d_num_transduced_out_it,
-                 const uint32_t seed_state,
+                 uint32_t const seed_state,
                  rmm::cuda_stream_view stream)
   {
     std::size_t temp_storage_bytes = 0;
