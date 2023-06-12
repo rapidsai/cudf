@@ -266,7 +266,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,
-    indices_itr + indices_size + 1,
+    indices_itr + indices_size,
     map_to_keys.begin(),
     [] __device__(auto const& lhs, auto const& rhs) { return lhs.second < rhs.second; });
 
