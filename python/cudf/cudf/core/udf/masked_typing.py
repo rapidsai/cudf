@@ -2,6 +2,7 @@
 
 import operator
 
+import numpy as np
 from numba import types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -17,6 +18,7 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.np.numpy_support import from_dtype
 
 from cudf.core.missing import NA
 from cudf.core.udf import api
@@ -409,6 +411,33 @@ class MaskedScalarIntCast(AbstractTemplate):
         if isinstance(args[0], MaskedType):
             # following numpy convention np.dtype(int) -> dtype('int64')
             return nb_signature(MaskedType(types.int64), args[0])
+
+
+@cuda_decl_registry.register_global(abs)
+class MaskedScalarAbsoluteValue(AbstractTemplate):
+    """
+    Typing for the builtin function abs. Returns the same
+    type as input except for boolean values which are converted
+    to integer.
+
+    This follows the expected result from the builtin abs function
+    which differs from numpy - np.abs returns a bool whereas abs
+    itself performs the cast.
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            if isinstance(args[0].value_type, (StringView, UDFString)):
+                # reject string types
+                return
+            else:
+                return_type = self.context.resolve_function_type(
+                    self.key, (args[0].value_type,), kws
+                ).return_type
+                if return_type in types.signed_domain:
+                    # promote to unsigned to avoid overflow
+                    return_type = from_dtype(np.dtype("u" + return_type.name))
+                return nb_signature(MaskedType(return_type), args[0])
 
 
 @cuda_decl_registry.register_global(api.pack_return)
