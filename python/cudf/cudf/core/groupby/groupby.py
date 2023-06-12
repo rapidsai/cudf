@@ -568,6 +568,73 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if self._sort:
             result = result.sort_index()
+        else:
+            # import pdb;pdb.set_trace()
+            if True and not libgroupby._is_all_scan_aggregate(normalized_aggs):
+                # import pdb;pdb.set_trace()
+                from cudf import _lib as libcudf
+                from cudf.core.join._join_helpers import _match_join_keys
+
+                # import pdb;pdb.set_trace()
+                if not isinstance(result_index, cudf.MultiIndex):
+                    if isinstance(self._by, (str, list)):
+                        try:
+                            lcol, rcol = _match_join_keys(
+                                self.obj[self._by]
+                                .drop_duplicates()
+                                ._data.columns[0],
+                                result_index._column,
+                                "inner",
+                            )
+                        except (KeyError, IndexError):
+                            lcol, rcol = _match_join_keys(
+                                self.grouping.keys.drop_duplicates()._column,
+                                result_index._column,
+                                "inner",
+                            )
+                    elif isinstance(self._by, _Grouping):
+                        lcol, rcol = _match_join_keys(
+                            self.grouping.keys.drop_duplicates()._column,
+                            result_index._column,
+                            "inner",
+                        )
+                    else:
+                        lcol, rcol = _match_join_keys(
+                            self.grouping.keys.drop_duplicates()._column,
+                            result_index._column,
+                            "inner",
+                        )
+                    scatter_map, indices = libcudf.join.join(
+                        [lcol], [rcol], how="inner"
+                    )
+                else:
+                    # import pdb;pdb.set_trace()
+                    if isinstance(self._by, (str, list)):
+                        try:
+                            left_cols = list(
+                                self.obj[self._by]
+                                .drop_duplicates()
+                                ._data.columns
+                            )
+                        except (KeyError, IndexError, TypeError):
+                            left_cols = list(
+                                self.grouping.keys.drop_duplicates()._data.columns
+                            )
+                    elif isinstance(self._by, _Grouping):
+                        left_cols = list(
+                            self.grouping.keys.drop_duplicates()._data.columns
+                        )
+                    else:
+                        left_cols = list(
+                            self.grouping.keys.drop_duplicates()._data.columns
+                        )
+                    right_cols = list(result_index._data.columns)
+                    scatter_map, indices = libcudf.join.join(
+                        left_cols, right_cols, how="inner"
+                    )
+
+                new_index = result_index[indices]
+                result = result.reindex(new_index)
 
         if not self._as_index:
             result = result.reset_index()

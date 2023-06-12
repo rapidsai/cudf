@@ -1329,8 +1329,8 @@ def test_groupby_quantile(request, interpolation, q):
 
     # There's a lot left to add to python bindings like index name
     # so this is a temporary workaround
-    pdresult = pdresult["y"].reset_index(drop=True)
-    gdresult = gdresult["y"].reset_index(drop=True)
+    # pdresult = pdresult["y"].reset_index(drop=True)
+    # gdresult = gdresult["y"].reset_index(drop=True)
 
     assert_groupby_results_equal(pdresult, gdresult)
 
@@ -2165,6 +2165,7 @@ def test_groupby_scan_null_keys(with_nan, dropna, duplicate_index):
 
     expect = df.groupby("key", dropna=dropna).cumsum()
     got = cdf.groupby("key", dropna=dropna).cumsum()
+    # import pdb;pdb.set_trace()
     assert_eq(expect, got)
 
 
