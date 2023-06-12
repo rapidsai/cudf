@@ -41,7 +41,7 @@ using cudf::detail::host_2dspan;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(const uint8_t* compressed_data_, size_t compressed_size_)
+  explicit constexpr CompressedStreamInfo(uint8_t const* compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
       compressed_data_size(compressed_size_),
@@ -55,7 +55,7 @@ struct CompressedStreamInfo {
       max_uncompressed_block_size(0)
   {
   }
-  const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
+  uint8_t const* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;              // [in] compressed data size for this stream
   device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
@@ -92,7 +92,7 @@ struct DictionaryEntry {
  * @brief Struct to describe per stripe's column information
  */
 struct ColumnDesc {
-  const uint8_t* streams[CI_NUM_STREAMS];  // ptr to data stream index
+  uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
   uint32_t strm_len[CI_NUM_STREAMS];       // stream length
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
@@ -415,7 +415,7 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_groups(statistics_group* groups,
-                                const stats_column_desc* cols,
+                                stats_column_desc const* cols,
                                 device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream);
 
@@ -428,7 +428,7 @@ void orc_init_statistics_groups(statistics_group* groups,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_buffersize(statistics_merge_group* groups,
-                                    const statistics_chunk* chunks,
+                                    statistics_chunk const* chunks,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream);
 
@@ -443,7 +443,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
-                           const statistics_chunk* chunks,
+                           statistics_chunk const* chunks,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream);
 

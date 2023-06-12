@@ -46,7 +46,7 @@ constexpr T divCeil(T dividend, T divisor) noexcept
  * @brief Sets the specified element of the array to the passed value
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V&)
+__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, T const& t, V const&)
 {
   array[idx] = t;
 }
@@ -58,8 +58,8 @@ __device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const 
 template <class T, class V>
 __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
                                            cudf::size_type idx,
-                                           const T& t,
-                                           const V& v)
+                                           T const& t,
+                                           V const& v)
 {
   array[idx] = {t, v};
 }
@@ -69,7 +69,7 @@ __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
  * Does not do anything, indexing is not allowed with void* arrays.
  */
 template <class T, class V>
-__device__ __forceinline__ void setElement(void*, cudf::size_type, const T&, const V&)
+__device__ __forceinline__ void setElement(void*, cudf::size_type, T const&, V const&)
 {
 }
 
@@ -86,26 +86,26 @@ __device__ __forceinline__ void setElement(void*, cudf::size_type, const T&, con
  * @param[out] positions Array containing the output positions
  */
 template <class T>
-__global__ void count_and_set_positions(const char* data,
+__global__ void count_and_set_positions(char const* data,
                                         uint64_t size,
                                         uint64_t offset,
-                                        const char key,
+                                        char const key,
                                         cudf::size_type* count,
                                         T* positions)
 {
   // thread IDs range per block, so also need the block id
-  const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-  const uint64_t did = tid * bytes_per_find_thread;
+  uint64_t const tid = threadIdx.x + (blockDim.x * blockIdx.x);
+  uint64_t const did = tid * bytes_per_find_thread;
 
-  const char* raw = (data + did);
+  char const* raw = (data + did);
 
-  const long byteToProcess =
+  long const byteToProcess =
     ((did + bytes_per_find_thread) < size) ? bytes_per_find_thread : (size - did);
 
   // Process the data
   for (long i = 0; i < byteToProcess; i++) {
     if (raw[i] == key) {
-      const auto idx = atomicAdd(count, (cudf::size_type)1);
+      auto const idx = atomicAdd(count, (cudf::size_type)1);
       setElement(positions, idx, did + offset + i, key);
     }
   }
@@ -124,7 +124,7 @@ cudf::size_type find_all_from_set(device_span<char const> data,
   int min_grid_size = 0;  // minimum block count required
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
-  const int grid_size = divCeil(data.size(), (size_t)block_size);
+  int const grid_size = divCeil(data.size(), (size_t)block_size);
 
   auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
     1, stream, rmm::mr::get_current_device_resource());
@@ -138,7 +138,7 @@ cudf::size_type find_all_from_set(device_span<char const> data,
 
 template <class T>
 cudf::size_type find_all_from_set(host_span<char const> data,
-                                  const std::vector<char>& keys,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream)
@@ -152,13 +152,13 @@ cudf::size_type find_all_from_set(host_span<char const> data,
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
 
-  const size_t chunk_count = divCeil(data.size(), max_chunk_bytes);
+  size_t const chunk_count = divCeil(data.size(), max_chunk_bytes);
   for (size_t ci = 0; ci < chunk_count; ++ci) {
-    const auto chunk_offset = ci * max_chunk_bytes;
-    const auto h_chunk      = data.data() + chunk_offset;
-    const int chunk_bytes = std::min((size_t)(data.size() - ci * max_chunk_bytes), max_chunk_bytes);
-    const auto chunk_bits = divCeil(chunk_bytes, bytes_per_find_thread);
-    const int grid_size   = divCeil(chunk_bits, block_size);
+    auto const chunk_offset = ci * max_chunk_bytes;
+    auto const h_chunk      = data.data() + chunk_offset;
+    int const chunk_bytes = std::min((size_t)(data.size() - ci * max_chunk_bytes), max_chunk_bytes);
+    auto const chunk_bits = divCeil(chunk_bytes, bytes_per_find_thread);
+    int const grid_size   = divCeil(chunk_bits, block_size);
 
     // Copy chunk to device
     CUDF_CUDA_TRY(
@@ -210,7 +210,7 @@ cudf::size_type count_all_from_set(device_span<char const> data,
 }
 
 cudf::size_type count_all_from_set(host_span<char const> data,
-                                   const std::vector<char>& keys,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream)
 {
   return find_all_from_set<void>(data, keys, 0, nullptr, stream);

@@ -99,7 +99,7 @@ class reader::impl {
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> num_rows,
-                           const std::vector<std::vector<size_type>>& stripes,
+                           std::vector<std::vector<size_type>> const& stripes,
                            rmm::cuda_stream_view stream);
 
  private:
@@ -120,7 +120,7 @@ class reader::impl {
    */
   rmm::device_buffer decompress_stripe_data(
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-    const std::vector<rmm::device_buffer>& stripe_data,
+    std::vector<rmm::device_buffer> const& stripe_data,
     OrcDecompressor const& decompressor,
     std::vector<orc_stream_info>& stream_info,
     size_t num_stripes,
@@ -165,7 +165,7 @@ class reader::impl {
                             cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                             std::vector<column_buffer>& out_buffers,
                             std::vector<orc_column_meta> const& list_col,
-                            const int32_t level);
+                            int32_t const level);
 
   /**
    * @brief Assemble the buffer with child columns.
@@ -174,9 +174,9 @@ class reader::impl {
    * @param col_buffers Column buffers for columns and children.
    * @param level Current nesting level.
    */
-  column_buffer&& assemble_buffer(const size_type orc_col_id,
+  column_buffer&& assemble_buffer(size_type const orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
-                                  const size_t level,
+                                  size_t const level,
                                   rmm::cuda_stream_view stream);
 
   /**
@@ -201,7 +201,7 @@ class reader::impl {
    *
    * @return An empty column equivalent to orc column type.
    */
-  std::unique_ptr<column> create_empty_column(const size_type orc_col_id,
+  std::unique_ptr<column> create_empty_column(size_type const orc_col_id,
                                               column_name_info& schema_info,
                                               rmm::cuda_stream_view stream);
 
@@ -211,7 +211,7 @@ class reader::impl {
    * @return Timezone table with timestamp offsets
    */
   std::unique_ptr<table> compute_timezone_table(
-    const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
+    std::vector<cudf::io::orc::metadata::stripe_source_mapping> const& selected_stripes,
     rmm::cuda_stream_view stream);
 
  private:

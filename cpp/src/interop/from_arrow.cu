@@ -111,7 +111,7 @@ struct dispatch_to_cudf_column {
     auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
     CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                                  reinterpret_cast<const uint8_t*>(mask_buffer->address()),
+                                  reinterpret_cast<uint8_t const*>(mask_buffer->address()),
                                   null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
@@ -145,7 +145,7 @@ struct dispatch_to_cudf_column {
     auto mutable_column_view = col->mutable_view();
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<T>(),
-      reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
+      reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream.value()));
@@ -205,7 +205,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     mutable_column_view.data<DeviceType>(),
-    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
     sizeof(DeviceType) * num_rows,
     cudaMemcpyDefault,
     stream.value()));
@@ -240,7 +240,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   auto data_buffer = array.data()->buffers[1];
   auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
                                 data_buffer->size(),
                                 cudaMemcpyDefault,
                                 stream.value()));

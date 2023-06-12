@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ struct hex_to_integer_fn {
   __device__ int64_t string_to_integer(string_view const& d_str)
   {
     int64_t result = 0, base = 1;
-    const char* str = d_str.data();
+    char const* str = d_str.data();
     size_type index = d_str.size_bytes();
     while (index-- > 0) {
       char ch = str[index];
