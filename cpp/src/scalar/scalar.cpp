@@ -107,7 +107,7 @@ string_scalar::value_type string_scalar::value(rmm::cuda_stream_view stream) con
 
 size_type string_scalar::size() const { return _data.size(); }
 
-const char* string_scalar::data() const { return static_cast<const char*>(_data.data()); }
+char const* string_scalar::data() const { return static_cast<char const*>(_data.data()); }
 
 string_scalar::operator std::string() const { return this->to_string(cudf::get_default_stream()); }
 

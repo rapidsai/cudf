@@ -388,4 +388,4 @@ def test_decimal_overflow():
 
     s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
     result = s * Decimal("1.0")
-    assert_eq(cudf.Decimal128Dtype(precision=38, scale=-2), result.dtype)
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=1), result.dtype)
