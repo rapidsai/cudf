@@ -15,7 +15,7 @@
 
 name: Bug Report
 description: File a bug report for cuDF
-title: "[BUG]: "
+title: "[BUG] "
 labels: ["bug"]
 
 body:
@@ -24,7 +24,7 @@ body:
       value: |
         Thanks for taking the time to help cuDF and fill out this bug report!
         - By submitting this issue, you agree to follow our [Code of Conduct](https://docs.rapids.ai/resources/conduct/)
-        - You also confirm that you have searched the [open bugs](https://github.com/rapidsai/cuDF/issues?q=is%3Aopen+is%3Aissue+label%3Abug) and have found no duplicates for this request
+        - You also confirm that you have searched the [open bugs](https://github.com/rapidsai/cudf/issues?q=is%3Aopen+is%3Aissue+label%3Abug) and have found no duplicates for this request
 
   - type: input
     id: version
@@ -44,7 +44,6 @@ body:
         - Docker
         - Conda
         - Source
-        - Rapids-Compose
 
   - type: textarea
     id: description
@@ -59,7 +58,7 @@ body:
     id: mvr
     attributes:
       label: Minimum reproducible example
-      description: Please supply a [minimum reproducible code example](https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports) here.
+      description: Please supply a [minimum reproducible code example](https://matthewrocklin.com/minimal-bug-reports) here.
       render: shell
 
   - type: textarea
@@ -73,11 +72,11 @@ body:
     id: env-details
     attributes:
       label: Environment details
-      description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cuDF/blob/main/print_env.sh) here
+      description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here
       placeholder: |
-       + Environment location: [Bare-metal, Docker, Cloud(specify cloud provider)]
+       + Environment location: [Bare metal, Docker, Cloud (specify cloud provider)]
        + If method of install is Docker, provide `docker pull` & `docker run` commands used
-       + Paste in print_env.sh (linked above) output here
+       + Paste output from `print_env.sh` (linked above)
       render: shell
 
   - type: textarea

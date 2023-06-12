@@ -42,4 +42,4 @@ jobs:
            gh issue comment ${issue_url} --body "Hi @${author}!
 
              Thanks for submitting this issue - our team has been notified and we'll get back to you as soon as we can!
-             In the mean time, feel free to add any relevant information to this issue."
+             In the meantime, feel free to add any relevant information to this issue."
