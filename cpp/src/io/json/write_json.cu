@@ -91,7 +91,7 @@ struct escape_strings_fn {
     return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
   }
 
-  __device__ void write_utf8_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, offset_type& bytes)
   {
     if (d_buffer) {
       d_buffer[0] = '\\';
@@ -108,28 +108,13 @@ struct escape_strings_fn {
 
   __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
   {
-    constexpr uint32_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
-    constexpr uint32_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
-    if (d_buffer) {
-      codepoint -= 0x1'0000;
-      auto hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
-      auto hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
-      d_buffer[0]   = '\\';
-      d_buffer[1]   = 'u';
-      d_buffer[2]   = nibble_to_hex((hex_high >> 12) & 0x0F);
-      d_buffer[3]   = nibble_to_hex((hex_high >> 8) & 0x0F);
-      d_buffer[4]   = nibble_to_hex((hex_high >> 4) & 0x0F);
-      d_buffer[5]   = nibble_to_hex((hex_high)&0x0F);
-      d_buffer[6]   = '\\';
-      d_buffer[7]   = 'u';
-      d_buffer[8]   = nibble_to_hex((hex_low >> 12) & 0x0F);
-      d_buffer[9]   = nibble_to_hex((hex_low >> 8) & 0x0F);
-      d_buffer[10]  = nibble_to_hex((hex_low >> 4) & 0x0F);
-      d_buffer[11]  = nibble_to_hex((hex_low)&0x0F);
-      d_buffer += 12;
-    } else {
-      bytes += 12;
-    }
+    constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
+    constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
+    codepoint -= 0x1'0000;
+    uint16_t hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
+    uint16_t hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
+    write_utf8_codepoint(hex_high, d_buffer, bytes);
+    write_utf8_codepoint(hex_low, d_buffer, bytes);
   }
 
   __device__ void operator()(size_type idx)
