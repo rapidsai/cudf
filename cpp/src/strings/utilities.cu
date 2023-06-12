@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,10 +86,10 @@ thread_safe_per_context_cache<special_case_mapping> d_special_case_mappings;
 
 }  // namespace
 
-/**
- * @copydoc cudf::strings::detail::get_character_flags_table
- */
-const character_flags_table_type* get_character_flags_table()
+   /**
+    * @copydoc cudf::strings::detail::get_character_flags_table
+    */
+character_flags_table_type const* get_character_flags_table()
 {
   return d_character_codepoint_flags.find_or_initialize([&](void) {
     character_flags_table_type* table = nullptr;
@@ -103,7 +103,7 @@ const character_flags_table_type* get_character_flags_table()
 /**
  * @copydoc cudf::strings::detail::get_character_cases_table
  */
-const character_cases_table_type* get_character_cases_table()
+character_cases_table_type const* get_character_cases_table()
 {
   return d_character_cases_table.find_or_initialize([&](void) {
     character_cases_table_type* table = nullptr;
@@ -117,7 +117,7 @@ const character_cases_table_type* get_character_cases_table()
 /**
  * @copydoc cudf::strings::detail::get_special_case_mapping_table
  */
-const special_case_mapping* get_special_case_mapping_table()
+special_case_mapping const* get_special_case_mapping_table()
 {
   return d_special_case_mappings.find_or_initialize([&](void) {
     special_case_mapping* table = nullptr;

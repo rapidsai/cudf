@@ -173,7 +173,7 @@ struct intermediate_statistics {
 
   intermediate_statistics(std::vector<ColStatsBlob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
-                          hostdevice_vector<statistics_merge_group> smg,
+                          cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
                           std::vector<data_type> sct)
     : rowgroup_blobs(std::move(rb)),
@@ -188,7 +188,7 @@ struct intermediate_statistics {
   std::vector<ColStatsBlob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
-  hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+  cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
 };
@@ -214,7 +214,7 @@ struct persisted_statistics {
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
-  std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+  std::vector<cudf::detail::hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
   std::vector<rmm::device_uvector<char>> string_pools;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
@@ -235,7 +235,7 @@ struct encoded_footer_statistics {
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
-  static constexpr const char* MAGIC = "ORC";
+  static constexpr char const* MAGIC = "ORC";
 
  public:
   /**
