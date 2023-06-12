@@ -56,6 +56,11 @@ def read_csv(path, blocksize="default", **kwargs):
         Passthrough key-word arguments that are sent to
         :func:`cudf:cudf.read_csv`.
 
+    Notes
+    -----
+    When either of `skipfooter`/`skiprows`/`nrows` are
+    `blocksize` will default to None if nothing is passed.
+
     Examples
     --------
     >>> import dask_cudf
@@ -81,7 +86,16 @@ def read_csv(path, blocksize="default", **kwargs):
 
     # Set default `blocksize`
     if blocksize == "default":
-        blocksize = "256 MiB"
+        if (
+            kwargs.get("skipfooter", 0) != 0
+            or kwargs.get("skiprows", 0)
+            or kwargs.get("nrows", None) is not None
+        ):
+            # Cannot read in blocks if skipfooter,
+            # skiprows or nrows is passed.
+            blocksize = None
+        else:
+            blocksize = "256 MiB"
 
     if "://" in str(path):
         func = make_reader(cudf.read_csv, "read_csv", "CSV")

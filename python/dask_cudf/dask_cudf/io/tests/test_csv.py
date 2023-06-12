@@ -170,3 +170,24 @@ def test_csv_reader_usecols(tmp_path, dtype):
     ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"], dtype=dtype)
 
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+
+
+def test_read_csv_skiprows(tmp_path):
+    # Repro from Issue#13552
+    lines = """x
+    x
+    x
+    A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5"""
+
+    file = tmp_path / "test_read_csv_skiprows.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    ddf_cpu = dd.read_csv(file, skiprows=3).compute()
+    ddf_gpu = dask_cudf.read_csv(file, skiprows=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
