@@ -51,7 +51,7 @@ body:
     attributes:
       label: Describe the issue
       description: Please provide a complete and succinct description of the problem, including what you expected to happen.
-      placeholder: XYZ occurred, I expected QRS results
+      placeholder: XYZ occurred, I expected QRS results.
     validations:
       required: true
 
@@ -85,4 +85,3 @@ body:
     attributes:
       label: Other/Misc.
       description: Please enter any other helpful information here.
-

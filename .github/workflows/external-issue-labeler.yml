@@ -19,7 +19,7 @@ on:
   issues:
     types:
       - opened
-      
+
 env:
   GITHUB_TOKEN: ${{ secrets.ISSUE_PR_WRITE_GITHUB_TOKEN }}
 
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if the issue author is not part of RAPIDS
     if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "CONTRIBUTOR", "COLLABORATOR"]'), github.event.issue.author_association)}}
-    steps: 
+    steps:
       - name: add-external-labels
         run: |
           issue_url=${{ github.event.issue.html_url }}
