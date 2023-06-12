@@ -243,6 +243,7 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 # register all lowering at init
 for unary_op in unary_ops:
     register_unary_op(unary_op)
+register_unary_op(abs)
 
 
 @cuda_lower(operator.is_, MaskedType, NAType)
@@ -330,27 +331,6 @@ def masked_scalar_cast_impl(context, builder, sig, args):
     )
     result.value = casted
     result.valid = input.valid
-    return result._getvalue()
-
-
-@cuda_lower(abs, MaskedType)
-def masked_scalar_abs_impl(context, builder, sig, args):
-    input = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
-    result = cgutils.create_struct_proxy(sig.return_type)(context, builder)
-
-    result.valid = input.valid
-    with builder.if_then(input.valid):
-        result.value = context.compile_internal(
-            builder,
-            lambda x: abs(x),
-            nb_signature(
-                sig.return_type.value_type,
-                sig.args[0].value_type,
-            ),
-            (input.value,),
-        )
     return result._getvalue()
 
 

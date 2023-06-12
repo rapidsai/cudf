@@ -803,10 +803,34 @@ def test_masked_udf_casting(operator, data):
 
 
 @pytest.mark.parametrize(
-    "data", [[1, -1, 0, cudf.NA], [1, 0, -1, cudf.NA], [True, False, cudf.NA]]
+    "data",
+    [
+        np.array(
+            [0, 1, -1, 0, np.iinfo("int64").min, np.iinfo("int64").max],
+            dtype="int64",
+        ),
+        np.array([0, 0, 1, np.iinfo("uint64").max], dtype="uint64"),
+        np.array(
+            [
+                0,
+                0.0,
+                -1.0,
+                1.5,
+                -1.5,
+                np.finfo("float64").min,
+                np.finfo("float64").max,
+                np.nan,
+                np.inf,
+                -np.inf,
+            ],
+            dtype="float64",
+        ),
+        [False, True, False, cudf.NA],
+    ],
 )
 def test_masked_udf_abs(data):
     data = cudf.Series(data)
+    data[0] = cudf.NA
 
     def func(x):
         return abs(x)
