@@ -58,8 +58,8 @@ def read_csv(path, blocksize="default", **kwargs):
 
     Notes
     -----
-    When either of `skipfooter`/`skiprows`/`nrows` are
-    `blocksize` will default to None if nothing is passed.
+    When either of `skipfooter`/`skiprows`/`nrows` are passed
+    `blocksize` will default to None.
 
     Examples
     --------
