@@ -33,7 +33,7 @@
 namespace cudf {
 namespace detail {
 
-rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
+rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::string> const& keys,
                                                              rmm::cuda_stream_view stream)
 {
   if (keys.empty()) { return rmm::device_uvector<serial_trie_node>{0, stream}; }
@@ -49,10 +49,10 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   // The trie takes a lot of memory, but the lookup is fast:
   // allows direct addressing of children nodes
   TreeTrieNode tree_trie;
-  for (const auto& key : keys) {
+  for (auto const& key : keys) {
     auto* current_node = &tree_trie;
 
-    for (const char character : key) {
+    for (char const character : key) {
       if (current_node->children[character] == nullptr)
         current_node->children[character] = std::make_unique<TreeTrieNode>();
 
@@ -80,9 +80,9 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
   while (!to_visit.empty()) {
-    const auto node_and_idx = to_visit.front();
-    const auto node         = node_and_idx.pnode;
-    const auto idx          = node_and_idx.idx;
+    auto const node_and_idx = to_visit.front();
+    auto const node         = node_and_idx.pnode;
+    auto const idx          = node_and_idx.idx;
     to_visit.pop_front();
 
     bool has_children = false;

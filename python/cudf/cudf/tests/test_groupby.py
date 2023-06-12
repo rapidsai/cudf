@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import collections
-import contextlib
 import datetime
 import itertools
 import operator
@@ -38,17 +37,6 @@ _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 _index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
-
-
-# TODO: Make use of set_option context manager
-# once https://github.com/rapidsai/cudf/issues/12736
-# is resolved.
-@contextlib.contextmanager
-def with_pandas_compat(on):
-    original_compat_setting = cudf.get_option("mode.pandas_compatible")
-    cudf.set_option("mode.pandas_compatible", on)
-    yield
-    cudf.set_option("mode.pandas_compatible", original_compat_setting)
 
 
 def assert_groupby_results_equal(
@@ -3105,21 +3093,21 @@ def test_groupby_by_index_names(index_names):
     )
 
 
-@with_pandas_compat(on=True)
 @pytest.mark.parametrize(
     "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
 )
 def test_group_by_pandas_compat(groups):
-    df = cudf.DataFrame(
-        {
-            "a": [1, 3, 2, 3, 3],
-            "b": ["x", "a", "y", "z", "a"],
-            "c": [10, 13, 11, 12, 12],
-        }
-    )
-    pdf = df.to_pandas()
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [1, 3, 2, 3, 3],
+                "b": ["x", "a", "y", "z", "a"],
+                "c": [10, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
 
-    assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
+        assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
 
 
 class TestSample:

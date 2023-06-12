@@ -37,7 +37,7 @@ namespace jit {
 
 void unary_operation(mutable_column_view output,
                      column_view input,
-                     const std::string& udf,
+                     std::string const& udf,
                      data_type output_type,
                      bool is_ptx,
                      rmm::cuda_stream_view stream)

@@ -34,6 +34,7 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -170,7 +171,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), cudf::get_default_stream()};
+  return rmm::device_buffer{
+    elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
 }
 
 /**
@@ -196,7 +198,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::get_default_stream()};
+  return rmm::device_buffer{
+    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
 
 /**
@@ -223,7 +226,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::get_default_stream()};
+  return rmm::device_buffer{
+    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
 
 /**
@@ -279,7 +283,7 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
   auto [null_mask, null_count] = make_null_mask_vector(begin, end);
   auto d_mask                  = rmm::device_buffer{null_mask.data(),
                                    cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
-                                   cudf::get_default_stream()};
+                                   cudf::test::get_default_stream()};
   return {std::move(d_mask), null_count};
 }
 
@@ -561,7 +565,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::get_default_stream()},
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream()},
       rmm::device_buffer{},
       0});
   }
@@ -627,7 +631,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::get_default_stream()},
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream()},
       std::move(null_mask),
       null_count});
   }
@@ -749,10 +753,11 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
     auto d_chars          = cudf::detail::make_device_uvector_sync(
-      chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = cudf::detail::make_device_uvector_sync(
-      offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-    wrapped = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
+      offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    wrapped =
+      cudf::make_strings_column(d_chars, d_offsets, {}, 0, cudf::test::get_default_stream());
   }
 
   /**
@@ -791,11 +796,11 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
     auto d_chars                 = cudf::detail::make_device_uvector_sync(
-      chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = cudf::detail::make_device_uvector_sync(
-      offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
-      null_mask, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     wrapped = cudf::make_strings_column(d_chars, d_offsets, d_bitmask, null_count);
   }
 
