@@ -74,8 +74,8 @@ std::size_t compute_join_output_size(
   cudf::null_equality nulls_equal,
   rmm::cuda_stream_view stream)
 {
-  const size_type build_table_num_rows{build_table.num_rows()};
-  const size_type probe_table_num_rows{probe_table.num_rows()};
+  size_type const build_table_num_rows{build_table.num_rows()};
+  size_type const probe_table_num_rows{probe_table.num_rows()};
 
   // If the build table is empty, we know exactly how large the output
   // will be for the different types of joins and can return immediately
@@ -571,7 +571,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                           std::cend(_build),
                           std::cbegin(probe),
                           std::cend(probe),
-                          [](const auto& b, const auto& p) { return b.type() == p.type(); }),
+                          [](auto const& b, auto const& p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
   return probe_join_indices(probe, join, output_size, stream, mr);
@@ -592,7 +592,7 @@ hash_join::hash_join(cudf::table_view const& build,
                      nullable_join has_nulls,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<const impl_type>(
+  : _impl{std::make_unique<impl_type const>(
       build, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }
