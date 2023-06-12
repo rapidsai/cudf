@@ -2092,6 +2092,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testTrimEmptyStringsWithNulls() {
+    try (ColumnVector cv = ColumnVector.fromStrings("", null);
+         ColumnVector trimmed = cv.strip();
+         ColumnVector expected = ColumnVector.fromStrings("", null)) {
+      assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
   void testAppendStrings() {
     try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
       b.append("123456789");
