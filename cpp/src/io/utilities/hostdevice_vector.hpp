@@ -19,7 +19,7 @@
 #include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -30,6 +30,8 @@
 #include <thrust/host_vector.h>
 
 #include <variant>
+
+namespace cudf::detail {
 
 inline bool hostdevice_vector_uses_pageable_buffer()
 {
@@ -67,7 +69,7 @@ class hostdevice_vector {
     if (hostdevice_vector_uses_pageable_buffer()) {
       h_data_owner = thrust::host_vector<T>();
     } else {
-      h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
+      h_data_owner = cudf::detail::pinned_host_vector<T>();
     }
 
     std::visit(
@@ -82,7 +84,7 @@ class hostdevice_vector {
     d_data.resize(max_size, stream);
   }
 
-  void push_back(const T& data)
+  void push_back(T const& data)
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
@@ -137,24 +139,34 @@ class hostdevice_vector {
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  void host_to_device_sync(rmm::cuda_stream_view stream)
+  {
+    host_to_device_async(stream);
+    stream.synchronize();
+  }
+
+  void device_to_host_async(rmm::cuda_stream_view stream)
   {
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
-    if (synchronize) { stream.synchronize(); }
+  }
+
+  void device_to_host_sync(rmm::cuda_stream_view stream)
+  {
+    device_to_host_async(stream);
+    stream.synchronize();
   }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] operator hostdevice_span<T>()
   {
@@ -164,25 +176,24 @@ class hostdevice_vector {
   /**
    * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
    *
-   * @return A typed hostdevice_span of the hostdevice_vector's data.
+   * @param offset The offset of the first element in the subspan
+   * @param count The number of elements in the subspan
+   * @return A typed hostdevice_span of the hostdevice_vector's data
    */
   [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
   {
-    CUDF_EXPECTS(count >= offset, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(count <= d_data.size(), "Slice range out of bounds.");
-    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count - offset};
+    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
+    CUDF_EXPECTS(count <= d_data.size() - offset,
+                 "The span with given offset and count is out of bounds.");
+    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
   }
 
  private:
-  std::variant<thrust::host_vector<T>, thrust::host_vector<T, cudf::detail::pinned_allocator<T>>>
-    h_data_owner;
+  std::variant<thrust::host_vector<T>, cudf::detail::pinned_host_vector<T>> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
-
-namespace cudf {
-namespace detail {
 
 /**
  * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
@@ -232,20 +243,15 @@ class hostdevice_2dvector {
 
   size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
-  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.host_to_device(stream, synchronize);
-  }
+  void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
 
-  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
-  {
-    _data.device_to_host(stream, synchronize);
-  }
+  void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
 
  private:
   hostdevice_vector<T> _data;
   typename host_2dspan<T>::size_type _size;
 };
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

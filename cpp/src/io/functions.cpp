@@ -179,17 +179,17 @@ compression_type infer_compression_type(compression_type compression, source_inf
   auto filepath = info.filepaths()[0];
 
   // Attempt to infer from the file extension
-  const auto pos = filepath.find_last_of('.');
+  auto const pos = filepath.find_last_of('.');
 
   if (pos == std::string::npos) { return {}; }
 
-  auto str_tolower = [](const auto& begin, const auto& end) {
+  auto str_tolower = [](auto const& begin, auto const& end) {
     std::string out;
     std::transform(begin, end, std::back_inserter(out), ::tolower);
     return out;
   };
 
-  const auto ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
+  auto const ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
 
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
@@ -345,7 +345,7 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 
   auto parse_column_statistics = [](auto const& raw_col_stats) {
     orc::column_statistics stats_internal;
-    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(raw_col_stats.c_str()),
+    orc::ProtobufReader(reinterpret_cast<uint8_t const*>(raw_col_stats.c_str()),
                         raw_col_stats.size())
       .read(stats_internal);
     return column_statistics(std::move(stats_internal));
@@ -428,7 +428,7 @@ void write_orc(orc_writer_options const& options)
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table());
 }
@@ -444,7 +444,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks[0]), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**
@@ -488,7 +488,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
  * @copydoc cudf::io::merge_row_group_metadata
  */
 std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
+  std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list)
 {
   CUDF_FUNC_RANGE();
   return detail_parquet::writer::merge_row_group_metadata(metadata_list);
@@ -519,7 +519,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -575,7 +575,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
 }
 
 /**

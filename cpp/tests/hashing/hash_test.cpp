@@ -26,8 +26,7 @@
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-class HashTest : public cudf::test::BaseFixture {
-};
+class HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(HashTest, MultiValue)
 {
@@ -221,10 +220,10 @@ TEST_F(HashTest, ListOfStruct)
     0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
 
   auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto nullmask_buf =
+  auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
-    17, offsets.release(), struct_col.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
+    17, offsets.release(), struct_col.release(), null_count, std::move(null_mask));
 
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{83451479,
                                                                  83451479,
@@ -287,21 +286,17 @@ TEST_F(HashTest, ListOfEmptyStruct)
   // [{}, {}]
 
   auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
-  auto struct_validity_buffer =
+  auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
-  auto struct_col =
-    cudf::make_structs_column(14, {}, cudf::UNKNOWN_NULL_COUNT, std::move(struct_validity_buffer));
+  auto struct_col = cudf::make_structs_column(14, {}, null_count, std::move(null_mask));
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
   auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto list_validity_buffer =
+  std::tie(null_mask, null_count) =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto list_column = cudf::make_lists_column(13,
-                                             offsets.release(),
-                                             std::move(struct_col),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
+  auto list_column = cudf::make_lists_column(
+    13, offsets.release(), std::move(struct_col), null_count, std::move(null_mask));
 
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{2271818677u,
                                                                  2271818677u,
@@ -334,13 +329,10 @@ TEST_F(HashTest, EmptyDeepList)
 
   auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
   auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
-  auto list_validity_buffer =
+  auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto list_column = cudf::make_lists_column(4,
-                                             offsets.release(),
-                                             list1.release(),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
+  auto list_column = cudf::make_lists_column(
+    4, offsets.release(), list1.release(), null_count, std::move(null_mask));
 
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{
     2271818677u, 2271818677u, 2271818614u, 2271818614u};
@@ -350,8 +342,7 @@ TEST_F(HashTest, EmptyDeepList)
 }
 
 template <typename T>
-class HashTestTyped : public cudf::test::BaseFixture {
-};
+class HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashTestTyped, cudf::test::FixedWidthTypes);
 
@@ -399,8 +390,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
 }
 
 template <typename T>
-class HashTestFloatTyped : public cudf::test::BaseFixture {
-};
+class HashTestFloatTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
@@ -438,8 +428,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*spark_col, *spark_col_neg_nan);
 }
 
-class SparkMurmurHash3Test : public cudf::test::BaseFixture {
-};
+class SparkMurmurHash3Test : public cudf::test::BaseFixture {};
 
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
@@ -717,13 +706,11 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                           cudf::test::iterators::nulls_at({0, 14}));
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16};
-  auto list_validity        = cudf::test::iterators::nulls_at({0});
-  auto list_validity_buffer = cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
-  auto list_column          = cudf::make_lists_column(11,
-                                             offsets.release(),
-                                             nested_list.release(),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
+  auto list_validity = cudf::test::iterators::nulls_at({0});
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
+  auto list_column = cudf::make_lists_column(
+    11, offsets.release(), nested_list.release(), null_count, std::move(null_mask));
 
   auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{42,
                                                                 42,
@@ -836,13 +823,10 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 5, 7, 9, 11};
   auto list_nullmask = std::vector<bool>(1, 8);
-  auto list_validity_buffer =
+  auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto list_column = cudf::make_lists_column(8,
-                                             offsets.release(),
-                                             struct_column.release(),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
+  auto list_column = cudf::make_lists_column(
+    8, offsets.release(), struct_column.release(), null_count, std::move(null_mask));
 
   // TODO: Lists of structs are not yet supported. Once support is added,
   // remove this EXPECT_THROW and uncomment the rest of this test.
@@ -858,8 +842,7 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
   */
 }
 
-class MD5HashTest : public cudf::test::BaseFixture {
-};
+class MD5HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(MD5HashTest, MultiValue)
 {
@@ -983,8 +966,7 @@ TEST_F(MD5HashTest, StringListsNulls)
 }
 
 template <typename T>
-class MD5HashTestTyped : public cudf::test::BaseFixture {
-};
+class MD5HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MD5HashTestTyped, cudf::test::NumericTypes);
 
@@ -1043,8 +1025,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
 }
 
 template <typename T>
-class MD5HashListTestTyped : public cudf::test::BaseFixture {
-};
+class MD5HashListTestTyped : public cudf::test::BaseFixture {};
 
 using NumericTypesNoBools =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -1077,8 +1058,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 }
 
 template <typename T>
-class MD5HashTestFloatTyped : public cudf::test::BaseFixture {
-};
+class MD5HashTestFloatTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MD5HashTestFloatTyped, cudf::test::FloatingPointTypes);
 

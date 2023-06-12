@@ -181,7 +181,7 @@ struct extract_last_day_of_month {
   __device__ inline timestamp_D operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
-    const year_month_day ymd(floor<days>(ts));
+    year_month_day const ymd(floor<days>(ts));
     auto const ymdl = year_month_day_last{ymd.year() / ymd.month() / last};
     return timestamp_D{sys_days{ymdl}};
   }
@@ -429,7 +429,8 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                   months_begin_iter,
                                   stream,
                                   mr);
-    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
+    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr),
+                          timestamp_column.null_count());
     return output;
   } else {
     return make_timestamp_column(

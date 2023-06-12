@@ -27,6 +27,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
@@ -37,6 +38,7 @@ from cudf._typing import (
     Dtype,
     NotImplementedType,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -66,6 +68,7 @@ from cudf.core.udf.utils import (
     _return_arr_from_dtype,
 )
 from cudf.utils import docutils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -224,8 +227,6 @@ class _FrameIndexer:
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
 
-T = TypeVar("T", bound="IndexedFrame")
-
 
 class IndexedFrame(Frame):
     """A frame containing an index.
@@ -357,8 +358,8 @@ class IndexedFrame(Frame):
         )
 
     def _mimic_inplace(
-        self: T, result: T, inplace: bool = False
-    ) -> Optional[Frame]:
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             self._index = result._index
         return super()._mimic_inplace(result, inplace)
@@ -441,7 +442,7 @@ class IndexedFrame(Frame):
             results[name] = getattr(result_col, op)()
         return self._from_data(results, self._index)
 
-    def _check_data_index_length_match(self: T) -> None:
+    def _check_data_index_length_match(self) -> None:
         # Validate that the number of rows in the data matches the index if the
         # data is not empty. This is a helper for the constructor.
         if self._data.nrows > 0 and self._data.nrows != len(self._index):
@@ -450,7 +451,7 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(self._index)})"
             )
 
-    def copy(self: T, deep: bool = True) -> T:
+    def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
         When ``deep=True`` (default), a new object will be created with a
@@ -918,12 +919,12 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(output, inplace=inplace)
 
     def _copy_type_metadata(
-        self: T,
-        other: T,
+        self,
+        other: Self,
         include_index: bool = True,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> T:
+    ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -1994,7 +1995,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    backfill = bfill
+    @_cudf_nvtx_annotate
+    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.bfill/Series.bfill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.backfill/Series.backfill is deprecated. Use "
+            "DataFrame.bfill/Series.bfill instead",
+            FutureWarning,
+        )
+        return self.bfill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     @_cudf_nvtx_annotate
     def ffill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2013,7 +2031,24 @@ class IndexedFrame(Frame):
             limit=limit,
         )
 
-    pad = ffill
+    @_cudf_nvtx_annotate
+    def pad(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+
+        .. deprecated:: 23.06
+           Use `DataFrame.ffill/Series.ffill` instead.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        warnings.warn(
+            "DataFrame.pad/Series.pad is deprecated. Use "
+            "DataFrame.ffill/Series.ffill instead",
+            FutureWarning,
+        )
+        return self.ffill(value=value, axis=axis, inplace=inplace, limit=limit)
 
     def add_prefix(self, prefix):
         """
@@ -2159,7 +2194,8 @@ class IndexedFrame(Frame):
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
         try:
-            kernel.forall(len(self))(*launch_args)
+            with _CUDFNumbaConfig():
+                kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
@@ -2288,12 +2324,12 @@ class IndexedFrame(Frame):
             raise ValueError('keep must be either "first", "last"')
 
     def _align_to_index(
-        self: T,
+        self,
         index: ColumnLike,
         how: str = "outer",
         sort: bool = True,
         allow_non_unique: bool = False,
-    ) -> T:
+    ) -> Self:
         index = cudf.core.index.as_index(index)
 
         if self.index.equals(index):
@@ -2870,7 +2906,8 @@ class IndexedFrame(Frame):
         boolean_mask = cudf.core.column.as_column(boolean_mask)
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
-
+        if (bn := len(boolean_mask)) != (n := len(self)):
+            raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
         return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
                 list(self._index._columns + self._columns), boolean_mask
@@ -3881,12 +3918,15 @@ class IndexedFrame(Frame):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
+        if sort is no_default:
+            sort = cudf.get_option("mode.pandas_compatible")
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
@@ -3895,7 +3935,7 @@ class IndexedFrame(Frame):
                 "squeeze parameter is not yet implemented"
             )
 
-        if observed is not False:
+        if not observed:
             raise NotImplementedError(
                 "observed parameter is not yet implemented"
             )

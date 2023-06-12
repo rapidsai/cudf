@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
 
 struct PackUnpackTest : public cudf::test::BaseFixture {
   void run_test(cudf::table_view const& t)
@@ -31,9 +31,9 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
     // verify pack_metadata itself works
     auto metadata = cudf::pack_metadata(
       unpacked, reinterpret_cast<uint8_t const*>(packed.gpu_data->data()), packed.gpu_data->size());
-    EXPECT_EQ(metadata.size(), packed.metadata_->size());
+    EXPECT_EQ(metadata.size(), packed.metadata->size());
     EXPECT_EQ(
-      std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata_->data()),
+      std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata->data()),
       true);
   }
   void run_test(std::vector<cudf::column_view> const& t) { run_test(cudf::table_view{t}); }
@@ -160,7 +160,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_structs(bool include_validit
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
@@ -198,7 +197,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_struct_of_list()
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
@@ -251,7 +249,6 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
                                  "Seventeen",
                                  "Dol",
                                  "Est"};
-  std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1};
   cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
@@ -269,12 +266,10 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
   std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
 
   cudf::test::fixed_width_column_wrapper<int> offsets{0, 1, 4, 5, 7, 7, 10, 13, 14, 16};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.begin() + 9);
   auto list = cudf::make_lists_column(
-    9,
-    offsets.release(),
-    struct_column.release(),
-    2,
-    cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.begin() + 9));
+    9, offsets.release(), struct_column.release(), null_count, std::move(null_mask));
 
   std::vector<std::unique_ptr<cudf::column>> out;
   out.push_back(std::move(list));

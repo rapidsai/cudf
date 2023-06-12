@@ -182,6 +182,14 @@ class reader::impl {
   void allocate_nesting_info();
 
   /**
+   * @brief Allocate space for use when decoding definition/repetition levels.
+   *
+   * One large contiguous buffer of data allocated and
+   * distributed among the PageInfo structs.
+   */
+  void allocate_level_decode_space();
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.

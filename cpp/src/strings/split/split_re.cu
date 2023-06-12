@@ -43,7 +43,7 @@ namespace strings {
 namespace detail {
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic
@@ -86,7 +86,7 @@ struct token_reader_fn {
       } else {
         if (direction == split_direction::FORWARD) { break; }  // we are done
         for (auto l = 0; l < token_idx - 1; ++l) {
-          d_result[l] = d_result[l + 1];  // shift left
+          d_result[l] = d_result[l + 1];                       // shift left
         }
         d_result[token_idx - 1] = token;
       }

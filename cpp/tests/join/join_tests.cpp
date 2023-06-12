@@ -133,10 +133,14 @@ struct JoinTest : public cudf::test::BaseFixture {
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
-                                          result.first->data()},
+                                          result.first->data(),
+                                          nullptr,
+                                          0},
                         cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.second->size()),
-                                          result.second->data()}});
+                                          result.second->data(),
+                                          nullptr,
+                                          0}});
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 
@@ -1493,10 +1497,14 @@ TEST_F(JoinTest, HashJoinWithNullsOneSide)
   auto const sort_result = [](auto const& result) {
     auto const left_cv  = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                            static_cast<cudf::size_type>(result.first->size()),
-                                           result.first->data()};
+                                           result.first->data(),
+                                           nullptr,
+                                           0};
     auto const right_cv = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                             static_cast<cudf::size_type>(result.second->size()),
-                                            result.second->data()};
+                                            result.second->data(),
+                                            nullptr,
+                                            0};
     auto sorted_left    = cudf::sort(cudf::table_view{{left_cv}});
     auto sorted_right   = cudf::sort(cudf::table_view{{right_cv}});
     return std::pair{std::move(sorted_left), std::move(sorted_right)};
@@ -1577,15 +1585,15 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   rmm::device_buffer zeroes(col_size * sizeof(int32_t), cudf::get_default_stream());
   CUDF_CUDA_TRY(
     cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::get_default_stream().value()));
-  cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
+  cudf::column_view col_zeros(
+    cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data(), nullptr, 0);
   cudf::table_view tview{{col_zeros}};
   cudf::hash_join hash_join(tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }
 
-struct JoinDictionaryTest : public cudf::test::BaseFixture {
-};
+struct JoinDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
 {
@@ -1880,7 +1888,7 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
                                          ""},
                                         {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
   auto gold_ages0_col  = column_wrapper<int32_t>{{48, 27, 25, 31, 351, -1, -1, -1, -1, -1},
-                                                {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+                                                 {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
 
   auto gold_is_human0_col =
     column_wrapper<bool>{{true, true, false, false, false, false, false, false, false, false},
@@ -1907,7 +1915,7 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
                                          "Angua von Überwald"},
                                         {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
   auto gold_ages1_col  = column_wrapper<int32_t>{{-1, -1, -1, -1, -1, 27, 27, 48, 27, 25},
-                                                {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                                                 {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
 
   auto gold_is_human1_col =
     column_wrapper<bool>{{false, false, false, false, false, true, true, true, true, false},

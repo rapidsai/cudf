@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,20 +22,22 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
-template <typename T>
-struct NumericPairIteratorTest : public IteratorTest<T> {
-};
-
-TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
-TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
-TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
-
-// to print meanvar for debug.
+namespace cudf {
+// To print meanvar for debug.
+// Needs to be in the cudf namespace for ADL
 template <typename T>
 std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
 {
   return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
 };
+}  // namespace cudf
+
+template <typename T>
+struct NumericPairIteratorTest : public IteratorTest<T> {};
+
+TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
+TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
+TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
 
 // Transformers and Operators for pair_iterator test
 template <typename ElementType>
@@ -51,8 +53,8 @@ struct transformer_pair_meanvar {
 
 struct sum_if_not_null {
   template <typename T>
-  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                           const thrust::pair<T, bool>& rhs)
+  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(thrust::pair<T, bool> const& lhs,
+                                                           thrust::pair<T, bool> const& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
@@ -75,7 +77,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   using T_output = cudf::meanvar<T>;
   transformer_pair_meanvar<T> transformer{};
 
-  const int column_size{5000};
+  int const column_size{5000};
   const T init{0};
 
   // data and valid arrays

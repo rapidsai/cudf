@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,7 @@ struct out_of_place_copy_range_dispatch {
     if (source_end != source_begin) {  // otherwise no-op
       auto ret_view = p_ret->mutable_view();
       in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
+      p_ret->set_null_count(ret_view.null_count());
     }
 
     return p_ret;

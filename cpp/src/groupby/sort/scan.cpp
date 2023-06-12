@@ -126,7 +126,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                "Unsupported list type in grouped rank scan.");
   auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
   auto const& group_labels     = helper.group_labels(stream);
-  auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
+  auto const group_labels_view = column_view(cudf::device_span<size_type const>(group_labels));
   auto const gather_map        = [&]() {
     if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
       return cudf::detail::sequence(group_labels.size(),
@@ -137,8 +137,8 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);
       return sort_order(table_view({group_labels_view, get_grouped_values()}),
-                        {order::ASCENDING, rank_agg._column_order},
-                        {null_order::AFTER, rank_agg._null_precedence},
+                               {order::ASCENDING, rank_agg._column_order},
+                               {null_order::AFTER, rank_agg._null_precedence},
                         stream,
                         rmm::mr::get_current_device_resource());
     }
@@ -184,7 +184,8 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
     cudf::detail::scatter(table_view{{*result}}, *gather_map, table_view{{*result}}, stream, mr)
       ->release()[0]);
   if (rank_agg._null_handling == null_policy::EXCLUDE) {
-    result->set_null_mask(cudf::detail::copy_bitmask(get_grouped_values(), stream, mr));
+    auto const values = get_grouped_values();
+    result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
   }
   cache.add_result(values, agg, std::move(result));
 }

@@ -85,10 +85,10 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&) = delete;
-  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher const&)            = delete;
+  MD5Hasher& operator=(MD5Hasher const&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
-  MD5Hasher& operator=(MD5Hasher&&) = delete;
+  MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)
@@ -106,7 +106,7 @@ struct MD5Hasher {
   struct md5_hash_step {
     uint32_t (&hash_values)[4];
 
-    void __device__ inline operator()(const uint8_t (&buffer)[message_chunk_size])
+    void __device__ inline operator()(uint8_t const (&buffer)[message_chunk_size])
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
@@ -276,10 +276,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       }
     });
 
-  rmm::device_buffer null_mask{0, stream, mr};
-
   return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, {});
 }
 
 }  // namespace detail

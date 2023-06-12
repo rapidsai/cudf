@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IsFloat)
 {
@@ -67,7 +66,7 @@ TEST_F(StringsConvertTest, IsFloat)
 
 TEST_F(StringsConvertTest, ToFloats32)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "1234",    nullptr,        "-876",     "543.2",
     "-0.12",   ".25",          "-.002",    "",
     "-0.0",    "1.2e4",        "NAN",      "abc123",
@@ -79,7 +78,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::vector<float> h_expected;
-  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
+  std::for_each(h_strings.begin(), h_strings.end(), [&](char const* str) {
     h_expected.push_back(str ? std::atof(str) : 0);
   });
 
@@ -104,7 +103,7 @@ TEST_F(StringsConvertTest, FromFloats32)
                               std::numeric_limits<float>::quiet_NaN(),
                               839542223232.79,
                               -0.0};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<float> floats(
@@ -139,7 +138,7 @@ TEST_F(StringsConvertTest, ToFloats64)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::vector<double> h_expected;
-  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
+  std::for_each(h_strings.begin(), h_strings.end(), [&](char const* str) {
     h_expected.push_back(str ? std::atof(str) : 0);
   });
 
@@ -164,7 +163,7 @@ TEST_F(StringsConvertTest, FromFloats64)
                                std::numeric_limits<double>::quiet_NaN(),
                                839542223232.794248339,
                                -0.0};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<double> floats(

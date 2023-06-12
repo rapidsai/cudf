@@ -556,8 +556,7 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
 }  // namespace
 
 // Base test fixture for tests
-struct JsonTest : public cudf::test::BaseFixture {
-};
+struct JsonTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonTest, TreeRepresentation)
 {
@@ -586,7 +585,7 @@ TEST_F(JsonTest, TreeRepresentation)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -673,7 +672,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -747,7 +746,7 @@ TEST_F(JsonTest, TreeRepresentation3)
   options.enable_lines(true);
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -772,7 +771,7 @@ TEST_F(JsonTest, TreeRepresentationError)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
@@ -786,8 +785,7 @@ TEST_F(JsonTest, TreeRepresentationError)
  * @brief Test fixture for parametrized JSON tree traversal tests
  */
 struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
-                               public testing::WithParamInterface<std::tuple<bool, std::string>> {
-};
+                               public testing::WithParamInterface<std::tuple<bool, std::string>> {};
 
 //
 std::vector<std::string> json_list = {
@@ -855,7 +853,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                              static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
+  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
     d_input, options, stream, rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);

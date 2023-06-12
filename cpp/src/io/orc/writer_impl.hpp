@@ -118,7 +118,7 @@ class orc_streams {
   auto type(int idx) const { return types[idx]; }
   auto size() const { return streams.size(); }
 
-  operator std::vector<Stream> const &() const { return streams; }
+  operator std::vector<Stream> const&() const { return streams; }
 
  private:
   std::vector<Stream> streams;
@@ -173,7 +173,7 @@ struct intermediate_statistics {
 
   intermediate_statistics(std::vector<ColStatsBlob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
-                          hostdevice_vector<statistics_merge_group> smg,
+                          cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
                           std::vector<data_type> sct)
     : rowgroup_blobs(std::move(rb)),
@@ -188,7 +188,7 @@ struct intermediate_statistics {
   std::vector<ColStatsBlob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
-  hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+  cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
 };
@@ -209,12 +209,12 @@ struct persisted_statistics {
   }
 
   void persist(int num_table_rows,
-               bool single_write_mode,
-               intermediate_statistics& intermediate_stats,
+               single_write_mode write_mode,
+               intermediate_statistics&& intermediate_stats,
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
-  std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+  std::vector<cudf::detail::hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
   std::vector<rmm::device_uvector<char>> string_pools;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
@@ -235,7 +235,7 @@ struct encoded_footer_statistics {
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
-  static constexpr const char* MAGIC = "ORC";
+  static constexpr char const* MAGIC = "ORC";
 
  public:
   /**
@@ -248,7 +248,7 @@ class writer::impl {
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
-                SingleWriteMode mode,
+                single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
@@ -261,7 +261,7 @@ class writer::impl {
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
-                SingleWriteMode mode,
+                single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
@@ -291,29 +291,29 @@ class writer::impl {
    * @brief Write the intermediate ORC data into the data sink.
    *
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
-   * by `process_for_write` called in the `write()` function.
+   * by `convert_table_to_orc_data` called in the `write()` function.
    *
-   * @param streams List of stream descriptors
-   * @param comp_results Status of data compression
-   * @param strm_descs List of stream descriptors
-   * @param enc_data ORC per-chunk streams of encoded data
-   * @param segmentation Description of how the ORC file is segmented into stripes and rowgroups
-   * @param stripes List of stripe description
-   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
-   * @param compressed_data Compressed stream data
-   * @param intermediate_stats Statistics data stored between calls to write
-   * @param stream_output Temporary host output buffer
+   * @param[in] enc_data ORC per-chunk streams of encoded data
+   * @param[in] segmentation Description of how the ORC file is segmented into stripes and rowgroups
+   * @param[in] orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param[in] compressed_data Compressed stream data
+   * @param[in] comp_results Status of data compression
+   * @param[in] strm_descs List of stream descriptors
+   * @param[in] rg_stats row group level statistics
+   * @param[in,out] streams List of stream descriptors
+   * @param[in,out] stripes List of stripe description
+   * @param[out] bounce_buffer Temporary host output buffer
    */
-  void write_orc_data_to_sink(orc_streams& streams,
-                              hostdevice_vector<compression_result> const& comp_results,
-                              hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-                              encoded_data const& enc_data,
+  void write_orc_data_to_sink(encoded_data const& enc_data,
                               file_segmentation const& segmentation,
-                              std::vector<StripeInformation>& stripes,
                               orc_table_view const& orc_table,
-                              rmm::device_buffer const& compressed_data,
-                              intermediate_statistics& intermediate_stats,
-                              uint8_t* stream_output);
+                              device_span<uint8_t const> compressed_data,
+                              host_span<compression_result const> comp_results,
+                              host_2dspan<gpu::StripeStream const> strm_descs,
+                              host_span<ColStatsBlob const> rg_stats,
+                              orc_streams& streams,
+                              host_span<StripeInformation> stripes,
+                              host_span<uint8_t> bounce_buffer);
 
   /**
    * @brief Add the processed table data into the internal file footer.
@@ -324,6 +324,17 @@ class writer::impl {
   void add_table_to_footer_data(orc_table_view const& orc_table,
                                 std::vector<StripeInformation>& stripes);
 
+  /**
+   * @brief Update writer-level statistics with data from the current table.
+   *
+   * @param num_rows Number of rows in the current table
+   * @param single_table_stats Statistics data from the current table
+   * @param compression_stats Compression statistics from the current table
+   */
+  void update_statistics(size_type num_rows,
+                         intermediate_statistics&& single_table_stats,
+                         std::optional<writer_compression_statistics> const& compression_stats);
+
  private:
   // CUDA stream.
   rmm::cuda_stream_view const _stream;
@@ -333,10 +344,11 @@ class writer::impl {
   size_type const _row_index_stride;
   CompressionKind const _compression_kind;
   size_t const _compression_blocksize;
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
-  bool const _single_write_mode;  // Special parameter only used by `write()` to indicate that
-                                  // we are guaranteeing a single table write. This enables some
-                                  // internal optimizations.
+  single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
+                                               // indicate that we are guaranteeing a single table
+                                               // write. This enables some internal optimizations.
   std::map<std::string, std::string> const _kv_meta;  // Optional user metadata.
   std::unique_ptr<data_sink> const _out_sink;
 

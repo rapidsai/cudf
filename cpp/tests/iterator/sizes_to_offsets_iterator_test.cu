@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,7 @@
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
-struct SizesToOffsetsIteratorTestTyped : public cudf::test::BaseFixture {
-};
+struct SizesToOffsetsIteratorTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SizesToOffsetsIteratorTestTyped, TestingTypes);
 
@@ -64,15 +63,14 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<T>(expected_values.begin(), expected_values.end());
-  auto result_col =
-    cudf::column_view(cudf::data_type(cudf::type_to_id<T>()), d_view.size(), result.data());
+  auto result_col = cudf::column_view(
+    cudf::data_type(cudf::type_to_id<T>()), d_view.size(), result.data(), nullptr, 0);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_col, expected);
   EXPECT_EQ(last.value(stream), expected_reduce);
 }
 
-struct SizesToOffsetsIteratorTest : public cudf::test::BaseFixture {
-};
+struct SizesToOffsetsIteratorTest : public cudf::test::BaseFixture {};
 
 TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
 {

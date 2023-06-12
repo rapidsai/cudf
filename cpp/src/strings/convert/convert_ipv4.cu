@@ -52,8 +52,8 @@ struct ipv4_to_integers_fn {
     uint32_t ipvals[4] = {0};  // IPV4 format: xxx.xxx.xxx.xxx
     int32_t ipv_idx    = 0;
     int32_t factor     = 1;
-    const char* in_ptr = d_str.data();
-    const char* end    = in_ptr + d_str.size_bytes();
+    char const* in_ptr = d_str.data();
+    char const* end    = in_ptr + d_str.size_bytes();
     while ((in_ptr < end) && (ipv_idx < 4)) {
       char ch = *in_ptr++;
       if (ch < '0' || ch > '9') {
@@ -197,7 +197,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                       if (d_str.empty()) return false;
                       constexpr int max_ip = 255;  // values must be in [0,255]
                       int ip_vals[4]       = {-1, -1, -1, -1};
-                      int ipv_idx          = 0;  // index into ip_vals
+                      int ipv_idx          = 0;    // index into ip_vals
                       for (auto const ch : d_str) {
                         if ((ch >= '0') && (ch <= '9')) {
                           auto const ip_val    = ip_vals[ipv_idx];

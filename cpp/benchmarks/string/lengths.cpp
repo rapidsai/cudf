@@ -51,6 +51,6 @@ static void bench_lengths(nvbench::state& state)
 }
 
 NVBENCH_BENCH(bench_lengths)
-  .set_name("strings_lengths")
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048, 4096});
+  .set_name("lengths")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048, 4096})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});

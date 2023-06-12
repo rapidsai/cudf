@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ inline rmm::device_buffer create_data(data_type type,
   return data;
 }
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief Class for holding device memory buffers to column data that eventually
@@ -85,11 +85,11 @@ struct column_buffer {
   }
 
   // move constructor
-  column_buffer(column_buffer&& col) = default;
+  column_buffer(column_buffer&& col)            = default;
   column_buffer& operator=(column_buffer&& col) = default;
 
   // copy constructor
-  column_buffer(column_buffer const& col) = delete;
+  column_buffer(column_buffer const& col)            = delete;
   column_buffer& operator=(column_buffer const& col) = delete;
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for

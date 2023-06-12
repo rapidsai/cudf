@@ -317,8 +317,8 @@ struct parse_datetime {
           bytes_read -= left;
           break;
         }
-        case 'u': [[fallthrough]];  // day of week: Mon(1)-Sat(6),Sun(7)
-        case 'w': {                 // day of week; Sun(0),Mon(1)-Sat(6)
+        case 'u': [[fallthrough]];      // day of week: Mon(1)-Sat(6),Sun(7)
+        case 'w': {                     // day of week; Sun(0),Mon(1)-Sat(6)
           auto const [weekday, left] = parse_int(ptr, item.length);
           timeparts.weekday          =  // 0 is mapped to 7 for chrono library
             static_cast<int8_t>((item.value == 'w' && weekday == 0) ? 7 : weekday);
@@ -477,7 +477,7 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @return true if all digits are 0-9
    */
-  __device__ bool check_digits(const char* str, size_type bytes)
+  __device__ bool check_digits(char const* str, size_type bytes)
   {
     return thrust::all_of(thrust::seq, str, str + bytes, [] __device__(char chr) {
       return (chr >= '0' && chr <= '9');
@@ -1000,10 +1000,10 @@ struct datetime_formatter_fn {
         case 'S':  // second
           copy_value = timeparts.second;
           break;
-        case 'f':  // sub-second
+        case 'f':                                 // sub-second
         {
           char subsecond_digits[] = "000000000";  // 9 max digits
-          const int digits        = [] {
+          int const digits        = [] {
             if constexpr (std::is_same_v<T, cudf::timestamp_ms>) return 3;
             if constexpr (std::is_same_v<T, cudf::timestamp_us>) return 6;
             if constexpr (std::is_same_v<T, cudf::timestamp_ns>) return 9;

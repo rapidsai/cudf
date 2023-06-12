@@ -58,7 +58,7 @@ class row_validity {
  public:
   row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ inline bool operator()(const size_type& i) const noexcept
+  __device__ inline bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }

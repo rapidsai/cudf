@@ -48,6 +48,7 @@ set(cython_sources
     string_casting.pyx
     strings_udf.pyx
     text.pyx
+    timezone.pyx
     transform.pyx
     transpose.pyx
     types.pyx
@@ -61,11 +62,6 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
-
-# All modules need to include the header containing the exception handler.
-foreach(target IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-endforeach()
 
 target_link_libraries(strings_udf cudf_strings_udf)
 
@@ -97,7 +93,7 @@ foreach(target IN LISTS targets_using_dlpack)
   target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
 endforeach()
 
-find_package(Python 3.8 REQUIRED COMPONENTS Interpreter)
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"

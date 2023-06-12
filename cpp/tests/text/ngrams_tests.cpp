@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@
 
 #include <vector>
 
-struct TextGenerateNgramsTest : public cudf::test::BaseFixture {
-};
+struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextGenerateNgramsTest, Ngrams)
 {
@@ -79,7 +78,7 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
 
 TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
 {
-  std::vector<const char*> h_strings{"the", "fox", "", "jumped", "over", nullptr, "the", "dog"};
+  std::vector<char const*> h_strings{"the", "fox", "", "jumped", "over", nullptr, "the", "dog"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -122,7 +121,7 @@ TEST_F(TextGenerateNgramsTest, Errors)
   EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings), 3),
                cudf::logic_error);
 
-  std::vector<const char*> h_strings{"", nullptr, "", nullptr};
+  std::vector<char const*> h_strings{"", nullptr, "", nullptr};
   cudf::test::strings_column_wrapper strings_no_tokens(
     h_strings.begin(),
     h_strings.end(),

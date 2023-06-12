@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,11 +25,11 @@ import java.nio.ByteBuffer;
  * much simpler.
  */
 public final class ContiguousTable implements AutoCloseable {
-  private long metadataHandle = 0;
   private Table table = null;
   private DeviceMemoryBuffer buffer;
-  private ByteBuffer metadataBuffer = null;
   private final long rowCount;
+  private PackedColumnMetadata meta;
+  private ByteBuffer metadataBuffer;
 
   // This method is invoked by JNI
   static ContiguousTable fromPackedTable(long metadataHandle,
@@ -43,8 +43,8 @@ public final class ContiguousTable implements AutoCloseable {
 
   /** Construct a contiguous table instance given a table and the device buffer backing it. */
   ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
-    this.metadataHandle = createPackedMetadata(table.getNativeView(),
-            buffer.getAddress(), buffer.getLength());
+    this.meta = new PackedColumnMetadata(createPackedMetadata(table.getNativeView(),
+            buffer.getAddress(), buffer.getLength()));
     this.table = table;
     this.buffer = buffer;
     this.rowCount = table.getRowCount();
@@ -57,7 +57,7 @@ public final class ContiguousTable implements AutoCloseable {
    * @param rowCount number of rows in the table
    */
   ContiguousTable(long metadataHandle, DeviceMemoryBuffer buffer, long rowCount) {
-    this.metadataHandle = metadataHandle;
+    this.meta = new PackedColumnMetadata(metadataHandle);
     this.buffer = buffer;
     this.rowCount = rowCount;
   }
@@ -94,18 +94,14 @@ public final class ContiguousTable implements AutoCloseable {
    *       or data corruption.
    */
   public ByteBuffer getMetadataDirectBuffer() {
-    if (metadataBuffer == null) {
-      metadataBuffer = createMetadataDirectBuffer(metadataHandle);
-    }
-    return metadataBuffer.asReadOnlyBuffer();
+    return meta.getMetadataDirectBuffer();
   }
 
   /** Close the contiguous table instance and its underlying resources. */
   @Override
   public void close() {
-    if (metadataHandle != 0) {
-      closeMetadata(metadataHandle);
-      metadataHandle = 0;
+    if (meta != null) {
+      meta.close();
     }
 
     if (table != null) {
@@ -122,9 +118,4 @@ public final class ContiguousTable implements AutoCloseable {
   // create packed metadata for a table backed by a single data buffer
   private static native long createPackedMetadata(long tableView, long dataAddress, long dataSize);
 
-  // create a DirectByteBuffer for the packed table metadata
-  private static native ByteBuffer createMetadataDirectBuffer(long metadataHandle);
-
-  // release the native metadata resources for a packed table
-  private static native void closeMetadata(long metadataHandle);
 }

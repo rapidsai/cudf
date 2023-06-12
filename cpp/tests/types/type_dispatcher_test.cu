@@ -25,12 +25,10 @@
 
 #include <rmm/device_uvector.hpp>
 
-struct DispatcherTest : public cudf::test::BaseFixture {
-};
+struct DispatcherTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedDispatcherTest : public DispatcherTest {
-};
+struct TypedDispatcherTest : public DispatcherTest {};
 
 TYPED_TEST_SUITE(TypedDispatcherTest, cudf::test::AllTypes);
 
@@ -77,8 +75,8 @@ TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
   EXPECT_EQ(true, result.front_element(cudf::get_default_stream()));
 }
 
-struct IdDispatcherTest : public DispatcherTest, public testing::WithParamInterface<cudf::type_id> {
-};
+struct IdDispatcherTest : public DispatcherTest,
+                          public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest, testing::ValuesIn(cudf::test::all_type_ids));
 
@@ -89,8 +87,7 @@ TEST_P(IdDispatcherTest, IdToType)
 }
 
 template <typename T>
-struct TypedDoubleDispatcherTest : public DispatcherTest {
-};
+struct TypedDoubleDispatcherTest : public DispatcherTest {};
 
 TYPED_TEST_SUITE(TypedDoubleDispatcherTest, cudf::test::AllTypes);
 
@@ -140,8 +137,7 @@ TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 }
 
 struct IdDoubleDispatcherTest : public DispatcherTest,
-                                public testing::WithParamInterface<cudf::type_id> {
-};
+                                public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds,
                         IdDoubleDispatcherTest,
@@ -156,8 +152,7 @@ TEST_P(IdDoubleDispatcherTest, IdToType)
 }
 
 struct IdFixedDoubleDispatcherTest : public DispatcherTest,
-                                     public testing::WithParamInterface<cudf::type_id> {
-};
+                                     public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds,
                         IdFixedDoubleDispatcherTest,

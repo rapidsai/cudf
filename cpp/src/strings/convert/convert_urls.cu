@@ -107,9 +107,9 @@ struct url_encoder_fn {
             out_ptr = copy_and_increment(out_ptr, hex, 2);  // add them to the output
           }
         }
-      } else  // these are to be utf-8 url-encoded
+      } else                       // these are to be utf-8 url-encoded
       {
-        uint8_t char_bytes[4];  // holds utf-8 bytes for one character
+        uint8_t char_bytes[4];     // holds utf-8 bytes for one character
         size_type char_width = from_char_utf8(ch, reinterpret_cast<char*>(char_bytes));
         nbytes += char_width * 3;  // '%' plus 2 hex chars per byte (example: é is %C3%A9)
         // process each byte in this current character
@@ -378,7 +378,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   constexpr int num_warps_per_threadblock = 4;
   constexpr int threadblock_size          = num_warps_per_threadblock * cudf::detail::warp_size;
   constexpr int char_block_size           = 256;
-  const int num_threadblocks =
+  int const num_threadblocks =
     std::min(65536, cudf::util::div_rounding_up_unsafe(strings_count, num_warps_per_threadblock));
 
   auto offset_count    = strings_count + 1;

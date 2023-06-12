@@ -320,7 +320,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     EXPECT_EQ(host_result[5], exact[2]) << "atomicXor test(2) failed";
   }
 
-  [[maybe_unused]] void print_exact(const T* v, const char* msg)
+  [[maybe_unused]] void print_exact(T const* v, char const* msg)
   {
     std::cout << std::hex << std::showbase;
     std::cout << "The " << msg << " = {" << +v[0] << ", " << +v[1] << ", " << +v[2] << "}"
