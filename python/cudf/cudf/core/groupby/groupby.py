@@ -10,9 +10,10 @@ from typing import Any, Iterable, List, Optional, Tuple, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 
 import cudf
+import pandas as pd
+from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
@@ -23,6 +24,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
@@ -569,67 +571,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         if self._sort:
             result = result.sort_index()
         else:
-            # import pdb;pdb.set_trace()
-            if True and not libgroupby._is_all_scan_aggregate(normalized_aggs):
-                # import pdb;pdb.set_trace()
-                from cudf import _lib as libcudf
-                from cudf.core.join._join_helpers import _match_join_keys
-
-                # import pdb;pdb.set_trace()
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
                 if not isinstance(result_index, cudf.MultiIndex):
-                    if isinstance(self._by, (str, list)):
-                        try:
-                            lcol, rcol = _match_join_keys(
-                                self.obj[self._by]
-                                .drop_duplicates()
-                                ._data.columns[0],
-                                result_index._column,
-                                "inner",
-                            )
-                        except (KeyError, IndexError):
-                            lcol, rcol = _match_join_keys(
-                                self.grouping.keys.drop_duplicates()._column,
-                                result_index._column,
-                                "inner",
-                            )
-                    elif isinstance(self._by, _Grouping):
-                        lcol, rcol = _match_join_keys(
-                            self.grouping.keys.drop_duplicates()._column,
-                            result_index._column,
-                            "inner",
-                        )
-                    else:
-                        lcol, rcol = _match_join_keys(
-                            self.grouping.keys.drop_duplicates()._column,
-                            result_index._column,
-                            "inner",
-                        )
-                    scatter_map, indices = libcudf.join.join(
-                        [lcol], [rcol], how="inner"
+                    lcol, rcol = _match_join_keys(
+                        self.grouping.keys.drop_duplicates()._column,
+                        result_index._column,
+                        "inner",
                     )
+                    _, indices = libcudf.join.join([lcol], [rcol], how="inner")
                 else:
-                    # import pdb;pdb.set_trace()
-                    if isinstance(self._by, (str, list)):
-                        try:
-                            left_cols = list(
-                                self.obj[self._by]
-                                .drop_duplicates()
-                                ._data.columns
-                            )
-                        except (KeyError, IndexError, TypeError):
-                            left_cols = list(
-                                self.grouping.keys.drop_duplicates()._data.columns
-                            )
-                    elif isinstance(self._by, _Grouping):
-                        left_cols = list(
-                            self.grouping.keys.drop_duplicates()._data.columns
-                        )
-                    else:
-                        left_cols = list(
-                            self.grouping.keys.drop_duplicates()._data.columns
-                        )
+                    left_cols = list(
+                        self.grouping.keys.drop_duplicates()._data.columns
+                    )
                     right_cols = list(result_index._data.columns)
-                    scatter_map, indices = libcudf.join.join(
+                    _, indices = libcudf.join.join(
                         left_cols, right_cols, how="inner"
                     )
 
