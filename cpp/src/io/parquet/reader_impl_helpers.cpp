@@ -180,18 +180,18 @@ metadata::metadata(datasource* source)
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
 
-  const auto len           = source->size();
-  const auto header_buffer = source->host_read(0, header_len);
-  const auto header        = reinterpret_cast<const file_header_s*>(header_buffer->data());
-  const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
-  const auto ender         = reinterpret_cast<const file_ender_s*>(ender_buffer->data());
+  auto const len           = source->size();
+  auto const header_buffer = source->host_read(0, header_len);
+  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
+  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
   CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
                "Corrupted header or footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
-  const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
   CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");

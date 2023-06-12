@@ -36,7 +36,7 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
                                                    rmm::mr::device_memory_resource* mr);
 
 template <template <typename> typename DispatchFn>
-std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
+std::unique_ptr<column> scan_agg_dispatch(column_view const& input,
                                           scan_aggregation const& agg,
                                           bitmask_type const* output_mask,
                                           rmm::cuda_stream_view stream,

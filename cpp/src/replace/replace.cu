@@ -66,10 +66,10 @@ static constexpr int BLOCK_SIZE = 256;
 // return the new_value for output column at index `idx`
 template <class T, bool replacement_has_nulls>
 __device__ auto get_new_value(cudf::size_type idx,
-                              const T* __restrict__ input_data,
-                              const T* __restrict__ values_to_replace_begin,
-                              const T* __restrict__ values_to_replace_end,
-                              const T* __restrict__ d_replacement_values,
+                              T const* __restrict__ input_data,
+                              T const* __restrict__ values_to_replace_begin,
+                              T const* __restrict__ values_to_replace_end,
+                              T const* __restrict__ d_replacement_values,
                               cudf::bitmask_type const* __restrict__ replacement_valid)
 {
   auto found_ptr =
