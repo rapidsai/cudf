@@ -60,7 +60,7 @@ inline rmm::device_buffer create_data(data_type type,
   return data;
 }
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 // forward declare friend functions
 template <typename string_policy>
