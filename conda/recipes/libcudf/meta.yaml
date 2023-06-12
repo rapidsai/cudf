@@ -150,6 +150,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/logger.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/pinned_host_vector.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/stacktrace.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
         - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp

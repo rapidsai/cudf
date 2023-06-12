@@ -355,13 +355,13 @@ class orc_metadata {
 };
 
 /**
- * @brief Reads file-level and stripe-level statistics of ORC dataset.
+ * @brief Reads metadata of ORC dataset.
  *
  * @ingroup io_readers
  *
  * @param src_info Dataset source
  *
- * @return Column names and decoded ORC statistics
+ * @return orc_metadata with ORC schema, number of rows and number of stripes.
  */
 orc_metadata read_orc_metadata(source_info const& src_info);
 

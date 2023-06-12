@@ -70,12 +70,12 @@ cudf::test::TempDirTestEnvironment* const temp_env =
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 template <typename T>
-std::vector<std::string> prepend_zeros(const std::vector<T>& input,
+std::vector<std::string> prepend_zeros(std::vector<T> const& input,
                                        int zero_count         = 0,
                                        bool add_positive_sign = false)
 {
   std::vector<std::string> output(input.size());
-  std::transform(input.begin(), input.end(), output.begin(), [=](const T& num) {
+  std::transform(input.begin(), input.end(), output.begin(), [=](T const& num) {
     auto str         = std::to_string(num);
     bool is_negative = (str[0] == '-');
     if (is_negative) {
@@ -92,12 +92,12 @@ std::vector<std::string> prepend_zeros(const std::vector<T>& input,
 }
 
 template <>
-std::vector<std::string> prepend_zeros<std::string>(const std::vector<std::string>& input,
+std::vector<std::string> prepend_zeros<std::string>(std::vector<std::string> const& input,
                                                     int zero_count,
                                                     bool add_positive_sign)
 {
   std::vector<std::string> output(input.size());
-  std::transform(input.begin(), input.end(), output.begin(), [=](const std::string& num) {
+  std::transform(input.begin(), input.end(), output.begin(), [=](std::string const& num) {
     auto str         = num;
     bool is_negative = (str[0] == '-');
     if (is_negative) {
@@ -245,7 +245,7 @@ struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalTy
       std::accumulate(reference_strings.begin(),
                       reference_strings.end(),
                       std::string{},
-                      [](const std::string& acc, const std::string& rhs) {
+                      [](std::string const& acc, std::string const& rhs) {
                         return acc + (acc.empty() ? "" : "\n") + "{\"col0\":" + rhs + "}";
                       });
     cudf::io::json_reader_options const in_opts =
@@ -359,7 +359,7 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
     float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998},
                   validity});
 
-  const auto bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
+  auto const bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
   ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
 }
 
@@ -453,7 +453,7 @@ TEST_P(JsonReaderParamTest, MultiColumn)
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   EXPECT_EQ(view.num_columns(), 6);
   EXPECT_EQ(view.column(0).type().id(), cudf::type_id::INT8);
@@ -504,7 +504,7 @@ TEST_P(JsonReaderParamTest, Booleans)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   // Booleans are the same (integer) data type, but valued at 0 or 1
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
@@ -549,7 +549,7 @@ TEST_P(JsonReaderParamTest, Dates)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
@@ -605,7 +605,7 @@ TEST_P(JsonReaderParamTest, Durations)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
 
@@ -877,7 +877,7 @@ TEST_F(JsonReaderTest, EmptyFile)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   auto result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -894,7 +894,7 @@ TEST_F(JsonReaderTest, NoDataFile)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -911,7 +911,7 @@ TEST_F(JsonReaderTest, NoDataFileValues)
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -957,7 +957,7 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
                                                 "\n");
   std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
-  const auto filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.json";
+  auto const filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.json";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << data;
@@ -1074,7 +1074,7 @@ TEST_P(JsonReaderParamTest, ParseInRangeIntegers)
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_small_int, view.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_less_equal_int64_max, view.column(1));
@@ -1178,7 +1178,7 @@ TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_out_of_range_positive, view.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_out_of_range_negative, view.column(1));

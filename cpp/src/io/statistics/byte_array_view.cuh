@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ class byte_array_view {
    * @param rhs Target byte_array_view to compare with this byte_array_view.
    * @return true if this byte_array_view is ordered before rhs
    */
-  [[nodiscard]] __device__ inline bool operator<(const byte_array_view& rhs) const
+  [[nodiscard]] __device__ inline bool operator<(byte_array_view const& rhs) const
   {
     return compare(rhs) < 0;
   }
@@ -130,7 +130,7 @@ class byte_array_view {
    * @param rhs Target byte_array_view to compare with this byte_array_view.
    * @return true if rhs is ordered before this byte_array_view
    */
-  [[nodiscard]] __device__ inline bool operator>(const byte_array_view& rhs) const
+  [[nodiscard]] __device__ inline bool operator>(byte_array_view const& rhs) const
   {
     return compare(rhs) > 0;
   }
@@ -141,7 +141,7 @@ class byte_array_view {
    * @param rhs Target byte_array_view to compare with this byte_array_view.
    * @return true if this byte_array_view is ordered before rhs
    */
-  [[nodiscard]] __device__ inline bool operator<=(const byte_array_view& rhs) const
+  [[nodiscard]] __device__ inline bool operator<=(byte_array_view const& rhs) const
   {
     return compare(rhs) <= 0;
   }
@@ -151,7 +151,7 @@ class byte_array_view {
    * @param rhs Target byte_array_view to compare with this byte_array_view.
    * @return true if rhs is ordered before this byte_array_view
    */
-  [[nodiscard]] __device__ inline bool operator>=(const byte_array_view& rhs) const
+  [[nodiscard]] __device__ inline bool operator>=(byte_array_view const& rhs) const
   {
     return compare(rhs) >= 0;
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     bool const output_is_valid = (count >= min_periods);
 
     // set the mask
-    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
+    unsigned int const result_mask = __ballot_sync(active_threads, output_is_valid);
 
     // store the output value, one per thread
     if (output_is_valid) { out_col[i] = val; }
