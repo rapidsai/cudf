@@ -183,7 +183,7 @@ aggregate_orc_metadata::select_stripes(
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
-      for (const auto& stripe_idx : user_specified_stripes[src_file_idx]) {
+      for (auto const& stripe_idx : user_specified_stripes[src_file_idx]) {
         CUDF_EXPECTS(
           stripe_idx >= 0 and stripe_idx < static_cast<decltype(stripe_idx)>(
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
@@ -228,13 +228,13 @@ aggregate_orc_metadata::select_stripes(
       per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
       for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
-        const auto stripe         = mapping.stripe_info[i].first;
-        const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
-        const auto sf_comp_length = stripe->footerLength;
+        auto const stripe         = mapping.stripe_info[i].first;
+        auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
+        auto const sf_comp_length = stripe->footerLength;
         CUDF_EXPECTS(
           sf_comp_offset + sf_comp_length < per_file_metadata[mapping.source_idx].source->size(),
           "Invalid stripe information");
-        const auto buffer =
+        auto const buffer =
           per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
         auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
           {buffer->data(), buffer->size()}, stream);
@@ -260,7 +260,7 @@ column_hierarchy aggregate_orc_metadata::select_columns(
       add_column_to_mapping(selected_columns, pfm, col_id);
     }
   } else {
-    for (const auto& path : column_paths.value()) {
+    for (auto const& path : column_paths.value()) {
       bool name_found = false;
       for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
         if (pfm.column_path(col_id) == path) {
