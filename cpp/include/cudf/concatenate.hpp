@@ -39,7 +39,7 @@ namespace cudf {
  * Returns an empty buffer if the column is not nullable.
  *
  * @param views Column views whose bitmasks will be concatenated
- * @param mr Device memory resource used for allocating return memory
+ * @param mr Device memory resource used for allocating the returned memory
  * @return Bitmasks of all the column views in the views vector
  */
 rmm::device_buffer concatenate_masks(
