@@ -2422,6 +2422,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dict),
+                      std::move(stripe_dicts),
                       cudf::detail::pinned_host_vector<uint8_t>()};
   }
 
@@ -2502,6 +2503,7 @@ auto convert_table_to_orc_data(table_view const& input,
                     std::move(streams),
                     std::move(stripes),
                     std::move(stripe_dict),
+                    std::move(stripe_dicts),
                     std::move(bounce_buffer)};
 }
 
@@ -2578,7 +2580,8 @@ void writer::impl::write(table_view const& input)
                          compression_stats,
                          streams,
                          stripes,
-                         stripe_dict, /* unused, but its data will be accessed via pointer later */
+                         stripe_dict,  /* TODO remove */
+                         stripe_dicts, /* unused, but its data will be accessed via pointer later */
                          bounce_buffer] = [&] {
     try {
       return convert_table_to_orc_data(input,
