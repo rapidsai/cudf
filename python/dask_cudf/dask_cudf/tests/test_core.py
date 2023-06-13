@@ -809,7 +809,7 @@ def test_series_describe():
     dd.assert_eq(
         dsr.describe(),
         pdsr.describe(),
-        check_less_precise=3,
+        rtol=1e-3,
     )
 
 
@@ -838,7 +838,7 @@ def test_zero_std_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), pddf.describe(), rtol=1e-3)
 
 
 def test_large_numbers_var():
@@ -853,7 +853,7 @@ def test_large_numbers_var():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
+    dd.assert_eq(ddf.var(), pddf.var(), rtol=1e-3)
 
 
 def test_index_map_partitions():

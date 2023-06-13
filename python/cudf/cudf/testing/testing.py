@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -101,7 +99,6 @@ def assert_column_equal(
     right,
     check_dtype=True,
     check_column_type="equiv",
-    check_less_precise=False,
     check_exact=False,
     check_datetimelike_compat=False,
     check_categorical=True,
@@ -129,8 +126,6 @@ def assert_column_equal(
         Whether to check the columns class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_datetime_like_compat : bool, default False
@@ -292,7 +287,6 @@ def assert_index_equal(
     right,
     exact="equiv",
     check_names: bool = True,
-    check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
     check_order: bool = True,
@@ -319,8 +313,6 @@ def assert_index_equal(
         for Index with an int8/int32/int64 dtype as well.
     check_names : bool, default True
         Whether to check the names attribute.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_categorical : bool, default True
@@ -404,7 +396,6 @@ def assert_index_equal(
                 exact=check_exact,
                 check_names=check_names,
                 check_exact=check_exact,
-                check_less_precise=check_less_precise,
                 check_order=check_order,
                 rtol=rtol,
                 atol=atol,
@@ -433,7 +424,6 @@ def assert_series_equal(
     check_dtype=True,
     check_index_type="equiv",
     check_series_type=True,
-    check_less_precise=False,
     check_names=True,
     check_exact=False,
     check_datetimelike_compat=False,
@@ -465,8 +455,6 @@ def assert_series_equal(
         Whether to check the series class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_names : bool, default True
         Whether to check that the names attribute for both the index
         and column attributes of the Series is identical.
@@ -530,7 +518,6 @@ def assert_series_equal(
         right.index,
         exact=check_index_type,
         check_names=check_names,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_categorical=check_categorical,
         rtol=rtol,
@@ -543,7 +530,6 @@ def assert_series_equal(
         right._column,
         check_dtype=check_dtype,
         check_column_type=check_series_type,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_datetimelike_compat=check_datetimelike_compat,
         check_categorical=check_categorical,
