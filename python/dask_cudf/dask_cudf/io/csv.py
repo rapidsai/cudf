@@ -88,7 +88,7 @@ def read_csv(path, blocksize="default", **kwargs):
     if blocksize == "default":
         if (
             kwargs.get("skipfooter", 0) != 0
-            or kwargs.get("skiprows", 0)
+            or kwargs.get("skiprows", 0) != 0
             or kwargs.get("nrows", None) is not None
         ):
             # Cannot read in blocks if skipfooter,
