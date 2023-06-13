@@ -190,20 +190,6 @@ std::size_t gather_stream_info(std::size_t stripe_index,
   return dst_offset;
 }
 
-void decompress_check(device_span<compression_result> results,
-                      bool* any_block_failure,
-                      rmm::cuda_stream_view stream)
-{
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(std::size_t{0}),
-                   thrust::make_counting_iterator(results.size()),
-                   [results, any_block_failure] __device__(auto const idx) {
-                     if (results[idx].status != compression_status::SUCCESS) {
-                       *any_block_failure = true;  // Doesn't need to be atomic
-                     }
-                   });
-}
-
 /**
  * @brief Decompresses the stripe data, at stream granularity.
  *
@@ -349,7 +335,17 @@ rmm::device_buffer decompress_stripe_data(
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_res, any_block_failure.device_ptr(), stream);
+
+    // Check if any block has been failed to decompress.
+    // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
+    thrust::for_each(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(std::size_t{0}),
+      thrust::make_counting_iterator(inflate_res.size()),
+      [results           = inflate_res.begin(),
+       any_block_failure = any_block_failure.device_ptr()] __device__(auto const idx) {
+        if (results[idx].status != compression_status::SUCCESS) { *any_block_failure = true; }
+      });
   }
 
   if (num_uncompressed_blocks > 0) {
@@ -364,7 +360,7 @@ rmm::device_buffer decompress_stripe_data(
   any_block_failure.device_to_host_async(stream);
 
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
-  compinfo.device_to_host_sync(stream);
+  compinfo.device_to_host_sync(stream);  // This also sync stream for `any_block_failure`.
 
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
