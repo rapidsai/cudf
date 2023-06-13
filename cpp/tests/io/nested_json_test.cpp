@@ -273,7 +273,7 @@ TEST_F(JsonTest, StackContextRecovering)
     d_input, stack_context.device_ptr(), recover_from_error, stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host_async(stream);
 
   // Make sure we copied back the stack context
   stream.synchronize();
