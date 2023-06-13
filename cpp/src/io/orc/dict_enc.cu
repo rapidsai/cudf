@@ -564,6 +564,42 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  collect_map_entries_kernel(device_2dspan<stripe_dictionary> dictionaries)
+{
+  auto col_idx    = blockIdx.x;
+  auto stripe_idx = blockIdx.y;
+  auto& dict      = dictionaries[col_idx][stripe_idx];
+  if (dict.map_slots.empty()) { return; }
+
+  auto t = threadIdx.x;
+  if (!t) printf("dict %d, stripe %d\n", blockIdx.x, blockIdx.y);
+
+  auto map = map_type::device_view(dict.map_slots.data(),
+                                   dict.map_slots.size(),
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
+
+  __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
+
+  using cuda::std::memory_order_relaxed;
+  if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
+  __syncthreads();
+  for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
+    if (t + i < dict.map_slots.size()) {
+      auto* slot = reinterpret_cast<map_type::value_type*>(map.begin_slot() + t + i);
+      auto key   = slot->first;
+      if (key != KEY_SENTINEL) {
+        auto loc       = counter.fetch_add(1, memory_order_relaxed);
+        dict.data[loc] = key;
+        // chunk.dict_data_idx[loc] = t + i;
+        slot->second = loc;
+      }
+    }
+  }
+}
+
 void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
                            device_2dspan<DictionaryChunk> chunks,
                            device_span<device_span<uint32_t>> dict_data,
@@ -618,6 +654,7 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
 void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
                                      rmm::cuda_stream_view stream)
 {
+  if (dictionaries.count() == 0) { return; }
   constexpr int block_size = 1024;
   initialize_dictionary_hash_maps_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries.flat_view());
@@ -627,9 +664,19 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
                                    device_span<orc_column_device_view const> columns,
                                    rmm::cuda_stream_view stream)
 {
+  if (dictionaries.count() == 0) { return; }
   dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
   populate_dictionary_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(dictionaries, columns);
+}
+
+void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
+                         rmm::cuda_stream_view stream)
+{
+  if (dictionaries.count() == 0) { return; }
+  constexpr int block_size = 1024;
+  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
+  collect_map_entries_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(dictionaries);
 }
 
 }  // namespace gpu

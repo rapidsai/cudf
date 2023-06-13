@@ -243,6 +243,9 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
                                    device_span<orc_column_device_view const> columns,
                                    rmm::cuda_stream_view stream);
 
+void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
+                         rmm::cuda_stream_view stream);
+
 constexpr uint32_t encode_block_size = 512;
 
 /**
