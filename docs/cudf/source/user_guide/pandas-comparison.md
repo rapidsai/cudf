@@ -153,7 +153,7 @@ enable `cudf` to cast the column names to `str` just like pandas.
 >>> df.to_parquet("df.parquet")
 
 Traceback (most recent call last):
-ValueError: parquet must have string column names
+ValueError: Writing a Parquet file requires string column names
 >>> cudf.set_option("mode.pandas_compatible", True)
 >>> df.to_parquet("df.parquet")
 
