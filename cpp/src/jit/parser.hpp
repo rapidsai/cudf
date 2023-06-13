@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ class ptx_parser {
   static std::string parse_param(const std::string& src);
 
   /**
-   * @brief parse function body of the the PTX code into statements by `;`s.
+   * @brief parse function body of the PTX code into statements by `;`s.
    *
    * @param src The function body of the PTX code
    * @return The parsed statements
