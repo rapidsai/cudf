@@ -22,15 +22,17 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to help cuDF and fill out this bug report!
+        Thanks for taking the time to help cuDF and fill out this bug report.
         - By submitting this issue, you agree to follow our [Code of Conduct](https://docs.rapids.ai/resources/conduct/)
-        - You also confirm that you have searched the [open bugs](https://github.com/rapidsai/cudf/issues?q=is%3Aopen+is%3Aissue+label%3Abug) and have found no duplicates for this request
+        - Please link to any related [open bugs](https://github.com/rapidsai/cudf/issues?q=is%3Aopen+is%3Aissue+label%3Abug)
 
   - type: input
     id: version
     attributes:
       label: Version
-      description: What version of cuDF are you running?
+      description: |
+        What version of cuDF are you running?
+        For Python installations: `python -c "import cudf; print(cudf.__version__)"`
       placeholder: "example: 23.06"
     validations:
       required: true
@@ -59,25 +61,22 @@ body:
     attributes:
       label: Minimum reproducible example
       description: Please supply a [minimum reproducible code example](https://matthewrocklin.com/minimal-bug-reports) here.
-      render: shell
 
   - type: textarea
     id: logs
     attributes:
       label: Relevant log output
-      description: Please paste relevant error and log output here
-      render: shell
+      description: Please paste relevant error and log output here.
 
   - type: textarea
     id: env-details
     attributes:
       label: Environment details
-      description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here
+      description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here.
       placeholder: |
        + Environment location: [Bare metal, Docker, Cloud (specify cloud provider)]
        + If method of install is Docker, provide `docker pull` & `docker run` commands used
        + Paste output from `print_env.sh` (linked above)
-      render: shell
 
   - type: textarea
     id: misc
