@@ -571,7 +571,7 @@ __global__ void __launch_bounds__(block_size)
   auto const col_idx    = blockIdx.x;
   auto const stripe_idx = blockIdx.y;
   auto& dict            = dictionaries[col_idx][stripe_idx];
-  if (dict.map_slots.empty()) { return; }
+  if (not dict.is_enabled()) { return; }
 
   auto t   = threadIdx.x;
   auto map = map_type::device_view(dict.map_slots.data(),
@@ -607,7 +607,7 @@ __global__ void __launch_bounds__(block_size)
   auto& dict            = dictionaries[col_idx][stripe_idx];
   auto const& col       = columns[dict.column_idx];
 
-  if (dict.map_slots.empty()) { return; }
+  if (not dict.is_enabled()) { return; }
 
   auto const t         = threadIdx.x;
   auto const start_row = dict.start_row;

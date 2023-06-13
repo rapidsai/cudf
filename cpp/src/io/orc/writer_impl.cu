@@ -274,12 +274,27 @@ class orc_column_view {
     stripe_dict   = host_stripe_dict;
     d_stripe_dict = dev_stripe_dict;
   }
+
+  void attach_stripe_dicts(host_span<gpu::stripe_dictionary const> host_stripe_dicts,
+                           device_span<gpu::stripe_dictionary const> dev_stripe_dicts)
+  {
+    stripe_dicts   = host_stripe_dicts;
+    d_stripe_dicts = dev_stripe_dicts;
+  }
+
   [[nodiscard]] auto host_stripe_dict(size_t stripe) const
   {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
     return &stripe_dict[stripe * _dict_stride + _str_idx];
   }
   [[nodiscard]] auto device_stripe_dict() const noexcept { return d_stripe_dict; }
+
+  [[nodiscard]] auto const& host_stripe_dict2(size_t stripe) const
+  {
+    CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
+    return stripe_dicts[stripe];
+  }
+  [[nodiscard]] auto const& device_stripe_dicts() const noexcept { return d_stripe_dicts; }
 
   // Index in the table
   [[nodiscard]] uint32_t index() const noexcept { return _index; }
@@ -336,6 +351,9 @@ class orc_column_view {
 
   gpu::StripeDictionary const* stripe_dict   = nullptr;
   gpu::StripeDictionary const* d_stripe_dict = nullptr;
+
+  host_span<gpu::stripe_dictionary const> stripe_dicts;
+  device_span<gpu::stripe_dictionary const> d_stripe_dicts;
 
   // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
   // into the output stream.
@@ -772,12 +790,12 @@ orc_streams create_streams(host_span<orc_column_view> columns,
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
         for (auto const& stripe : segmentation.stripes) {
-          const auto sd = column.host_stripe_dict(stripe.id);
-          enable_dict   = (enable_dict && sd->dict_data != nullptr);
+          auto const sd = column.host_stripe_dict2(stripe.id);
+          enable_dict   = (enable_dict && sd.is_enabled());
           if (enable_dict) {
-            dict_strings += sd->num_strings;
-            dict_lengths_div512 += (sd->num_strings + 0x1ff) >> 9;
-            dict_data_size += sd->dict_char_count;
+            dict_strings += sd.entry_count;
+            dict_lengths_div512 += (sd.entry_count + 0x1ff) >> 9;
+            dict_data_size += sd.char_count;
           }
         }
 
@@ -1096,11 +1114,11 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
               if (rg_idx == *stripe.cbegin()) {
-                const auto stripe_dict = column.host_stripe_dict(stripe.id);
+                auto const stripe_dict = column.host_stripe_dict2(stripe.id);
                 strm.lengths[strm_type] =
                   (strm_type == gpu::CI_DICTIONARY)
-                    ? stripe_dict->dict_char_count
-                    : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+                    ? stripe_dict.char_count
+                    : (((stripe_dict.entry_count + 0x1ff) >> 9) * (512 * 4 + 2));
               } else {
                 strm.lengths[strm_type] = 0;
               }
@@ -2300,11 +2318,13 @@ auto convert_table_to_orc_data(table_view const& input,
   hostdevice_2dvector<gpu::stripe_dictionary> stripe_dicts(
     orc_table.num_string_columns(), segmentation.num_stripes(), stream);
   for (auto col_idx : orc_table.string_column_indices) {
-    auto& str_column = orc_table.column(col_idx);
+    auto& str_column       = orc_table.column(col_idx);
+    auto const str_col_idx = str_column.str_index();
+    str_column.attach_stripe_dicts(stripe_dicts[str_col_idx],
+                                   stripe_dicts.device_view()[str_col_idx]);
     for (auto const& stripe : segmentation.stripes) {
-      auto const stripe_idx  = stripe.id;
-      auto const str_col_idx = str_column.str_index();
-      auto& sd               = stripe_dicts[str_col_idx][stripe_idx];
+      auto const stripe_idx = stripe.id;
+      auto& sd              = stripe_dicts[str_col_idx][stripe_idx];
 
       sd.map_slots  = hash_maps_storage[str_col_idx][stripe_idx];
       sd.column_idx = col_idx;
@@ -2676,7 +2696,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       sf.columns[i].kind = orc_table.column(i - 1).orc_encoding();
       sf.columns[i].dictionarySize =
         (sf.columns[i].kind == DICTIONARY_V2)
-          ? orc_table.column(i - 1).host_stripe_dict(stripe_id)->num_strings
+          ? orc_table.column(i - 1).host_stripe_dict2(stripe_id).entry_count
           : 0;
       if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }

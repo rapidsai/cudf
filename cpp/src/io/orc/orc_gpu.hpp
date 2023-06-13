@@ -233,7 +233,7 @@ struct stripe_dictionary {
   size_type entry_count;
   size_type char_count;
 
-  constexpr bool use_dictionary() const { return not map_slots.empty(); }
+  constexpr bool is_enabled() const { return not map_slots.empty(); }
 };
 
 void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> map_slots,
