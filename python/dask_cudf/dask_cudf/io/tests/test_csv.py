@@ -191,3 +191,87 @@ def test_read_csv_skiprows(tmp_path):
     ddf_gpu = dask_cudf.read_csv(file, skiprows=3).compute()
 
     dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_skiprows_error(tmp_path):
+    # Repro from Issue#13552
+    lines = """x
+    x
+    x
+    A, B, C, D
+    1, 2, 3, 4
+    """
+
+    file = tmp_path / "test_read_csv_skiprows_error.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(file, skiprows=3, blocksize="100 MiB").compute()
+
+
+def test_read_csv_skipfooter(tmp_path):
+    # Repro from Issue#13552
+    lines = """A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5
+    x
+    x
+    x"""
+
+    file = tmp_path / "test_read_csv_skipfooter.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    ddf_cpu = dd.read_csv(file, skipfooter=3).compute()
+    ddf_gpu = dask_cudf.read_csv(file, skipfooter=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+
+
+def test_read_csv_skipfooter_error(tmp_path):
+    lines = """A, B, C, D\n1, 2, 3, 4\n2, 3, 5, 1
+    """
+
+    file = tmp_path / "test_read_csv_skipfooter_error.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(file, skipfooter=3, blocksize="100 MiB").compute()
+
+
+def test_read_csv_nrows(tmp_path):
+    lines = """A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5
+    x
+    x
+    x"""
+
+    file = tmp_path / "test_read_csv_nrows.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    ddf_cpu = pd.read_csv(file, nrows=2)
+    ddf_gpu = dask_cudf.read_csv(file, nrows=2).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_nrows_error(tmp_path):
+    lines = "A, B, C, D\n1, 2, 3, 4\n2, 3, 5, 1"
+
+    file = tmp_path / "test_read_csv_nrows_error.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(file, nrows=2, blocksize="100 MiB").compute()

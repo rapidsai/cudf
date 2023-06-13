@@ -203,9 +203,14 @@ def read_csv_without_blocksize(path, **kwargs):
 
     name = "read-csv-" + tokenize(path, **kwargs)
 
+    meta_kwargs = kwargs.copy()
+    if "skipfooter" in meta_kwargs:
+        meta_kwargs.pop("skipfooter")
+    if "nrows" in meta_kwargs:
+        meta_kwargs.pop("nrows")
     # Read "head" of first file (first 5 rows).
     # Convert to empty df for metadata.
-    meta = cudf.read_csv(filenames[0], nrows=5, **kwargs).iloc[:0]
+    meta = cudf.read_csv(filenames[0], nrows=5, **meta_kwargs).iloc[:0]
 
     graph = {
         (name, i): (apply, cudf.read_csv, [fn], kwargs)
