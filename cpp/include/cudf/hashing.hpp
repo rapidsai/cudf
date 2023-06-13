@@ -51,7 +51,7 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
  * @param input The table of columns to hash
  * @param hash_function The hash function enum to use
  * @param seed Optional seed value to use for the hash function
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A column where each row is the hash of a column from the input
