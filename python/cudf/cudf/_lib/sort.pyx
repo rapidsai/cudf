@@ -125,6 +125,8 @@ cdef pair[vector[order], vector[null_order]] ordering(
     -------
     pair of vectors (order, and null_order)
     """
+    cdef vector[order] c_column_order
+    cdef vector[null_order] c_null_precedence
     for asc, null in zip(column_order, null_precedence):
         c_column_order.push_back(order.ASCENDING if asc else order.DESCENDING)
         if asc ^ (null == "first"):
