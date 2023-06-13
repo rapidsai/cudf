@@ -1169,25 +1169,22 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
 
         needle = as_column(target)
-        haystack = self._column
         result = cudf.core.column.full(
             len(needle),
-            fill_value=-1 if method is None else None,
+            fill_value=-1,
             dtype=libcudf.types.size_type_dtype,
         )
+
+        if not len(self):
+            return result.values
         try:
-            lcol, rcol = _match_join_keys(needle, haystack, "inner")
+            lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return cupy.full(
-                len(needle), -1, dtype=libcudf.types.size_type_dtype
-            )
+            return result.values
+
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
         result_series = cudf.Series(result)
-        if not len(self):
-            return cupy.full(
-                len(needle), -1, dtype=libcudf.types.size_type_dtype
-            )
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
@@ -2849,7 +2846,7 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
 
 
 def _get_indexer_basic(index, positions, method, target_col, tolerance):
-    nonexact = positions.isnull()
+    nonexact = positions == -1
     positions[nonexact] = index.searchsorted(
         target_col[nonexact],
         side="left" if method in {"pad", "ffill"} else "right",

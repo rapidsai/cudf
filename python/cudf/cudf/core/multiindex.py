@@ -29,6 +29,7 @@ from cudf.core.index import (
     _lexsorted_equal_range,
     as_index,
 )
+from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
 
@@ -1647,39 +1648,45 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 f"{method=} is not supported yet for MultiIndex."
             )
 
+        result = cudf.core.column.full(
+            len(target),
+            fill_value=-1,
+            dtype=libcudf.types.size_type_dtype,
+        )
+        if not len(self):
+            return result.values
         try:
             target = cudf.MultiIndex.from_tuples(target)
         except TypeError:
-            return cp.full(
-                len(target), -1, dtype=libcudf.types.size_type_dtype
-            )
+            return result.values
 
-        needle_table = target.to_frame(index=False)
-        col_names = list(range(0, self.nlevels))
-        haystack_table = self.copy(deep=True).to_frame(index=False)
-        result = cudf.core.column.full(
-            len(needle_table),
-            fill_value=-1 if method is None else None,
-            dtype=libcudf.types.size_type_dtype,
+        lcols, rcols = map(
+            list,
+            zip(
+                *[
+                    _match_join_keys(lcol, rcol, "inner")
+                    for lcol, rcol in zip(
+                        target._data.columns, self._data.columns
+                    )
+                ]
+            ),
         )
         scatter_map, indices = libcudf.join.join(
-            list(needle_table._data.columns),
-            list(haystack_table._data.columns),
+            lcols,
+            rcols,
             how="inner",
         )
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
         result_series = cudf.Series(result)
-        if not len(self):
-            return cp.full(
-                len(needle_table), -1, dtype=libcudf.types.size_type_dtype
-            )
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
                 method=method,
-                target_col=needle_table[col_names],
+                target_col=target.to_frame(index=False)[
+                    list(range(0, self.nlevels))
+                ],
                 tolerance=tolerance,
             )
         elif method is not None:
