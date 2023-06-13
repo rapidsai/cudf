@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -65,7 +65,7 @@ from cudf.api import types
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, True),
+        (pd.CategoricalDtype.type, True),
         (pd.CategoricalDtype, True),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -174,7 +174,7 @@ def test_is_categorical_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), True),
@@ -279,7 +279,7 @@ def test_is_numeric_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -384,7 +384,7 @@ def test_is_integer_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -490,7 +490,7 @@ def test_is_integer(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         # (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -595,7 +595,7 @@ def test_is_string_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -700,7 +700,7 @@ def test_is_datetime_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -805,7 +805,7 @@ def test_is_list_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -913,7 +913,7 @@ def test_is_struct_dtype(obj, expect):
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -1019,7 +1019,7 @@ def test_is_decimal_dtype(obj, expect):
         np.array([], dtype=object),
         # Pandas dtypes.
         # TODO: pandas does not consider these to be categoricals.
-        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype.type,
         # pd.CategoricalDtype,
         # Pandas objects.
         pd.Series(dtype="bool"),
@@ -1101,7 +1101,7 @@ def test_pandas_agreement(obj):
         np.array([], dtype=object),
         # Pandas dtypes.
         # TODO: pandas does not consider these to be categoricals.
-        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype.type,
         # pd.CategoricalDtype,
         # Pandas objects.
         pd.Series(dtype="bool"),
