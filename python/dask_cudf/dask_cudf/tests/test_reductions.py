@@ -78,8 +78,8 @@ def test_rowwise_reductions(data, op):
         got = getattr(pddf, op)(numeric_only=True, axis=1)
 
     dd.assert_eq(
-        expected.compute(),
-        got.compute(),
+        expected,
+        got,
         check_exact=False,
         check_dtype=op not in ("var", "std"),
     )
