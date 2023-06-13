@@ -477,7 +477,7 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @return true if all digits are 0-9
    */
-  __device__ bool check_digits(const char* str, size_type bytes)
+  __device__ bool check_digits(char const* str, size_type bytes)
   {
     return thrust::all_of(thrust::seq, str, str + bytes, [] __device__(char chr) {
       return (chr >= '0' && chr <= '9');
@@ -1003,7 +1003,7 @@ struct datetime_formatter_fn {
         case 'f':                                 // sub-second
         {
           char subsecond_digits[] = "000000000";  // 9 max digits
-          const int digits        = [] {
+          int const digits        = [] {
             if constexpr (std::is_same_v<T, cudf::timestamp_ms>) return 3;
             if constexpr (std::is_same_v<T, cudf::timestamp_us>) return 6;
             if constexpr (std::is_same_v<T, cudf::timestamp_ns>) return 9;

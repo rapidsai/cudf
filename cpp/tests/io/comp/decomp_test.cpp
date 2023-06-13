@@ -37,36 +37,36 @@ using cudf::device_span;
  */
 template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
-  std::vector<uint8_t> vector_from_string(const char* str) const
+  std::vector<uint8_t> vector_from_string(char const* str) const
   {
-    return std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(str),
-                                reinterpret_cast<const uint8_t*>(str) + strlen(str));
+    return std::vector<uint8_t>(reinterpret_cast<uint8_t const*>(str),
+                                reinterpret_cast<uint8_t const*>(str) + strlen(str));
   }
 
   void Decompress(std::vector<uint8_t>* decompressed,
-                  const uint8_t* compressed,
+                  uint8_t const* compressed,
                   size_t compressed_size)
   {
     auto stream = cudf::get_default_stream();
     rmm::device_buffer src{compressed, compressed_size, stream};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
-    hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
     inf_in[0] = {static_cast<uint8_t const*>(src.data()), src.size()};
-    inf_in.host_to_device(stream);
+    inf_in.host_to_device_async(stream);
 
-    hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
     inf_out[0] = dst;
-    inf_out.host_to_device(stream);
+    inf_out.host_to_device_async(stream);
 
-    hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
-    inf_stat.host_to_device(stream);
+    inf_stat.host_to_device_async(stream);
 
     static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
-    inf_stat.device_to_host(stream, true);
+    inf_stat.device_to_host_sync(stream);
     ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }
 };

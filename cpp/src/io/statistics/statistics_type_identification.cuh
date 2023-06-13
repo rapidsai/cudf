@@ -92,7 +92,7 @@ class type_conversion {
   using type = typename type_selector::template type<T>;
 
   template <typename T>
-  static constexpr __device__ typename type_selector::template type<T> convert(const T& elem)
+  static constexpr __device__ typename type_selector::template type<T> convert(T const& elem)
   {
     using Type = typename type_selector::template type<T>;
     if constexpr (cudf::is_duration<T>()) {
@@ -153,7 +153,7 @@ class extrema_type {
   /**
    * @brief Function that converts an element of a leaf column into its extrema type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
                   std::is_same_v<T, byte_array_view>) {
@@ -215,7 +215,7 @@ class aggregation_type {
   /**
    * @brief Function that converts an element of a leaf column into its aggregate type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>) {
       return val.size_bytes();

@@ -60,7 +60,7 @@ inline rmm::device_buffer create_data(data_type type,
   return data;
 }
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief Class for holding device memory buffers to column data that eventually

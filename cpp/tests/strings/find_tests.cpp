@@ -136,7 +136,7 @@ TEST_F(StringsFindTest, StartsWith)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_targets{"éa", "th", "e", "ll", "tést strings", ""};
+    std::vector<char const*> h_targets{"éa", "th", "e", "ll", "tést strings", ""};
     cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
 
     auto targets_view = cudf::strings_column_view(targets);
@@ -150,7 +150,7 @@ TEST_F(StringsFindTest, StartsWith)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_targets{"éa", "th", "e", "ll", nullptr, ""};
+    std::vector<char const*> h_targets{"éa", "th", "e", "ll", nullptr, ""};
     cudf::test::strings_column_wrapper targets(
       h_targets.begin(),
       h_targets.end(),
@@ -174,7 +174,7 @@ TEST_F(StringsFindTest, EndsWith)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_targets{"éa", "sé", "th", "ll", "tést strings", ""};
+    std::vector<char const*> h_targets{"éa", "sé", "th", "ll", "tést strings", ""};
     cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
 
     auto targets_view = cudf::strings_column_view(targets);
@@ -188,7 +188,7 @@ TEST_F(StringsFindTest, EndsWith)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_targets{"éa", "sé", "th", nullptr, "tést strings", ""};
+    std::vector<char const*> h_targets{"éa", "sé", "th", nullptr, "tést strings", ""};
     cudf::test::strings_column_wrapper targets(
       h_targets.begin(),
       h_targets.end(),
@@ -279,7 +279,7 @@ TEST_F(StringsFindTest, AllEmpty)
 
 TEST_F(StringsFindTest, AllNull)
 {
-  std::vector<const char*> h_strings{nullptr, nullptr, nullptr, nullptr};
+  std::vector<char const*> h_strings{nullptr, nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

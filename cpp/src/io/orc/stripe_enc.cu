@@ -69,7 +69,7 @@ struct intrle_enc_state_s {
 struct strdata_enc_state_s {
   uint32_t char_count;
   uint32_t lengths_red[(512 / 32)];
-  const char* str_data[512];
+  char const* str_data[512];
 };
 
 struct orcenc_state_s {
@@ -144,7 +144,7 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
  */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ void StoreBytes(
-  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t count, int t)
+  orcenc_state_s* s, uint8_t const* inbuf, uint32_t inpos, uint32_t count, int t)
 {
   uint8_t* dst = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   while (count > 0) {
@@ -175,7 +175,7 @@ static __device__ void StoreBytes(
  */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ uint32_t ByteRLE(
-  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+  orcenc_state_s* s, uint8_t const* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
   uint8_t* dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -361,7 +361,7 @@ template <StreamIndexType cid,
           int block_size,
           typename Storage>
 static __device__ uint32_t IntegerRLE(
-  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
+  orcenc_state_s* s, T const* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -1039,7 +1039,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = nullptr;
+      char const* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);
@@ -1194,14 +1194,14 @@ __global__ void __launch_bounds__(1024)
                              uint32_t max_comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
-  __shared__ const uint8_t* volatile comp_src_g;
+  __shared__ uint8_t const* volatile comp_src_g;
   __shared__ uint32_t volatile comp_len_g;
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
   uint32_t t           = threadIdx.x;
   uint32_t num_blocks, b, blk_size;
-  const uint8_t* src;
+  uint8_t const* src;
   uint8_t* dst;
 
   if (t == 0) ss = strm_desc[stripe_id][stream_id];
