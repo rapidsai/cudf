@@ -43,7 +43,7 @@ namespace strings {
 namespace detail {
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 enum class split_direction {
   FORWARD,  ///< for split logic

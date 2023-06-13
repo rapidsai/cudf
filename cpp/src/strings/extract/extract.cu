@@ -42,7 +42,7 @@ namespace detail {
 
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
