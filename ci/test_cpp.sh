@@ -24,9 +24,6 @@ if (( ${SUITEERROR} == 0 )); then
     popd
 fi
 
-# Clear the LD_PRELOAD used by the stream testing utility
-unset LD_PRELOAD
-
 # Ensure that benchmarks are runnable
 pushd $CONDA_PREFIX/bin/benchmarks/libcudf/
 rapids-logger "Run tests of libcudf benchmarks"
