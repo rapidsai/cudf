@@ -2508,7 +2508,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * The column must have rows that are lists of lists.
    *
-   * @param ignoreNull Whether to ignore null list elements of input columns from the operation,
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
    *                   or any row containing null list elements will result in a null output row
    * @return A new column vector containing the flattened result
    */
