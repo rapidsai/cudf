@@ -80,21 +80,16 @@ struct normalize_spaces_fn {
     // this will retrieve tokens automatically skipping runs of whitespace
     while (tokenizer.next_token()) {
       auto const token_pos = tokenizer.token_byte_positions();
-      nbytes += token_pos.second - token_pos.first + 1;  // token size plus a single space
+      auto const token =
+        cudf::string_view(d_str.data() + token_pos.first, token_pos.second - token_pos.first);
       if (optr) {
-        cudf::string_view const token(d_str.data() + token_pos.first,
-                                      token_pos.second - token_pos.first);
-        if (optr != buffer) {  // prepend space unless we are at the beginning
-          optr = cudf::strings::detail::copy_string(optr, single_space);
-        }
-        // conditionally prefetch into L1/L2; found empirically with benchmarking;
-        // this provided an additional ~30% performance improvement for long strings
-        constexpr cudf::size_type PREFETCH_THRESHOLD = 128;
-        nbytes += d_str.size_bytes() > PREFETCH_THRESHOLD ? std::min(token.length(), 0) : 0;
+        // prepend space unless we are at the beginning
+        if (optr != buffer) { optr = cudf::strings::detail::copy_string(optr, single_space); }
         // write token to output buffer
         thrust::copy_n(thrust::seq, token.data(), token.size_bytes(), optr);
         optr += token.size_bytes();
       }
+      nbytes += token.size_bytes() + 1;  // token size plus a single space
     }
     // remove trailing space
     if (!d_chars) d_offsets[idx] = (nbytes > 0) ? nbytes - 1 : 0;
