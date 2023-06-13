@@ -175,19 +175,16 @@ struct orc_stream_info {
   explicit orc_stream_info(uint64_t offset_,
                            std::size_t dst_pos_,
                            uint32_t length_,
-                           uint32_t gdf_idx_,
                            uint32_t stripe_idx_)
     : offset(offset_),
       dst_pos(dst_pos_),
       length(length_),
-      gdf_idx(gdf_idx_),
       stripe_idx(stripe_idx_)
   {
   }
   uint64_t offset;      // offset in file
   std::size_t dst_pos;  // offset in memory relative to start of compressed stripe data
   std::size_t length;   // length in file
-  uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
 
@@ -268,7 +265,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
         }
       }
       stream_info.emplace_back(
-        stripeinfo->offset + src_offset, dst_offset, stream.length, col, stripe_index);
+        stripeinfo->offset + src_offset, dst_offset, stream.length, stripe_index);
       dst_offset += stream.length;
     }
     src_offset += stream.length;
