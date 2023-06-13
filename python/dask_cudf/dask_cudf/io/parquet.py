@@ -167,6 +167,12 @@ class CudfEngine(ArrowDatasetEngine):
 
             for i, (name, index2) in enumerate(partition_keys):
 
+                if not len(partitions[i].keys):
+                    # Non-categorical case
+                    if name not in df.columns:
+                        df[name] = as_column(index2, length=len(df))
+                    continue
+
                 # Build the column from `codes` directly
                 # (since the category is often a larger dtype)
                 codes = as_column(
