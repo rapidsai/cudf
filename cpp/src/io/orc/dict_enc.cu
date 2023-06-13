@@ -520,11 +520,7 @@ __global__ void __launch_bounds__(block_size)
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
 
-  if (t == 0) {
-    auto const& offsets = col.child(strings_column_view::offsets_column_index);
-    dictionaries[col_idx][stripe_idx].direct_char_count =
-      offsets.element<size_type>(end_row) - offsets.element<size_type>(start_row);
-  }
+  if (t == 0) { auto const& offsets = col.child(strings_column_view::offsets_column_index); }
 
   // Make a view of the hash map
   auto hash_map_mutable = map_type::device_mutable_view(dict.map_slots.data(),
@@ -631,7 +627,7 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
                                    device_span<orc_column_device_view const> columns,
                                    rmm::cuda_stream_view stream)
 {
-  dim3 const dim_grid(dictionaries.size().second, dictionaries.size().first);
+  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
   populate_dictionary_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(dictionaries, columns);
 }

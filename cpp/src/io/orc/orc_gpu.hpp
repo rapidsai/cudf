@@ -228,9 +228,8 @@ struct stripe_dictionary {
   size_type num_rows;
 
   // output
-  uint32_t* data;               // row indices of corresponding string (row from dictionary index)
-  uint32_t* index;              // dictionary index from row index
-  size_type direct_char_count;  // TODO remove now that ranged for loop fell apart
+  device_span<uint32_t> data;   // row indices of corresponding string (row from dictionary index)
+  device_span<uint32_t> index;  // dictionary index from row index
   size_type entry_count;
   size_type char_count;
 
