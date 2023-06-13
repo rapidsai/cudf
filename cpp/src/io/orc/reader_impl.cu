@@ -238,10 +238,10 @@ std::size_t gather_stream_info(std::size_t stripe_index,
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
-      const auto schema_type = types[column_id];
+      auto const schema_type = types[column_id];
       if (schema_type.subtypes.size() != 0) {
         if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
-          for (const auto& idx : schema_type.subtypes) {
+          for (auto const& idx : schema_type.subtypes) {
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
             if (child_idx >= 0) {
               col                             = child_idx;
@@ -887,8 +887,8 @@ void decode_stream_data(std::size_t num_dicts,
                         rmm::cuda_stream_view stream,
                         rmm::mr::device_memory_resource* mr)
 {
-  const auto num_stripes = chunks.size().first;
-  const auto num_columns = chunks.size().second;
+  auto const num_stripes = chunks.size().first;
+  auto const num_columns = chunks.size().second;
   thrust::counting_iterator<int> col_idx_it(0);
   thrust::counting_iterator<int> stripe_idx_it(0);
 

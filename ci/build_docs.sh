@@ -49,9 +49,9 @@ rapids-logger "Build dask-cuDF Sphinx docs"
 pushd docs/dask_cudf
 sphinx-build -b dirhtml source _html
 sphinx-build -b text source _text
-mkdir -p "${RAPIDS_DOCS_DIR}/dask_cudf/"{html,txt}
-mv _html/* "${RAPIDS_DOCS_DIR}/dask_cudf/html"
-mv _text/* "${RAPIDS_DOCS_DIR}/dask_cudf/txt"
+mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/"{html,txt}
+mv _html/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
+mv _text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
 popd
 
 rapids-upload-docs

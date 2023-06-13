@@ -43,7 +43,7 @@ struct column_hierarchy {
  * to aggregate that metadata from all the files.
  */
 class aggregate_orc_metadata {
-  using OrcStripeInfo = std::pair<const StripeInformation*, const StripeFooter*>;
+  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
 
   /**
    * @brief Sums up the number of rows of each source
@@ -91,7 +91,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Returns the name of the given column from the given source.
    */
-  [[nodiscard]] std::string const& column_name(const int source_idx, const int column_id) const
+  [[nodiscard]] std::string const& column_name(int const source_idx, int const column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
@@ -103,7 +103,7 @@ class aggregate_orc_metadata {
    *
    * Full name includes ancestor columns' names.
    */
-  [[nodiscard]] std::string const& column_path(const int source_idx, const int column_id) const
+  [[nodiscard]] std::string const& column_path(int const source_idx, int const column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");

@@ -86,6 +86,37 @@ struct escape_strings_fn {
       bytes += cudf::strings::detail::bytes_in_char_utf8(chr);
   }
 
+  __device__ inline char nibble_to_hex(uint8_t nibble) const
+  {
+    return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
+  }
+
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, offset_type& bytes)
+  {
+    if (d_buffer) {
+      d_buffer[0] = '\\';
+      d_buffer[1] = 'u';
+      d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
+      d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
+      d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer += 6;
+    } else {
+      bytes += 6;
+    }
+  }
+
+  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
+  {
+    constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
+    constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
+    codepoint -= 0x1'0000;
+    uint16_t hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
+    uint16_t hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
+    write_utf8_codepoint(hex_high, d_buffer, bytes);
+    write_utf8_codepoint(hex_low, d_buffer, bytes);
+  }
+
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
@@ -103,8 +134,21 @@ struct escape_strings_fn {
     offset_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
-    for (auto chr : d_str) {
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(chr);
+    for (auto utf8_char : d_str) {
+      if (utf8_char > 0x0000'00FF) {
+        // multi-byte char
+        uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
+        if (codepoint <= 0x0000'FFFF) {
+          // write \uXXXX utf-8 codepoint
+          write_utf8_codepoint(codepoint, d_buffer, bytes);
+        } else {
+          // write \uXXXX\uXXXX utf-16 surrogate pair
+          // codepoint > 0xFFFF && codepoint <= 0x10FFFF
+          write_utf16_codepoint(codepoint, d_buffer, bytes);
+        }
+        continue;
+      }
+      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {
@@ -159,18 +203,12 @@ struct struct_scatter_strings_fn {
     auto const d_str_null = tbl.column(col).is_null(row);
     auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
     // prefix
-    if (col == 0) { d_strviews[this_index - 1] = row_prefix; }
+    if (col == 0) d_strviews[this_index - 1] = row_prefix;
+    if (col != 0) d_strviews[this_index - 1] = include_nulls ? value_separator : string_view{};
     if (!include_nulls && d_str_null) {
-      if (col != 0) d_strviews[this_index - 1] = string_view{};
       d_strviews[this_index]     = string_view{};
       d_strviews[this_index + 1] = string_view{};
     } else {
-      // if previous column was null, then we skip the value separator
-      if (col != 0)
-        if (tbl.column(col - 1).is_null(row) && !include_nulls)
-          d_strviews[this_index - 1] = string_view{};
-        else
-          d_strviews[this_index - 1] = value_separator;
       auto const d_col_name = col_names.element<string_view>(col);
       auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
       // column_name: value
@@ -179,6 +217,16 @@ struct struct_scatter_strings_fn {
     }
     // suffix
     if (col == tbl.num_columns() - 1) { d_strviews[this_index + 2] = row_suffix; }
+  }
+};
+
+struct validity_fn {
+  table_device_view const tbl;
+  __device__ bool operator()(size_type idx) const
+  {
+    auto const row = idx / tbl.num_columns();
+    auto const col = idx % tbl.num_columns();
+    return tbl.column(col).is_valid(row);
   }
 };
 
@@ -247,6 +295,41 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(total_rows),
                    scatter_fn);
+  if (!include_nulls) {
+    // if previous column was null, then we skip the value separator
+    rmm::device_uvector<bool> d_str_separator(total_rows, stream);
+    auto row_num = cudf::detail::make_counting_transform_iterator(
+      0, [tbl = *tbl_device_view] __device__(auto idx) -> size_type {
+        return idx / tbl.num_columns();
+      });
+    auto validity_iterator =
+      cudf::detail::make_counting_transform_iterator(0, validity_fn{*tbl_device_view});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                  row_num,
+                                  row_num + total_rows,
+                                  validity_iterator,
+                                  d_str_separator.begin(),
+                                  false,
+                                  thrust::equal_to<size_type>{},
+                                  thrust::logical_or<bool>{});
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(total_rows),
+                     [write_separator = d_str_separator.begin(),
+                      d_strviews      = d_strviews.begin(),
+                      value_separator,
+                      tbl = *tbl_device_view,
+                      strviews_per_column,
+                      num_strviews_per_row] __device__(auto idx) {
+                       auto const row = idx / tbl.num_columns();
+                       auto const col = idx % tbl.num_columns();
+                       auto const this_index =
+                         row * num_strviews_per_row + col * strviews_per_column + 1;
+                       if (write_separator[idx] && tbl.column(col).is_valid(row)) {
+                         d_strviews[this_index - 1] = value_separator;
+                       }
+                     });
+  }
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
