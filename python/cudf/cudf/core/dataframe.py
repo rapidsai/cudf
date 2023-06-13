@@ -7640,7 +7640,7 @@ def _get_union_of_indices(indexes):
         merged_index = cudf.core.index.GenericIndex._concat(indexes)
         merged_index = merged_index.drop_duplicates()
         inds = merged_index._values.argsort()
-        return merged_index.take(inds)
+        return merged_index.take(inds, check_bounds=False)
 
 
 def _get_union_of_series_names(series_list):
