@@ -50,7 +50,11 @@ requirements:
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    {% if cuda_major == "11" %}
+    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    {% else %}
+    - cuda-version {{ cuda_version }}
+    {% endif %}
   imports:
     - custreamz
 
