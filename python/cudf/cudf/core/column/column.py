@@ -2163,7 +2163,7 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
+    elif isinstance(arbitrary, pd.arrays.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
