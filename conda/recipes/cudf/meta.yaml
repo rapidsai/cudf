@@ -56,7 +56,7 @@ requirements:
     - setuptools
     - dlpack >=0.5,<0.6.0a0
     - pyarrow =11
-    - libcudf ={{ version }}
+    - libcudf ={{ version }}*=cuda{{ cuda_major }}*
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
@@ -74,7 +74,7 @@ requirements:
     - numba >=0.57
     - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
-    - libcudf {{ version }}
+    - libcudf {{ version }}*=cuda{{ cuda_major }}*
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
