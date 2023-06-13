@@ -27,6 +27,7 @@
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/detail/data_casting.cuh>
+#include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -87,6 +88,56 @@ void check_input_size(std::size_t input_size)
 }  // namespace
 
 namespace cudf::io::json {
+
+// FST to prune tokens of invalid lines for recovering JSON lines format
+namespace token_filter {
+
+// Type used to represent the target state in the transition table
+using StateT = char;
+
+/**
+ * @brief Definition of the DFA's states
+ */
+enum class dfa_states_t : StateT { VALID, INVALID, NUM_STATES };
+
+// Aliases for readability of the transition table
+constexpr auto TT_INV = dfa_states::INVALID;
+constexpr auto TT_VLD = dfa_states::VALID;
+
+/**
+ * @brief Definition of the symbol groups
+ */
+enum class dfa_symbol_group_id : uint8_t {
+  ERROR,             ///< Error token symbol group
+  DELIMITER,         ///< Record / line delimiter symbol group
+  OTHER_SYMBOLS,     ///< Symbol group that implicitly matches all other tokens
+  NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
+};
+
+constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
+constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
+
+// The i-th string representing all the characters of a symbol group
+std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS - 1> const symbol_groups{{
+  {token_t::ErrorBegin},  // Error token symbol group
+  {token_t::LineEnd}      // Record / line delimiter symbol group
+}};
+
+// Transition table
+std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
+  {/* IN_STATE      ERROR   DELIM   OTHER */
+   /* VALID    */ {{TT_INV, TT_VLD, TT_VLD}},
+   /* INVALID  */ {{TT_INV, TT_VLD, TT_INV}}}};
+
+// Translation table (i.e., for each transition, what are the symbols that we output)
+std::array<std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
+  translation_table{{/* IN_STATE      ERROR   DELIM   OTHER */
+                     /* VALID    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}, {}}},
+                     /* INVALID  */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
+
+// The DFA's starting state
+constexpr auto start_state = static_cast<StateT>(TT_OOS);
+}  // namespace token_filter
 
 // JSON to stack operator DFA (Deterministic Finite Automata)
 namespace to_stack_op {
@@ -649,18 +700,18 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({}),   // LINE_BREAK
                                                         {ValueBegin}}};  // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
-    {                                                                    /*ROOT*/
-     {ErrorBegin},                                                       // OPENING_BRACE
-     {ErrorBegin},                                                       // OPENING_BRACKET
-     {ErrorBegin},                                                       // CLOSING_BRACE
-     {ErrorBegin},                                                       // CLOSING_BRACKET
-     {ErrorBegin},                                                       // QUOTE
-     {ErrorBegin},                                                       // ESCAPE
-     {ErrorBegin},                                                       // COMMA
-     {ErrorBegin},                                                       // COLON
-     {ErrorBegin},                                                       // WHITE_SPACE
-     nl_tokens({ErrorBegin}),                                            // LINE_BREAK
-     {ErrorBegin},                                                       // OTHER
+    {                          /*ROOT*/
+     {ErrorBegin},             // OPENING_BRACE
+     {ErrorBegin},             // OPENING_BRACKET
+     {ErrorBegin},             // CLOSING_BRACE
+     {ErrorBegin},             // CLOSING_BRACKET
+     {ErrorBegin},             // QUOTE
+     {ErrorBegin},             // ESCAPE
+     {ErrorBegin},             // COMMA
+     {ErrorBegin},             // COLON
+     {ErrorBegin},             // WHITE_SPACE
+     nl_tokens({ErrorBegin}),  // LINE_BREAK
+     {ErrorBegin},             // OTHER
      /*LIST*/
      {StructBegin},  // OPENING_BRACE
      {ListBegin},    // OPENING_BRACKET
@@ -686,18 +737,18 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({}),                        // LINE_BREAK
      {ErrorBegin}}};                       // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    {                                      /*ROOT*/
-     {ErrorBegin},                         // OPENING_BRACE
-     {ErrorBegin},                         // OPENING_BRACKET
-     {ErrorBegin},                         // CLOSING_BRACE
-     {ErrorBegin},                         // CLOSING_BRACKET
-     {ErrorBegin},                         // QUOTE
-     {ErrorBegin},                         // ESCAPE
-     {ErrorBegin},                         // COMMA
-     {ErrorBegin},                         // COLON
-     {ValueEnd},                           // WHITE_SPACE
-     nl_tokens({ValueEnd}),                // LINE_BREAK
-     {},                                   // OTHER
+    {                        /*ROOT*/
+     {ErrorBegin},           // OPENING_BRACE
+     {ErrorBegin},           // OPENING_BRACKET
+     {ErrorBegin},           // CLOSING_BRACE
+     {ErrorBegin},           // CLOSING_BRACKET
+     {ErrorBegin},           // QUOTE
+     {ErrorBegin},           // ESCAPE
+     {ErrorBegin},           // COMMA
+     {ErrorBegin},           // COLON
+     {ValueEnd},             // WHITE_SPACE
+     nl_tokens({ValueEnd}),  // LINE_BREAK
+     {},                     // OTHER
      /*LIST*/
      {ErrorBegin},           // OPENING_BRACE
      {ErrorBegin},           // OPENING_BRACKET
@@ -711,17 +762,17 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({ValueEnd}),  // LINE_BREAK
      {},                     // OTHER
      /*STRUCT*/
-     {ErrorBegin},                                                      // OPENING_BRACE
-     {ErrorBegin},                                                      // OPENING_BRACKET
-     {ValueEnd, StructMemberEnd, StructEnd},                            // CLOSING_BRACE
-     {ErrorBegin},                                                      // CLOSING_BRACKET
-     {ErrorBegin},                                                      // QUOTE
-     {ErrorBegin},                                                      // ESCAPE
-     {ValueEnd, StructMemberEnd},                                       // COMMA
-     {ErrorBegin},                                                      // COLON
-     {ValueEnd},                                                        // WHITE_SPACE
-     nl_tokens({ValueEnd}),                                             // LINE_BREAK
-     {}}};                                                              // OTHER
+     {ErrorBegin},                            // OPENING_BRACE
+     {ErrorBegin},                            // OPENING_BRACKET
+     {ValueEnd, StructMemberEnd, StructEnd},  // CLOSING_BRACE
+     {ErrorBegin},                            // CLOSING_BRACKET
+     {ErrorBegin},                            // QUOTE
+     {ErrorBegin},                            // ESCAPE
+     {ValueEnd, StructMemberEnd},             // COMMA
+     {ErrorBegin},                            // COLON
+     {ValueEnd},                              // WHITE_SPACE
+     nl_tokens({ValueEnd}),                   // LINE_BREAK
+     {}}};                                    // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{                /*ROOT*/
                                                         {},             // OPENING_BRACE
@@ -861,17 +912,17 @@ auto get_translation_table(bool include_line_delimiter)
      nl_tokens({ErrorBegin}),  // LINE_BREAK
      {ErrorBegin},             // OTHER
      /*STRUCT*/
-     {ErrorBegin},                                                                // OPENING_BRACE
-     {ErrorBegin},                                                                // OPENING_BRACKET
-     {StructEnd},                                                                 // CLOSING_BRACE
-     {ErrorBegin},                                                                // CLOSING_BRACKET
-     {StructMemberBegin, FieldNameBegin},                                         // QUOTE
-     {ErrorBegin},                                                                // ESCAPE
-     {ErrorBegin},                                                                // COMMA
-     {ErrorBegin},                                                                // COLON
-     {},                                                                          // WHITE_SPACE
-     nl_tokens({}),                                                               // LINE_BREAK
-     {ErrorBegin}}};                                                              // OTHER
+     {ErrorBegin},                         // OPENING_BRACE
+     {ErrorBegin},                         // OPENING_BRACKET
+     {StructEnd},                          // CLOSING_BRACE
+     {ErrorBegin},                         // CLOSING_BRACKET
+     {StructMemberBegin, FieldNameBegin},  // QUOTE
+     {ErrorBegin},                         // ESCAPE
+     {ErrorBegin},                         // COMMA
+     {ErrorBegin},                         // COLON
+     {},                                   // WHITE_SPACE
+     nl_tokens({}),                        // LINE_BREAK
+     {ErrorBegin}}};                       // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -898,17 +949,17 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({ErrorBegin}),  // LINE_BREAK
                                                         {ErrorBegin},             // OTHER
                                                         /*STRUCT*/
-                                                        {},                       // OPENING_BRACE
-                                                        {},                       // OPENING_BRACKET
-                                                        {},                       // CLOSING_BRACE
-                                                        {},                       // CLOSING_BRACKET
-                                                        {FieldNameEnd},           // QUOTE
-                                                        {},                       // ESCAPE
-                                                        {},                       // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        nl_tokens({}),            // LINE_BREAK
-                                                        {}}};                     // OTHER
+                                                        {},              // OPENING_BRACE
+                                                        {},              // OPENING_BRACKET
+                                                        {},              // CLOSING_BRACE
+                                                        {},              // CLOSING_BRACKET
+                                                        {FieldNameEnd},  // QUOTE
+                                                        {},              // ESCAPE
+                                                        {},              // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        nl_tokens({}),   // LINE_BREAK
+                                                        {}}};            // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -935,17 +986,17 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({ErrorBegin}),  // LINE_BREAK
                                                         {ErrorBegin},             // OTHER
                                                         /*STRUCT*/
-                                                        {},                       // OPENING_BRACE
-                                                        {},                       // OPENING_BRACKET
-                                                        {},                       // CLOSING_BRACE
-                                                        {},                       // CLOSING_BRACKET
-                                                        {},                       // QUOTE
-                                                        {},                       // ESCAPE
-                                                        {},                       // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        nl_tokens({}),            // LINE_BREAK
-                                                        {}}};                     // OTHER
+                                                        {},             // OPENING_BRACE
+                                                        {},             // OPENING_BRACKET
+                                                        {},             // CLOSING_BRACE
+                                                        {},             // CLOSING_BRACKET
+                                                        {},             // QUOTE
+                                                        {},             // ESCAPE
+                                                        {},             // COMMA
+                                                        {},             // COLON
+                                                        {},             // WHITE_SPACE
+                                                        nl_tokens({}),  // LINE_BREAK
+                                                        {}}};           // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{                          /*ROOT*/
                                                         {ErrorBegin},             // OPENING_BRACE
@@ -984,18 +1035,18 @@ auto get_translation_table(bool include_line_delimiter)
                                                         nl_tokens({}),   // LINE_BREAK
                                                         {ErrorBegin}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                 /*ROOT*/
-                                                        {},              // OPENING_BRACE
-                                                        {},              // OPENING_BRACKET
-                                                        {},              // CLOSING_BRACE
-                                                        {},              // CLOSING_BRACKET
-                                                        {},              // QUOTE
-                                                        {},              // ESCAPE
-                                                        {},              // COMMA
-                                                        {},              // COLON
-                                                        {},              // WHITE_SPACE
-                                                        nl_tokens({}),   // LINE_BREAK
-                                                        {},              // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                /*ROOT*/
+                                                        {},             // OPENING_BRACE
+                                                        {},             // OPENING_BRACKET
+                                                        {},             // CLOSING_BRACE
+                                                        {},             // CLOSING_BRACKET
+                                                        {},             // QUOTE
+                                                        {},             // ESCAPE
+                                                        {},             // COMMA
+                                                        {},             // COLON
+                                                        {},             // WHITE_SPACE
+                                                        nl_tokens({}),  // LINE_BREAK
+                                                        {},             // OTHER
                                                         /*LIST*/
                                                         {},             // OPENING_BRACE
                                                         {},             // OPENING_BRACKET
@@ -1220,6 +1271,30 @@ void get_stack_context(device_span<SymbolT const> json_in,
       json_in.size(),
       stream);
   }
+}
+
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
+  rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>, rmm::cuda_stream_view stream)
+{
+  // Prepare finite-state transducer
+  using ToStackOpFstT = cudf::io::fst::detail::Dfa<PdaTokenT, num_symbol_groups, num_states>;
+
+  // Translation table specialized on the choice of whether to reset on newlines outside of strings
+  const auto translation_table =
+    reset_on_new_line ? to_stack_op::resetting_translation_table : to_stack_op::translation_table;
+
+  ToStackOpFstT json_to_stack_ops_fst{
+    to_stack_op::symbol_groups, to_stack_op::transition_table, translation_table, stream};
+
+  // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
+  // of structs/lists
+  json_to_stack_ops_fst.Transduce(json_in.begin(),
+                                  static_cast<SymbolOffsetT>(json_in.size()),
+                                  stack_ops.data(),
+                                  stack_op_indices.data(),
+                                  d_num_stack_ops.data(),
+                                  to_stack_op::start_state,
+                                  stream);
 }
 
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
