@@ -568,14 +568,12 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_2dspan<stripe_dictionary> dictionaries)
 {
-  auto col_idx    = blockIdx.x;
-  auto stripe_idx = blockIdx.y;
-  auto& dict      = dictionaries[col_idx][stripe_idx];
+  auto const col_idx    = blockIdx.x;
+  auto const stripe_idx = blockIdx.y;
+  auto& dict            = dictionaries[col_idx][stripe_idx];
   if (dict.map_slots.empty()) { return; }
 
-  auto t = threadIdx.x;
-  if (!t) printf("dict %d, stripe %d\n", blockIdx.x, blockIdx.y);
-
+  auto t   = threadIdx.x;
   auto map = map_type::device_view(dict.map_slots.data(),
                                    dict.map_slots.size(),
                                    cuco::empty_key{KEY_SENTINEL},
@@ -593,10 +591,51 @@ __global__ void __launch_bounds__(block_size)
       if (key != KEY_SENTINEL) {
         auto loc       = counter.fetch_add(1, memory_order_relaxed);
         dict.data[loc] = key;
-        // chunk.dict_data_idx[loc] = t + i;
-        slot->second = loc;
+        slot->second   = loc;
       }
     }
+  }
+}
+
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  get_dictionary_indices_kernel(device_2dspan<stripe_dictionary> dictionaries,
+                                device_span<orc_column_device_view const> columns)
+{
+  auto const col_idx    = blockIdx.x;
+  auto const stripe_idx = blockIdx.y;
+  auto& dict            = dictionaries[col_idx][stripe_idx];
+  auto const& col       = columns[dict.column_idx];
+
+  if (dict.map_slots.empty()) { return; }
+
+  auto const t         = threadIdx.x;
+  auto const start_row = dict.start_row;
+  auto const end_row   = dict.start_row + dict.num_rows;
+
+  auto map = map_type::device_view(dict.map_slots.data(),
+                                   dict.map_slots.size(),
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
+
+  auto cur_row = start_row + t;
+
+  while (cur_row < end_row) {
+    auto const is_valid = cur_row < col.size() and col.is_valid(cur_row);
+
+    if (is_valid) {
+      auto hash_fn          = hash_functor{col};
+      auto equality_fn      = equality_functor{col};
+      auto const found_slot = map.find(cur_row, hash_fn, equality_fn);
+      cudf_assert(found_slot != map.end() &&
+                  "Unable to find value in map in dictionary index construction");
+      if (found_slot != map.end()) {
+        // No need for atomic as this is not going to be modified by any other thread
+        auto val_ptr        = reinterpret_cast<map_type::mapped_type const*>(&found_slot->second);
+        dict.index[cur_row] = *val_ptr;
+      }
+    }
+    cur_row += block_size;
   }
 }
 
@@ -677,6 +716,17 @@ void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
   constexpr int block_size = 1024;
   dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
   collect_map_entries_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(dictionaries);
+}
+
+void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
+                            device_span<orc_column_device_view const> columns,
+                            rmm::cuda_stream_view stream)
+{
+  if (dictionaries.count() == 0) { return; }
+  constexpr int block_size = 1024;
+  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
+  get_dictionary_indices_kernel<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(dictionaries, columns);
 }
 
 }  // namespace gpu

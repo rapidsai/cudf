@@ -2360,7 +2360,7 @@ auto convert_table_to_orc_data(table_view const& input,
   stripe_dicts.host_to_device_async(stream);
 
   gpu::collect_map_entries(stripe_dicts, stream);
-  // gpu::get_dictionary_indices(frags, stream);
+  gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
