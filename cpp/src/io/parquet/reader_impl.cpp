@@ -244,7 +244,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 {
   if (_file_preprocessed) { return; }
 
-  const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
+  auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {

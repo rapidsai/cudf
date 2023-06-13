@@ -378,7 +378,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   constexpr int num_warps_per_threadblock = 4;
   constexpr int threadblock_size          = num_warps_per_threadblock * cudf::detail::warp_size;
   constexpr int char_block_size           = 256;
-  const int num_threadblocks =
+  int const num_threadblocks =
     std::min(65536, cudf::util::div_rounding_up_unsafe(strings_count, num_warps_per_threadblock));
 
   auto offset_count    = strings_count + 1;

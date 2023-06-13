@@ -553,7 +553,7 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
                                      rmm::mr::device_memory_resource* mr)
 {
   bool const has_nulls =
-    std::any_of(views.begin(), views.end(), [](const column_view col) { return col.has_nulls(); });
+    std::any_of(views.begin(), views.end(), [](column_view const col) { return col.has_nulls(); });
   if (has_nulls) {
     size_type const total_element_count =
       std::accumulate(views.begin(), views.end(), 0, [](auto accumulator, auto const& v) {

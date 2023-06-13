@@ -65,10 +65,10 @@ struct stats_column_desc {
 
 template <typename ReturnType, typename InternalType>
 struct t_array_stats {
-  const InternalType* ptr;  //!< ptr to data
+  InternalType const* ptr;  //!< ptr to data
   size_type length;         //!< length of data
   __host__ __device__ __forceinline__ volatile t_array_stats& operator=(
-    const ReturnType& val) volatile
+    ReturnType const& val) volatile
   {
     ptr    = val.data();
     length = val.size_bytes();
@@ -108,7 +108,7 @@ struct statistics_chunk {
 };
 
 struct statistics_group {
-  const stats_column_desc* col;  //!< Column information
+  stats_column_desc const* col;  //!< Column information
   uint32_t start_row;            //!< Start row of this group
   uint32_t num_rows;             //!< Number of rows in group
   uint32_t non_leaf_nulls;       //!< Number of null non-leaf values in the group
