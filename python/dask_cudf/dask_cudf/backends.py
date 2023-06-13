@@ -383,14 +383,14 @@ try:
     def _cudf_to_table(obj, preserve_index=True, **kwargs):
         if kwargs:
             warnings.warn(
-                f"Ignoring the following arguments to "
+                "Ignoring the following arguments to "
                 f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
             )
         return obj.to_arrow(preserve_index=preserve_index)
 
     @from_pyarrow_table_dispatch.register(cudf.DataFrame)
-    def _table_to_cudf(obj, table, **kwargs):
-        # cudf must ignore self_destruct
+    def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
+        # cudf ignores self_destruct.
         kwargs.pop("self_destruct", None)
         if kwargs:
             warnings.warn(
