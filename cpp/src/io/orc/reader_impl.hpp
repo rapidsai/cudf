@@ -34,51 +34,15 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
 
-// Forward declarations
-class metadata;
 namespace {
-struct orc_stream_info;
-struct stripe_source_mapping;
-}  // namespace
+struct reader_column_meta;
+}
 
 /**
- * @brief Keeps track of orc mapping and child column details.
- */
-struct reader_column_meta {
-  // Mapping between column id in orc to processing order.
-  std::vector<std::vector<size_type>> orc_col_map;
-
-  // Number of rows in child columns.
-  std::vector<uint32_t> num_child_rows;
-
-  // Consists of parent column valid_map and null count.
-  std::vector<column_validity_info> parent_column_data;
-
-  std::vector<size_type> parent_column_index;
-
-  // Start row of child columns [stripe][column].
-  std::vector<uint32_t> child_start_row;
-
-  // Number of rows of child columns [stripe][column].
-  std::vector<uint32_t> num_child_rows_per_stripe;
-
-  struct row_group_meta {
-    uint32_t num_rows;   // number of rows in a column in a row group
-    uint32_t start_row;  // start row in a column in a row group
-  };
-
-  // Row group metadata [rowgroup][column].
-  std::vector<row_group_meta> rwgrp_meta;
-};
-
-/**
- * @brief Implementation for ORC reader
+ * @brief Implementation for ORC reader.
  */
 class reader::impl {
  public:
@@ -101,62 +65,11 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows_opt Optional number of rows to read
    * @param stripes Indices of individual stripes to load if non-empty
-   *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(uint64_t skip_rows,
                            std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
-
- private:
-  /**
-   * @brief Decompresses the stripe data, at stream granularity
-   *
-   * @param decompressor Block decompressor
-   * @param stripe_data List of source stripe column data
-   * @param stream_info List of stream to column mappings
-   * @param chunks Vector of list of column chunk descriptors
-   * @param row_groups Vector of list of row index descriptors
-   * @param num_stripes Number of stripes making up column chunks
-   * @param row_index_stride Distance between each row index
-   * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return Device buffer to decompressed page data
-   */
-  rmm::device_buffer decompress_stripe_data(
-    OrcDecompressor const& decompressor,
-    host_span<rmm::device_buffer const> stripe_data,
-    host_span<orc_stream_info> stream_info,
-    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-    cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-    std::size_t num_stripes,
-    std::size_t row_index_stride,
-    bool use_base_stride,
-    rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Converts the stripe column data and outputs to columns
-   *
-   * @param num_dicts Number of dictionary entries required
-   * @param skip_rows Number of rows to offset from start
-   * @param row_index_stride Distance between each row index
-   * @param level Current nesting level being processed
-   * @param tz_table Local time to UTC conversion table
-   * @param chunks Vector of list of column chunk descriptors
-   * @param row_groups Vector of list of row index descriptors
-   * @param out_buffers Output columns' device buffers
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  void decode_stream_data(std::size_t num_dicts,
-                          std::size_t skip_rows,
-                          std::size_t row_index_stride,
-                          std::size_t level,
-                          table_view const& tz_table,
-                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
-                          std::vector<column_buffer>& out_buffers,
-                          rmm::cuda_stream_view stream);
 
  private:
   rmm::cuda_stream_view const _stream;
@@ -169,12 +82,8 @@ class reader::impl {
   data_type const _timestamp_type;  // Override output timestamp resolution
   bool const _use_index;            // Enable or disable attempt to use row index for parsing
   bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
-  std::vector<std::string> const _decimal128_columns;  // Control decimals conversion
-
-  reader_column_meta _col_meta{};
+  std::vector<std::string> const _decimal128_columns;   // Control decimals conversion
+  std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail::orc
