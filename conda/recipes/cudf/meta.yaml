@@ -57,7 +57,13 @@ requirements:
     - pyarrow =11
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
+    {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
+    {% else %}
+    - cuda-version {{ cuda_version }}
+    - cuda-nvrtc {{ cuda_spec }}
+    - libcufile  # [linux64]
+    {% endif %}
   run:
     - protobuf >=4.21.6,<4.22
     - python
@@ -70,7 +76,13 @@ requirements:
     - libcudf {{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
+    {% if cuda_major == "11" %}
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    {% else %}
+    - cuda-version {{ cuda_version }}
+    - cuda-nvrtc {{ cuda_spec }}
+    - libcufile  # [linux64]
+    {% endif %}
     - nvtx >=0.2.1
     - packaging
     - ptxcompiler >=0.7.0
