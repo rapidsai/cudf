@@ -262,7 +262,7 @@ cdef csv_reader_options make_csv_reader_options(
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
             c_dtypes_list.reserve(1)
@@ -439,7 +439,7 @@ def read_csv(
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
             if cudf.api.types.is_categorical_dtype(dtype):
