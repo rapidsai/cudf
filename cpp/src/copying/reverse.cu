@@ -50,7 +50,8 @@ std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return std::move(cudf::reverse(table_view({source_column}))->release().front());
+  return std::move(
+    cudf::detail::reverse(table_view({source_column}), stream, mr)->release().front());
 }
 }  // namespace detail
 
