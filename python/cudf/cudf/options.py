@@ -321,6 +321,7 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+
 class option_context(ContextDecorator):
     """
     Context manager to temporarily set options in the `with` statement context.
