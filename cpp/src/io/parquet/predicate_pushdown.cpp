@@ -20,6 +20,7 @@
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -44,31 +45,63 @@ struct stats_caster {
   host_span<std::vector<size_type> const> row_group_indices;
   rmm::cuda_stream_view stream;
 
+  template <typename ToType, typename FromType>
+  static ToType targetType(FromType const value)
+  {
+    if constexpr (cudf::is_timestamp<ToType>()) {
+      return static_cast<ToType>(
+        typename ToType::duration{static_cast<typename ToType::rep>(value)});
+    } else if constexpr (std::is_same_v<ToType, string_view>) {
+      return ToType{nullptr, 0};
+    } else {
+      return static_cast<ToType>(value);
+    }
+  }
+  // uses storage type as T
   template <typename T>
-  static T convert(uint8_t const* stats_val, Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case BOOLEAN: return static_cast<T>(*reinterpret_cast<bool const*>(stats_val));
-      case INT32: return static_cast<T>(*reinterpret_cast<int32_t const*>(stats_val));
-      case INT64: return static_cast<T>(*reinterpret_cast<int64_t const*>(stats_val));
+      case BOOLEAN: return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
+      case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
+      case INT64: return targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
       case INT96:  // Deprecated
-        return static_cast<T>(
-          static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
-          reinterpret_cast<int32_t const*>(stats_val)[2]);
-      case FLOAT: return static_cast<T>(*reinterpret_cast<float const*>(stats_val));
-      case DOUBLE: return static_cast<T>(*reinterpret_cast<double const*>(stats_val));
-      // TODO string support
+        return targetType<T>(static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0])
+                               << 32 |
+                             reinterpret_cast<int32_t const*>(stats_val)[2]);
+      case FLOAT:
+        if constexpr (std::is_floating_point_v<T>)
+          return targetType<T>(*reinterpret_cast<float const*>(stats_val));
+        else
+          return T{};
+      case DOUBLE:
+        if constexpr (std::is_floating_point_v<T>)
+          return targetType<T>(*reinterpret_cast<double const*>(stats_val));
+        else
+          return T{};
       case BYTE_ARRAY:
       case FIXED_LEN_BYTE_ARRAY:
-      default: return static_cast<T>(0);
+      default:
+        if constexpr (std::is_same_v<T, string_view>) {
+          return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
+        } else if (stats_size == sizeof(T)) {
+          // if type size == length of stats_val. then typecast and return.
+          if constexpr (cudf::is_chrono<T>())
+            return targetType<T>(*reinterpret_cast<typename T::rep const*>(stats_val));
+          else
+            return targetType<T>(*reinterpret_cast<T const*>(stats_val));
+        } else {
+          return T{};
+        }
     }
   }
 
   template <typename T>
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(size_t col_idx) const
+  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
+    size_t col_idx, cudf::data_type dtype) const
   {
-    if constexpr (!cudf::is_numeric<T>())
-      CUDF_FAIL("Only numeric types are supported");
+    if constexpr (is_compound<T>())
+      CUDF_FAIL("Compound types does not have statistics");
     else {
       struct host_column {
         thrust::host_vector<T> val;
@@ -76,23 +109,31 @@ struct stats_caster {
         cudf::size_type null_count = 0;
         host_column(size_type total_row_groups)
           : val(total_row_groups),
-            null_mask(cudf::bitmask_allocation_size_bytes(total_row_groups) / sizeof(bitmask_type),
-                      ~bitmask_type{0})
+            null_mask(
+              cudf::util::div_rounding_up_safe<size_type>(
+                cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
+              ~bitmask_type{0})
         {
         }
         void set_index(size_type index, std::vector<uint8_t> const& binary_value, Type const type)
         {
-          val[index] = binary_value.empty() ? T{0} : convert<T>(binary_value.data(), type);
+          // val[index] = binary_value.empty() ? T{0} : convert<T>(binary_value.data(),
+          // binary_value.size(), type);
+          if (!binary_value.empty())
+            val[index] = convert<T>(binary_value.data(), binary_value.size(), type);
           if (binary_value.empty()) {
             clear_bit_unsafe(null_mask.data(), index);
             null_count++;
           }
         }
-        auto to_device(rmm::cuda_stream_view stream)
+        auto to_device(cudf::data_type dtype, rmm::cuda_stream_view stream)
         {
           return std::make_unique<column>(
+            dtype,
+            val.size(),
             cudf::detail::make_device_uvector_async(
-              val, stream, rmm::mr::get_current_device_resource()),
+              val, stream, rmm::mr::get_current_device_resource())
+              .release(),
             rmm::device_buffer{
               null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream},
             null_count);
@@ -118,11 +159,11 @@ struct stats_caster {
           // translate binary data to Type then to <T>
           min.set_index(stats_idx, min_value, colchunk.meta_data.type);
           max.set_index(stats_idx, max_value, colchunk.meta_data.type);
-          std::cout << min.val[stats_idx] << "," << max.val[stats_idx] << "\n";
+          // std::cout << min.val[stats_idx] << "," << max.val[stats_idx] << "\n";
           stats_idx++;
         }
       };
-      return {min.to_device(stream), max.to_device(stream)};
+      return {min.to_device(dtype, stream), max.to_device(dtype, stream)};
     }
   }
 };
@@ -307,15 +348,16 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const& dtype = output_dtypes[col_idx];
     // Only numeric supported for now.
-    if (!cudf::is_numeric(dtype)) {
-      std::cout << "non_numeric[" << col_idx << "]=" << static_cast<int>(dtype.id()) << "\n";
+    if (cudf::is_compound(dtype)) {
+      std::cout << "compound_type[" << col_idx << "]=" << static_cast<int>(dtype.id()) << "\n";
       columns.push_back(
         cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
       columns.push_back(
         cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
       continue;
     }
-    auto [min_col, max_col] = cudf::type_dispatcher(dtype, stats_col, col_idx);
+    auto [min_col, max_col] =
+      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, col_idx, dtype);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
   }
