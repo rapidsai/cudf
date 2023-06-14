@@ -181,16 +181,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsPolicy(JNIEnv
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_distinctCount(JNIEnv *env, jclass,
                                                                     jlong j_col,
-                                                                    jboolean nulls_included,
-                                                                    jboolean nan_is_null) {
-  JNI_NULL_CHECK(env,j_col, "column is null", 0);
+                                                                    jboolean nulls_included) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
 
-    return cudf::distinct_count(col, 
-                       nulls_included ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
-                       nan_is_null ? cudf::nan_policy::NAN_IS_NULL : cudf::nan_policy::NAN_IS_VALID);
+    return cudf::distinct_count(
+        col, nulls_included ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+        cudf::nan_policy::NAN_IS_VALID);
   }
   CATCH_STD(env, 0);
 }

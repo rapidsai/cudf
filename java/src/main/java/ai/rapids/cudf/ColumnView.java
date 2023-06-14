@@ -3972,7 +3972,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param nullPolicy if nulls should be included or not.
    */
   public int distinctCount(NullPolicy nullPolicy) {
-    return distinctCount(getNativeView(), nullPolicy.includeNulls, false);
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
   }
 
   /**
@@ -3980,7 +3980,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Nulls are included.
    */
   public int distinctCount() {
-    return distinctCount(getNativeView(), true, false);
+    return distinctCount(getNativeView(), true);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -4015,7 +4015,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
-  private static native int distinctCount(long handle, boolean nullsIncluded, boolean nansAreNulls);
+  private static native int distinctCount(long handle, boolean nullsIncluded);
 
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
@@ -4749,8 +4749,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native boolean hasNonEmptyNulls(long handle) throws CudfException;
 
   static native long purgeNonEmptyNulls(long handle) throws CudfException;
-
-
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when

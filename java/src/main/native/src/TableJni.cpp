@@ -2922,15 +2922,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Table_distinctCount(JNIEnv *env, jclass,
-                                                              jlong input_jtable,
-                                                              jboolean nulls_equal) {
+                                                               jlong input_jtable,
+                                                               jboolean nulls_equal) {
   JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto const input = reinterpret_cast<cudf::table_view const *>(input_jtable);
 
-    return cudf::distinct_count(*input, 
-                       nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
+    return cudf::distinct_count(*input, nulls_equal ? cudf::null_equality::EQUAL :
+                                                      cudf::null_equality::UNEQUAL);
   }
   CATCH_STD(env, 0);
 }
