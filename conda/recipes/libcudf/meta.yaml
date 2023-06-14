@@ -40,13 +40,13 @@ requirements:
     {% if cuda_major == "11" %}
     - {{ compiler('cuda11') }} {{ cuda_version }}
     {% else %}
-    - cuda-version {{ cuda_version }}
     - {{ compiler('cuda') }}
     {% endif %}
+    - cuda-version {{ cuda_version }}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
+    - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
@@ -58,13 +58,13 @@ requirements:
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
     {% else %}
-    - cuda-version {{ cuda_version }}
     - cuda-cupti-dev
     - cuda-nvrtc-dev
     - cuda-nvtx-dev
     - libcufile-dev  # [linux64]
     - libcurand-dev
     {% endif %}
+    - cuda-version {{ cuda_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -96,11 +96,11 @@ outputs:
         - cudatoolkit {{ cuda_spec }}
         - libcufile {{ cuda11_libcufile_run_version }}  # [linux64]
         {% else %}
-        - cuda-version {{ cuda_spec }}
-        - cuda-nvrtc {{ cuda_spec }}
+        - cuda-nvrtc
         - libcufile  # [linux64]
         {% endif %}
-        - librmm ={{ minor_version }}*=cuda{{ cuda_major }}*
+        - cuda-version {{ cuda_spec }}
+        - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
@@ -403,9 +403,9 @@ outputs:
         {% if cuda_major == "11" %}
         - {{ compiler('cuda11') }} {{ cuda_version }}
         {% else %}
-        - cuda-version {{ cuda_version }}
         - {{ compiler('cuda') }}
         {% endif %}
+        - cuda-version {{ cuda_version }}
         - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
@@ -413,9 +413,9 @@ outputs:
         {% if cuda_major == "11" %}
         - cuda-nvtx ={{ cuda_version }}
         {% else %}
-        - cuda-version {{ cuda_version }}
         - cuda-nvtx-dev
         {% endif %}
+        - cuda-version {{ cuda_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
@@ -445,10 +445,10 @@ outputs:
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% else %}
-        - cuda-version {{ cuda_spec }}
         - cuda-cupti
         - libcurand
         {% endif %}
+        - cuda-version {{ cuda_spec }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
     about:

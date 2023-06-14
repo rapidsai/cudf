@@ -43,15 +43,15 @@ build:
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - ninja
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     {% if cuda_major == "11" %}
     - {{ compiler('cuda11') }} {{ cuda_version }}
     {% else %}
-    - cuda-version {{ cuda_version }}
     - {{ compiler('cuda') }}
     {% endif %}
-    - ninja
+    - cuda-version {{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - protobuf >=4.21.6,<4.22
@@ -61,15 +61,15 @@ requirements:
     - setuptools
     - dlpack >=0.5,<0.6.0a0
     - pyarrow =11
-    - libcudf ={{ version }}*=cuda{{ cuda_major }}*
+    - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
     {% else %}
-    - cuda-version {{ cuda_version }}
-    - cuda-nvrtc {{ cuda_spec }}
+    - cuda-nvrtc
     - libcufile  # [linux64]
     {% endif %}
+    - cuda-version {{ cuda_version }}
   run:
     - protobuf >=4.21.6,<4.22
     - python
@@ -79,7 +79,7 @@ requirements:
     - numba >=0.57
     - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
-    - libcudf {{ version }}*=cuda{{ cuda_major }}*
+    - libcudf {{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
@@ -88,11 +88,11 @@ requirements:
     - cubinlinker  # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0
     {% else %}
-    - cuda-version {{ cuda_version }}
-    - cuda-nvrtc {{ cuda_spec }}
+    - cuda-nvrtc
     - libcufile  # [linux64]
     - cuda-python >=12.0,<13.0
     {% endif %}
+    - cuda-version {{ cuda_version }}
     - nvtx >=0.2.1
     - packaging
     - cachetools
