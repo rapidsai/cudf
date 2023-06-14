@@ -445,7 +445,7 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  table_input_metadata const* _metadata = nullptr;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
@@ -861,7 +861,7 @@ class chunked_orc_writer_options {
   // Row index stride (maximum number of rows in each row group)
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  table_input_metadata const* _metadata = nullptr;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
