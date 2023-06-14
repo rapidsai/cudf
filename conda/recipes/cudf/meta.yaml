@@ -85,11 +85,11 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - ptxcompiler >=0.7.0
     - cubinlinker  # CUDA enhanced compatibility.
-    - cuda-python >=11.7.1,<12.0
+    - cuda-python >=11.7.1,<12.0a0
     {% else %}
     - cuda-nvrtc
     - libcufile  # [linux64]
-    - cuda-python >=12.0,<13.0
+    - cuda-python >=12.0,<13.0a0
     {% endif %}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
