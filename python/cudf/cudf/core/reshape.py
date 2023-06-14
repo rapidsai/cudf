@@ -1138,7 +1138,7 @@ def _get_unique(column, dummy_na):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
-        unique = column.unique().sort_by_values()[0]
+        unique = column.unique().sort_values()
     if not dummy_na:
         if np.issubdtype(unique.dtype, np.floating):
             unique = unique.nans_to_nulls()
