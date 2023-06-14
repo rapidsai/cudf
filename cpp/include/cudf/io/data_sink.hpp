@@ -41,7 +41,7 @@ class data_sink {
    * @param[in] filepath Path to the file to use
    * @return Constructed data_sink object
    */
-  static std::unique_ptr<data_sink> create(const std::string& filepath);
+  static std::unique_ptr<data_sink> create(std::string const& filepath);
 
   /**
    * @brief Create a sink from a std::vector
