@@ -1378,7 +1378,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # values of `self`:
         order = arange(len(self))
         order = order.take(left_gather_map, check_bounds=False).argsort()
-        codes = codes.take(order, check_bounds=False)
+        codes = codes.take(order)
         return codes
 
 
