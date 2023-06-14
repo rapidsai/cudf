@@ -191,40 +191,12 @@ struct StripeStream {
   uint8_t pad[3];
 };
 
-/**
- * @brief Struct to describe a dictionary chunk
- */
-struct DictionaryChunk {
-  uint32_t* dict_data;        // dictionary data (index of non-null rows)
-  uint32_t* dict_index;       // row indices of corresponding string (row from dictionary index)
-  uint32_t start_row;         // start row of this chunk
-  uint32_t num_rows;          // num rows in this chunk
-  uint32_t num_dict_strings;  // number of strings in dictionary
-  uint32_t dict_char_count;   // size of dictionary string data for this chunk
-
-  orc_column_device_view const* leaf_column;  //!< Pointer to string column
-};
-
-/**
- * @brief Struct to describe a dictionary
- */
-struct StripeDictionary {
-  uint32_t* dict_data;       // row indices of corresponding string (row from dictionary index)
-  uint32_t* dict_index;      // dictionary index from row index
-  uint32_t column_id;        // real column id
-  uint32_t start_chunk;      // first chunk in stripe
-  uint32_t num_chunks;       // number of chunks in the stripe
-  uint32_t num_strings;      // number of unique strings in the dictionary
-  uint32_t dict_char_count;  // total size of dictionary string data
-
-  orc_column_device_view const* leaf_column;  //!< Pointer to string column
-};
-
 struct stripe_dictionary {
   // input
   device_span<slot_type> map_slots;
   uint32_t column_idx;
-  size_type start_row;  // first chunk in stripe
+  size_type start_row;       // first row in stripe
+  size_type start_rowgroup;  // first rowgroup in stripe
   size_type num_rows;
 
   // output
@@ -364,14 +336,15 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 /**
  * @brief Launches kernel for encoding column dictionaries
  *
- * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] stripes Stripe dictionaries device array
  * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
-void EncodeStripeDictionaries(StripeDictionary const* stripes,
+void EncodeStripeDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -419,45 +392,11 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<compression_result> comp_res,
   rmm::cuda_stream_view stream);
 
-/**
- * @brief Launches kernel for initializing dictionary chunks
- *
- * @param[in] orc_columns Pre-order flattened device array of ORC column views
- * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] dict_data dictionary data (index of non-null rows)
- * @param[in] dict_index row indices of corresponding string (row from dictionary index)
- * @param[in] tmp_indices Temporary buffer for dictionary indices
- * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
- * @param[in] str_col_indexes List of columns that are strings type
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
-void InitDictionaryIndices(device_span<orc_column_device_view const> orc_columns,
-                           device_2dspan<DictionaryChunk> chunks,
-                           device_span<device_span<uint32_t>> dict_data,
-                           device_span<device_span<uint32_t>> dict_index,
-                           device_span<device_span<uint32_t>> tmp_indices,
-                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                           device_span<uint32_t const> str_col_indexes,
-                           rmm::cuda_stream_view stream);
-
 void rowgroup_char_counts(device_2dspan<size_type> counts,
                           device_span<orc_column_device_view const> orc_columns,
                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
                           device_span<uint32_t const> str_col_indexes,
                           rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for building stripe dictionaries
- *
- * @param[in] d_stripes StripeDictionary device 2D array [stripe][column]
- * @param[in] h_stripes StripeDictionary host 2D array [stripe][column]
- * @param[in] chunks DictionaryChunk device array [rowgroup][column]
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
-void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes,
-                             host_2dspan<StripeDictionary const> h_stripes,
-                             device_2dspan<DictionaryChunk const> chunks,
-                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernels to initialize statistics collection
