@@ -44,20 +44,22 @@ requirements:
   host:
     - python
     - cython >=0.29,<0.30
+    - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
-    - libcudf_kafka ={{ version }}*=cuda{{ cuda_major }}*
+    - libcudf_kafka ={{ version }}
     - setuptools
   run:
     - python
-    - libcudf_kafka ={{ version }}*=cuda{{ cuda_major }}*
-    - cudf ={{ version }}*=cuda{{ cuda_major }}*
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+    - libcudf_kafka ={{ version }}
+    - cudf ={{ version }}
 
 test:
   requires:
     {% if cuda_major == "11" %}
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    - cudatoolkit ={{ cuda_version }}
     {% endif %}
-    - cuda-version {{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf_kafka
 
