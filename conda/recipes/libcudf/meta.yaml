@@ -51,6 +51,7 @@ requirements:
     - libcufile-dev {{ libcufile_host_version }}  # [linux64]
     - libcurand {{ libcurand_host_version }}
     - libcurand-dev {{ libcurand_host_version }}
+    - nvcomp {{ nvcomp_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -80,6 +81,7 @@ outputs:
         - libarrow {{ libarrow_version }}
         - libcufile {{ libcufile_run_version }}      # [linux64]
         - libcufile-dev {{ libcufile_run_version }}  # [linux64]
+        - nvcomp {{ nvcomp_version }}
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
