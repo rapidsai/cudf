@@ -1351,8 +1351,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                orc_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
+  : _impl{std::make_unique<impl>(std::move(sources), options, stream, mr)}
 {
-  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
 }
 
 // Destructor within this translation unit
