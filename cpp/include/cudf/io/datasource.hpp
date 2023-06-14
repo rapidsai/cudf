@@ -113,7 +113,7 @@ class datasource {
    * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(const std::string& filepath,
+  static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset = 0,
                                             size_t size   = 0);
 
@@ -434,8 +434,8 @@ class arrow_io_source : public datasource {
    */
   explicit arrow_io_source(std::string_view arrow_uri)
   {
-    const std::string uri_start_delimiter = "//";
-    const std::string uri_end_delimiter   = "?";
+    std::string const uri_start_delimiter = "//";
+    std::string const uri_end_delimiter   = "?";
 
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
       arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
