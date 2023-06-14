@@ -7,4 +7,7 @@ export cudf_ROOT="$(realpath ./cpp/build)"
 [[ $(arch) == "aarch64" ]] && targetsDir="targets/sbsa-linux"
 export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}:${BUILD_PREFIX}/${targetsDir}/lib:${BUILD_PREFIX}/${targetsDir}/lib/stubs"
 
-./build.sh -n -v libcudf libcudf_kafka benchmarks tests --build_metrics --incl_cache_stats --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib -DCUDF_ENABLE_ARROW_S3=ON\"
+./build.sh -n -v \
+    libcudf libcudf_kafka benchmarks tests \
+    --build_metrics --incl_cache_stats \
+    --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib -DCUDF_ENABLE_ARROW_S3=ON -DNVBench_ENABLE_CUPTI=OFF\"

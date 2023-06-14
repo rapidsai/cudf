@@ -70,6 +70,7 @@ requirements:
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - spdlog {{ spdlog_version }}
+    - benchmark {{ gbench_version }}
     - gtest {{ gtest_version }}
     - gmock {{ gtest_version }}
 
@@ -445,10 +446,10 @@ outputs:
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% else %}
-        - cuda-cupti
         - libcurand
         {% endif %}
         - cuda-version {{ cuda_spec }}
+        - benchmark {{ gbench_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
     about:
