@@ -567,31 +567,33 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param skip Number of rows to skip
+   * @param skiprows Number of rows to skip
    */
-  void set_skiprows(size_type skip)
+  void set_skiprows(size_type skiprows)
   {
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skiprows can't be a non zero value if range offset and/or range size has been set");
+    if ((skiprows != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skiprows must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
-    _skiprows = skip;
+    _skiprows = skiprows;
   }
 
   /**
    * @brief Sets number of rows to skip from end.
    *
-   * @param skip Number of rows to skip
+   * @param skipfooter Number of rows to skip
    */
-  void set_skipfooter(size_type skip)
+  void set_skipfooter(size_type skipfooter)
   {
-    CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `nrows` and `skipfooter`");
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skipfooter can't be a non zero value if range offset and/or range size has been set");
+    CUDF_EXPECTS((skipfooter == 0) or (_nrows == -1),
+                 "Cannot use both `nrows` and `skipfooter`",
+                 std::invalid_argument);
+    if ((skipfooter != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skipfooter must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
 
-    _skipfooter = skip;
+    _skipfooter = skipfooter;
   }
 
   /**
