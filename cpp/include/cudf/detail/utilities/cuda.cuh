@@ -41,8 +41,8 @@ static constexpr size_type warp_size{32};
  */
 class grid_1d {
  public:
-  const int num_threads_per_block;
-  const int num_blocks;
+  int const num_threads_per_block;
+  int const num_blocks;
   /**
    * @param overall_num_elements The number of elements the kernel needs to
    * handle/process, in its main, one-dimensional/linear input (e.g. one or more
