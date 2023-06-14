@@ -195,15 +195,10 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              arch: x86_64
               cuda: "12.0"
             packages:
-              - cuda-nvcc_linux-64=12.0
-          - matrix:
-              arch: aarch64
-              cuda: "12.0"
-            packages:
-              - cuda-nvcc_linux-aarch64=12.0
+              - cuda-version=12.0
+              - cuda-nvcc
           - matrix:
               arch: x86_64
               cuda: "11.8"
@@ -435,7 +430,7 @@ dependencies:
           - matrix:
               cuda: "12.0"
             packages:
-              - cuda-python>=12.1,<13.0
+              - cuda-python>=12.0,<13.0
           - matrix: # All CUDA 11 versions
             packages:
               - cuda-python>=11.7.1,<12.0
