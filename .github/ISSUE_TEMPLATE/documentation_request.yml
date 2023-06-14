@@ -46,7 +46,7 @@ body:
     id: search_locs
     attributes:
       label: |
-        If this is a correction, please provide a link to the incorrect documentation. 
+        If this is a correction, please provide a link to the incorrect documentation.
         If this is a new documentation request, please link to where you have looked.
       placeholder: |
        https://docs.rapids.ai/api/cudf/stable/ and
