@@ -37,7 +37,7 @@ build:
 requirements:
   host:
     - python
-    - cudf ={{ version }}
+    - cudf ={{ version }}*=cuda{{ cuda_major }}*
     - dask >=2023.5.1
     - dask-core >=2023.5.1
     - distributed >=2023.5.1

@@ -49,7 +49,7 @@ requirements:
   run:
     - python
     - libcudf_kafka ={{ version }}*=cuda{{ cuda_major }}*
-    - cudf ={{ version }}
+    - cudf ={{ version }}*=cuda{{ cuda_major }}*
 
 test:
   requires:
