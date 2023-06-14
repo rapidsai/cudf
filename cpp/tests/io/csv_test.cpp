@@ -1381,14 +1381,14 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_offset(4)
         .skiprows(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_offset(4)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
 
   {
@@ -1403,14 +1403,14 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_size(4)
         .skiprows(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_size(4)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
@@ -1466,7 +1466,7 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .nrows(1)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
     ;
   }
   {

@@ -56,6 +56,11 @@ def read_csv(path, blocksize="default", **kwargs):
         Passthrough key-word arguments that are sent to
         :func:`cudf:cudf.read_csv`.
 
+    Notes
+    -----
+    If any of `skipfooter`/`skiprows`/`nrows` are passed,
+    `blocksize` will default to None.
+
     Examples
     --------
     >>> import dask_cudf
@@ -81,7 +86,16 @@ def read_csv(path, blocksize="default", **kwargs):
 
     # Set default `blocksize`
     if blocksize == "default":
-        blocksize = "256 MiB"
+        if (
+            kwargs.get("skipfooter", 0) != 0
+            or kwargs.get("skiprows", 0) != 0
+            or kwargs.get("nrows", None) is not None
+        ):
+            # Cannot read in blocks if skipfooter,
+            # skiprows or nrows is passed.
+            blocksize = None
+        else:
+            blocksize = "256 MiB"
 
     if "://" in str(path):
         func = make_reader(cudf.read_csv, "read_csv", "CSV")
@@ -189,9 +203,14 @@ def read_csv_without_blocksize(path, **kwargs):
 
     name = "read-csv-" + tokenize(path, **kwargs)
 
+    meta_kwargs = kwargs.copy()
+    if "skipfooter" in meta_kwargs:
+        meta_kwargs.pop("skipfooter")
+    if "nrows" in meta_kwargs:
+        meta_kwargs.pop("nrows")
     # Read "head" of first file (first 5 rows).
     # Convert to empty df for metadata.
-    meta = cudf.read_csv(filenames[0], nrows=5, **kwargs).iloc[:0]
+    meta = cudf.read_csv(filenames[0], nrows=5, **meta_kwargs).iloc[:0]
 
     graph = {
         (name, i): (apply, cudf.read_csv, [fn], kwargs)
