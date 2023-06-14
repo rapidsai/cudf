@@ -434,7 +434,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  const std::unique_ptr<const impl_type> _impl;
+  const std::unique_ptr<impl_type const> _impl;
 };
 
 /**

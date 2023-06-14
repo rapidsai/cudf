@@ -442,8 +442,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
-    const auto* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
-    const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
+    auto const* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
+    char const* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
     size_type offset      = d_offsets[index];
     return string_view{d_strings + offset, d_offsets[index + 1] - offset};
   }
