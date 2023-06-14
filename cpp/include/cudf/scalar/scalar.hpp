@@ -545,7 +545,7 @@ class string_scalar : public scalar {
    * @brief Returns a raw pointer to the string in device memory.
    * @return a raw pointer to the string in device memory
    */
-  [[nodiscard]] const char* data() const;
+  [[nodiscard]] char const* data() const;
 
  protected:
   rmm::device_buffer _data{};  ///< device memory containing the string

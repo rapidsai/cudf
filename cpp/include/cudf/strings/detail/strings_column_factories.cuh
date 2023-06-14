@@ -45,7 +45,7 @@ namespace detail {
  * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
  * data in device memory.
  */
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief Average string byte-length threshold for deciding character-level

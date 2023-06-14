@@ -13,6 +13,9 @@ sysroot_version:
 cmake_version:
   - ">=3.26.4"
 
+gbench_version:
+  - "==1.8.0"
+
 gtest_version:
   - ">=1.13.0"
 
