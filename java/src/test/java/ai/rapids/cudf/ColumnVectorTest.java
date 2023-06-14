@@ -2877,7 +2877,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testFlattenLists() {
+  void testFlattenListsNoNulls() {
     HostColumnVector.ListType listType = new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32));
     HostColumnVector.ListType listOfListsType = new HostColumnVector.ListType(true, listType);
@@ -2889,6 +2889,23 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(listType,
              Arrays.asList(1, 2, 3, 4, 5, 6),
              Arrays.asList(7, 8, 9, 10, 11, 12, 13, 14, 15))) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testFlattenListsWithNulls() {
+    HostColumnVector.ListType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    HostColumnVector.ListType listOfListsType = new HostColumnVector.ListType(true, listType);
+
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+        Arrays.asList(null, Arrays.asList(3), Arrays.asList(4, 5, 6)),
+        Arrays.asList(Arrays.asList(null, 8, 9), Arrays.asList(10, 11, 12, 13, 14, null)));
+         ColumnVector result = input.flattenLists(true);
+         ColumnVector expected = ColumnVector.fromLists(listType,
+             null,
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
       assertColumnsAreEqual(expected, result);
     }
   }
