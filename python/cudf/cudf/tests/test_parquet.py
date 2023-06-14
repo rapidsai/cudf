@@ -30,7 +30,6 @@ from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
-    assert_exceptions_equal,
     expect_warning_if,
     set_random_null_mask_inplace,
 )
@@ -2528,15 +2527,29 @@ def test_parquet_writer_decimal(decimal_type, data):
 
 
 def test_parquet_writer_column_validation():
-    df = cudf.DataFrame({1: [1, 2, 3], "1": ["a", "b", "c"]})
+    df = cudf.DataFrame({1: [1, 2, 3], "a": ["a", "b", "c"]})
     pdf = df.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=df.to_parquet,
-        rfunc=pdf.to_parquet,
-        lfunc_args_and_kwargs=(["cudf.parquet"],),
-        rfunc_args_and_kwargs=(["pandas.parquet"],),
-    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.warns(UserWarning):
+            df.to_parquet("cudf.parquet")
+
+    if PANDAS_GE_200:
+        with pytest.warns(UserWarning):
+            pdf.to_parquet("pandas.parquet")
+
+        assert_eq(
+            pd.read_parquet("cudf.parquet"),
+            cudf.read_parquet("pandas.parquet"),
+        )
+        assert_eq(
+            cudf.read_parquet("cudf.parquet"),
+            pd.read_parquet("pandas.parquet"),
+        )
+
+    with cudf.option_context("mode.pandas_compatible", False):
+        with pytest.raises(ValueError):
+            df.to_parquet("cudf.parquet")
 
 
 def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
