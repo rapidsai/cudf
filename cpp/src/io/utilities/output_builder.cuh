@@ -106,33 +106,33 @@ class split_device_span_iterator {
 
   [[nodiscard]] constexpr reference operator[](size_type i) const { return _span[_offset + i]; }
 
-  [[nodiscard]] constexpr friend bool operator==(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator==(it const& lhs, it const& rhs)
   {
     return lhs._offset == rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator!=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator!=(it const& lhs, it const& rhs)
   {
     return !(lhs == rhs);
   }
-  [[nodiscard]] constexpr friend bool operator<(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator<(it const& lhs, it const& rhs)
   {
     return lhs._offset < rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator>=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator>=(it const& lhs, it const& rhs)
   {
     return !(lhs < rhs);
   }
 
-  [[nodiscard]] constexpr friend bool operator>(const it& lhs, const it& rhs) { return rhs < lhs; }
+  [[nodiscard]] constexpr friend bool operator>(it const& lhs, it const& rhs) { return rhs < lhs; }
 
-  [[nodiscard]] constexpr friend bool operator<=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator<=(it const& lhs, it const& rhs)
   {
     return !(lhs > rhs);
   }
 
-  [[nodiscard]] constexpr friend difference_type operator-(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend difference_type operator-(it const& lhs, it const& rhs)
   {
     return lhs._offset - rhs._offset;
   }
@@ -215,9 +215,9 @@ class output_builder {
   }
 
   output_builder(output_builder&&)                 = delete;
-  output_builder(const output_builder&)            = delete;
+  output_builder(output_builder const&)            = delete;
   output_builder& operator=(output_builder&&)      = delete;
-  output_builder& operator=(const output_builder&) = delete;
+  output_builder& operator=(output_builder const&) = delete;
 
   /**
    * @brief Returns the next free chunk of `max_write_size` elements from the underlying storage.

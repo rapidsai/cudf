@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 namespace cudf {
 namespace detail {
 
-std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(const int64_t size, arrow::MemoryPool* ar_mr)
+std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(int64_t const size, arrow::MemoryPool* ar_mr)
 {
   /*
   nvcc 11.0 generates Internal Compiler Error during codegen when arrow::AllocateBuffer
@@ -33,7 +33,7 @@ std::unique_ptr<arrow::Buffer> allocate_arrow_buffer(const int64_t size, arrow::
   return std::move(result).ValueOrDie();
 }
 
-std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(const int64_t size, arrow::MemoryPool* ar_mr)
+std::shared_ptr<arrow::Buffer> allocate_arrow_bitmap(int64_t const size, arrow::MemoryPool* ar_mr)
 {
   /*
   nvcc 11.0 generates Internal Compiler Error during codegen when arrow::AllocateBuffer
