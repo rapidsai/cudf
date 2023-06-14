@@ -262,7 +262,7 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 
   auto const child = lists_column_view(input).child();
   CUDF_EXPECTS(child.type().id() == type_id::LIST,
-               "Rows of the input column must be lists of lists.",
+               "Child of the input lists column must also be a lists column.",
                std::invalid_argument);
 
   if (input.size() == 0) { return cudf::empty_like(input); }
