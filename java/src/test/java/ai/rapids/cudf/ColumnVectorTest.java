@@ -98,6 +98,14 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testDistinctCount() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(5L, 3L, null, null, 5L)) {
+      assertEquals(3, cv.distinctCount());
+      assertEquals(2, cv.distinctCount(NullPolicy.EXCLUDE));
+    }
+  }
+
+  @Test
   void testClampDouble() {
     try (ColumnVector cv = ColumnVector.fromDoubles(2.33d, 32.12d, -121.32d, 0.0d, 0.00001d,
         Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN);
@@ -2089,6 +2097,15 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
            ColumnVector result = cv.strip(null)) {}
     });
+  }
+
+  @Test
+  void testTrimEmptyStringsWithNulls() {
+    try (ColumnVector cv = ColumnVector.fromStrings("", null);
+         ColumnVector trimmed = cv.strip();
+         ColumnVector expected = ColumnVector.fromStrings("", null)) {
+      assertColumnsAreEqual(expected, trimmed);
+    }
   }
 
   @Test

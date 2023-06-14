@@ -235,7 +235,7 @@ struct encoded_footer_statistics {
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
-  static constexpr const char* MAGIC = "ORC";
+  static constexpr char const* MAGIC = "ORC";
 
  public:
   /**
