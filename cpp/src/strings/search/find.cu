@@ -304,7 +304,6 @@ __global__ void contains_warp_parallel_fn(column_device_view const d_strings,
     // check the target matches this part of the d_str data
     if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
   }
-  // if (found) { atomicOr(d_results + str_idx, true); }
   auto const result = warp_reduce(temp_storage).Reduce(found, cub::Max());
   if (lane_idx == 0) { d_results[str_idx] = result; }
 }
