@@ -36,7 +36,7 @@ fi
 
 if (( ${SUITEERROR} == 0 )); then
     # Run a small nvbench benchmark
-    ./STRINGS_NVBENCH --run-once --benchmark 0
+    ./STRINGS_NVBENCH --run-once --benchmark 0 --devices 0
     SUITEERROR=$?
 fi
 popd
