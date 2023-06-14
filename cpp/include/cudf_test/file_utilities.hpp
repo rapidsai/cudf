@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ class temp_directory {
    *
    * @param base_name The base name of the temporary directory
    */
-  temp_directory(const std::string& base_name)
+  temp_directory(std::string const& base_name)
   {
     std::string dir_template{std::filesystem::temp_directory_path().string()};
     if (auto env_p = std::getenv("WORKSPACE")) dir_template = env_p;
@@ -67,5 +67,5 @@ class temp_directory {
    *
    * @return string path of the temporary directory
    */
-  [[nodiscard]] const std::string& path() const { return _path; }
+  [[nodiscard]] std::string const& path() const { return _path; }
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ namespace detail {
  * @param bytes Number of bytes to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
-__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
+__device__ inline char* copy_and_increment(char* buffer, char const* input, size_type bytes)
 {
   memcpy(buffer, input, bytes);
   return buffer + bytes;
@@ -48,7 +48,7 @@ __device__ inline char* copy_and_increment(char* buffer, const char* input, size
  * @param d_string String to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
-__device__ inline char* copy_string(char* buffer, const string_view& d_string)
+__device__ inline char* copy_string(char* buffer, string_view const& d_string)
 {
   return copy_and_increment(buffer, d_string.data(), d_string.size_bytes());
 }
@@ -62,7 +62,7 @@ class per_context_cache {
   // If there is no object available in the cache, it calls the initializer
   // `init` to create a new one and cache it for later uses.
   template <typename Initializer>
-  TableType* find_or_initialize(const Initializer& init)
+  TableType* find_or_initialize(Initializer const& init)
   {
     int device_id;
     CUDF_CUDA_TRY(cudaGetDevice(&device_id));
@@ -85,7 +85,7 @@ template <typename TableType>
 class thread_safe_per_context_cache : public per_context_cache<TableType> {
  public:
   template <typename Initializer>
-  TableType* find_or_initialize(const Initializer& init)
+  TableType* find_or_initialize(Initializer const& init)
   {
     std::lock_guard<std::mutex> guard(mutex);
     return per_context_cache<TableType>::find_or_initialize(init);
