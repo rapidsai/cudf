@@ -2908,6 +2908,16 @@ public class ColumnVectorTest extends CudfTestBase {
              Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
       assertColumnsAreEqual(expected, result);
     }
+
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+        Arrays.asList(null, Arrays.asList(3), Arrays.asList(4, 5, 6)),
+        Arrays.asList(Arrays.asList(null, 8, 9), Arrays.asList(10, 11, 12, 13, 14, null)));
+         ColumnVector result = input.flattenLists(false);
+         ColumnVector expected = ColumnVector.fromLists(listType,
+             Arrays.asList(3, 4, 5, 6),
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
+      assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test
