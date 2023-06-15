@@ -256,15 +256,16 @@ template <typename T = uint8_t>
     if (io_size != 0) {
       auto& source = sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        auto buffer        = rmm::device_buffer(io_size, stream);
+        auto buffer        = rmm::device_buffer(io_size + ALIGN_PADDING, stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
         auto const buffer = source->host_read(io_offset, io_size);
-        page_data[chunk] =
-          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
+        auto dbuffer      = rmm::device_buffer(io_size + ALIGN_PADDING, stream);
+        cudaMemcpyAsync(dbuffer.data(), buffer->data(), buffer->size(), cudaMemcpyDefault, stream);
+        page_data[chunk] = datasource::buffer::create(std::move(dbuffer));
       }
       auto d_compdata = page_data[chunk]->data();
       do {
@@ -441,7 +442,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // Dispatch batches of pages to decompress for each codec
-  rmm::device_buffer decomp_pages(total_decomp_size, stream);
+  rmm::device_buffer decomp_pages(total_decomp_size + ALIGN_PADDING, stream);
 
   std::vector<device_span<uint8_t const>> comp_in;
   comp_in.reserve(num_comp_pages);

@@ -48,6 +48,10 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 // level decode buffer size.
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
+// amount of padding to add to data buffers to allow for fast
+// copying of unaligned data
+constexpr int ALIGN_PADDING = 8;
+
 /**
  * @brief Struct representing an input column in the file.
  */

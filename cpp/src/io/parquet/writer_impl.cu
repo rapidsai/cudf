@@ -1831,8 +1831,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // Initialize data pointers in batch
   uint32_t const num_stats_bfr =
     (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size + ALIGN_PADDING, stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size + ALIGN_PADDING, stream);
   rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
