@@ -42,5 +42,17 @@ T* align_ptr_for_type(void* destination)
     std::align(alignment, bytes_needed, destination, padded_bytes_needed));
 }
 
+/**
+ * @brief Align a value up to the nearest multiple of the given alignment.
+ *
+ * @param value The input value to align
+ * @param alignment The amount of bytes to align, must be a power of 2
+ * @return The aligned value
+ */
+inline std::size_t align_up(std::size_t value, std::size_t alignment)
+{
+  return (value + (alignment - 1)) & ~(alignment - 1);
+}
+
 }  // namespace detail
 }  // namespace cudf
