@@ -264,7 +264,8 @@ template <typename T = uint8_t>
       } else {
         auto const buffer = source->host_read(io_offset, io_size);
         auto dbuffer      = rmm::device_buffer(io_size + ALIGN_PADDING, stream);
-        cudaMemcpyAsync(dbuffer.data(), buffer->data(), buffer->size(), cudaMemcpyDefault, stream);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          dbuffer.data(), buffer->data(), buffer->size(), cudaMemcpyDefault, stream));
         page_data[chunk] = datasource::buffer::create(std::move(dbuffer));
       }
       auto d_compdata = page_data[chunk]->data();
