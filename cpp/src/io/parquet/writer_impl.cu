@@ -239,6 +239,37 @@ bool is_col_fixed_width(column_view const& column)
   return is_fixed_width(column.type());
 }
 
+// given a column_view and the encoded page info for the pages in that chunk,
+// return a ColumnChunkSize object with the data sizes for each page.
+ColumnChunkSize sizes_for_chunk(column_view const& col,
+                                host_span<gpu::EncPage const> col_pages,
+                                rmm::cuda_stream_view stream)
+{
+  std::vector<size_type> slice_offsets;
+  std::for_each(col_pages.begin(), col_pages.end(), [&](auto const& page) {
+    if (page.page_type == PageType::DATA_PAGE) {
+      slice_offsets.push_back(page.start_row);
+      slice_offsets.push_back(page.start_row + page.num_rows);
+    }
+  });
+
+  auto slices = cudf::slice(col, slice_offsets);
+
+  std::vector<size_t> page_sizes;
+  std::transform(
+    slices.begin(), slices.end(), std::back_inserter(page_sizes), [&stream](auto& slice) {
+      return column_size(slice, stream);
+    });
+  int64_t chunk_size = std::reduce(page_sizes.begin(), page_sizes.end(), 0L);
+
+  ColumnChunkSize cs{chunk_size};
+  std::transform(
+    page_sizes.begin(), page_sizes.end(), std::back_inserter(cs.page_sizes), [](auto sz) {
+      return static_cast<int64_t>(sz);
+    });
+  return cs;
+}
+
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -1957,6 +1988,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                     std::move(uncomp_bfr),
                     std::move(comp_bfr),
                     std::move(col_idx_bfr),
+                    std::move(single_streams_table),
                     std::move(bounce_buffer)};
 }
 
@@ -2060,6 +2092,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
+                         single_streams_table,
                          bounce_buffer] = [&] {
     try {
       return convert_table_to_parquet_data(*_table_meta,
@@ -2098,6 +2131,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                              first_rg_in_part,
                              batch_list,
                              rg_to_part,
+                             single_streams_table,
                              bounce_buffer);
 
   update_compression_statistics(comp_stats);
@@ -2113,6 +2147,7 @@ void writer::impl::write_parquet_data_to_sink(
   host_span<int const> first_rg_in_part,
   host_span<size_type const> batch_list,
   host_span<int const> rg_to_part,
+  table_view const& single_streams_table,
   host_span<uint8_t> bounce_buffer)
 {
   _agg_meta              = std::move(updated_agg_meta);

@@ -136,6 +136,7 @@ class writer::impl {
    * @param first_rg_in_part The first rowgroup in each partition
    * @param batch_list The batches of rowgroups to encode
    * @param rg_to_part A map from rowgroup to partition
+   * @param single_streams_table input table converted to parquet columns
    * @param[out] bounce_buffer Temporary host output buffer
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
@@ -145,6 +146,7 @@ class writer::impl {
                                   host_span<int const> first_rg_in_part,
                                   host_span<size_type const> batch_list,
                                   host_span<int const> rg_to_part,
+                                  table_view const& single_streams_table,
                                   host_span<uint8_t> bounce_buffer);
 
   // Cuda stream to be used
