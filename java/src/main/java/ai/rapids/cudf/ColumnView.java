@@ -2491,6 +2491,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists() {
+    return flattenLists(false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   *
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists(boolean ignoreNull) {
+    return new ColumnVector(flattenLists(getNativeView(), ignoreNull));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -3967,6 +3992,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ((actualBytes + 63) >> 6) << 6;
   }
 
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * @param nullPolicy if nulls should be included or not.
+   */
+  public int distinctCount(NullPolicy nullPolicy) {
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
+  }
+
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * Nulls are included.
+   */
+  public int distinctCount() {
+    return distinctCount(getNativeView(), true);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3999,6 +4040,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
+  private static native int distinctCount(long handle, boolean nullsIncluded);
+
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
@@ -4448,6 +4491,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long dropListDuplicates(long nativeView);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
 
   /**
    * Native method for list lookup
