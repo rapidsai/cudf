@@ -269,7 +269,7 @@ template <typename T = uint8_t>
         auto tmp_buffer =
           rmm::device_buffer(cudf::detail::align_up(read_buffer->size(), 8 /*alignment*/), stream);
         CUDF_CUDA_TRY(cudaMemcpyAsync(
-          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault));
+          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
         page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
       }
       auto d_compdata = page_data[chunk]->data();
