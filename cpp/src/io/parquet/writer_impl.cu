@@ -1837,7 +1837,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   rmm::device_buffer uncomp_bfr(cudf::detail::align_up(max_uncomp_bfr_size, 8 /*alignment*/),
                                 stream);
   rmm::device_buffer comp_bfr(cudf::detail::align_up(max_comp_bfr_size, 8 /*alignment*/), stream);
-  rmm::device_buffer col_idx_bfr(column_index_bfr_size * 2, stream);
+  rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
