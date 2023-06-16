@@ -21,6 +21,7 @@
 #include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -256,15 +257,20 @@ template <typename T = uint8_t>
     if (io_size != 0) {
       auto& source = sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        auto buffer        = rmm::device_buffer(io_size, stream);
+        // Buffer needs to be padded as the compute kernels require aligned data pointers.
+        auto buffer = rmm::device_buffer(cudf::detail::align_up(io_size, 8 /*alignment*/), stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
-        auto const buffer = source->host_read(io_offset, io_size);
-        page_data[chunk] =
-          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
+        auto const read_buffer = source->host_read(io_offset, io_size);
+        // Buffer needs to be padded as the compute kernels require aligned data pointers.
+        auto tmp_buffer =
+          rmm::device_buffer(cudf::detail::align_up(read_buffer->size(), 8 /*alignment*/), stream);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault));
+        page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
       }
       auto d_compdata = page_data[chunk]->data();
       do {
@@ -440,8 +446,10 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
     }
   }
 
-  // Dispatch batches of pages to decompress for each codec
-  rmm::device_buffer decomp_pages(total_decomp_size, stream);
+  // Dispatch batches of pages to decompress for each codec.
+  // Buffer needs to be padded as the compute kernels require aligned data pointers.
+  rmm::device_buffer decomp_pages(cudf::detail::align_up(total_decomp_size, 8 /*alignment*/),
+                                  stream);
 
   std::vector<device_span<uint8_t const>> comp_in;
   comp_in.reserve(num_comp_pages);
