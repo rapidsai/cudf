@@ -20,7 +20,7 @@ import cudf
 from cudf.core.buffer.buffer import Buffer, get_ptr_and_size
 from cudf.utils.string import format_bytes
 
-T = TypeVar("T", bound="TenableBuffer")
+T = TypeVar("T", bound="ExposureTrackedBuffer")
 
 
 def get_owner(data, klass: Type[T]) -> Optional[T]:
@@ -47,28 +47,28 @@ def get_owner(data, klass: Type[T]) -> Optional[T]:
     return None
 
 
-def as_tenable_buffer(
+def as_exposure_tracked_buffer(
     data, exposed: bool, subclass: Optional[Type[T]] = None
 ) -> BufferSlice:
-    """Factory function to wrap `data` in a tenable buffer and buffer slice
+    """Factory function to wrap `data` in a slice of an exposure tracked buffer
 
-    If `subclass` is None, a new TenableBuffer that points to the memory of
-    `data` is created and a BufferSlice that points to all of the new
-    TenableBuffer is returned.
+    If `subclass` is None, a new ExposureTrackedBuffer that points to the
+    memory of `data` is created and a BufferSlice that points to all of the
+    new ExposureTrackedBuffer is returned.
 
     If `subclass` is not None, a new `subclass` is created instead. Still,
     a BufferSlice that points to all of the new `subclass` is returned
 
-    It is illegal for a tenable buffer to own another tenable buffer. When
-    representing the same memory, we should have a single tenable buffer
-    and multiple buffer slices.
+    It is illegal for an exposure tracked buffer to own another exposure
+    tracked buffer. When representing the same memory, we should have a single
+    buffer and multiple buffer slices.
 
     Developer Notes
     ---------------
     This function always returns slices thus all buffers in cudf will use
     `BufferSlice` when copy-on-write is enabled. The slices implements
     copy-on-write by trigging deep copies when write access is detected
-    and multiple slices points to the same tenable buffer.
+    and multiple slices points to the same exposure tracked buffer.
 
     Parameters
     ----------
@@ -77,42 +77,46 @@ def as_tenable_buffer(
     exposed
         Mark the buffer as permanently exposed.
     subclass
-        If not None, a subclass of TenableBuffer to wrap `data`.
+        If not None, a subclass of ExposureTrackedBuffer to wrap `data`.
 
     Return
     ------
     BufferSlice
-        A buffer slice that points to a TenableBuffer (or `subclass`), which
-        in turn wraps `data`.
+        A buffer slice that points to a ExposureTrackedBuffer (or `subclass`),
+        which in turn wraps `data`.
     """
 
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        return cast(BufferSlice, TenableBuffer._from_host_memory(data)[:])
+        return cast(
+            BufferSlice, ExposureTrackedBuffer._from_host_memory(data)[:]
+        )
 
-    owner = get_owner(data, subclass or TenableBuffer)
+    owner = get_owner(data, subclass or ExposureTrackedBuffer)
     if owner is None:
         return cast(
             BufferSlice,
-            TenableBuffer._from_device_memory(data, exposed=exposed)[:],
+            ExposureTrackedBuffer._from_device_memory(data, exposed=exposed)[
+                :
+            ],
         )
 
-    # At this point, we know that `data` is owned by a tenable buffer
+    # At this point, we know that `data` is owned by a exposure tracked buffer
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
     if size > 0 and owner._ptr == 0:
         raise ValueError("Cannot create a non-empty slice of a null buffer")
     return BufferSlice(base=owner, offset=ptr - owner._ptr, size=size)
 
 
-class TenableBuffer(Buffer):
+class ExposureTrackedBuffer(Buffer):
     """A Buffer that tracks its "expose" status.
 
     In order to implement copy-on-write and spillable buffers, we need the
     ability to detect external access to the underlying memory. We say that
     the buffer has been exposed if the device pointer (integer or void*) has
-    been accessed outside of TenableBuffer. In this case, we have no control
-    over knowing if the data is being modified by a third-party.
+    been accessed outside of ExposureTrackedBuffer. In this case, we have no
+    control over knowing if the data is being modified by a third-party.
 
     Attributes
     ----------
@@ -136,7 +140,7 @@ class TenableBuffer(Buffer):
 
     @classmethod
     def _from_device_memory(cls, data: Any, *, exposed: bool = False) -> Self:
-        """Create an tenable buffer from device memory.
+        """Create an exposure tracked buffer from device memory.
 
         No data is being copied.
 
@@ -149,7 +153,7 @@ class TenableBuffer(Buffer):
 
         Returns
         -------
-        TenableBuffer
+        ExposureTrackedBuffer
             Buffer representing the same device memory as `data`
         """
         ret = super()._from_device_memory(data)
@@ -167,19 +171,19 @@ class TenableBuffer(Buffer):
 
     def __repr__(self) -> str:
         return (
-            f"<TenableBuffer exposed={self.exposed} "
+            f"<ExposureTrackedBuffer exposed={self.exposed} "
             f"size={format_bytes(self._size)} "
             f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
         )
 
 
-class BufferSlice(TenableBuffer):
-    """A slice (aka. a view) of a tenable buffer.
+class BufferSlice(ExposureTrackedBuffer):
+    """A slice (aka. a view) of a exposure tracked buffer.
 
     Parameters
     ----------
     base
-        The tenable buffer this slice refers to.
+        The exposure tracked buffer this slice refers to.
     offset
         The offset relative to the start memory of base (in bytes).
     size
@@ -190,7 +194,7 @@ class BufferSlice(TenableBuffer):
 
     def __init__(
         self,
-        base: TenableBuffer,
+        base: ExposureTrackedBuffer,
         offset: int,
         size: int,
         *,

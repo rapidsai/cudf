@@ -11,8 +11,8 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
+    ExposureTrackedBuffer,
     SpillableBuffer,
-    TenableBuffer,
     acquire_spill_lock,
     as_buffer,
 )
@@ -534,7 +534,10 @@ cdef class Column:
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype_itemsize)
                 )
-            elif column_owner and isinstance(data_owner, TenableBuffer):
+            elif (
+                column_owner and
+                isinstance(data_owner, ExposureTrackedBuffer)
+            ):
                 data = as_buffer(
                     data=data_ptr,
                     size=base_nbytes,
@@ -564,7 +567,7 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, TenableBuffer):
+                if isinstance(data_owner, ExposureTrackedBuffer):
                     # accessing the pointer marks it exposed permanently.
                     data_owner.mark_exposed()
                 elif isinstance(data_owner, SpillableBuffer):

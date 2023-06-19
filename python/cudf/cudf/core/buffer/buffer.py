@@ -262,7 +262,7 @@ class Buffer(Serializable):
         See Also
         --------
         SpillableBuffer.get_ptr
-        TenableBuffer.get_ptr
+        ExposureTrackedBuffer.get_ptr
         """
         return self._ptr
 
