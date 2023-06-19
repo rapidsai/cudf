@@ -131,6 +131,16 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testDistinctCount() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, null, null, 5)
+            .build()) {
+      assertEquals(3, table1.distinctCount());
+      assertEquals(4, table1.distinctCount(NullEquality.UNEQUAL));
+    }
+  }
+
+  @Test
   void testMergeSimple() {
     try (Table table1 = new Table.TestBuilder()
             .column(5, 3, 3, 1, 1)
