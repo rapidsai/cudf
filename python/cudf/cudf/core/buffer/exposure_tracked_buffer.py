@@ -61,7 +61,7 @@ def as_exposure_tracked_buffer(
 
     It is illegal for an exposure tracked buffer to own another exposure
     tracked buffer. When representing the same memory, we should have a single
-    buffer and multiple buffer slices.
+    exposure tracked buffer and multiple buffer slices.
 
     Developer Notes
     ---------------
@@ -250,11 +250,13 @@ class BufferSlice(ExposureTrackedBuffer):
         ----------
         deep : bool, default True
             The semantics when copy-on-write is disabled:
-                - If True, returns a deep copy of the underlying Buffer data.
-                - If False, returns a shallow copy of the Buffer pointing to
-                  the same underlying data.
+                - If deep=True, returns a deep copy of the underlying data.
+                - If deep=False, returns a shallow copy of the Buffer pointing
+                  to the same underlying data.
             The semantics when copy-on-write is enabled:
-                - Always a deep copy of the underlying Buffer data.
+                - From the users perspective, always a deep copy of the
+                  underlying data. However, the data isn't actually copied
+                  until someone writers to the returned buffer.
 
         Returns
         -------
