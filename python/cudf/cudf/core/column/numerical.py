@@ -768,10 +768,12 @@ def _normalize_find_and_replace_input(
         if len(col_to_normalize) == 1:
             if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
-            else:
-                col_to_normalize_casted = input_column_dtype.type(
-                    col_to_normalize[0]
-                )
+            if np.isinf(col_to_normalize[0]):
+                return normalized_column
+            col_to_normalize_casted = np.array(col_to_normalize[0]).astype(
+                input_column_dtype
+            )
+
             if not np.isnan(col_to_normalize_casted) and (
                 col_to_normalize_casted != col_to_normalize[0]
             ):

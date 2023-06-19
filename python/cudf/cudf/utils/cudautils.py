@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from pickle import dumps
 
@@ -8,6 +8,7 @@ from numba import cuda
 from numba.np import numpy_support
 
 import cudf
+from cudf.utils._numba import _CUDFNumbaConfig
 
 #
 # Misc kernels
@@ -80,19 +81,20 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     """
     found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
-        if compare == "gt":
-            gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
-        elif compare == "lt":
-            gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
-        else:
-            if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(
-                    arr, val, found, arr.size
-                )
+        with _CUDFNumbaConfig():
+            if compare == "gt":
+                gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
+            elif compare == "lt":
+                gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
             else:
-                gpu_mark_found_int.forall(found.size)(
-                    arr, val, found, arr.size
-                )
+                if arr.dtype in ("float32", "float64"):
+                    gpu_mark_found_float.forall(found.size)(
+                        arr, val, found, arr.size
+                    )
+                else:
+                    gpu_mark_found_int.forall(found.size)(
+                        arr, val, found, arr.size
+                    )
 
     return cudf.core.column.column.as_column(found).set_mask(mask)
 
@@ -154,9 +156,10 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 def window_sizes_from_offset(arr, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_window_sizes_from_offset.forall(arr.size)(
-            arr, window_sizes, offset
-        )
+        with _CUDFNumbaConfig():
+            gpu_window_sizes_from_offset.forall(arr.size)(
+                arr, window_sizes, offset
+            )
     return window_sizes
 
 
@@ -177,9 +180,10 @@ def gpu_grouped_window_sizes_from_offset(
 def grouped_window_sizes_from_offset(arr, group_starts, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_grouped_window_sizes_from_offset.forall(arr.size)(
-            arr, window_sizes, group_starts, offset
-        )
+        with _CUDFNumbaConfig():
+            gpu_grouped_window_sizes_from_offset.forall(arr.size)(
+                arr, window_sizes, group_starts, offset
+            )
     return window_sizes
 
 

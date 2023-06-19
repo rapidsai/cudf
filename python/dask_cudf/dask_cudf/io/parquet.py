@@ -20,7 +20,11 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import _default_open_file_options
+from cudf.io.parquet import (
+    _apply_post_filters,
+    _default_open_file_options,
+    _normalize_filters,
+)
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
@@ -69,6 +73,7 @@ class CudfEngine(ArrowDatasetEngine):
         fs,
         columns=None,
         row_groups=None,
+        filters=None,
         strings_to_categorical=None,
         partitions=None,
         partitioning=None,
@@ -134,6 +139,10 @@ class CudfEngine(ArrowDatasetEngine):
                 else:
                     raise err
 
+        # Apply filters (if any are defined)
+        filters = _normalize_filters(filters)
+        df = _apply_post_filters(df, filters)
+
         if partitions and partition_keys is None:
 
             # Use `HivePartitioning` by default
@@ -183,6 +192,7 @@ class CudfEngine(ArrowDatasetEngine):
         index,
         categories=(),
         partitions=(),
+        filters=None,
         partitioning=None,
         schema=None,
         open_file_options=None,
@@ -255,6 +265,7 @@ class CudfEngine(ArrowDatasetEngine):
                             fs,
                             columns=read_columns,
                             row_groups=rgs if rgs else None,
+                            filters=filters,
                             strings_to_categorical=strings_to_cats,
                             partitions=partitions,
                             partitioning=partitioning,
@@ -281,6 +292,7 @@ class CudfEngine(ArrowDatasetEngine):
                     fs,
                     columns=read_columns,
                     row_groups=rgs if rgs else None,
+                    filters=filters,
                     strings_to_categorical=strings_to_cats,
                     partitions=partitions,
                     partitioning=partitioning,
