@@ -45,7 +45,7 @@ class lists_column_view : private column_view {
    */
   lists_column_view(column_view const& lists_column);
   lists_column_view(lists_column_view&&)      = default;  ///< Move constructor
-  lists_column_view(const lists_column_view&) = default;  ///< Copy constructor
+  lists_column_view(lists_column_view const&) = default;  ///< Copy constructor
   ~lists_column_view()                        = default;
   /**
    * @brief Copy assignment operator
