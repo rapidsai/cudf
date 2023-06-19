@@ -93,7 +93,9 @@ def test_melt_many_columns():
     grid_df = grid_df.sort_values("sales")
 
     df_d = cudf.DataFrame(mydict)
-    grid_df_d = cudf_melt(df_d, id_vars=["id"], var_name="d", value_name="sales")
+    grid_df_d = cudf_melt(
+        df_d, id_vars=["id"], var_name="d", value_name="sales"
+    )
     grid_df_d = grid_df_d.sort_values("sales")
     grid_df_d["d"] = grid_df_d["d"].astype("str")
 
