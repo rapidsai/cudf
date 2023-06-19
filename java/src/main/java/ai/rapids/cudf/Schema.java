@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -71,6 +71,17 @@ public class Schema {
     int[] ret = new int[types.size()];
     for (int i = 0; i < types.size(); i++) {
       ret[i] = types.get(i).getScale();
+    }
+    return ret;
+  }
+
+  DType[] getTypes() {
+    if (types == null) {
+      return null;
+    }
+    DType[] ret = new DType[types.size()];
+    for (int i = 0; i < types.size(); i++) {
+      ret[i] = types.get(i);
     }
     return ret;
   }

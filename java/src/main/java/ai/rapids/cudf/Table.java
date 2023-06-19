@@ -233,7 +233,10 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
-  private static native long[] readJSON(String[] columnNames,
+  /**
+   * read JSON data and return a pointer to a TableWithMeta object.
+   */
+  private static native long readJSON(String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
@@ -748,6 +751,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
+  private static native int distinctCount(long handle, boolean nullsEqual);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -968,6 +973,42 @@ public final class Table implements AutoCloseable {
     return readJSON(schema, opts, buffer, 0, buffer.length);
   }
 
+  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
+    String[] neededColumns = schema.getColumnNames();
+    if (neededColumns == null || neededColumns.length == 0) {
+      return twm.releaseTable();
+    } else {
+      String[] foundNames = twm.getColumnNames();
+      HashMap<String, Integer> indices = new HashMap<>();
+      for (int i = 0; i < foundNames.length; i++) {
+        indices.put(foundNames[i], i);
+      }
+      // We might need to rearrange the columns to match what we want.
+      DType[] types = schema.getTypes();
+      ColumnVector[] columns = new ColumnVector[neededColumns.length];
+      try (Table tbl = twm.releaseTable()) {
+        for (int i = 0; i < columns.length; i++) {
+          String neededColumnName = neededColumns[i];
+          Integer index = indices.get(neededColumnName);
+          if (index != null) {
+            columns[i] = tbl.getColumn(index).incRefCount();
+          } else {
+            try (Scalar s = Scalar.fromNull(types[i])) {
+              columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
+            }
+          }
+        }
+        return new Table(columns);
+      } finally {
+        for (ColumnVector c: columns) {
+          if (c != null) {
+            c.close();
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Read a JSON file.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
@@ -976,11 +1017,14 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
-    return new Table(
-        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
-            path.getAbsolutePath(),
-            0, 0,
-            opts.isDayFirst(), opts.isLines()));
+    try (TableWithMeta twm = new TableWithMeta(
+            readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+                    path.getAbsolutePath(),
+                    0, 0,
+                    opts.isDayFirst(), opts.isLines()))) {
+
+      return gatherJSONColumns(schema, twm);
+    }
   }
 
   /**
@@ -1043,9 +1087,11 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
-        null, buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+    try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
+            schema.getTypeIds(), schema.getTypeScales(), null,
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+      return gatherJSONColumns(schema, twm);
+    }
   }
 
   /**
@@ -2114,6 +2160,22 @@ public final class Table implements AutoCloseable {
   public Table dropDuplicates(int[] keyColumns, DuplicateKeepOption keep, boolean nullsEqual) {
     assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
     return new Table(dropDuplicates(nativeHandle, keyColumns, keep.keepValue, nullsEqual));
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * @param nullEqual if nulls should be considered equal to each other or not.
+   */
+  public int distinctCount(NullEquality nullsEqual) {
+    return distinctCount(nativeHandle, nullsEqual.nullsEqual);
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * Nulls are considered to be equal to one another.
+   */
+  public int distinctCount() {
+    return distinctCount(nativeHandle, true);
   }
 
   /**
