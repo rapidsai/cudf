@@ -368,8 +368,13 @@ table_with_metadata reader::impl::read(
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
-  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, filter);
-  return read_chunk_internal(uses_custom_row_bounds, filter);
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv     = named_to_reference_converter(filter, metadata);
+  auto output_filter = expr_conv.get_converted_expr();
+
+  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, output_filter);
+  return read_chunk_internal(uses_custom_row_bounds, output_filter);
 }
 
 table_with_metadata reader::impl::read_chunk()

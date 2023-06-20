@@ -19,6 +19,7 @@
 #include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
+#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
@@ -211,6 +212,65 @@ class aggregate_reader_metadata {
                    bool include_index,
                    bool strings_to_categorical,
                    type_id timestamp_type_id) const;
+};
+
+/**
+ * @brief Converts named columns to index reference columns
+ *
+ */
+class named_to_reference_converter : public ast::detail::expression_transformer {
+ public:
+  named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                               table_metadata const& metadata)
+    : metadata(metadata)
+  {
+    if (!expr.has_value()) return;
+    // create map for column name.
+    std::transform(metadata.schema_info.begin(),
+                   metadata.schema_info.end(),
+                   std::inserter(column_name_to_index, column_name_to_index.end()),
+                   [i = 0](const auto& data) mutable { return make_pair(data.name, i++); });
+    expr.value().get().accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns the AST to apply on Column chunk statistics.
+   *
+   * @return AST operation expression
+   */
+  [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
+    const
+  {
+    return _stats_expr;
+  }
+
+ private:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    std::vector<std::reference_wrapper<ast::expression const>> operands);
+
+  table_metadata const& metadata;
+  std::unordered_map<std::string, size_type> column_name_to_index;
+  std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
+  std::vector<ast::column_reference> _col_ref;
+  std::vector<ast::operation> _operators;
 };
 
 }  // namespace cudf::io::detail::parquet

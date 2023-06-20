@@ -402,4 +402,60 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // TODO will no of col chunks for all row groups be same?
 }
 
+// convert column named expression to column index reference expression
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::literal const& expr)
+{
+  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::column_reference const& expr)
+{
+  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::column_name_reference const& expr)
+{
+  // check if column name is in metadata
+  auto col_index_it = column_name_to_index.find(expr.get_column_name());
+  if (col_index_it == column_name_to_index.end()) {
+    CUDF_FAIL("Column name not found in metadata");
+  }
+  auto col_index = col_index_it->second;
+  _col_ref.push_back(ast::column_reference(col_index));
+  _stats_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
+  return std::reference_wrapper<ast::expression const>(_col_ref.back());
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::operation const& expr)
+{
+  auto const operands = expr.get_operands();
+  auto op             = expr.get_operator();
+  auto new_operands   = visit_operands(operands);
+  if (cudf::ast::detail::ast_operator_arity(op) == 2)
+    _operators.push_back(ast::operation(op, new_operands.front(), new_operands.back()));
+  else if (cudf::ast::detail::ast_operator_arity(op) == 1)
+    _operators.push_back(ast::operation(op, new_operands.front()));
+  _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+  return std::reference_wrapper<ast::expression const>(_operators.back());
+}
+
+std::vector<std::reference_wrapper<ast::expression const>>
+named_to_reference_converter::visit_operands(
+  std::vector<std::reference_wrapper<ast::expression const>> operands)
+{
+  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
+  for (auto const& operand : operands) {
+    auto const new_operand = operand.get().accept(*this);
+    transformed_operands.push_back(new_operand);
+  }
+  return transformed_operands;
+}
+
 }  // namespace cudf::io::detail::parquet
