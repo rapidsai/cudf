@@ -473,7 +473,7 @@ ensure that the passed CUDA stream is a valid one, immediately throwing an excep
 stream is detected. Running tests with this library loaded immediately triggers errors if any test
 accidentally runs code on an invalid stream.
 
-Stream validity is determined by overloading the definition of cudf's default stream. Normally, in
+Stream validity is determined by overloading the definition of libcudf's default stream. Normally, in
 libcudf `cudf::get_default_stream` returns one of `rmm`'s default stream values (depending on
 whether or not libcudf is compiled with per thread default stream enabled). In the preload library,
 this function is redefined to instead return a new user-created stream managed using a
@@ -485,7 +485,7 @@ created by the preload library.
 The preload library supports two different modes, `cudf` mode and `testing` mode. The previous
 paragraph describes the behavior of `cudf` mode, where `cudf::get_default_stream` is overloaded. In
 `cudf` mode, the preload library ensures that all CUDA runtime APIs are being provided cudf's
-default stream. This will detect oversights where e.g. a Thrust call has no stream specified, or
+default stream. This will detect oversights where, for example, a Thrust call has no stream specified, or
 when one of CUDA's default stream values is explicitly specified to a kernel. However, it will not
 detect cases where a stream is not correctly forwarded down the call stack, for instance if
 some `detail` function that accepts a stream parameter fails to forward it along and instead
