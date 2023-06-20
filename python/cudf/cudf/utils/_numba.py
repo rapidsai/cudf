@@ -6,10 +6,15 @@ import sys
 import warnings
 
 from numba import config as numba_config
+from nvjitlink.api import NvJitLinker
 
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
 )
+
+
+def new_patched_linker(max_registers=0, lineinfo=False, cc=None):
+    return NvJitLinker(max_registers, lineinfo, cc)
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -116,6 +121,9 @@ def _setup_numba():
                 f"install CUDA toolkit version {driver_version} to "
                 "continue using cuDF."
             )
+            from numba.cuda.cudadrv.driver import Linker
+
+            Linker.new = new_patched_linker
         else:
             # Support MVC for all CUDA versions in the 11.x range
             ptx_toolkit_version = _get_cuda_version_from_ptx_file(
@@ -171,6 +179,7 @@ def _get_cuda_version_from_ptx_file(path):
         "7.8": (11, 8),
         "8.0": (12, 0),
         "8.1": (12, 1),
+        "8.2": (12, 2),
     }
 
     cuda_ver = ver_map.get(version)
