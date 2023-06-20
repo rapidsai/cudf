@@ -150,7 +150,8 @@ cudf::size_type distinct_count(table_view const& keys,
       stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);
-    // when nulls are equal, only insert those rows that are not all null to improve efficiency
+    // when nulls are equal, we skip hashing any row that has a null
+    // in every column to improve efficiency.
     if (nulls_equal == null_equality::EQUAL and has_nulls) {
       thrust::counting_iterator<size_type> stencil(0);
       // We must consider a row if any of its column entries is valid,
