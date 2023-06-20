@@ -44,7 +44,7 @@ struct make_pair_function {
   /**
    * @brief Hash the merge pair entry
    */
-  __device__ cuco::pair_type<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
+  __device__ cuco::pair<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
   {
     auto const result = _hasher(d_strings.element<cudf::string_view>(idx));
     return cuco::make_pair(result, idx);
