@@ -194,6 +194,13 @@ class reader::impl {
   void allocate_level_decode_space();
 
   /**
+   * @brief Populate the output table metadata from the parquet file metadata.
+   *
+   * @param out_metadata The output table metadata to add to
+   */
+  void populate_metadata(table_metadata& out_metadata);
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
