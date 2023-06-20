@@ -836,31 +836,32 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
-        # pandas supports directly merging RangeIndex objects and can
-        # intelligently create RangeIndex outputs depending on the type of
-        # join. Hence falling back to performing a merge on pd.RangeIndex
-        # since the conversion is cheap.
-        if isinstance(other, RangeIndex):
-            other_pd = other.to_pandas()
-            return cudf.from_pandas(
-                self.to_pandas().join(
-                    other_pd,
-                    how=how,
-                    level=level,
-                    return_indexers=return_indexers,
-                    sort=sort,
+        if how in {"left", "right"}:
+            # pandas supports directly merging RangeIndex objects and can
+            # intelligently create RangeIndex outputs depending on the type of
+            # join. Hence falling back to performing a merge on pd.RangeIndex
+            # since the conversion is cheap.
+            if isinstance(other, RangeIndex):
+                other_pd = other.to_pandas()
+                return cudf.from_pandas(
+                    self.to_pandas().join(
+                        other_pd,
+                        how=how,
+                        level=level,
+                        return_indexers=return_indexers,
+                        sort=sort,
+                    )
                 )
-            )
-        elif isinstance(other, pd.RangeIndex):
-            return cudf.from_pandas(
-                self.to_pandas().join(
-                    other,
-                    how=how,
-                    level=level,
-                    return_indexers=return_indexers,
-                    sort=sort,
+            elif isinstance(other, pd.RangeIndex):
+                return cudf.from_pandas(
+                    self.to_pandas().join(
+                        other,
+                        how=how,
+                        level=level,
+                        return_indexers=return_indexers,
+                        sort=sort,
+                    )
                 )
-            )
         return self._as_int_index().join(
             other, how, level, return_indexers, sort
         )
