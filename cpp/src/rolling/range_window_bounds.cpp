@@ -35,8 +35,7 @@ struct range_scalar_constructor {
   {
     CUDF_FAIL(
       "Unsupported range type. "
-      "Only Durations, fixed-point, floating point, and non-boolean integral range types are "
-      "allowed.");
+      "Only durations, fixed-point, and non-boolean numeric range types are allowed.");
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
@@ -46,9 +45,7 @@ struct range_scalar_constructor {
       static_cast<duration_scalar<T> const&>(range_scalar_));
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(std::is_floating_point_v<T> ||
-                           (std::is_integral_v<T> && not cudf::is_boolean<T>()))>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && not cudf::is_boolean<T>())>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     return std::make_unique<numeric_scalar<T>>(
@@ -56,13 +53,6 @@ struct range_scalar_constructor {
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
-  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
-  {
-    return std::make_unique<fixed_point_scalar<T>>(
-      static_cast<fixed_point_scalar<T> const&>(range_scalar_));
-  }
-
-  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>())>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     return std::make_unique<fixed_point_scalar<T>>(

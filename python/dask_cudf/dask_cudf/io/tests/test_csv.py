@@ -16,6 +16,42 @@ import cudf
 import dask_cudf
 
 
+@pytest.fixture
+def csv_begin_bad_lines(tmp_path):
+    lines = """x
+    x
+    x
+    A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5"""
+
+    file = tmp_path / "test_read_csv_begin.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    return file
+
+
+@pytest.fixture
+def csv_end_bad_lines(tmp_path):
+    lines = """A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5
+    x
+    x
+    x"""
+
+    file = tmp_path / "test_read_csv_end.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    return file
+
+
 def test_csv_roundtrip_backend_dispatch(tmp_path):
     # Test ddf.read_csv cudf-backend dispatch
     df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
@@ -170,3 +206,50 @@ def test_csv_reader_usecols(tmp_path, dtype):
     ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"], dtype=dtype)
 
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+
+
+def test_read_csv_skiprows(csv_begin_bad_lines):
+    # Repro from Issue#13552
+    ddf_cpu = dd.read_csv(csv_begin_bad_lines, skiprows=3).compute()
+    ddf_gpu = dask_cudf.read_csv(csv_begin_bad_lines, skiprows=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_skiprows_error(csv_begin_bad_lines):
+    # Repro from Issue#13552
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_begin_bad_lines, skiprows=3, blocksize="100 MiB"
+        ).compute()
+
+
+def test_read_csv_skipfooter(csv_end_bad_lines):
+    # Repro from Issue#13552
+
+    ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+
+
+def test_read_csv_skipfooter_error(csv_end_bad_lines):
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_end_bad_lines, skipfooter=3, blocksize="100 MiB"
+        ).compute()
+
+
+def test_read_csv_nrows(csv_end_bad_lines):
+    ddf_cpu = pd.read_csv(csv_end_bad_lines, nrows=2)
+    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, nrows=2).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_nrows_error(csv_end_bad_lines):
+
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_end_bad_lines, nrows=2, blocksize="100 MiB"
+        ).compute()
