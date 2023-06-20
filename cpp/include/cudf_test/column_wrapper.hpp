@@ -449,7 +449,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -662,7 +662,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * @brief Construct a nullable column from an initializer list of decimal elements and the
    * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
    * element.
    *
@@ -1026,7 +1026,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable dictionary column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
