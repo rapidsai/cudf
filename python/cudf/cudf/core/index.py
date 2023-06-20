@@ -841,27 +841,27 @@ class RangeIndex(BaseIndex, BinaryOperand):
             # intelligently create RangeIndex outputs depending on the type of
             # join. Hence falling back to performing a merge on pd.RangeIndex
             # since the conversion is cheap.
+            self_pd = self.to_pandas()
             if isinstance(other, RangeIndex):
                 other_pd = other.to_pandas()
-                return cudf.from_pandas(
-                    self.to_pandas().join(
-                        other_pd,
-                        how=how,
-                        level=level,
-                        return_indexers=return_indexers,
-                        sort=sort,
-                    )
-                )
             elif isinstance(other, pd.RangeIndex):
-                return cudf.from_pandas(
-                    self.to_pandas().join(
-                        other,
-                        how=how,
-                        level=level,
-                        return_indexers=return_indexers,
-                        sort=sort,
-                    )
+                other_pd = other
+            else:
+                other_pd = None
+            if other_pd is not None:
+                result = self_pd.join(
+                    other_pd,
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
                 )
+                if return_indexers:
+                    return tuple(
+                        cudf.from_pandas(result[0]), result[1], result[2]
+                    )
+                else:
+                    return cudf.from_pandas(result)
         return self._as_int_index().join(
             other, how, level, return_indexers, sort
         )
