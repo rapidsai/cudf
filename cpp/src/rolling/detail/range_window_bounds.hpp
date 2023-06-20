@@ -64,9 +64,7 @@ struct range_type_impl {
 template <typename ColumnType>
 struct range_type_impl<
   ColumnType,
-  std::enable_if_t<std::is_floating_point_v<ColumnType> ||
-                     (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>()),
-                   void>> {
+  std::enable_if_t<cudf::is_numeric<ColumnType>() && !cudf::is_boolean<ColumnType>(), void>> {
   using type     = ColumnType;
   using rep_type = ColumnType;
 };
