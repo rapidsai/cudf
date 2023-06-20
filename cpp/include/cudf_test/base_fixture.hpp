@@ -308,10 +308,10 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 {
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
-    const char* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
-    const char* env_stream_mode =
+    char const* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
+    char const* env_stream_mode =
       std::getenv("GTEST_CUDF_STREAM_MODE");                        // Overridden by CLI options
-    const char* env_stream_error_mode =
+    char const* env_stream_error_mode =
       std::getenv("GTEST_CUDF_STREAM_ERROR_MODE");                  // Overridden by CLI options
     auto default_rmm_mode          = env_rmm_mode ? env_rmm_mode : "pool";
     auto default_stream_mode       = env_stream_mode ? env_stream_mode : "default";
@@ -339,7 +339,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
       "is not \"default\"",
       cxxopts::value<std::string>()->default_value(default_stream_error_mode));
     return options.parse(argc, argv);
-  } catch (const cxxopts::OptionException& e) {
+  } catch (cxxopts::OptionException const& e) {
     CUDF_FAIL("Error parsing command line options");
   }
 }

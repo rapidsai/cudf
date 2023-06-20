@@ -1563,8 +1563,10 @@ class Frame(BinaryOperand, Scannable):
         ).values
 
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
-        # Get an int64 column consisting of the indices required to sort self
-        # according to the columns specified in by.
+        """
+        Get the indices required to sort self according to the columns
+        specified in by.
+        """
 
         to_sort = [
             *(

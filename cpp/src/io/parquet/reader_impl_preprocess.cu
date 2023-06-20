@@ -229,20 +229,20 @@ template <typename T = uint8_t>
   cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   size_t begin_chunk,
   size_t end_chunk,
-  const std::vector<size_t>& column_chunk_offsets,
+  std::vector<size_t> const& column_chunk_offsets,
   std::vector<size_type> const& chunk_source_map,
   rmm::cuda_stream_view stream)
 {
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    const size_t io_offset   = column_chunk_offsets[chunk];
+    size_t const io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
     size_t next_chunk        = chunk + 1;
-    const bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
+    bool const is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
     while (next_chunk < end_chunk) {
-      const size_t next_offset = column_chunk_offsets[next_chunk];
-      const bool is_next_compressed =
+      size_t const next_offset = column_chunk_offsets[next_chunk];
+      bool const is_next_compressed =
         (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
       if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
         // Can't merge if not contiguous or mixing compressed and uncompressed
@@ -382,7 +382,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
   rmm::cuda_stream_view stream)
 {
-  auto for_each_codec_page = [&](parquet::Compression codec, const std::function<void(size_t)>& f) {
+  auto for_each_codec_page = [&](parquet::Compression codec, std::function<void(size_t)> const& f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
       const auto page_stride = chunks[c].max_num_pages;
       if (chunks[c].codec == codec) {
@@ -462,7 +462,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
-  for (const auto& codec : codecs) {
+  for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
     for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
@@ -735,8 +735,8 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
   size_t total_decompressed_size = 0;
   auto remaining_rows            = num_rows;
   std::vector<std::future<void>> read_rowgroup_tasks;
-  for (const auto& rg : row_groups_info) {
-    const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
+  for (auto const& rg : row_groups_info) {
+    auto const& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start  = rg.start_row;
     auto const row_group_source = rg.source_index;
     auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
@@ -1436,8 +1436,8 @@ struct row_counts_different {
  */
 void detect_malformed_pages(cudf::detail::hostdevice_vector<gpu::PageInfo>& pages,
                             cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                            device_span<const int> page_keys,
-                            device_span<const int> page_index,
+                            device_span<int const> page_keys,
+                            device_span<int const> page_index,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
@@ -1566,7 +1566,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
 
   // generate string dict indices if necessary
   {
-    auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
+    auto is_dict_chunk = [](gpu::ColumnChunkDesc const& chunk) {
       return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
     };
 

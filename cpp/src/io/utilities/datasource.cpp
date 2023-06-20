@@ -38,7 +38,7 @@ namespace {
  */
 class file_source : public datasource {
  public:
-  explicit file_source(const char* filepath) : _file(filepath, O_RDONLY)
+  explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
@@ -112,7 +112,7 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(const char* filepath, size_t offset, size_t size)
+  explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
     if (_file.size() != 0) map(_file.desc(), offset, size);
@@ -178,7 +178,7 @@ class memory_mapped_source : public file_source {
  */
 class direct_read_source : public file_source {
  public:
-  explicit direct_read_source(const char* filepath) : file_source(filepath) {}
+  explicit direct_read_source(char const* filepath) : file_source(filepath) {}
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
@@ -318,7 +318,7 @@ class user_datasource_wrapper : public datasource {
 
 }  // namespace
 
-std::unique_ptr<datasource> datasource::create(const std::string& filepath,
+std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -342,7 +342,7 @@ std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> 
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer.data()), buffer.size()));
+    reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
 }
 
 std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
