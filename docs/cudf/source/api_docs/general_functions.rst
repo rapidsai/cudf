@@ -14,7 +14,6 @@ Data manipulations
    cudf.cut
    cudf.factorize
    cudf.get_dummies
-   cudf.isclose
    cudf.melt
    cudf.merge
    cudf.pivot
