@@ -276,6 +276,7 @@ table_with_metadata reader::impl::read_chunk_internal(
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
+  out_metadata.schema_info.resize(_output_buffers.size());
 
   // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
@@ -300,7 +301,7 @@ table_with_metadata reader::impl::read_chunk_internal(
                             : std::nullopt;
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
@@ -319,7 +320,7 @@ table_with_metadata reader::impl::finalize_output(
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
     } else {
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
