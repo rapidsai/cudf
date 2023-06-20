@@ -1660,18 +1660,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         except TypeError:
             return result.values
 
+        join_keys = [
+            _match_join_keys(lcol, rcol, "inner")
+            for lcol, rcol in zip(target._data.columns, self._data.columns)
+        ]
+        join_keys = map(list, zip(*join_keys))
         scatter_map, indices = libcudf.join.join(
-            *map(
-                list,
-                zip(
-                    *[
-                        _match_join_keys(lcol, rcol, "inner")
-                        for lcol, rcol in zip(
-                            target._data.columns, self._data.columns
-                        )
-                    ]
-                ),
-            ),
+            *join_keys,
             how="inner",
         )
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
