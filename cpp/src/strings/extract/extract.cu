@@ -61,9 +61,7 @@ struct extract_fn {
 
     if (d_strings.is_valid(idx)) {
       auto const d_str = d_strings.element<string_view>(idx);
-
-      auto itr   = d_str.begin();
-      auto match = d_prog.find(prog_idx, d_str, d_str.begin());
+      auto const match = d_prog.find(prog_idx, d_str, d_str.begin());
       if (match) {
         auto const itr = d_str.begin() + match->first;
         auto last_pos  = itr;
