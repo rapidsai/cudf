@@ -7,10 +7,10 @@ import warnings
 from functools import cached_property
 from typing import Any, Set
 
-import pandas as pd
 from typing_extensions import Self
 
 import cudf
+import pandas as pd
 from cudf._lib.copying import _gather_map_is_valid, gather
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
@@ -1391,7 +1391,9 @@ class BaseIndex(Serializable):
         if self_is_multi and other_is_multi:
             return cudf.MultiIndex._from_data(output._data)
         else:
-            return cudf.core.index._index_from_data(output._data)
+            idx = cudf.core.index._index_from_data(output._data)
+            idx.name = self.name
+            return idx
 
     def rename(self, name, inplace=False):
         """

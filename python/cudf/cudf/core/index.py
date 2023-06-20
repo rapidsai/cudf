@@ -20,10 +20,9 @@ from typing import (
 
 import cupy
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 
 import cudf
+import pandas as pd
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
@@ -63,6 +62,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from pandas._config import get_option
 
 
 def _lexsorted_equal_range(
@@ -839,6 +839,27 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # TODO: pandas supports directly merging RangeIndex objects and can
         # intelligently create RangeIndex outputs depending on the type of
         # join. We need to implement that for the supported special cases.
+        if isinstance(other, RangeIndex):
+            other_pd = other.to_pandas()
+            return cudf.from_pandas(
+                self.to_pandas().join(
+                    other_pd,
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
+                )
+            )
+        elif isinstance(other, pd.RangeIndex):
+            return cudf.from_pandas(
+                self.to_pandas().join(
+                    other,
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
+                )
+            )
         return self._as_int_index().join(
             other, how, level, return_indexers, sort
         )
