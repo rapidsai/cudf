@@ -20,9 +20,10 @@ from typing import (
 
 import cupy
 import numpy as np
+import pandas as pd
+from pandas._config import get_option
 
 import cudf
-import pandas as pd
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
@@ -62,7 +63,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-from pandas._config import get_option
 
 
 def _lexsorted_equal_range(

@@ -7,10 +7,10 @@ import warnings
 from functools import cached_property
 from typing import Any, Set
 
+import pandas as pd
 from typing_extensions import Self
 
 import cudf
-import pandas as pd
 from cudf._lib.copying import _gather_map_is_valid, gather
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
