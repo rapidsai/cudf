@@ -35,8 +35,7 @@ struct range_scalar_constructor {
   {
     CUDF_FAIL(
       "Unsupported range type. "
-      "Only Durations, fixed-point, floating point, and non-boolean integral range types are "
-      "allowed.");
+      "Only durations, fixed-point, and non-boolean numeric range types are allowed.");
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
