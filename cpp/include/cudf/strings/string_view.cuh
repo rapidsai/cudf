@@ -223,6 +223,13 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
   return tmp;
 }
 
+__device__ inline string_view::const_iterator& string_view::const_iterator::move_to(
+  size_type new_pos)
+{
+  *this += (new_pos - char_pos);  // more efficient than recounting from the start
+  return *this;
+}
+
 __device__ inline bool string_view::const_iterator::operator==(
   string_view::const_iterator const& rhs) const
 {
@@ -272,7 +279,7 @@ __device__ inline size_type string_view::const_iterator::byte_offset() const { r
 
 __device__ inline string_view::const_iterator string_view::begin() const
 {
-  return const_iterator(*this, 0);
+  return const_iterator(*this, 0, 0);
 }
 
 __device__ inline string_view::const_iterator string_view::end() const
