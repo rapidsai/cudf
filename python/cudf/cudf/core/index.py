@@ -836,7 +836,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
-        if how in {"left", "right"}:
+        if how in {"left", "right"} or self.equals(other):
             # pandas supports directly merging RangeIndex objects and can
             # intelligently create RangeIndex outputs depending on the type of
             # join. Hence falling back to performing a merge on pd.RangeIndex
