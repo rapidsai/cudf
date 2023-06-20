@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ struct hash_circular_buffer {
     available_space = space_to_leave;
   }
 
-  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
+  __device__ inline uint8_t const& operator[](int idx) const { return storage[idx]; }
 };
 
 // Get a uint8_t pointer to a column element and its size as a pair.
