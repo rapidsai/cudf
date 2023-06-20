@@ -135,7 +135,7 @@ class writer_compression_statistics {
    * @param other The other writer_compression_statistics object
    * @return writer_compression_statistics& Reference to this object
    */
-  writer_compression_statistics& operator+=(const writer_compression_statistics& other) noexcept
+  writer_compression_statistics& operator+=(writer_compression_statistics const& other) noexcept
   {
     _num_compressed_bytes += other._num_compressed_bytes;
     _num_failed_bytes += other._num_failed_bytes;
@@ -263,7 +263,7 @@ struct host_buffer {
    * @param data Pointer to the buffer
    * @param size Size of the buffer
    */
-  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+  host_buffer(char const* data, size_t size) : data(data), size(size) {}
 };
 
 /**
@@ -331,7 +331,7 @@ struct source_info {
    * @param host_data Input buffer in host memory
    * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
+  explicit source_info(char const* host_data, size_t size)
     : _type(io_type::HOST_BUFFER),
       _host_buffers(
         {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
