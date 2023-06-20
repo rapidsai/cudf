@@ -225,7 +225,7 @@ struct data_type_error : public std::invalid_argument, public stacktrace_recorde
 namespace cudf {
 namespace detail {
 // @cond
-inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
+inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int line)
 {
   // Calls cudaGetLastError to clear the error status. It is nearly certain that a fatal error
   // occurred if it still returns the same error after a cleanup.
