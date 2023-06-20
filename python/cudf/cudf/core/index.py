@@ -836,9 +836,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
-        # TODO: pandas supports directly merging RangeIndex objects and can
+        # pandas supports directly merging RangeIndex objects and can
         # intelligently create RangeIndex outputs depending on the type of
-        # join. We need to implement that for the supported special cases.
+        # join. Hence falling back to performing a merge on pd.RangeIndex
+        # since the conversion is cheap.
         if isinstance(other, RangeIndex):
             other_pd = other.to_pandas()
             return cudf.from_pandas(
