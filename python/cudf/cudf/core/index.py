@@ -2846,6 +2846,9 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
 
 
 def _get_indexer_basic(index, positions, method, target_col, tolerance):
+    # `positions` will be modified in-place, so it is the
+    # responsibility of the caller to decide whether or not
+    # to make a copy of it before passing it to this method.
     nonexact = positions == -1
     positions[nonexact] = index.searchsorted(
         target_col[nonexact],
