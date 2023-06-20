@@ -5,6 +5,7 @@ import warnings
 from collections import abc
 from typing import Dict, Optional
 
+import cupy
 import numpy as np
 import pandas as pd
 
@@ -576,15 +577,9 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [
-        cudf.Series(
-            cudf.core.column.full(
-                N, i, dtype=min_unsigned_type(len(value_vars))
-            )
-        )
-        for i in range(len(value_vars))
-    ]
-    temp = cudf.Series._concat(objs=var_cols, index=None)
+    nval = len(value_vars)
+    dtype = min_unsigned_type(nval)
+    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"

@@ -90,13 +90,11 @@ def test_melt_many_columns():
 
     df = pd.DataFrame(mydict)
     grid_df = pd.melt(df, id_vars=["id"], var_name="d", value_name="sales")
-    grid_df = grid_df.sort_values("sales")
 
     df_d = cudf.DataFrame(mydict)
-    grid_df_d = cudf_melt(
+    grid_df_d = cudf.melt(
         df_d, id_vars=["id"], var_name="d", value_name="sales"
     )
-    grid_df_d = grid_df_d.sort_values("sales")
     grid_df_d["d"] = grid_df_d["d"].astype("str")
 
     assert_eq(grid_df, grid_df_d)
