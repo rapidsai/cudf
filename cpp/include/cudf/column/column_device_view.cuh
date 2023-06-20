@@ -275,7 +275,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**
-   * @brief Returns the the specified bitmask word from the `null_mask()`.
+   * @brief Returns the specified bitmask word from the `null_mask()`.
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
