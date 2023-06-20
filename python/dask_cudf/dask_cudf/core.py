@@ -269,9 +269,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         dtype=None,
         out=None,
         naive=False,
+        numeric_only=False,
     ):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.var(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -281,6 +284,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         elif naive:
@@ -421,7 +425,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
-            n = x.count(skipna=skipna)
+            n = x.count()
             avg = x.mean(skipna=skipna)
         else:
             # Not skipping nulls, so might as well

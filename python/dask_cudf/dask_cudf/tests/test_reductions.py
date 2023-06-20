@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -71,10 +71,15 @@ def test_rowwise_reductions(data, op):
     pddf = gddf.to_dask_dataframe()
 
     if op in ("var", "std"):
-        expected = getattr(pddf, op)(axis=1, ddof=0)
-        got = getattr(gddf, op)(axis=1, ddof=0)
+        expected = getattr(pddf, op)(axis=1, numeric_only=True, ddof=0)
+        got = getattr(gddf, op)(axis=1, numeric_only=True, ddof=0)
     else:
-        expected = getattr(pddf, op)(axis=1)
-        got = getattr(pddf, op)(axis=1)
+        expected = getattr(pddf, op)(numeric_only=True, axis=1)
+        got = getattr(pddf, op)(numeric_only=True, axis=1)
 
-    dd.assert_eq(expected.compute(), got.compute(), check_exact=False)
+    dd.assert_eq(
+        expected,
+        got,
+        check_exact=False,
+        check_dtype=op not in ("var", "std"),
+    )

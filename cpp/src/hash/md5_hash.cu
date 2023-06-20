@@ -85,8 +85,8 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&)            = delete;
-  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher const&)            = delete;
+  MD5Hasher& operator=(MD5Hasher const&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
   MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
@@ -106,7 +106,7 @@ struct MD5Hasher {
   struct md5_hash_step {
     uint32_t (&hash_values)[4];
 
-    void __device__ inline operator()(const uint8_t (&buffer)[message_chunk_size])
+    void __device__ inline operator()(uint8_t const (&buffer)[message_chunk_size])
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
