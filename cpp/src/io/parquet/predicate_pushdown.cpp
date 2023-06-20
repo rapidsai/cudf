@@ -206,6 +206,15 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
 
   /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override
+  {
+    CUDF_FAIL("Column name reference is not supported in statistics AST");
+  }
+
+  /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override

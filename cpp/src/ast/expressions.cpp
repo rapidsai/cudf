@@ -53,6 +53,10 @@ cudf::size_type operation::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }
+cudf::size_type column_name_reference::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
 
 auto literal::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))
@@ -65,6 +69,11 @@ auto column_reference::accept(detail::expression_transformer& visitor) const
   return visitor.visit(*this);
 }
 auto operation::accept(detail::expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
+{
+  return visitor.visit(*this);
+}
+auto column_name_reference::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);

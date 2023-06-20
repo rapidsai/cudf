@@ -194,6 +194,13 @@ class expression_parser {
   cudf::size_type visit(operation const& expr);
 
   /**
+   * @brief Visit a column name reference expression.
+   *
+   * @param expr Column name reference expression.
+   * @return cudf::size_type Index of device data reference for the expression.
+   */
+  cudf::size_type visit(column_name_reference const& expr);
+  /**
    * @brief Internal class used to track the utilization of intermediate storage locations.
    *
    * As expressions are being evaluated, they may generate "intermediate" data that is immediately

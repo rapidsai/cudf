@@ -51,6 +51,14 @@ class expression_transformer {
    */
   virtual std::reference_wrapper<expression const> visit(operation const& expr) = 0;
 
+  /**
+   * @brief Visit a column name reference expression.
+   *
+   * @param expr Column name reference expression
+   * @return Reference wrapper of transformed expression
+   */
+  virtual std::reference_wrapper<expression const> visit(column_name_reference const& expr) = 0;
+
   virtual ~expression_transformer() {}
 };
 }  // namespace cudf::ast::detail
