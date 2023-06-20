@@ -6158,7 +6158,7 @@ public class TableTest extends CudfTestBase {
 
   /**
    * Helper to get scalar for preceding == Decimal(value),
-   * with data width depending upon the the order-by
+   * with data width depending upon the order-by
    * column index:
    *   orderby_col_idx = 2 -> Decimal32
    *   orderby_col_idx = 3 -> Decimal64
