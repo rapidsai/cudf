@@ -2463,7 +2463,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> sr.apply(f)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
-        used to manipulate string data, see the the UDF guide,
+        used to manipulate string data, see the UDF guide,
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
 
         """
