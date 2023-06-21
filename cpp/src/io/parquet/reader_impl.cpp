@@ -17,10 +17,23 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <rmm/cuda_stream_pool.hpp>
 
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
+
+namespace {
+
+auto& get_stream_pool()
+{
+  // don't really need 16 here, but it's a reasonable limit we might see if we use a mechanism
+  // like this more generally.
+  static auto pool = rmm::cuda_stream_pool(1);
+  return pool;
+}
+
+}  // namespace
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
@@ -156,12 +169,27 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
 
-  // TODO: explore launching these concurrently with a stream pool
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
-  if (has_strings) {
-    chunk_nested_str_data.host_to_device_async(_stream);
-    gpu::DecodeStringPageData(
+  // FIXME: leaving in single-stream version for testing. remove before merge.
+  if constexpr (true) {
+    auto stream1 = get_stream_pool().get_stream();
+    gpu::DecodePageData(
+      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream1);
+    if (has_strings) {
+      auto stream2 = get_stream_pool().get_stream();
+      chunk_nested_str_data.host_to_device_async(stream2);
+      gpu::DecodeStringPageData(
+        pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream2);
+      stream2.synchronize();
+    }
+    stream1.synchronize();
+  } else {
+    gpu::DecodePageData(
       pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
+    if (has_strings) {
+      chunk_nested_str_data.host_to_device_async(_stream);
+      gpu::DecodeStringPageData(
+        pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
+    }
   }
 
   pages.device_to_host_async(_stream);
