@@ -844,8 +844,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
             self_pd = self.to_pandas()
             if isinstance(other, RangeIndex):
                 other_pd = other.to_pandas()
-            elif isinstance(other, pd.RangeIndex):
-                other_pd = other
             else:
                 other_pd = None
             if other_pd is not None:
