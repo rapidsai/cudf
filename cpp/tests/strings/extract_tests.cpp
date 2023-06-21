@@ -33,7 +33,7 @@ struct StringsExtractTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsExtractTests, ExtractTest)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "First Last", "Joe Schmoe", "John Smith", "Jane Smith", "Beyonce", "Sting", nullptr, ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -42,7 +42,7 @@ TEST_F(StringsExtractTests, ExtractTest)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_expecteds{"First",
+  std::vector<char const*> h_expecteds{"First",
                                        "Joe",
                                        "John",
                                        "Jane",
@@ -201,7 +201,7 @@ TEST_F(StringsExtractTests, DotAll)
 
 TEST_F(StringsExtractTests, EmptyExtractTest)
 {
-  std::vector<const char*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
+  std::vector<char const*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -210,7 +210,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
 
   auto pattern = std::string("([^_]*)\\Z");
 
-  std::vector<const char*> h_expected{nullptr, "AAA", "A", "", "", ""};
+  std::vector<char const*> h_expected{nullptr, "AAA", "A", "", "", ""};
   cudf::test::strings_column_wrapper expected(
     h_expected.data(),
     h_expected.data() + h_strings.size(),
@@ -225,7 +225,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
 
 TEST_F(StringsExtractTests, ExtractAllTest)
 {
-  std::vector<const char*> h_input(
+  std::vector<char const*> h_input(
     {"123 banana 7 eleven", "41 apple", "6 pear 0 pair", nullptr, "", "bees", "4 pare"});
   auto validity =
     thrust::make_transform_iterator(h_input.begin(), [](auto str) { return str != nullptr; });
@@ -269,7 +269,7 @@ TEST_F(StringsExtractTests, MediumRegex)
     "http://www.world.com";
   auto prog = cudf::strings::regex_program::create(medium_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com thats all",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
@@ -283,7 +283,7 @@ TEST_F(StringsExtractTests, MediumRegex)
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::extract(strings_view, *prog);
-  std::vector<const char*> h_expected{"world", nullptr, nullptr};
+  std::vector<char const*> h_expected{"world", nullptr, nullptr};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -299,7 +299,7 @@ TEST_F(StringsExtractTests, LargeRegex)
     "http://www.world.com I'm here @home zzzz";
   auto prog = cudf::strings::regex_program::create(large_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
@@ -313,7 +313,7 @@ TEST_F(StringsExtractTests, LargeRegex)
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::extract(strings_view, *prog);
-  std::vector<const char*> h_expected{"quick", nullptr, nullptr};
+  std::vector<char const*> h_expected{"quick", nullptr, nullptr};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),

@@ -97,5 +97,5 @@ jobs:
       sha: ${{ inputs.sha }}
       package-name: dask_cudf
       # Test against latest dask/distributed/dask-cuda.
-      test-before: "python -m pip install git+https://github.com/dask/dask.git@2023.3.2 git+https://github.com/dask/distributed.git@2023.3.2.1 git+https://github.com/rapidsai/dask-cuda.git@branch-23.08"
+      test-before: "python -m pip install git+https://github.com/dask/dask.git@main git+https://github.com/dask/distributed.git@main git+https://github.com/rapidsai/dask-cuda.git@branch-23.08"
       test-unittest: "python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests"
