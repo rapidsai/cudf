@@ -76,9 +76,9 @@ class reprog_device {
  public:
   reprog_device()                                = delete;
   ~reprog_device()                               = default;
-  reprog_device(const reprog_device&)            = default;
+  reprog_device(reprog_device const&)            = default;
   reprog_device(reprog_device&&)                 = default;
-  reprog_device& operator=(const reprog_device&) = default;
+  reprog_device& operator=(reprog_device const&) = default;
   reprog_device& operator=(reprog_device&&)      = default;
 
   /**

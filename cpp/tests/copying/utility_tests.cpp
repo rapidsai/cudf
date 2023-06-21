@@ -60,7 +60,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 
 TEST_F(EmptyLikeStringTest, ColumnStringTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "thé result does not include the value in the sum in",
                                      "",
                                      nullptr,
