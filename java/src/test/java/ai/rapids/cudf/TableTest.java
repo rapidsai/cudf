@@ -6266,8 +6266,7 @@ public class TableTest extends CudfTestBase {
 
   /**
    * Helper to get scalar for preceding == Decimal(value),
-   * with data width depending upon the order-by
-   * column index:
+   * with data width depending upon the order-by column index:
    *   orderby_col_idx = 2 -> FLOAT32
    *   orderby_col_idx = 3 -> FLOAT64
    */
@@ -6285,7 +6284,6 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testRangeWindowsWithFloatOrderBy() {
-
     try (Table unsorted = new Table.TestBuilder()
             .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
             .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
