@@ -30,7 +30,7 @@ struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, UrlEncode)
 {
-  std::vector<const char*> h_strings{"www.nvidia.com/rapids?p=é",
+  std::vector<char const*> h_strings{"www.nvidia.com/rapids?p=é",
                                      "/_file-7.txt",
                                      "a b+c~d",
                                      "e\tfgh\\jklmnopqrstuvwxyz",
@@ -48,7 +48,7 @@ TEST_F(StringsConvertTest, UrlEncode)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_encode(strings_view);
 
-  std::vector<const char*> h_expected{"www.nvidia.com%2Frapids%3Fp%3D%C3%A9",
+  std::vector<char const*> h_expected{"www.nvidia.com%2Frapids%3Fp%3D%C3%A9",
                                       "%2F_file-7.txt",
                                       "a%20b%2Bc~d",
                                       "e%09fgh%5Cjklmnopqrstuvwxyz",
@@ -67,7 +67,7 @@ TEST_F(StringsConvertTest, UrlEncode)
 
 TEST_F(StringsConvertTest, UrlDecode)
 {
-  std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9",
+  std::vector<char const*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9",
                                      "/_file-1234567890.txt",
                                      "a%20b%2Bc~defghijklmnopqrstuvwxyz",
                                      "%25-accent%c3%a9d",
@@ -84,7 +84,7 @@ TEST_F(StringsConvertTest, UrlDecode)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_decode(strings_view);
 
-  std::vector<const char*> h_expected{"www.nvidia.com/rapids/?p=é",
+  std::vector<char const*> h_expected{"www.nvidia.com/rapids/?p=é",
                                       "/_file-1234567890.txt",
                                       "a b+c~defghijklmnopqrstuvwxyz",
                                       "%-accentéd",
@@ -102,7 +102,7 @@ TEST_F(StringsConvertTest, UrlDecode)
 
 TEST_F(StringsConvertTest, UrlDecodeNop)
 {
-  std::vector<const char*> h_strings{"www.nvidia.com/rapids/abc123",
+  std::vector<char const*> h_strings{"www.nvidia.com/rapids/abc123",
                                      "/_file-1234567890.txt",
                                      "abcdefghijklmnopqrstuvwxyz",
                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ%",
@@ -123,7 +123,7 @@ TEST_F(StringsConvertTest, UrlDecodeNop)
 
 TEST_F(StringsConvertTest, UrlDecodeSliced)
 {
-  std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9%",
+  std::vector<char const*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9%",
                                      "01/_file-1234567890.txt",
                                      "a%20b%2Bc~defghijklmnopqrstuvwxyz",
                                      "%25-accent%c3%a9d",
@@ -137,7 +137,7 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
     thrust::make_transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
-  std::vector<const char*> h_expected{"www.nvidia.com/rapids/?p=é%",
+  std::vector<char const*> h_expected{"www.nvidia.com/rapids/?p=é%",
                                       "01/_file-1234567890.txt",
                                       "a b+c~defghijklmnopqrstuvwxyz",
                                       "%-accentéd",
@@ -204,7 +204,7 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   string_encoded.push_back('\0');
   string_plain.push_back('\0');
 
-  std::vector<const char*> h_strings{string_encoded.data()};
+  std::vector<char const*> h_strings{string_encoded.data()};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
@@ -214,7 +214,7 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_decode(strings_view);
 
-  std::vector<const char*> h_expected{string_plain.data()};
+  std::vector<char const*> h_expected{string_plain.data()};
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),

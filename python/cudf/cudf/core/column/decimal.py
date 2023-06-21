@@ -357,12 +357,23 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     if op in {"__add__", "__sub__"}:
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
-    elif op == "__mul__":
-        scale = s1 + s2
-        precision = p1 + p2 + 1
-    elif op == "__div__":
-        scale = max(6, s1 + p2 + 1)
-        precision = p1 - s1 + s2 + scale
+        if precision > Decimal128Dtype.MAX_PRECISION:
+            precision = Decimal128Dtype.MAX_PRECISION
+            scale = Decimal128Dtype.MAX_PRECISION - max(p1 - s1, p2 - s2)
+    elif op in {"__mul__", "__div__"}:
+        if op == "__mul__":
+            scale = s1 + s2
+            precision = p1 + p2 + 1
+        else:
+            scale = max(6, s1 + p2 + 1)
+            precision = p1 - s1 + s2 + scale
+        if precision > Decimal128Dtype.MAX_PRECISION:
+            integral = precision - scale
+            if integral < 32:
+                scale = min(scale, Decimal128Dtype.MAX_PRECISION - integral)
+            elif scale > 6 and integral > 32:
+                scale = 6
+            precision = Decimal128Dtype.MAX_PRECISION
     else:
         raise NotImplementedError()
 
@@ -390,9 +401,9 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     # can fit `precision` & `scale`.
     max_precision = max(lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION)
     for decimal_type in (
-        cudf.Decimal32Dtype,
-        cudf.Decimal64Dtype,
-        cudf.Decimal128Dtype,
+        Decimal32Dtype,
+        Decimal64Dtype,
+        Decimal128Dtype,
     ):
         if decimal_type.MAX_PRECISION >= max_precision:
             try:
@@ -402,15 +413,12 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # to try the next dtype
                 continue
 
-    # Instead of raising an overflow error, we create a `Decimal128Dtype`
-    # with max possible scale & precision, see example of this demonstration
-    # here: https://learn.microsoft.com/en-us/sql/t-sql/data-types/
-    # precision-scale-and-length-transact-sql?view=sql-server-ver16#examples
-    scale = min(
-        scale, cudf.Decimal128Dtype.MAX_PRECISION - (precision - scale)
+    # if we've reached this point, we cannot create a decimal type without
+    # overflow; raise an informative error
+    raise ValueError(
+        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
+        f"{repr(rhs_dtype)} would result in overflow"
     )
-    precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
-    return cudf.Decimal128Dtype(precision=precision, scale=scale)
 
 
 def _same_precision_and_scale(lhs: DecimalDtype, rhs: DecimalDtype) -> bool:
