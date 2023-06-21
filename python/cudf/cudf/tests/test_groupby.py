@@ -3284,7 +3284,8 @@ def test_head_tail_empty():
 @pytest.mark.parametrize(
     "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
 )
-def test_group_by_pandas_sort_order(groups):
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
     with cudf.option_context("mode.pandas_compatible", True):
         df = cudf.DataFrame(
             {
@@ -3295,4 +3296,7 @@ def test_group_by_pandas_sort_order(groups):
         )
         pdf = df.to_pandas()
 
-        assert_eq(pdf.groupby(groups).sum(), df.groupby(groups).sum())
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
