@@ -3613,7 +3613,12 @@ public final class Table implements AutoCloseable {
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
+      // NOTE: Don't clean the columnViewAddresses as they were already cleaned by ColumnView
+      for (ColumnVector columnVector: columns) {
+        if (columnVector != null) {
+          columnVector.close();
+        }
+      }
       throw t;
     }
 
