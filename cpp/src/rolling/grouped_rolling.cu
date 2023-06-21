@@ -314,7 +314,7 @@ struct device_value_accessor {
    *
    * @param[in] col_ column device view of cudf column
    */
-  __device__ device_value_accessor(column_device_view const& col_) : col{col_}
+  explicit __device__ device_value_accessor(column_device_view const& col_) : col{col_}
   {
     cudf_assert(type_id_matches_device_storage_type<T>(col.type().id()) &&
                 "the data type mismatch");
