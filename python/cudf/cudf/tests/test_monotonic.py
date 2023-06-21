@@ -10,12 +10,12 @@ import pytest
 
 import cudf
 from cudf import (
-    MultiIndex,
-    Series,
     CategoricalIndex,
     DatetimeIndex,
     Index,
+    MultiIndex,
     RangeIndex,
+    Series,
 )
 from cudf.testing._utils import assert_eq
 

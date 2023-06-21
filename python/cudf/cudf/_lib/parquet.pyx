@@ -364,7 +364,9 @@ def write_parquet(
             if cudf.get_option("mode.pandas_compatible"):
                 tbl_meta.get().column_metadata[i].set_name(str(name).encode())
             else:
-                raise ValueError("Writing a Parquet file requires string column names")
+                raise ValueError(
+                    "Writing a Parquet file requires string column names"
+                )
         else:
             tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
