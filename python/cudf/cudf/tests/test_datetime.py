@@ -2,6 +2,7 @@
 
 import datetime
 import operator
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -10,10 +11,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-import warnings
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_EQ_200
+from cudf.core._compat import PANDAS_EQ_200, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,

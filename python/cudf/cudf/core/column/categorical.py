@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
-import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa

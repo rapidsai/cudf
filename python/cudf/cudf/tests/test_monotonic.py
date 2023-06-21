@@ -9,8 +9,9 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import MultiIndex, Series
-from cudf.core.index import (
+from cudf import (
+    MultiIndex,
+    Series,
     CategoricalIndex,
     DatetimeIndex,
     Index,

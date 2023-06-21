@@ -7,14 +7,7 @@ import pickle
 import warnings
 from functools import cached_property
 from numbers import Number
-from typing import (
-    Any,
-    List,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np

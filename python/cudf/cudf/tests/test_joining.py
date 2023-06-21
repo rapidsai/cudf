@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -15,7 +16,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
-from cudf.core._compat import PANDAS_GE_200
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
 

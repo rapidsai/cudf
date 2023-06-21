@@ -57,6 +57,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core import column, df_protocol, reshape
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -104,7 +105,6 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
-from cudf.core._compat import PANDAS_GE_200
 
 _cupy_nan_methods_map = {
     "min": "nanmin",

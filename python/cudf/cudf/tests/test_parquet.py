@@ -20,7 +20,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_LT_153, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_153
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,

@@ -15,6 +15,7 @@ import pyorc
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
@@ -23,7 +24,6 @@ from cudf.testing._utils import (
     gen_rand_series,
     supported_numpy_dtypes,
 )
-from cudf.core._compat import PANDAS_GE_200
 
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we

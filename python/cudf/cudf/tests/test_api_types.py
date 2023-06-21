@@ -6,8 +6,8 @@ import pytest
 from pandas.api import types as pd_types
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
 from cudf.api import types
+from cudf.core._compat import PANDAS_GE_200
 
 
 @pytest.mark.parametrize(

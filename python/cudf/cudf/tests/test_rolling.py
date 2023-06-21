@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_LT_140
 from cudf.testing._utils import _create_pandas_series, assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 

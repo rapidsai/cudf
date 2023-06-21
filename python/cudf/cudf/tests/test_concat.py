@@ -8,7 +8,7 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
