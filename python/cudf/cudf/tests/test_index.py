@@ -2692,14 +2692,12 @@ def test_rangeindex_binops_user_option(
 def test_rangeindex_join_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for join.
-    idx1 = cudf.RangeIndex(0, 10)
-    idx2 = cudf.RangeIndex(5, 15)
+    idx1 = cudf.RangeIndex(0, 10, name="a")
+    idx2 = cudf.RangeIndex(5, 15, name="b")
 
     actual = idx1.join(idx2, how="inner", sort=True)
-    expected = cudf.Index(
-        [5, 6, 7, 8, 9], dtype=f"int{default_integer_bitwidth}", name=0
-    )
-
+    expected = idx1.to_pandas().join(idx2.to_pandas(), how="inner", sort=True)
+    assert actual.dtype == cudf.dtype(f"int{default_integer_bitwidth}")
     assert_eq(expected, actual)
 
 
