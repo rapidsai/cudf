@@ -574,9 +574,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             if cudf.get_option(
                 "mode.pandas_compatible"
             ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
-                # Even with `sort=False`, pandas clearly documents and
-                # ensures that the ordering inside the group by columns
-                # is preserved(i.e., it is deterministic).
+                # Even with `sort=False`, pandas guarantees that
+                # groupby preserves the order of rows within each group.
                 left_cols = list(
                     self.grouping.keys.drop_duplicates()._data.columns
                 )
