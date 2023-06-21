@@ -30,7 +30,6 @@
 #include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/timezone.hpp>
-#include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -320,9 +319,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
-  // Buffer needs to be padded as the compute kernels require aligned data pointers.
-  rmm::device_buffer decomp_data(cudf::detail::align_up(total_decomp_size, 8 /*alignment*/),
-                                 stream);
+  // Buffer needs to be padded.
+  rmm::device_buffer decomp_data(cudf::util::round_up_safe(total_decomp_size, size_t{8}), stream);
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
@@ -1070,9 +1068,8 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
           CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                        "Invalid index rowgroup stream data");
 
-          // Buffer needs to be padded as the compute kernels require aligned data pointers.
-          stripe_data.emplace_back(cudf::detail::align_up(total_data_size, 8 /*alignment*/),
-                                   stream);
+          // Buffer needs to be padded.
+          stripe_data.emplace_back(cudf::util::round_up_safe(total_data_size, size_t{8}), stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read

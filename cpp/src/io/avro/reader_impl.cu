@@ -22,14 +22,13 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/alignment.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -206,9 +205,8 @@ rmm::device_buffer decompress_data(datasource& source,
     uint32_t const initial_blk_len = meta.max_block_size * 2 + (meta.max_block_size * 2) % 4096;
     size_t const uncomp_size       = initial_blk_len * meta.block_list.size();
 
-    // Buffer needs to be padded as the compute kernels require aligned data pointers.
-    rmm::device_buffer decomp_block_data(cudf::detail::align_up(uncomp_size, 8 /*alignment*/),
-                                         stream);
+    // Buffer needs to be padded.
+    rmm::device_buffer decomp_block_data(cudf::util::round_up_safe(uncomp_size, size_t{8}), stream);
 
     auto const base_offset = meta.block_list[0].offset;
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
@@ -311,10 +309,10 @@ rmm::device_buffer decompress_data(datasource& source,
     CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
                  "Unable to get scratch size for snappy decompression");
 
-    // Buffer needs to be padded as the compute kernels require aligned data pointers.
-    rmm::device_buffer scratch(cudf::detail::align_up(temp_size, 8 /*alignment*/), stream);
+    // Buffer needs to be padded.
+    rmm::device_buffer scratch(cudf::util::round_up_safe(temp_size, size_t{8}), stream);
     rmm::device_buffer decomp_block_data(
-      cudf::detail::align_up(uncompressed_data_size, 8 /*alignment*/), stream);
+      cudf::util::round_up_safe(uncompressed_data_size, size_t{8}), stream);
     rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
     cudf::detail::hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
 
@@ -528,8 +526,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         block_data        = rmm::device_buffer{buffer->data(), buffer->size(), stream};
       }
 
-      // Buffer needs to be padded as the compute kernels require aligned data pointers.
-      block_data.resize(cudf::detail::align_up(block_data.size(), 8 /*alignment*/), stream);
+      // Buffer needs to be padded.
+      block_data.resize(cudf::util::round_up_safe(block_data.size(), size_t{8}), stream);
 
       if (meta.codec != "" && meta.codec != "null") {
         auto decomp_block_data = decompress_data(*source, meta, block_data, stream);
