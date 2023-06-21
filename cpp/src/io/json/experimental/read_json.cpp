@@ -53,7 +53,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
     auto d_buffer     = rmm::device_uvector<char>(total_source_size, stream);
     size_t bytes_read = 0;
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
-    for (const auto& source : sources) {
+    for (auto const& source : sources) {
       if (!source->is_empty()) {
         auto data_size   = (range_size != 0) ? range_size : source->size();
         auto destination = reinterpret_cast<uint8_t*>(d_buffer.data()) + bytes_read;

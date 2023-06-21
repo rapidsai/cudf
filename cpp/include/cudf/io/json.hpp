@@ -110,7 +110,7 @@ class json_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit json_reader_options(const source_info& src) : _source(src) {}
+  explicit json_reader_options(source_info const& src) : _source(src) {}
 
   friend json_reader_options_builder;
 
@@ -192,7 +192,7 @@ class json_reader_options {
    */
   size_t get_byte_range_padding() const
   {
-    auto const num_columns = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;

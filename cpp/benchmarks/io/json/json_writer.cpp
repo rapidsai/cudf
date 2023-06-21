@@ -24,7 +24,7 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;

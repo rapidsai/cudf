@@ -279,7 +279,7 @@ struct from_durations_fn {
   inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
   {
     if (timeparts->subsecond == 0) return ptr;
-    const int digits = format_length('S', timeparts) - 3;
+    int const digits = format_length('S', timeparts) - 3;
     *ptr             = '.';
     auto value       = timeparts->subsecond;
     for (int idx = digits; idx > 0; idx--) {
@@ -446,9 +446,9 @@ struct parse_duration {
   size_type items_count;
 
   // function to parse string (maximum 10 digits) to integer.
-  __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
+  __device__ int32_t str2int(char const* str, int8_t max_bytes, int8_t& actual_length)
   {
-    const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
+    char const* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
     int32_t value   = 0;
     for (int8_t idx = 0; idx < max_bytes; ++idx) {
       char chr = *ptr++;
@@ -463,12 +463,12 @@ struct parse_duration {
   }
 
   // function to parse fraction of decimal value with trailing zeros removed.
-  __device__ int32_t str2int_fixed(const char* str,
+  __device__ int32_t str2int_fixed(char const* str,
                                    int8_t fixed_width,
                                    size_type string_length,
                                    int8_t& actual_length)
   {
-    const char* ptr = (*str == '.') ? str + 1 : str;
+    char const* ptr = (*str == '.') ? str + 1 : str;
     int32_t value   = 0;
     // parse till fixed_width or end of string.
     for (int8_t idx = 0; idx < fixed_width && idx < string_length; ++idx) {
@@ -487,24 +487,24 @@ struct parse_duration {
   }
 
   // parse 2 digit string to integer
-  __device__ int8_t parse_2digit_int(const char* str, int8_t& actual_length)
+  __device__ int8_t parse_2digit_int(char const* str, int8_t& actual_length)
   {
-    const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
+    char const* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
     int8_t value    = 0;
     if (*ptr >= '0' && *ptr <= '9') value = (value * 10) + static_cast<int32_t>(*ptr++ - '0');
     if (*ptr >= '0' && *ptr <= '9') value = (value * 10) + static_cast<int32_t>(*ptr++ - '0');
     actual_length += (ptr - str);
     return (*str == '-') ? -value : value;
   }
-  inline __device__ int8_t parse_hour(const char* str, int8_t& actual_length)
+  inline __device__ int8_t parse_hour(char const* str, int8_t& actual_length)
   {
     return parse_2digit_int(str, actual_length);
   }
-  inline __device__ int8_t parse_minute(const char* str, int8_t& actual_length)
+  inline __device__ int8_t parse_minute(char const* str, int8_t& actual_length)
   {
     return parse_2digit_int(str, actual_length);
   }
-  inline __device__ int8_t parse_second(const char* str, int8_t& actual_length)
+  inline __device__ int8_t parse_second(char const* str, int8_t& actual_length)
   {
     return parse_2digit_int(str, actual_length);
   }

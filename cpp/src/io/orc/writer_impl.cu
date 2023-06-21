@@ -751,7 +751,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
         size_t dict_strings        = 0;
         size_t dict_lengths_div512 = 0;
         for (auto const& stripe : segmentation.stripes) {
-          const auto sd = column.host_stripe_dict(stripe.id);
+          auto const sd = column.host_stripe_dict(stripe.id);
           enable_dict   = (enable_dict && sd->dict_data != nullptr);
           if (enable_dict) {
             dict_strings += sd->num_strings;
@@ -775,7 +775,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
           for (dict_bits = 1; dict_bits < 32; dict_bits <<= 1) {
             if (dict_strings <= (1ull << dict_bits)) break;
           }
-          const auto valid_count = column.size() - column.null_count();
+          auto const valid_count = column.size() - column.null_count();
           dict_data_size += (dict_bits * valid_count + 7) >> 3;
         }
 
@@ -1197,7 +1197,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
       auto const& col_streams = (enc_data->streams)[col_idx];
       // Assign stream data of column data stream(s)
       for (int k = 0; k < gpu::CI_INDEX; k++) {
-        const auto stream_id = col_streams[0].ids[k];
+        auto const stream_id = col_streams[0].ids[k];
         if (stream_id != -1) {
           auto const actual_stripe_size = std::accumulate(
             col_streams.begin() + stripe.first,
@@ -1590,7 +1590,7 @@ void write_index_stream(int32_t stripe_id,
   auto kind = TypeKind::STRUCT;
   // TBD: Not sure we need an empty index stream for column 0
   if (stream_id != 0) {
-    const auto& strm = enc_streams[column_id][0];
+    auto const& strm = enc_streams[column_id][0];
     present          = find_record(strm, gpu::CI_PRESENT);
     data             = find_record(strm, gpu::CI_DATA);
     data2            = find_record(strm, gpu::CI_DATA2);
@@ -1661,13 +1661,13 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     std::unique_ptr<data_sink> const& out_sink,
                                     rmm::cuda_stream_view stream)
 {
-  const auto length                                        = strm_desc.stream_size;
+  auto const length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
   if (length == 0) {
     return std::async(std::launch::deferred, [] {});
   }
 
-  const auto* stream_in = (compression_kind == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
+  auto const* stream_in = (compression_kind == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
                                                      : (compressed_data + strm_desc.bfr_offset);
 
   auto write_task = [&]() {
@@ -2271,7 +2271,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
-  const auto num_data_streams       = streams.size() - num_index_streams;
+  auto const num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
   auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
@@ -2704,7 +2704,7 @@ void writer::impl::close()
   ps.version              = {0, 12};
   ps.magic                = MAGIC;
 
-  const auto ps_length = static_cast<uint8_t>(pbw.write(ps));
+  auto const ps_length = static_cast<uint8_t>(pbw.write(ps));
   pbw.put_byte(ps_length);
   _out_sink->host_write(pbw.data(), pbw.size());
   _out_sink->flush();
