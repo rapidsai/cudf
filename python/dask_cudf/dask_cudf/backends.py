@@ -372,6 +372,36 @@ try:
 except ImportError:
     pass
 
+try:
+    # Requires dask>2023.6.0
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _cudf_to_table(obj, preserve_index=True, **kwargs):
+        if kwargs:
+            warnings.warn(
+                "Ignoring the following arguments to "
+                f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
+            )
+        return obj.to_arrow(preserve_index=preserve_index)
+
+    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
+        # cudf ignores self_destruct.
+        kwargs.pop("self_destruct", None)
+        if kwargs:
+            warnings.warn(
+                f"Ignoring the following arguments to "
+                f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
+            )
+        return obj.from_arrow(table)
+
+except ImportError:
+    pass
+
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
 @_dask_cudf_nvtx_annotate

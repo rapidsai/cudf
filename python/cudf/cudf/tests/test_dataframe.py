@@ -1695,18 +1695,30 @@ def test_nonmatching_index_setitem(nrows):
     assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
-def test_from_pandas():
-    df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int",
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_150, reason="pyarrow support only in >=1.5"
+            ),
+        ),
+    ],
+)
+def test_from_pandas(dtype):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
     gdf = cudf.DataFrame.from_pandas(df)
     assert isinstance(gdf, cudf.DataFrame)
 
-    assert_eq(df, gdf)
+    assert_eq(df, gdf, check_dtype="pyarrow" not in dtype)
 
     s = df.x
     gs = cudf.Series.from_pandas(s)
     assert isinstance(gs, cudf.Series)
 
-    assert_eq(s, gs)
+    assert_eq(s, gs, check_dtype="pyarrow" not in dtype)
 
 
 @pytest.mark.parametrize("dtypes", [int, float])

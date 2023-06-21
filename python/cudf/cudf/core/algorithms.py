@@ -91,7 +91,7 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     cats = cats.unique().astype(values.dtype)
 
     if sort:
-        cats, _ = cats.sort_by_values()
+        cats = cats.sort_values()
 
     labels = values._column._label_encoding(
         cats=cats, na_sentinel=na_sentinel

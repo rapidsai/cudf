@@ -1065,7 +1065,7 @@ def is_interval_dtype(obj):
             obj,
             (
                 cudf.core.dtypes.IntervalDtype,
-                pd.core.dtypes.dtypes.IntervalDtype,
+                pd.IntervalDtype,
             ),
         )
         or obj is cudf.core.dtypes.IntervalDtype

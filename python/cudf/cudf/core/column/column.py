@@ -918,16 +918,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             raise ValueError(f"Invalid value for side: {side}")
 
-    def sort_by_values(
+    def sort_values(
         self: ColumnBase,
         ascending: bool = True,
         na_position: str = "last",
-    ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(
-            ascending=ascending, na_position=na_position
-        )
-        col_keys = self.take(col_inds)
-        return col_keys, col_inds
+    ) -> ColumnBase:
+        return libcudf.sort.sort(
+            [self], column_order=[ascending], null_precedence=[na_position]
+        )[0]
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1014,7 +1012,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_by_values()[0].astype(self.dtype)
+        cats = self.unique().sort_values().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
@@ -1984,10 +1982,13 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary, pd.Series) and isinstance(
-            arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
-        ):
-            return as_column(arbitrary.array)
+        if isinstance(arbitrary, pd.Series):
+            if isinstance(
+                arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
+            ):
+                return as_column(arbitrary.array)
+            elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
+                return as_column(pa.array(arbitrary.array, from_pandas=True))
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):
@@ -2152,7 +2153,7 @@ def as_column(
         if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
-    elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
+    elif isinstance(arbitrary, pd.arrays.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:

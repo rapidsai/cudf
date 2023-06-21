@@ -229,9 +229,7 @@ def _union_categoricals(
         [obj._column for obj in to_union]
     )
     if sort_categories:
-        sorted_categories = result_col.categories.sort_by_values(
-            ascending=True
-        )[0]
+        sorted_categories = result_col.categories.sort_values(ascending=True)
         result_col = result_col.reorder_categories(
             new_categories=sorted_categories
         )

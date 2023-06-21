@@ -86,6 +86,37 @@ struct escape_strings_fn {
       bytes += cudf::strings::detail::bytes_in_char_utf8(chr);
   }
 
+  __device__ inline char nibble_to_hex(uint8_t nibble) const
+  {
+    return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
+  }
+
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, offset_type& bytes)
+  {
+    if (d_buffer) {
+      d_buffer[0] = '\\';
+      d_buffer[1] = 'u';
+      d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
+      d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
+      d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer += 6;
+    } else {
+      bytes += 6;
+    }
+  }
+
+  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, offset_type& bytes)
+  {
+    constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
+    constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
+    codepoint -= 0x1'0000;
+    uint16_t hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
+    uint16_t hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
+    write_utf8_codepoint(hex_high, d_buffer, bytes);
+    write_utf8_codepoint(hex_low, d_buffer, bytes);
+  }
+
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
@@ -103,8 +134,21 @@ struct escape_strings_fn {
     offset_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
-    for (auto chr : d_str) {
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(chr);
+    for (auto utf8_char : d_str) {
+      if (utf8_char > 0x0000'00FF) {
+        // multi-byte char
+        uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
+        if (codepoint <= 0x0000'FFFF) {
+          // write \uXXXX utf-8 codepoint
+          write_utf8_codepoint(codepoint, d_buffer, bytes);
+        } else {
+          // write \uXXXX\uXXXX utf-16 surrogate pair
+          // codepoint > 0xFFFF && codepoint <= 0x10FFFF
+          write_utf16_codepoint(codepoint, d_buffer, bytes);
+        }
+        continue;
+      }
+      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {

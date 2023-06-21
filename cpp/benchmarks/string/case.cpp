@@ -26,7 +26,7 @@
 void bench_case(nvbench::state& state)
 {
   auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const max_width = static_cast<int32_t>(state.get_int64("width"));
+  auto const max_width = static_cast<int32_t>(state.get_int64("row_width"));
   auto const encoding  = state.get_string("encoding");
 
   if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
