@@ -576,7 +576,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
                 # Even with `sort=False`, pandas clearly documents and
                 # ensures that the ordering inside the group by columns
-                # is preserved(i.e., it is not non-deterministic).
+                # is preserved (i.e., it is deterministic).
                 if not isinstance(result_index, cudf.MultiIndex):
                     lcol, rcol = _match_join_keys(
                         self.grouping.keys.drop_duplicates()._column,
