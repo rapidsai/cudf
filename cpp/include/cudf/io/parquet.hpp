@@ -1407,7 +1407,7 @@ class chunked_parquet_writer_options_builder {
     std::vector<std::map<std::string, std::string>> metadata);
 
   /**
-   * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
+   * @brief Sets the level of statistics in chunked_parquet_writer_options.
    *
    * @param sf Level of statistics requested in the output file
    * @return this for chaining
