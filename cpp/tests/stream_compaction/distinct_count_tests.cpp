@@ -274,6 +274,16 @@ TEST_F(DistinctCount, TableWithNull)
   EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
 }
 
+TEST_F(DistinctCount, TableWithSomeNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{{1, 2, 3, 4, 5, 6}, {1, 0, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{1, 1, 1, 1, 1, 1}};
+  cudf::table_view input{{col1, col2}};
+
+  EXPECT_EQ(4, cudf::distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(6, cudf::distinct_count(input, null_equality::UNEQUAL));
+}
+
 TEST_F(DistinctCount, EmptyColumnedTable)
 {
   std::vector<cudf::column_view> cols{};
