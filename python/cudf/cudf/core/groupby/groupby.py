@@ -577,24 +577,22 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # Even with `sort=False`, pandas clearly documents and
                 # ensures that the ordering inside the group by columns
                 # is preserved(i.e., it is not non-deterministic).
-                if not isinstance(result_index, cudf.MultiIndex):
-                    lcol, rcol = _match_join_keys(
-                        self.grouping.keys.drop_duplicates()._column,
-                        result_index._column,
-                        "inner",
-                    )
-                    _, indices = libcudf.join.join([lcol], [rcol], how="inner")
-                else:
-                    left_cols = list(
-                        self.grouping.keys.drop_duplicates()._data.columns
-                    )
-                    right_cols = list(result_index._data.columns)
-                    _, indices = libcudf.join.join(
-                        left_cols, right_cols, how="inner"
-                    )
-
-                new_index = result_index[indices]
-                result = result.reindex(new_index)
+                left_cols = list(
+                    self.grouping.keys.drop_duplicates()._data.columns
+                )
+                right_cols = list(result_index._data.columns)
+                join_keys = [
+                    _match_join_keys(lcol, rcol, "left")
+                    for lcol, rcol in zip(left_cols, right_cols)
+                ]
+                # TODO: In future, see if we can centralize
+                # logic else where that has similar patterns.
+                join_keys = map(list, zip(*join_keys))
+                _, indices = libcudf.join.join(
+                    *join_keys,
+                    how="left",
+                )
+                result = result.take(indices)
 
         if not self._as_index:
             result = result.reset_index()

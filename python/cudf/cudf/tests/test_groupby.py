@@ -3279,3 +3279,20 @@ def test_head_tail_empty():
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_group_by_pandas_sort_order(groups):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(pdf.groupby(groups).sum(), df.groupby(groups).sum())
