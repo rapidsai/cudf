@@ -10,9 +10,9 @@ from typing import Any, Iterable, List, Optional, Tuple, Union
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 
 import cudf
-import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or

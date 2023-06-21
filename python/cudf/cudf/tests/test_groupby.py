@@ -10,6 +10,7 @@ from decimal import Decimal
 from functools import partial
 
 import numpy as np
+import pandas as pd
 import pytest
 from numba import cuda
 from numpy.testing import assert_array_equal
@@ -17,7 +18,6 @@ from numpy.testing import assert_array_equal
 import rmm
 
 import cudf
-import pandas as pd
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
