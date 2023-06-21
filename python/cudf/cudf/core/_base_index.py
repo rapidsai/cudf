@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -10,7 +11,6 @@ import pandas as pd
 from typing_extensions import Self
 
 import cudf
-import warnings
 from cudf._lib.copying import _gather_map_is_valid, gather
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
@@ -90,7 +90,90 @@ class BaseIndex(Serializable):
     def values(self):
         raise NotImplementedError
 
-    def get_loc(self, key, method=None, tolerance=None):
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
+        """
+        Compute indexer and mask for new index given the current index.
+
+        The indexer should be then used as an input to ndarray.take to align
+        the current data to the new index.
+
+        Parameters
+        ----------
+        target : Index
+        method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
+            - default: exact matches only.
+            - pad / ffill: find the PREVIOUS index value if no exact match.
+            - backfill / bfill: use NEXT index value if no exact match.
+            - nearest: use the NEAREST index value if no exact match. Tied
+              distances are broken by preferring the larger index
+              value.
+        tolerance : int or float, optional
+            Maximum distance from index value for inexact matches. The value
+            of the index at the matching location must satisfy the equation
+            ``abs(index[loc] - target) <= tolerance``.
+
+        Returns
+        -------
+        cupy.ndarray
+            Integers from 0 to n - 1 indicating that the index at these
+            positions matches the corresponding target values.
+            Missing values in the target are marked by -1.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index(['c', 'a', 'b'])
+        >>> index
+        Index(['c', 'a', 'b'], dtype='object')
+        >>> index.get_indexer(['a', 'b', 'x'])
+        array([ 1,  2, -1], dtype=int32)
+        """
+        raise NotImplementedError
+
+    def get_loc(self, key):
+        """
+        Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+
+        Returns
+        -------
+        int or slice or boolean mask
+            - If result is unique, return integer index
+            - If index is monotonic, loc is returned as a slice object
+            - Otherwise, a boolean mask is returned
+
+        Examples
+        --------
+        >>> import cudf
+        >>> unique_index = cudf.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+        >>> monotonic_index = cudf.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+        >>> non_monotonic_index = cudf.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        >>> numeric_unique_index = cudf.Index([1, 2, 3])
+        >>> numeric_unique_index.get_loc(3)
+        2
+
+        **MultiIndex**
+
+        >>> multi_index = cudf.MultiIndex.from_tuples([('a', 'd'), ('b', 'e'), ('b', 'f')])
+        >>> multi_index
+        MultiIndex([('a', 'd'),
+                    ('b', 'e'),
+                    ('b', 'f')],
+                )
+        >>> multi_index.get_loc('b')
+        slice(1, 3, None)
+        >>> multi_index.get_loc(('b', 'e'))
+        1
+        """  # noqa: E501
         raise NotImplementedError
 
     def __getitem__(self, key):

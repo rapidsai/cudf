@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import math
+import operator
 import pickle
 import warnings
 from functools import cached_property
@@ -23,6 +23,7 @@ from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
+from cudf import _lib as libcudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
@@ -35,6 +36,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -51,6 +53,7 @@ from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
+from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring, doc_apply
@@ -61,7 +64,6 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
-from cudf.core._compat import PANDAS_GE_200
 
 
 class IndexMeta(type):
@@ -591,48 +593,48 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
-        # We should not actually remove this code until we have implemented the
-        # get_indexers method as an alternative, see
-        # https://github.com/rapidsai/cudf/issues/12312
-        if method is not None:
-            warnings.warn(
-                f"Passing method to {self.__class__.__name__}.get_loc is "
-                "deprecated and will raise in a future version.",
-                FutureWarning,
+    def get_indexer(self, target, limit=None, method=None, tolerance=None):
+        target_col = cudf.core.column.as_column(target)
+        if method is not None or not isinstance(
+            target_col, cudf.core.column.NumericalColumn
+        ):
+            # TODO: See if we can implement this without converting to
+            # Integer index.
+            return self._as_int_index().get_indexer(
+                target=target, limit=limit, method=method, tolerance=tolerance
             )
 
-        # Given an actual integer,
+        if self.step > 0:
+            start, stop, step = self.start, self.stop, self.step
+        else:
+            # Reversed
+            reverse = self._range[::-1]
+            start, stop, step = reverse.start, reverse.stop, reverse.step
+
+        target_array = target_col.values
+        locs = target_array - start
+        valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+        locs[~valid] = -1
+        locs[valid] = locs[valid] / step
+
+        if step != self.step:
+            # Reversed
+            locs[valid] = len(self) - 1 - locs[valid]
+        return locs
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
+        if not is_scalar(key):
+            raise TypeError("Should be a scalar-like")
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
-        if method is None:
-            if tolerance is not None:
-                raise ValueError(
-                    "tolerance argument only valid if using pad, "
-                    "backfill or nearest lookups"
-                )
-
-            if idx > idx_int_upper_bound or idx < 0:
-                raise KeyError(key)
-
-            idx_int = (key - self._start) // self._step
-            if idx_int != idx:
-                raise KeyError(key)
-            return idx_int
-
-        if (method == "ffill" and idx < 0) or (
-            method == "bfill" and idx > idx_int_upper_bound
-        ):
+        if idx > idx_int_upper_bound or idx < 0:
             raise KeyError(key)
 
-        round_method = {
-            "ffill": math.floor,
-            "bfill": math.ceil,
-            "nearest": round,
-        }[method]
-        if tolerance is not None and (abs(idx) * self._step > tolerance):
+        idx_int = (key - self._start) // self._step
+        if idx_int != idx:
             raise KeyError(key)
-        return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+        return idx_int
 
     @_cudf_nvtx_annotate
     def _union(self, other, sort=None):
@@ -1136,59 +1138,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return _index_from_data(super().astype({self.name: dtype}, copy))
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
-        """Get integer location, slice or boolean mask for requested label.
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
+        if is_scalar(target):
+            raise TypeError("Should be a sequence")
 
-        Parameters
-        ----------
-        key : label
-        method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
-            - default: exact matches only.
-            - pad / ffill: find the PREVIOUS index value if no exact match.
-            - backfill / bfill: use NEXT index value if no exact match.
-            - nearest: use the NEAREST index value if no exact match. Tied
-              distances are broken by preferring the larger index
-              value.
-        tolerance : int or float, optional
-            Maximum distance from index value for inexact matches. The value
-            of the index at the matching location must satisfy the equation
-            ``abs(index[loc] - key) <= tolerance``.
-
-        Returns
-        -------
-        int or slice or boolean mask
-            - If result is unique, return integer index
-            - If index is monotonic, loc is returned as a slice object
-            - Otherwise, a boolean mask is returned
-
-        Examples
-        --------
-        >>> unique_index = cudf.Index(list('abc'))
-        >>> unique_index.get_loc('b')
-        1
-        >>> monotonic_index = cudf.Index(list('abbc'))
-        >>> monotonic_index.get_loc('b')
-        slice(1, 3, None)
-        >>> non_monotonic_index = cudf.Index(list('abcb'))
-        >>> non_monotonic_index.get_loc('b')
-        array([False,  True, False,  True])
-        >>> numeric_unique_index = cudf.Index([1, 2, 3])
-        >>> numeric_unique_index.get_loc(3)
-        2
-        """
-        # We should not actually remove this code until we have implemented the
-        # get_indexers method as an alternative, see
-        # https://github.com/rapidsai/cudf/issues/12312
-        if method is not None:
-            warnings.warn(
-                f"Passing method to {self.__class__.__name__}.get_loc is "
-                "deprecated and will raise in a future version.",
-                FutureWarning,
-            )
-        if tolerance is not None:
-            raise NotImplementedError(
-                "Parameter tolerance is not supported yet."
-            )
         if method not in {
             None,
             "ffill",
@@ -1202,6 +1155,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 f" or nearest. Got {method}"
             )
 
+        if not self.is_unique:
+            raise ValueError("Cannot get index for a non-unique Index.")
+
         is_sorted = (
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
@@ -1212,37 +1168,63 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "is specified."
             )
 
-        key_as_table = cudf.core.frame.Frame(
-            {"None": as_column(key, length=1)}
+        needle = as_column(target)
+        result = cudf.core.column.full(
+            len(needle),
+            fill_value=-1,
+            dtype=libcudf.types.size_type_dtype,
         )
+
+        if not len(self):
+            return result.values
+        try:
+            lcol, rcol = _match_join_keys(needle, self._column, "inner")
+        except ValueError:
+            return result.values
+
+        scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
+        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
+        result_series = cudf.Series(result)
+
+        if method in {"ffill", "bfill", "pad", "backfill"}:
+            result_series = _get_indexer_basic(
+                index=self,
+                positions=result_series,
+                method=method,
+                target_col=cudf.Series(needle),
+                tolerance=tolerance,
+            )
+        elif method == "nearest":
+            result_series = _get_nearest_indexer(
+                index=self,
+                positions=result_series,
+                target_col=cudf.Series(needle),
+                tolerance=tolerance,
+            )
+        elif method is not None:
+            raise ValueError(
+                f"{method=} is unsupported, only supported values are: "
+                "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
+            )
+
+        return result_series.to_cupy()
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
+        if not is_scalar(key):
+            raise TypeError("Should be a scalar-like")
+
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+
+        target_as_table = cudf.core.frame.Frame({"None": as_column([key])})
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
-            self, key_as_table, is_sorted
+            self, target_as_table, is_sorted
         )
 
         if lower_bound == upper_bound:
-            # Key not found, apply method
-            if method in ("pad", "ffill"):
-                if lower_bound == 0:
-                    raise KeyError(key)
-                return lower_bound - 1
-            elif method in ("backfill", "bfill"):
-                if lower_bound == self._data.nrows:
-                    raise KeyError(key)
-                return lower_bound
-            elif method == "nearest":
-                if lower_bound == self._data.nrows:
-                    return lower_bound - 1
-                elif lower_bound == 0:
-                    return 0
-                lower_val = self._column.element_indexing(lower_bound - 1)
-                upper_val = self._column.element_indexing(lower_bound)
-                return (
-                    lower_bound - 1
-                    if abs(lower_val - key) < abs(upper_val - key)
-                    else lower_bound
-                )
-            else:
-                raise KeyError(key)
+            raise KeyError(key)
 
         if lower_bound + 1 == upper_bound:
             # Search result is unique, return int.
@@ -2861,3 +2843,71 @@ def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
         old_s, s = s, old_s - quotient * s
         old_t, t = t, old_t - quotient * t
     return old_r, old_s, old_t
+
+
+def _get_indexer_basic(index, positions, method, target_col, tolerance):
+    # `positions` will be modified in-place, so it is the
+    # responsibility of the caller to decide whether or not
+    # to make a copy of it before passing it to this method.
+    nonexact = positions == -1
+    positions[nonexact] = index.searchsorted(
+        target_col[nonexact],
+        side="left" if method in {"pad", "ffill"} else "right",
+    )
+    if method in {"pad", "ffill"}:
+        # searchsorted returns "indices into a sorted array such that,
+        # if the corresponding elements in v were inserted before the
+        # indices, the order of a would be preserved".
+        # Thus, we need to subtract 1 to find values to the left.
+        positions[nonexact] -= 1
+        # This also mapped not found values (values of 0 from
+        # np.searchsorted) to -1, which conveniently is also our
+        # sentinel for missing values
+    else:
+        # Mark indices to the right of the largest value as not found
+        positions[positions == len(index)] = -1
+
+    if tolerance is not None:
+        distance = abs(index[positions] - target_col)
+        return positions.where(distance <= tolerance, -1)
+    return positions
+
+
+def _get_nearest_indexer(
+    index: Index,
+    positions: cudf.Series,
+    target_col: cudf.core.column.ColumnBase,
+    tolerance: Union[int, float],
+):
+    """
+    Get the indexer for the nearest index labels; requires an index with
+    values that can be subtracted from each other.
+    """
+    left_indexer = _get_indexer_basic(
+        index=index,
+        positions=positions.copy(deep=True),
+        method="pad",
+        target_col=target_col,
+        tolerance=tolerance,
+    )
+    right_indexer = _get_indexer_basic(
+        index=index,
+        positions=positions.copy(deep=True),
+        method="backfill",
+        target_col=target_col,
+        tolerance=tolerance,
+    )
+
+    left_distances = abs(index[left_indexer] - target_col)
+    right_distances = abs(index[right_indexer] - target_col)
+
+    op = operator.lt if index.is_monotonic_increasing else operator.le
+    indexer = left_indexer.where(
+        op(left_distances, right_distances) | (right_indexer == -1),
+        right_indexer,
+    )
+
+    if tolerance is not None:
+        distance = abs(index[indexer] - target_col)
+        return indexer.where(distance <= tolerance, -1)
+    return indexer
