@@ -64,8 +64,8 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  const uint8_t* base;             ///< base ptr of compressed stream
-  const uint8_t* end;              ///< end of compressed stream
+  uint8_t const* base;             ///< base ptr of compressed stream
+  uint8_t const* end;              ///< end of compressed stream
   uint32_t uncompressed_size;      ///< uncompressed stream size
   uint32_t bytes_left;             ///< remaining bytes to decompress
   int32_t error;                   ///< current error status
@@ -88,7 +88,7 @@ inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
  */
 __device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
 {
-  const uint8_t* base = s->base;
+  uint8_t const* base = s->base;
   auto end            = (uint32_t)(s->end - base);
   auto align_bytes    = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
   int32_t pos         = min(align_bytes, end);
@@ -538,7 +538,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
           uint32_t tr  = t - shuffle(bofs - blen_t, it);
           int32_t dist = shuffle(dist_t, it);
           if (it < n) {
-            const uint8_t* src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
+            uint8_t const* src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
             out[t]             = *src;
           }
           out += shuffle(bofs, n - 1);
@@ -565,7 +565,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
           }
           blen += blen2;
           if (t < blen) {
-            const uint8_t* src = (dist > 0) ? (out - d) : (literal_base - d);
+            uint8_t const* src = (dist > 0) ? (out - d) : (literal_base - d);
             out[t]             = src[t];
           }
           out += blen;
@@ -578,12 +578,12 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
         uint8_t b0, b1;
         if (t < blen) {
           uint32_t pos       = t;
-          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          uint8_t const* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b0                 = *src;
         }
         if (32 + t < blen) {
           uint32_t pos       = 32 + t;
-          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          uint8_t const* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b1                 = *src;
         }
         if (t < blen) { out[t] = b0; }
