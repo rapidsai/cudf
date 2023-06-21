@@ -843,9 +843,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
             # since the conversion is cheap.
             self_pd = self.to_pandas()
             if isinstance(other, RangeIndex):
-                other_pd = other.to_pandas()
                 result = self_pd.join(
-                    other_pd,
+                    other.to_pandas(),
                     how=how,
                     level=level,
                     return_indexers=return_indexers,
