@@ -2885,6 +2885,42 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testFlattenLists() {
+    HostColumnVector.ListType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    HostColumnVector.ListType listOfListsType = new HostColumnVector.ListType(true, listType);
+
+    // Input does not have nulls.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           Arrays.asList(Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(4, 5, 6)),
+           Arrays.asList(Arrays.asList(7, 8, 9), Arrays.asList(10, 11, 12, 13, 14, 15)));
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           Arrays.asList(1, 2, 3, 4, 5, 6),
+           Arrays.asList(7, 8, 9, 10, 11, 12, 13, 14, 15))) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Input has nulls.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+          Arrays.asList(null, Arrays.asList(3), Arrays.asList(4, 5, 6)),
+          Arrays.asList(Arrays.asList(null, 8, 9), Arrays.asList(10, 11, 12, 13, 14, null)))) {
+      try (ColumnVector result = input.flattenLists(false);
+           ColumnVector expected = ColumnVector.fromLists(listType,
+             null,
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
+        assertColumnsAreEqual(expected, result);
+      }
+      try (ColumnVector result = input.flattenLists(true);
+           ColumnVector expected = ColumnVector.fromLists(listType,
+             Arrays.asList(3, 4, 5, 6),
+             Arrays.asList(null, 8, 9, 10, 11, 12, 13, 14, null))) {
+        assertColumnsAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testPrefixSum() {
     try (ColumnVector v1 = ColumnVector.fromLongs(1, 2, 3, 5, 8, 10);
          ColumnVector summed = v1.prefixSum();
