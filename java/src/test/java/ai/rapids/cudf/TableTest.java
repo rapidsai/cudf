@@ -6264,6 +6264,106 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Helper to get scalar for preceding == Decimal(value),
+   * with data width depending upon the order-by column index:
+   *   orderby_col_idx = 2 -> FLOAT32
+   *   orderby_col_idx = 3 -> FLOAT64
+   */
+  private static Scalar getFloatingPointScalarRangeBounds(float value, int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromFloat(value);
+      case 3: return Scalar.fromDouble(Double.valueOf(value));
+      default:
+        throw new IllegalStateException("Unexpected order by column index: "
+                + orderby_col_idx);
+    }
+  }
+
+  @Test
+  void testRangeWindowsWithFloatOrderBy() {
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+            .column(400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f) // Float OBY Key
+            .column(400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0) // Double OBY Key
+            .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
+            .build()) {
+
+      // Columns 2-3 are order-by columns of type FLOAT32 and FLOAT64 respectively, with similarly ordered values.
+      // In the following loop, each float type is tested as the order-by column,
+      // producing the same results with similar range bounds.
+      for (int float_oby_col_idx = 2; float_oby_col_idx <= 3; ++float_oby_col_idx) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0),
+                OrderByArg.asc(1),
+                OrderByArg.asc(float_oby_col_idx));
+             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(4);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Test Window functionality with range window (200 PRECEDING and 100 FOLLOWING)
+          try (Scalar preceding200 = getFloatingPointScalarRangeBounds(200, float_oby_col_idx);
+               Scalar following100 = getFloatingPointScalarRangeBounds(100, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .window(preceding200, following100)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 4, 3, 2, 3, 4, 3, 2, 3, 4, 3)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and CURRENT ROW)
+          try (Scalar current_row = getFloatingPointScalarRangeBounds(0, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .unboundedPreceding()
+                       .following(current_row)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING)
+          try (WindowOptions window = WindowOptions.builder()
+                  .minPeriods(1)
+                  .unboundedPreceding()
+                  .unboundedFollowing()
+                  .orderByColumnIndex(float_oby_col_idx)
+                  .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+        }
+      }
+    }
+  }
+
   @Test
   void testGroupByCountWithNulls() {
     try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
