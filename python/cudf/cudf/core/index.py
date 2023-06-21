@@ -841,9 +841,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
             # intelligently create RangeIndex outputs depending on the type of
             # join. Hence falling back to performing a merge on pd.RangeIndex
             # since the conversion is cheap.
-            self_pd = self.to_pandas()
             if isinstance(other, RangeIndex):
-                result = self_pd.join(
+                result = self.to_pandas().join(
                     other.to_pandas(),
                     how=how,
                     level=level,
