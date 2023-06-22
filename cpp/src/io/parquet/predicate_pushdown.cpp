@@ -91,18 +91,22 @@ struct stats_caster {
           else
             return targetType<T>(*reinterpret_cast<T const*>(stats_val));
         } else {
+          // unsupported type
           return T{};
         }
     }
   }
 
+  // Casts statistics (min,max) of a column to device columns
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
     size_t col_idx, cudf::data_type dtype) const
   {
-    if constexpr (is_compound<T>())
+    // List, Struct, Dictionary types are not supported
+    if constexpr (is_compound<T>() && !std::is_same_v<T, string_view>)
       CUDF_FAIL("Compound types does not have statistics");
     else {
+      // Local struct to hold host columns
       struct host_column {
         thrust::host_vector<T> val;
         std::vector<bitmask_type> null_mask;
@@ -115,10 +119,9 @@ struct stats_caster {
               ~bitmask_type{0})
         {
         }
+
         void set_index(size_type index, std::vector<uint8_t> const& binary_value, Type const type)
         {
-          // val[index] = binary_value.empty() ? T{0} : convert<T>(binary_value.data(),
-          // binary_value.size(), type);
           if (!binary_value.empty())
             val[index] = convert<T>(binary_value.data(), binary_value.size(), type);
           if (binary_value.empty()) {
@@ -126,8 +129,37 @@ struct stats_caster {
             null_count++;
           }
         }
+
+        static auto make_strings_children(host_span<string_view> host_strings,
+                                          rmm::cuda_stream_view stream)
+        {
+          std::vector<char> chars{};
+          std::vector<cudf::size_type> offsets(1, 0);
+          for (auto const& str : host_strings) {
+            auto tmp =
+              str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
+            chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
+            offsets.push_back(offsets.back() + tmp.length());
+          }
+          auto d_chars = cudf::detail::make_device_uvector_async(
+            chars, stream, rmm::mr::get_current_device_resource());
+          auto d_offsets = cudf::detail::make_device_uvector_sync(
+            offsets, stream, rmm::mr::get_current_device_resource());
+          return std::tuple{std::move(d_chars), std::move(d_offsets)};
+        }
+
         auto to_device(cudf::data_type dtype, rmm::cuda_stream_view stream)
         {
+          if constexpr (std::is_same_v<T, string_view>) {
+            auto [d_chars, d_offsets] = make_strings_children(val, stream);
+            return cudf::make_strings_column(
+              val.size(),
+              std::move(d_offsets),
+              std::move(d_chars),
+              rmm::device_buffer{
+                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream},
+              null_count);
+          }
           return std::make_unique<column>(
             dtype,
             val.size(),
@@ -138,13 +170,12 @@ struct stats_caster {
               null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream},
             null_count);
         }
-      };
+      };  // local struct host_column
       host_column min(total_row_groups);
       host_column max(total_row_groups);
 
       int stats_idx = 0;
-      std::cout << "col_idx[" << col_idx << "]:min, max\n";
-      // TODO first 2 for-loops as iterator.
+      // std::cout << "col_idx[" << col_idx << "]:min, max\n";
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
@@ -356,9 +387,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     total_row_groups, per_file_metadata, input_row_group_indices, cudf::get_default_stream()};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const& dtype = output_dtypes[col_idx];
-    // Only numeric supported for now.
-    if (cudf::is_compound(dtype)) {
-      std::cout << "compound_type[" << col_idx << "]=" << static_cast<int>(dtype.id()) << "\n";
+    // Only comparable types except fixed point are supported.
+    if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
+      // std::cout << "compound_type[" << col_idx << "]=" << static_cast<int>(dtype.id()) << "\n";
+      // placeholder only for unsupported types.
       columns.push_back(
         cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
       columns.push_back(
@@ -391,7 +423,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
       for (auto const rg_idx : input_row_group_indices[src_idx]) {
         if (is_row_group_required[is_required_idx++]) {
           filtered_row_groups.push_back(rg_idx);
-          std::cout << "Read [src_idx, rg_idx]=[" << src_idx << "," << rg_idx << "]\n";
+          // std::cout << "Read [src_idx, rg_idx]=[" << src_idx << "," << rg_idx << "]\n";
         }
       }
       filtered_row_group_indices.push_back(std::move(filtered_row_groups));
@@ -399,11 +431,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     return {std::move(filtered_row_group_indices)};
   }
   return std::nullopt;
-  // TODO will no of col chunks for all row groups be same?
 }
 
 // convert column named expression to column index reference expression
-
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::literal const& expr)
 {
