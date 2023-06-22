@@ -206,7 +206,8 @@ rmm::device_buffer decompress_data(datasource& source,
     size_t const uncomp_size       = initial_blk_len * meta.block_list.size();
 
     // Buffer needs to be padded.
-    rmm::device_buffer decomp_block_data(cudf::util::round_up_safe(uncomp_size, size_t{8}), stream);
+    rmm::device_buffer decomp_block_data(cudf::util::round_up_safe(uncomp_size, PADDING_MODULUS),
+                                         stream);
 
     auto const base_offset = meta.block_list[0].offset;
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
@@ -310,9 +311,9 @@ rmm::device_buffer decompress_data(datasource& source,
                  "Unable to get scratch size for snappy decompression");
 
     // Buffer needs to be padded.
-    rmm::device_buffer scratch(cudf::util::round_up_safe(temp_size, size_t{8}), stream);
+    rmm::device_buffer scratch(cudf::util::round_up_safe(temp_size, PADDING_MODULUS), stream);
     rmm::device_buffer decomp_block_data(
-      cudf::util::round_up_safe(uncompressed_data_size, size_t{8}), stream);
+      cudf::util::round_up_safe(uncompressed_data_size, PADDING_MODULUS), stream);
     rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
     cudf::detail::hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
 
@@ -527,7 +528,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       }
 
       // Buffer needs to be padded.
-      block_data.resize(cudf::util::round_up_safe(block_data.size(), size_t{8}), stream);
+      block_data.resize(cudf::util::round_up_safe(block_data.size(), PADDING_MODULUS), stream);
 
       if (meta.codec != "" && meta.codec != "null") {
         auto decomp_block_data = decompress_data(*source, meta, block_data, stream);

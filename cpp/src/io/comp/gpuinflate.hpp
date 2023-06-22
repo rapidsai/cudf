@@ -48,6 +48,16 @@ struct compression_result {
 enum class gzip_header_included { NO, YES };
 
 /**
+ * @brief The value used for padding a data buffer such that its size will be multiple of this
+ * modulus.
+ *
+ * Padding is necessary for input/output buffers of several compression/decompression kernels.
+ * Such kernels operate on aligned data pointers, which require padding to the buffers so that the
+ * pointers can shift along theirs address space to satisfy their alignment requirement.
+ */
+constexpr std::size_t PADDING_MODULUS{8};
+
+/**
  * @brief Interface for decompressing GZIP-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using

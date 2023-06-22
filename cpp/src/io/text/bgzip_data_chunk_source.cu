@@ -72,7 +72,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                              rmm::cuda_stream_view stream)
   {
     // Buffer needs to be padded.
-    device.resize(cudf::util::round_up_safe(host.size(), size_t{8}), stream);
+    device.resize(cudf::util::round_up_safe(host.size(), PADDING_MODULUS), stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   }
@@ -125,7 +125,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       copy_to_device(h_compressed_blocks, d_compressed_blocks, stream);
       copy_to_device(h_compressed_offsets, d_compressed_offsets, stream);
       copy_to_device(h_decompressed_offsets, d_decompressed_offsets, stream);
-      d_decompressed_blocks.resize(cudf::util::round_up_safe(decompressed_size(), size_t{8}),
+      d_decompressed_blocks.resize(cudf::util::round_up_safe(decompressed_size(), PADDING_MODULUS),
                                    stream);
       d_compressed_spans.resize(num_blocks(), stream);
       d_decompressed_spans.resize(num_blocks(), stream);
