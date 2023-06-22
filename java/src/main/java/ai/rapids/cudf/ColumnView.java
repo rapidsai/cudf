@@ -82,9 +82,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     try {
       AssertEmptyNulls.assertNullsAreEmpty(this);
     } catch (Throwable t) {
-      // offHeap state is null, so there is nothing to clean in offHeap
-      // delete ColumnView to avoid memory leak
-      deleteColumnView(viewHandle);
+      // cleanup offHeap
+      offHeap.clean(false);
       viewHandle = 0;
       throw t;
     }
@@ -5168,5 +5167,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector purgeNonEmptyNulls() {
     return new ColumnVector(purgeNonEmptyNulls(viewHandle));
+  }
+
+  static ColumnView[] getColumnViewsFromPointers(long[] nativeHandles) {
+    ColumnView[] columns = new ColumnView[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnView(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columns);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
+      throw t;
+    }
   }
 }

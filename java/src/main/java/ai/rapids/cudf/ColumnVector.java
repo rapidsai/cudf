@@ -1728,4 +1728,34 @@ public final class ColumnVector extends ColumnView {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
     }
   }
+
+  static ColumnVector[] getColumnVectorsFromPointers(long[] nativeHandles) {
+    ColumnVector[] columns = new ColumnVector[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnVector(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        for (ColumnVector columnVector: columns) {
+          if (columnVector != null) {
+            columnVector.close();
+          }
+        }
+        for (long nativeHandle : nativeHandles) {
+          if (nativeHandle != 0) {
+            deleteCudfColumn(nativeHandle);
+          }
+        }
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
+      throw t;
+    }
+  }
 }

@@ -83,12 +83,8 @@ public final class Table implements AutoCloseable {
    */
   public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
-    this.columns = new ColumnVector[cudfColumns.length];
+    this.columns = ColumnVector.getColumnVectorsFromPointers(cudfColumns);
     try {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        this.columns[i] = new ColumnVector(cudfColumns[i]);
-        cudfColumns[i] = 0;
-      }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
         views[i] = columns[i].getNativeView();
@@ -96,7 +92,9 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(cudfColumns, this.columns);
+      for (ColumnVector column: columns) {
+        column.close();
+      }
       throw t;
     }
   }
@@ -3462,16 +3460,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
+    ColumnVector[] ret = ColumnVector.getColumnVectorsFromPointers(ptrs);
     return ret;
   }
 
@@ -3551,16 +3540,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
+    ColumnVector[] ret = ColumnVector.getColumnVectorsFromPointers(ptrs);
     return ret;
   }
 
