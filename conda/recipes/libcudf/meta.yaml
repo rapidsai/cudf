@@ -58,7 +58,6 @@ requirements:
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
     {% else %}
-    - cuda-cupti-dev
     - cuda-nvrtc-dev
     - cuda-nvtx-dev
     - libcufile-dev  # [linux64]
