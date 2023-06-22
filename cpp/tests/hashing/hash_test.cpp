@@ -1106,4 +1106,61 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
 
+template <typename T>
+class HashMurmur64TestTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(HashMurmur64TestTyped, NumericTypesNoBools);
+
+TYPED_TEST(HashMurmur64TestTyped, DISABLED_TestNumeric)
+{
+  using T   = TypeParam;
+  auto col1 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
+    {-1, -1, 0, 2, 22, 27, 11, 12, 0, 32, 0, 42, 0, 62, 0, 0, 1, -22},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+
+  auto const output = cudf::hash64(cudf::table_view({col1}));
+  cudf::test::print(output->view());
+}
+
+class HashMurmur64Test : public cudf::test::BaseFixture {};
+
+TEST_F(HashMurmur64Test, DISABLED_MultiType)
+{
+  auto col1 = cudf::test::strings_column_wrapper(
+    {"The",
+     "quick",
+     "brown fox",
+     "jumps over the lazy dog.",
+     "I am Jack's complete lack of null value",
+     "A very long (greater than 128 bytes/char string) to test a a very long string",
+     "Some multi-byte characters here: ééé",
+     "ééé",
+     "ééé ééé",
+     "ééé ééé ééé ééé",
+     "",
+     "!@#$%^&*(())",
+     "0123456789",
+     "{}|:<>?,./;[]=-"});
+
+  using ts = cudf::timestamp_s;
+  auto col2 =
+    cudf::test::fixed_width_column_wrapper<ts, ts::duration>({ts::duration::zero(),
+                                                              static_cast<ts::duration>(100),
+                                                              static_cast<ts::duration>(-100),
+                                                              ts::duration::min(),
+                                                              static_cast<ts::duration>(1000),
+                                                              static_cast<ts::duration>(1111),
+                                                              static_cast<ts::duration>(100000),
+                                                              static_cast<ts::duration>(-1000),
+                                                              static_cast<ts::duration>(2222),
+                                                              static_cast<ts::duration>(3333),
+                                                              static_cast<ts::duration>(44444),
+                                                              static_cast<ts::duration>(-100),
+                                                              static_cast<ts::duration>(100),
+                                                              ts::duration::max()});
+
+  auto const output = cudf::hash64(cudf::table_view({col1, col2}));
+  cudf::test::print(output->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()

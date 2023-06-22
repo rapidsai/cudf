@@ -42,6 +42,11 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         rmm::cuda_stream_view,
                                         rmm::mr::device_memory_resource* mr);
 
+std::unique_ptr<column> murmur_hash3_64(table_view const& input,
+                                        uint64_t seed,
+                                        rmm::cuda_stream_view,
+                                        rmm::mr::device_memory_resource* mr);
+
 std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
                                               uint32_t seed,
                                               rmm::cuda_stream_view,

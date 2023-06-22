@@ -1,0 +1,324 @@
+/*
+ * Copyright (c) 2023, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/hashing.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/table/table_device_view.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/tabulate.h>
+
+namespace cudf {
+namespace detail {
+
+namespace {
+
+using hash_value_type = uint64_t;
+
+// MurmurHash3_x64_128 implementation from
+// https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+//-----------------------------------------------------------------------------
+// MurmurHash3_64_128 was written by Austin Appleby, and is placed in the public
+// domain. The author hereby disclaims copyright to this source code.
+// Note - The x86 and x64 versions do _not_ produce the same results, as the
+// algorithms are optimized for their respective platforms. You can still
+// compile and run any of them on any platform, but your performance with the
+// non-native version will be less than optimal.
+template <typename Key>
+struct MurmurHash3_64 {
+  using result_type = hash_value_type;
+
+  constexpr MurmurHash3_64() = default;
+  constexpr MurmurHash3_64(hash_value_type seed) : m_seed(seed) {}
+
+  __device__ inline uint64_t getblock64(std::byte const* data, cudf::size_type offset) const
+  {
+    // Read an 8-byte value from the data pointer as individual bytes for safe
+    // unaligned access (very likely for string types).
+    auto block      = reinterpret_cast<uint8_t const*>(data + offset);
+    uint64_t result = block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+    block += 4;
+    result = result << 32;
+    return result | block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+  }
+
+  __device__ inline uint32_t fmix64(uint64_t k) const
+  {
+    k ^= k >> 33;
+    k *= 0xff51afd7ed558ccdUL;
+    k ^= k >> 33;
+    k *= 0xc4ceb9fe1a85ec53UL;
+    k ^= k >> 33;
+    return k;
+  }
+
+  __device__ inline uint64_t rotate_bits_left(uint64_t x, uint32_t r) const noexcept
+  {
+    return (x << r) | (x >> (64 - r));
+  }
+
+  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
+
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
+  {
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+  }
+
+  thrust::pair<uint64_t, uint64_t> __device__ inline compute_remaining_bytes(
+    std::byte const* data,
+    cudf::size_type len,
+    cudf::size_type tail_offset,
+    result_type h1,
+    result_type h2) const
+  {
+    // Process remaining bytes that do not fill a 8-byte chunk.
+    uint64_t k1     = 0;
+    uint64_t k2     = 0;
+    auto const tail = reinterpret_cast<uint8_t const*>(data + tail_offset);
+    switch (len % (BLOCK_SIZE - 1)) {
+      case 15: k2 ^= static_cast<uint64_t>(tail[14]) << 48;
+      case 14: k2 ^= static_cast<uint64_t>(tail[13]) << 40;
+      case 13: k2 ^= static_cast<uint64_t>(tail[12]) << 32;
+      case 12: k2 ^= static_cast<uint64_t>(tail[11]) << 24;
+      case 11: k2 ^= static_cast<uint64_t>(tail[10]) << 16;
+      case 10: k2 ^= static_cast<uint64_t>(tail[9]) << 8;
+      case 9:
+        k2 ^= static_cast<uint64_t>(tail[8]) << 0;
+        k2 *= c2;
+        k2 = rotate_bits_left(k2, 33);
+        k2 *= c1;
+        h2 ^= k2;
+
+      case 8: k1 ^= static_cast<uint64_t>(tail[7]) << 56;
+      case 7: k1 ^= static_cast<uint64_t>(tail[6]) << 48;
+      case 6: k1 ^= static_cast<uint64_t>(tail[5]) << 40;
+      case 5: k1 ^= static_cast<uint64_t>(tail[4]) << 32;
+      case 4: k1 ^= static_cast<uint64_t>(tail[3]) << 24;
+      case 3: k1 ^= static_cast<uint64_t>(tail[2]) << 16;
+      case 2: k1 ^= static_cast<uint64_t>(tail[1]) << 8;
+      case 1:
+        k1 ^= static_cast<uint64_t>(tail[0]) << 0;
+        k1 *= c1;
+        k1 = rotate_bits_left(k1, 31);
+        k1 *= c2;
+        h1 ^= k1;
+    };
+    return {h1, h2};
+  }
+
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    auto const nblocks = len / BLOCK_SIZE;
+    result_type h1     = m_seed;
+    result_type h2     = m_seed;
+
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint64_t k1 = getblock64(data, i * BLOCK_SIZE / 2);        // 1st 8 bytes
+      uint64_t k2 = getblock64(data, (i + 1) * BLOCK_SIZE / 2);  // 2nd 8 bytes
+
+      k1 *= c1;
+      k1 = rotate_bits_left(k1, 31);
+      k1 *= c2;
+
+      h1 ^= k1;
+      h1 = rotate_bits_left(h1, 27);
+      h1 += h2;
+      h1 = h1 * 5 + 0x52dce729;
+
+      k2 *= c2;
+      k2 = rotate_bits_left(k2, 33);
+      k2 *= c1;
+
+      h2 ^= k2;
+      h2 = rotate_bits_left(h2, 31);
+      h2 += h1;
+      h2 = h2 * 5 + 0x38495ab5;
+    }
+
+    thrust::tie(h1, h2) = compute_remaining_bytes(data, len, nblocks * BLOCK_SIZE, h1, h2);
+
+    // Finalize hash.
+    h1 ^= len;
+    h2 ^= len;
+
+    h1 += h2;
+    h2 += h1;
+
+    h1 = fmix64(h1);
+    h2 = fmix64(h2);
+
+    h1 += h2;
+    h2 += h1;
+
+    return h1;
+  }
+
+ private:
+  hash_value_type m_seed{};
+  static constexpr uint32_t BLOCK_SIZE = 16;  // 2 x 64-bit = 16 bytes
+
+  static constexpr uint64_t c1 = 0x87c37b91114253d5UL;
+  static constexpr uint64_t c2 = 0x4cf5ad432745937fUL;
+};
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<bool>::operator()(bool const& key) const
+{
+  return compute<uint8_t>(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<float>::operator()(float const& key) const
+{
+  return compute(detail::normalize_nans(key));
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<double>::operator()(double const& key) const
+{
+  return compute(detail::normalize_nans(key));
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return compute_bytes(data, len);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<numeric::decimal32>::operator()(
+  numeric::decimal32 const& key) const
+{
+  return compute(key.value());
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<numeric::decimal64>::operator()(
+  numeric::decimal64 const& key) const
+{
+  return compute(key.value());
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_64<numeric::decimal128>::operator()(
+  numeric::decimal128 const& key) const
+{
+  return compute(key.value());
+}
+
+/**
+ * @brief Computes the hash value of a row in the given table.
+ *
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ */
+template <typename Nullate>
+class murmur_device_row_hasher {
+ public:
+  murmur_device_row_hasher(Nullate nulls, table_device_view const& t, hash_value_type seed)
+    : _check_nulls(nulls), _table(t), _seed(seed)
+  {
+  }
+
+  /**
+   * @brief Return the hash value of a row in the given table.
+   *
+   * @param row_index The row index to compute the hash value of
+   * @return The hash value of the row
+   */
+  __device__ auto operator()(size_type row_index) const noexcept
+  {
+    return detail::accumulate(
+      _table.begin(),
+      _table.end(),
+      _seed,
+      [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
+        return cudf::type_dispatcher(
+          column.type(), element_hasher_adapter{}, column, row_index, nulls, hash);
+      });
+  }
+
+  /**
+   * @brief Computes the hash value of an element in the given column.
+   */
+  class element_hasher_adapter {
+   public:
+    template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index,
+                                          Nullate const _check_nulls,
+                                          hash_value_type const _seed) const noexcept
+    {
+      if (_check_nulls && col.is_null(row_index)) {
+        return std::numeric_limits<hash_value_type>::max();
+      }
+      auto const hasher = MurmurHash3_64<T>{_seed};
+      return hasher(col.element<T>(row_index));
+    }
+
+    template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
+    __device__ hash_value_type operator()(column_device_view const&,
+                                          size_type,
+                                          Nullate const,
+                                          hash_value_type const) const noexcept
+    {
+      CUDF_UNREACHABLE("Unsupported type for MurmurHash64");
+    }
+  };
+
+  Nullate const _check_nulls;
+  table_device_view const _table;
+  hash_value_type const _seed;
+};
+
+}  // namespace
+
+std::unique_ptr<column> murmur_hash3_64(table_view const& input,
+                                        uint64_t seed,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
+                                    input.num_rows(),
+                                    mask_state::UNALLOCATED,
+                                    stream,
+                                    mr);
+
+  // Return early if there's nothing to hash
+  if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
+
+  bool const nullable   = has_nulls(input);
+  auto const input_view = table_device_view::create(input, stream);
+  auto output_view      = output->mutable_view();
+
+  // Compute the hash value for each row
+  thrust::tabulate(rmm::exec_policy(stream),
+                   output_view.begin<hash_value_type>(),
+                   output_view.end<hash_value_type>(),
+                   murmur_device_row_hasher(nullable, *input_view, seed));
+
+  return output;
+}
+
+}  // namespace detail
+}  // namespace cudf
