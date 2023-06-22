@@ -751,6 +751,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
+  private static native int distinctCount(long handle, boolean nullsEqual);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -2158,6 +2160,22 @@ public final class Table implements AutoCloseable {
   public Table dropDuplicates(int[] keyColumns, DuplicateKeepOption keep, boolean nullsEqual) {
     assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
     return new Table(dropDuplicates(nativeHandle, keyColumns, keep.keepValue, nullsEqual));
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * @param nullEqual if nulls should be considered equal to each other or not.
+   */
+  public int distinctCount(NullEquality nullsEqual) {
+    return distinctCount(nativeHandle, nullsEqual.nullsEqual);
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * Nulls are considered to be equal to one another.
+   */
+  public int distinctCount() {
+    return distinctCount(nativeHandle, true);
   }
 
   /**
@@ -4027,6 +4045,8 @@ public final class Table implements AutoCloseable {
           case UINT16:
           case UINT32:
           case UINT64:
+          case FLOAT32:
+          case FLOAT64:
           case TIMESTAMP_MILLISECONDS:
           case TIMESTAMP_SECONDS:
           case TIMESTAMP_DAYS:
