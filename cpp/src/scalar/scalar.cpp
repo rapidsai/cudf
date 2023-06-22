@@ -66,6 +66,10 @@ string_scalar::string_scalar(std::string const& string,
   : scalar(data_type(type_id::STRING), is_valid, stream, mr),
     _data(string.data(), string.size(), stream, mr)
 {
+  CUDF_EXPECTS(
+    string.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "Data exceeds the string size limit",
+    std::overflow_error);
 }
 
 string_scalar::string_scalar(string_scalar const& other,
