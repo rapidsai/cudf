@@ -5551,12 +5551,12 @@ TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
-TEST_F(ParquetReaderTest, FilterAST)
+TEST_F(ParquetReaderTest, FilterSimple)
 {
   srand(31337);
   auto written_table = create_random_fixed_table<int>(9, 9, false);
 
-  auto filepath = temp_env->get_temp_filepath("FilterAST.parquet");
+  auto filepath = temp_env->get_temp_filepath("FilterSimple.parquet");
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *written_table);
   cudf::io::write_parquet(args);
@@ -5589,19 +5589,25 @@ auto create_parquet_with_stats(std::string const& filename)
   auto col2 = testdata::unordered<double>();
 
   auto const expected = table_view{{col0, col1, col2}};
-  std::cout << "expected.size=" << expected.num_rows() << "\n";
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("col_uint32");
+  expected_metadata.column_metadata[1].set_name("col_int64");
+  expected_metadata.column_metadata[2].set_name("col_double");
+
   auto const filepath = temp_env->get_temp_filepath(filename);
   const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata)
       .row_group_size_rows(8000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
   return filepath;
 }
 
-TEST_F(ParquetReaderTest, StatsPrint)
+TEST_F(ParquetReaderTest, FilterIdentity)
 {
-  auto filepath     = create_parquet_with_stats("StatsPrint.parquet");
+  auto filepath     = create_parquet_with_stats("FilterIdentity.parquet");
   auto const source = cudf::io::datasource::create(filepath);
 
   // Filtering AST - table[0] < RAND_MAX/2
@@ -5613,11 +5619,17 @@ TEST_F(ParquetReaderTest, StatsPrint)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .filter(filter_expression);
   auto result = cudf::io::read_parquet(read_opts);
+
+  cudf::io::parquet_reader_options read_opts2 =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result2 = cudf::io::read_parquet(read_opts2);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *result2.tbl);
 }
 
-TEST_F(ParquetReaderTest, StatsRowGroups)
+TEST_F(ParquetReaderTest, FilterReferenceExpression)
 {
-  auto filepath     = create_parquet_with_stats("StatsRowGroups.parquet");
+  auto filepath     = create_parquet_with_stats("FilterReferenceExpression.parquet");
   auto const source = cudf::io::datasource::create(filepath);
   // Filtering AST - table[0] < 150
   auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
@@ -5630,5 +5642,106 @@ TEST_F(ParquetReaderTest, StatsRowGroups)
       .filter(filter_expression);
   auto result = cudf::io::read_parquet(read_opts);
 }
+
+TEST_F(ParquetReaderTest, FilterNamedExpression)
+{
+  auto filepath     = create_parquet_with_stats("NamedExpression.parquet");
+  auto const source = cudf::io::datasource::create(filepath);
+  // Filtering AST - table[0] < 150
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result = cudf::io::read_parquet(read_opts);
+}
+
+// TODO types to test. all fixed width type + string.
+template <typename T>
+struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
+
+// These chrono types are not supported because parquet writer does not have a type to represent
+// them.
+using UnSupportedChronoTypes =
+  cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
+// Also fixed point types unsupported, because AST does not support them yet.
+using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnSupportedChronoTypes>,
+                                                cudf::test::ComparableTypes>;
+
+TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
+
+TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
+{
+  using T   = TypeParam;
+  auto col0 = testdata::ascending<T>();
+  auto col1 = testdata::descending<T>();
+  auto col2 = testdata::unordered<T>();
+
+  auto const written_table = table_view{{col0, col1, col2}};
+  auto const filepath      = temp_env->get_temp_filepath("FilterTyped.parquet");
+  {
+    cudf::io::table_input_metadata expected_metadata(written_table);
+    expected_metadata.column_metadata[0].set_name("col0");
+    expected_metadata.column_metadata[1].set_name("col1");
+    expected_metadata.column_metadata[2].set_name("col2");
+
+    const cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .metadata(&expected_metadata)
+        .row_group_size_rows(8000);
+    // .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // Filtering AST - table[0] < 100
+  auto literal_value = []() {
+    if constexpr (cudf::is_timestamp<T>())
+      return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));   // i (0-20,000)
+    else if constexpr (cudf::is_duration<T>())
+      return cudf::duration_scalar<T>(T(10000));                          // i (0-20,000)
+    else if constexpr (std::is_same_v<T, cudf::string_view>)
+      return cudf::string_scalar("000010000");                            // i (0-20,000)
+    else
+      return cudf::numeric_scalar<T>((100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+  }();
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_name_0        = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+  auto col_ref_0         = cudf::ast::column_reference(0);
+  auto ref_filter        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Reading with Predicate Pushdown
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .filter(filter_expression);
+  auto result       = cudf::io::read_parquet(read_opts);
+  auto result_table = result.tbl->view();
+
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, ref_filter);
+  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+    << "Predicate filter should return a boolean";
+  auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+
+  // tests
+  EXPECT_EQ(int(cudf::column_view(col0).type().id()), int(result_table.column(0).type().id()))
+    << "col0 type mismatch";
+  // To make sure AST filters out some elements
+  EXPECT_NE(written_table.num_rows(), expected->num_rows());
+  EXPECT_EQ(result_table.num_rows(), expected->num_rows());
+  EXPECT_EQ(result_table.num_columns(), expected->num_columns());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+}
+
+// TODO supported operators
+// TODO Error types - type mismatch, invalid column name, invalid literal type, invalid operator
+// TODO test with multiple filters
+// TODO test with multiple row groups
+// TODO test with multiple files
+// TODO test with multiple predicates and multiple columns
+// TODO test without stats information in file.
 
 CUDF_TEST_PROGRAM_MAIN()

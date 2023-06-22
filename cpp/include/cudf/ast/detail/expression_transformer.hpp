@@ -20,7 +20,7 @@
 
 namespace cudf::ast::detail {
 /**
- * @brief Base "visitor" pattern class with the `expression` class for expression parser.
+ * @brief Base "visitor" pattern class with the `expression` class for expression transformer.
  *
  * This class can be used to implement recursive traversal of AST tree, and used to validate or
  * translate an AST expression.
