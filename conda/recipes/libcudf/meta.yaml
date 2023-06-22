@@ -372,6 +372,9 @@ outputs:
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - librdkafka {{ librdkafka_version }}
+        - {{ pin_subpackage('libcudf', exact=True) }}
       run:
         - librdkafka {{ librdkafka_version }}
         - {{ pin_subpackage('libcudf', exact=True) }}
@@ -440,15 +443,27 @@ outputs:
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - cuda-version {{ cuda_spec }}
+        {% if cuda_major == "11" %}
+        - libcurand {{ cuda11_libcurand_run_version }}
+        {% else %}
+        - libcurand-dev
+        {% endif %}
+        - benchmark {{ gbench_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - cuda-version {{ cuda_spec }}
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% else %}
         - libcurand
         {% endif %}
-        - cuda-version {{ cuda_spec }}
         - benchmark {{ gbench_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
