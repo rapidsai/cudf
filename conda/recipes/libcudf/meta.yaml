@@ -452,8 +452,6 @@ outputs:
         - cuda-version {{ cuda_spec }}
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
-        {% else %}
-        - libcurand
         {% endif %}
         - benchmark {{ gbench_version }}
         - gtest {{ gtest_version }}
