@@ -116,6 +116,16 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
     return fwcw<T>(begin, begin + num_rows).release();
   }
 
+  /// Generate order-by column with values: [-1400, -1300, -1200 ... -300, -200, -100]
+  [[nodiscard]] column_ptr generate_negative_order_by_column() const
+  {
+    auto const begin =
+      thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                      [&](T const& i) -> T { return (i - num_rows) * 100; });
+
+    return fwcw<T>(begin, begin + num_rows).release();
+  }
+
   /**
    * @brief Run grouped_rolling test with no nulls in the order-by column
    */
@@ -124,6 +134,20 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
     auto const preceding = make_range_bounds(T{200});
     auto const following = make_range_bounds(T{100});
     auto const order_by  = generate_order_by_column();
+    auto const results   = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+    auto const expected_results = bigints_column{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9},
+                                                 cudf::test::iterators::no_nulls()};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+  }
+
+  /**
+   * @brief Run grouped_rolling test with no nulls in the order-by column
+   */
+  void run_test_negative_oby() const
+  {
+    auto const preceding = make_range_bounds(T{200});
+    auto const following = make_range_bounds(T{100});
+    auto const order_by  = generate_negative_order_by_column();
     auto const results   = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
     auto const expected_results = bigints_column{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9},
                                                  cudf::test::iterators::no_nulls()};
@@ -225,6 +249,7 @@ TYPED_TEST_SUITE(GroupedRollingRangeOrderByFloatingPointTest, cudf::test::Floati
 TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, BoundedRanges)
 {
   this->run_test_no_null_oby();
+  this->run_test_negative_oby();
   this->run_test_nulls_in_oby();
 }
 
