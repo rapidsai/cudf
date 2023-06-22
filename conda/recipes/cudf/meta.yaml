@@ -65,6 +65,7 @@ requirements:
     {% if cuda_major == "11" %}
     - cudatoolkit ={{ cuda_version }}
     {% else %}
+    - cuda-cudart-dev
     - cuda-nvrtc
     - libcufile  # [linux64]
     {% endif %}
