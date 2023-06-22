@@ -673,7 +673,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      cleanupColumnViews(nativeHandles, columnVectors);
+      try {
+        cleanupColumnViews(nativeHandles, columnVectors);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
       throw t;
     }
     return columnVectors;
@@ -818,22 +822,46 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      cleanupColumnViews(nativeHandles, columnViews);
+      try {
+        cleanupColumnViews(nativeHandles, columnViews);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
       throw t;
     }
     return columnViews;
   }
 
-  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) {
-    for (ColumnView columnView: columnViews) {
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) throws Throwable {
+    Throwable t = null;
+    for (ColumnView columnView : columnViews) {
       if (columnView != null) {
-        columnView.close();
+        try {
+          columnView.close();
+        } catch (Throwable s) {
+          if (t == null) {
+            t = s;
+          } else {
+            t.addSuppressed(s);
+          }
+        }
       }
     }
-    for (long nativeHandle: nativeHandles) {
+    for (long nativeHandle : nativeHandles) {
       if (nativeHandle != 0) {
-        deleteColumnView(nativeHandle);
+        try {
+          deleteColumnView(nativeHandle);
+        } catch (Throwable s) {
+          if (t == null) {
+            t = s;
+          } else {
+            t.addSuppressed(s);
+          }
+        }
       }
+    }
+    if (t != null) {
+      throw t;
     }
   }
 

@@ -1741,20 +1741,25 @@ public final class ColumnVector extends ColumnView {
       }
       return columns;
     } catch (Throwable t) {
-      try {
-        for (ColumnVector columnVector: columns) {
-          if (columnVector != null) {
+      for (ColumnVector columnVector : columns) {
+        if (columnVector != null) {
+          try {
             columnVector.close();
+          } catch (Throwable s) {
+            t.addSuppressed(s);
           }
         }
-        for (long nativeHandle : nativeHandles) {
-          if (nativeHandle != 0) {
-            deleteCudfColumn(nativeHandle);
-          }
-        }
-      } catch (Throwable s) {
-        t.addSuppressed(s);
       }
+      for (long nativeHandle : nativeHandles) {
+        if (nativeHandle != 0) {
+          try {
+            deleteCudfColumn(nativeHandle);
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+
       throw t;
     }
   }

@@ -3460,8 +3460,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = ColumnVector.getColumnVectorsFromPointers(ptrs);
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3540,8 +3539,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = ColumnVector.getColumnVectorsFromPointers(ptrs);
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3614,7 +3612,11 @@ public final class Table implements AutoCloseable {
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
+      try {
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
       throw t;
     }
 

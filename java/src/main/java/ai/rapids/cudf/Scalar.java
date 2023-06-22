@@ -677,8 +677,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
 
     long[] childHandles = getChildrenFromStructScalar(getScalarHandle());
-    ColumnView[] children = ColumnView.getColumnViewsFromPointers(childHandles);
-    return children;
+    return ColumnView.getColumnViewsFromPointers(childHandles);
   }
 
   @Override
