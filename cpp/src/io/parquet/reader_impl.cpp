@@ -25,7 +25,7 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
-int constexpr NUM_DECODERS       = 2;
+int constexpr NUM_DECODERS       = 2;  // how many decode kernels are there to run
 int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
 int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
 
