@@ -53,7 +53,7 @@ enum class gzip_header_included { NO, YES };
  *
  * Padding is necessary for input/output buffers of several compression/decompression kernels.
  * Such kernels operate on aligned data pointers, which require padding to the buffers so that the
- * pointers can shift along theirs address space to satisfy their alignment requirement.
+ * pointers can shift along the address space to satisfy their alignment requirement.
  */
 constexpr std::size_t PADDING_MODULUS{8};
 
