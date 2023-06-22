@@ -503,7 +503,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsNoNull)
   // [ [{1, 11, "1"}, {2, 12, "2"}], [{3, 13, "3"}], [{4, 14, "4"}, {5, 15, "5"}, {6, 16, "6"}] ]
   // [ [] ]
   // [ [{7, 17, "7"}, {8, 18, "8"}], [{9, 19, "9"}, {10, 110, "10"}] ]
-  //
   auto const input = [] {
     auto child = [] {
       auto child1  = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -519,10 +518,9 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsNoNull)
   }();
 
   // Output:
-  // [ {1, 11, "1"}, {2, 12, "2"}, {3, 13, "3"}, {4, 14, "4"}, {5, 15, "5"}, {6, 16, "6"} ]
-  // [ ]
-  // [ {7, 17, "7"}, {8, 18, "8"}, {9, 19, "9"}, {10, 110, "10"} ]
-  //
+  // [{1, 11, "1"}, {2, 12, "2"}, {3, 13, "3"}, {4, 14, "4"}, {5, 15, "5"}, {6, 16, "6"}]
+  // []
+  // [{7, 17, "7"}, {8, 18, "8"}, {9, 19, "9"}, {10, 110, "10"}]
   auto const expected = [] {
     auto child1  = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     auto child2  = int32s_col{11, 12, 13, 14, 15, 16, 17, 18, 19, 110};
@@ -546,7 +544,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
   // [ [{1, 11, "1"}, {null, null, null}], [{3, 13, "3"}], NULL ]
   // [ [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}] ]
   // [ [{7, 17, "7"}, {null, null, null}], [{9, 19, "9"}, {10, 110, "10"}] ]
-  //
   auto const input = [] {
     auto child = [] {
       auto child1                  = int32s_col{1, null, 3, 4, 5, null, 7, null, 9, 10};
@@ -570,7 +567,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
     // [{1, 11, "1"}, {null, null, null}, {3, 13, "3"}]
     // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
     // [{7, 17, "7"}, {null, null, null}, {9, 19, "9"}, {10, 110, "10"}]
-    //
     auto const expected = [] {
       auto child1  = int32s_col{1, null, 3, 4, 5, null, 7, null, 9, 10};
       auto child2  = int32s_col{11, null, 13, 14, 15, null, 17, null, 19, 110};
@@ -588,7 +584,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
   {
     // Output:
     // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
-    //
     auto const expected = [] {
       auto child1  = int32s_col{4, 5, null};
       auto child2  = int32s_col{14, 15, null};
@@ -609,7 +604,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
     // NULL
     // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
     // [{7, 17, "7"}, {null, null, null}, {9, 19, "9"}, {10, 110, "10"}]
-    //
     auto const expected = [] {
       auto child1                  = int32s_col{4, 5, null, 7, null, 9, 10};
       auto child2                  = int32s_col{14, 15, null, 17, null, 19, 110};
@@ -632,7 +626,6 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
     // Output:
     // NULL
     // [{4, 14, "4"}, {5, 15, "5"}, {null, null, null}]
-    //
     auto const expected = [] {
       auto child1                  = int32s_col{4, 5, null};
       auto child2                  = int32s_col{14, 15, null};
@@ -705,12 +698,10 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
   using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
 
-  // clang-format off
   // Input:
   // [ [{1, 11, [1, 1]}, {2, 12, [2]}], [{3, 13, [3, 3]}] ]
   // [ [{4, 14, null}, {5, 15, [5, 5, 5]}, {6, 16, [6, 6]}], NULL ]
   // [ [{7, 17, [7]}, {8, 18, [8]}], [{9, 19, [9, 9]}, {10, 110, [10, 10, 10, 10]}] ]
-  // clang-format on
   auto const input = [] {
     auto child = [] {
       auto child1 = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -732,12 +723,10 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
 
   // Concatenate with ignoring null lists.
   {
-    // clang-format off
     // Output:
     // [{1, 11, [1, 1]}, {2, 12, [2]}, {3, 13, [3, 3]}]
     // [{4, 14, null}, {5, 15, [5, 5, 5]}, {6, 16, [6, 6]}]
     // [{7, 17, [7]}, {8, 18, [8]}, {9, 19, [9, 9]}, {10, 110, [10, 10, 10, 10]}]
-    // clang-format on
     auto const expected = [] {
       auto child1 = int32s_col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
       auto child2 = int32s_col{11, 12, 13, 14, 15, 16, 17, 18, 19, 110};
@@ -755,10 +744,8 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
 
   // Concatenate with ignoring null lists and sliced input.
   {
-    // clang-format off
     // Output:
     // [{4, 14, null}, {5, 15, [5, 5, 5]}, {6, 16, [6, 6]}]
-    // clang-format on
     auto const expected = [] {
       auto child1  = int32s_col{4, 5, 6};
       auto child2  = int32s_col{14, 15, 16};
@@ -775,12 +762,10 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
 
   // Concatenate with `concatenate_null_policy::NULLIFY_OUTPUT_ROW`.
   {
-    // clang-format off
     // Output:
     // [{1, 11, [1, 1]}, {2, 12, [2]}, {3, 13, [3, 3]}]
     // NULL
     // [{7, 17, [7]}, {8, 18, [8]}, {9, 19, [9, 9]}, {10, 110, [10, 10, 10, 10]}]
-    // clang-format on
     auto const expected = [] {
       auto child1 = int32s_col{1, 2, 3, 7, 8, 9, 10};
       auto child2 = int32s_col{11, 12, 13, 17, 18, 19, 110};
@@ -801,11 +786,9 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
 
   // Concatenate with `concatenate_null_policy::NULLIFY_OUTPUT_ROW` and sliced input.
   {
-    // clang-format off
     // Output:
     // NULL
     // [{7, 17, [7]}, {8, 18, [8]}, {9, 19, [9, 9]}, {10, 110, [10, 10, 10, 10]}]
-    // clang-format on
     auto const expected = [] {
       auto child1                  = int32s_col{7, 8, 9, 10};
       auto child2                  = int32s_col{17, 18, 19, 110};
