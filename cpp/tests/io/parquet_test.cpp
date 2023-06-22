@@ -5602,13 +5602,18 @@ auto create_parquet_with_stats(std::string const& filename)
       .row_group_size_rows(8000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
-  return filepath;
+
+  std::vector<std::unique_ptr<column>> columns;
+  columns.push_back(col0.release());
+  columns.push_back(col1.release());
+  columns.push_back(col2.release());
+
+  return std::pair{cudf::table{std::move(columns)}, filepath};
 }
 
 TEST_F(ParquetReaderTest, FilterIdentity)
 {
-  auto filepath     = create_parquet_with_stats("FilterIdentity.parquet");
-  auto const source = cudf::io::datasource::create(filepath);
+  auto [src, filepath] = create_parquet_with_stats("FilterIdentity.parquet");
 
   // Filtering AST - table[0] < RAND_MAX/2
   auto literal_value     = cudf::numeric_scalar<bool>(true);
@@ -5629,37 +5634,46 @@ TEST_F(ParquetReaderTest, FilterIdentity)
 
 TEST_F(ParquetReaderTest, FilterReferenceExpression)
 {
-  auto filepath     = create_parquet_with_stats("FilterReferenceExpression.parquet");
-  auto const source = cudf::io::datasource::create(filepath);
+  auto [src, filepath] = create_parquet_with_stats("FilterReferenceExpression.parquet");
   // Filtering AST - table[0] < 150
   auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
   auto literal           = cudf::ast::literal(literal_value);
   auto col_ref_0         = cudf::ast::column_reference(0);
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
+  // Expected result
+  auto predicate = cudf::compute_column(src, filter_expression);
+  auto expected  = cudf::apply_boolean_mask(src, *predicate);
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .filter(filter_expression);
   auto result = cudf::io::read_parquet(read_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(ParquetReaderTest, FilterNamedExpression)
 {
-  auto filepath     = create_parquet_with_stats("NamedExpression.parquet");
-  auto const source = cudf::io::datasource::create(filepath);
+  auto [src, filepath] = create_parquet_with_stats("NamedExpression.parquet");
   // Filtering AST - table[0] < 150
-  auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto literal_value  = cudf::numeric_scalar<uint32_t>(150);
+  auto literal        = cudf::ast::literal(literal_value);
+  auto col_name_0     = cudf::ast::column_name_reference("col_uint32");
+  auto parquet_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+  auto col_ref_0      = cudf::ast::column_reference(0);
+  auto table_filter   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .filter(filter_expression);
+      .filter(parquet_filter);
   auto result = cudf::io::read_parquet(read_opts);
+
+  // Expected result
+  auto predicate = cudf::compute_column(src, table_filter);
+  auto expected  = cudf::apply_boolean_mask(src, *predicate);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-// TODO types to test. all fixed width type + string.
+// Test for Types - numeric, chrono, string.
 template <typename T>
 struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
