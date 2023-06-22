@@ -28,7 +28,6 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 
-#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -269,9 +268,6 @@ class reader::impl {
   std::size_t _chunk_read_limit{0};
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
-
-  // stream pool for page decoding
-  rmm::cuda_stream_pool _stream_pool;
 };
 
 }  // namespace cudf::io::detail::parquet
