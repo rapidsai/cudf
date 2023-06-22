@@ -1072,7 +1072,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
  * @return A parquet-compatible blob that contains the data for all row groups in the list
  */
 std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+  std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list);
 
 class chunked_parquet_writer_options_builder;
 

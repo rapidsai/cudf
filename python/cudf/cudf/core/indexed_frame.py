@@ -2423,7 +2423,9 @@ class IndexedFrame(Frame):
                 rhs = cudf.DataFrame._from_data(
                     {
                         # bookkeeping workaround for unnamed series
-                        name or 0: col
+                        (name or 0)
+                        if isinstance(self, cudf.Series)
+                        else name: col
                         for name, col in df._data.items()
                     },
                     index=df._index,
