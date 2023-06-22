@@ -652,7 +652,7 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsWithNull)
   }
 }
 
-TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsOfListsNoNull)
+TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsNoNull)
 {
   using structs_col = cudf::test::structs_column_wrapper;
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -699,7 +699,7 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsOfListsNoNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results, verbosity);
 }
 
-TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsOfListsWithNulls)
+TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
 {
   using structs_col = cudf::test::structs_column_wrapper;
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
