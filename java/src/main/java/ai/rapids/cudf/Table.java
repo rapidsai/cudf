@@ -3626,17 +3626,15 @@ public final class Table implements AutoCloseable {
     Table result = null;
     try {
       for (int i = 0; i < columns.length; i++) {
-        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        long columnViewAddress = columnViewAddresses[i];
+        // setting address to zero, so we don't clean it incase of an exception as it 
+        // will be cleaned up by the ColumnView  constructor
         columnViewAddresses[i] = 0;
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddress, data);
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      // NOTE: Don't clean the columnViewAddresses as they were already cleaned by ColumnView
-      for (ColumnVector columnVector: columns) {
-        if (columnVector != null) {
-          columnVector.close();
-        }
-      }
+      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
       throw t;
     }
 
