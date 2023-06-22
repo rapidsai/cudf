@@ -31,8 +31,12 @@ int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
 
 auto& get_stream_pool()
 {
-  static auto pool = rmm::cuda_stream_pool(STREAM_POOL_SIZE);
-  return pool;
+  // TODO: creating this on the heap because there were issues with trying to call the
+  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
+  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
+  // results in non-fatal warnings when running nvbench in cuda-gdb.
+  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
+  return *pool;
 }
 
 }  // namespace
