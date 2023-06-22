@@ -6,15 +6,11 @@ import sys
 import warnings
 
 from numba import config as numba_config
-from nvjitlink.api import NvJitLinker
+from nvjitlink.patch import new_patched_linker
 
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
 )
-
-
-def new_patched_linker(max_registers=0, lineinfo=False, cc=None):
-    return NvJitLinker(max_registers, lineinfo, cc)
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
