@@ -37,7 +37,9 @@ build:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
-    - {{ compiler('cuda') }}
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% endif %}
 
 requirements:
   build:
