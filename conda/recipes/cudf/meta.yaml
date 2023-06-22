@@ -67,7 +67,7 @@ requirements:
     {% else %}
     - cuda-cudart-dev
     - cuda-nvrtc
-    - libcufile  # [linux64]
+    - libcufile-dev  # [linux64]
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
