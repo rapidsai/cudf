@@ -5,6 +5,7 @@ import warnings
 from collections import abc
 from typing import Dict, Optional
 
+import cupy
 import numpy as np
 import pandas as pd
 
@@ -15,6 +16,7 @@ from cudf._typing import Dtype
 from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.utils.dtypes import min_unsigned_type
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -534,7 +536,8 @@ def melt(
             )
     else:
         # then all remaining columns in frame
-        value_vars = list(set(frame._column_names) - set(id_vars))
+        unique_id = set(id_vars)
+        value_vars = [c for c in frame._column_names if c not in unique_id]
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
@@ -574,11 +577,9 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [
-        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-        for i in range(len(value_vars))
-    ]
-    temp = cudf.Series._concat(objs=var_cols, index=None)
+    nval = len(value_vars)
+    dtype = min_unsigned_type(nval)
+    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
