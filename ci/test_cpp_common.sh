@@ -18,10 +18,6 @@ set +u
 conda activate test
 set -u
 
-RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-LIBRMM_CHANNEL=$(rapids-get-artifact ci/rmm/pull-request/1223/8704a75/rmm_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
-LIBKVIKIO_CHANNEL=$(rapids-get-artifact ci/kvikio/pull-request/224/33d061b/kvikio_conda_cpp_cuda${RAPIDS_CUDA_MAJOR}_$(arch).tar.gz)
-
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
@@ -30,8 +26,6 @@ rapids-print-env
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  --channel "${LIBRMM_CHANNEL}" \
-  --channel "${LIBKVIKIO_CHANNEL}" \
   libcudf libcudf_kafka libcudf-tests
 
 rapids-logger "Check GPU usage"
