@@ -25,6 +25,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 
+#include <list>
 #include <tuple>
 #include <vector>
 
@@ -269,8 +270,8 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   table_metadata const& metadata;
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
-  std::vector<ast::column_reference> _col_ref;
-  std::vector<ast::operation> _operators;
+  std::list<ast::column_reference> _col_ref;
+  std::list<ast::operation> _operators;
 };
 
 }  // namespace cudf::io::detail::parquet

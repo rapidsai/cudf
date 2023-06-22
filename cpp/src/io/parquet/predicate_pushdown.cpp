@@ -31,6 +31,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <algorithm>
+#include <list>
 #include <optional>
 
 namespace cudf::io::detail::parquet {
@@ -270,42 +271,36 @@ class stats_expression_converter : public ast::detail::expression_transformer {
         col1 <= val --> vmin <= val
         */
         case ast::ast_operator::EQUAL: {
-          _col_ref.push_back(ast::column_reference(col_index * 2));
-          auto const& vmin = _col_ref.back();
-          _col_ref.push_back(ast::column_reference(col_index * 2 + 1));
-          auto const& vmax = _col_ref.back();
-          _operators.push_back(
-            ast::operation(ast::ast_operator::LESS_EQUAL, vmin, operands[1].get()));
-          _operators.push_back(
-            ast::operation(ast::ast_operator::GREATER_EQUAL, vmax, operands[1].get()));
-          _operators.push_back(ast::operation(
-            ast::ast_operator::LOGICAL_AND, *(_operators.end() - 2), _operators.back()));
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          auto const& op1 =
+            _operators.emplace_back(ast::ast_operator::LESS_EQUAL, vmin, operands[1].get());
+          auto const& op2 =
+            _operators.emplace_back(ast::ast_operator::GREATER_EQUAL, vmax, operands[1].get());
+          _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
           break;
         }
         case ast::ast_operator::NOT_EQUAL: {
-          _col_ref.push_back(ast::column_reference(col_index * 2));
-          auto const& vmin = _col_ref.back();
-          _col_ref.push_back(ast::column_reference(col_index * 2 + 1));
-          auto const& vmax = _col_ref.back();
-          _operators.push_back(ast::operation(ast::ast_operator::GREATER, vmin, operands[1].get()));
-          _operators.push_back(ast::operation(ast::ast_operator::LESS, vmax, operands[1].get()));
-          _operators.push_back(ast::operation(
-            ast::ast_operator::LOGICAL_OR, *(_operators.end() - 2), _operators.back()));
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          auto const& op1 =
+            _operators.emplace_back(ast::ast_operator::GREATER, vmin, operands[1].get());
+          auto const& op2 =
+            _operators.emplace_back(ast::ast_operator::LESS, vmax, operands[1].get());
+          _operators.emplace_back(ast::ast_operator::LOGICAL_OR, op1, op2);
           break;
         }
         // can these be combined in any way?
         case ast::ast_operator::LESS: [[fallthrough]];
         case ast::ast_operator::LESS_EQUAL: {
-          _col_ref.push_back(ast::column_reference(col_index * 2));
-          auto const& vmin = _col_ref.back();
-          _operators.push_back(ast::operation(op, vmin, operands[1].get()));
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          _operators.emplace_back(op, vmin, operands[1].get());
           break;
         }
         case ast::ast_operator::GREATER: [[fallthrough]];
         case ast::ast_operator::GREATER_EQUAL: {
-          _col_ref.push_back(ast::column_reference(col_index * 2 + 1));
-          auto const& vmax = _col_ref.back();
-          _operators.push_back(ast::operation(op, vmax, operands[1].get()));
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          _operators.emplace_back(op, vmax, operands[1].get());
           break;
         }
         default: CUDF_FAIL("Unsupported operation in Statistics AST");
@@ -313,9 +308,9 @@ class stats_expression_converter : public ast::detail::expression_transformer {
     } else {
       auto new_operands = visit_operands(operands);
       if (cudf::ast::detail::ast_operator_arity(op) == 2)
-        _operators.push_back(ast::operation(op, new_operands.front(), new_operands.back()));
+        _operators.emplace_back(op, new_operands.front(), new_operands.back());
       else if (cudf::ast::detail::ast_operator_arity(op) == 1)
-        _operators.push_back(ast::operation(op, new_operands.front()));
+        _operators.emplace_back(op, new_operands.front());
     }
     _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
     return std::reference_wrapper<ast::expression const>(_operators.back());
@@ -345,9 +340,8 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   }
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
   size_type _num_columns;
-  std::vector<ast::literal> _literals;
-  std::vector<ast::column_reference> _col_ref;
-  std::vector<ast::operation> _operators;
+  std::list<ast::column_reference> _col_ref;
+  std::list<ast::operation> _operators;
 };
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
@@ -457,7 +451,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
     CUDF_FAIL("Column name not found in metadata");
   }
   auto col_index = col_index_it->second;
-  _col_ref.push_back(ast::column_reference(col_index));
+  _col_ref.emplace_back(col_index);
   _stats_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
 }
@@ -469,9 +463,9 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   auto op             = expr.get_operator();
   auto new_operands   = visit_operands(operands);
   if (cudf::ast::detail::ast_operator_arity(op) == 2)
-    _operators.push_back(ast::operation(op, new_operands.front(), new_operands.back()));
+    _operators.emplace_back(op, new_operands.front(), new_operands.back());
   else if (cudf::ast::detail::ast_operator_arity(op) == 1)
-    _operators.push_back(ast::operation(op, new_operands.front()));
+    _operators.emplace_back(op, new_operands.front());
   _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
   return std::reference_wrapper<ast::expression const>(_operators.back());
 }
