@@ -54,6 +54,10 @@ enum class gzip_header_included { NO, YES };
  * (inflate_kernel and nvcomp snappy). Such kernels operate on aligned data pointers, which require
  * padding to the buffers so that the pointers can shift along the address space to satisfy their
  * alignment requirement.
+ *
+ * In the meantime, it is not entirely clear why such padding is needed. We need to further
+ * investigate and implement a better fix rather than just padding the buffer.
+ * See https://github.com/rapidsai/cudf/issues/13605.
  */
 constexpr std::size_t BUFFER_PADDING_MULTIPLE{8};
 
