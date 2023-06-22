@@ -796,7 +796,7 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
       auto structs                 = structs_col{{child1, child2, child3}};
       auto offsets                 = int32s_col{0, 0, 4};
       auto const null_it           = null_at(0);  // null row
-      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 3);
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 2);
       return cudf::make_lists_column(
         2, offsets.release(), structs.release(), null_count, std::move(null_mask));
     }();
