@@ -927,6 +927,31 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 }
 
 /**
+ * @brief Functor for setupLocalPageInfo that always returns true.
+ */
+struct all_types_filter {
+  __device__ inline bool operator()(PageInfo const& page) { return true; }
+};
+
+/**
+ * @brief Functor for setupLocalPageInfo that returns true if this is not a string column.
+ */
+struct non_string_filter {
+  device_span<ColumnChunkDesc const> chunks;
+
+  __device__ inline bool operator()(PageInfo const& page) { return !is_string_col(page, chunks); }
+};
+
+/**
+ * @brief Functor for setupLocalPageInfo that returns true if this is a string column.
+ */
+struct string_filter {
+  device_span<ColumnChunkDesc const> chunks;
+
+  __device__ inline bool operator()(PageInfo const& page) { return is_string_col(page, chunks); }
+};
+
+/**
  * @brief Sets up block-local page state information from the global pages.
  *
  * @param[in, out] s The local page state to be filled in
@@ -934,15 +959,19 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
  * @param[in] chunks The global list of chunks
  * @param[in] min_row Crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
+ * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess)
  * @param[in] decoders rle_stream decoders which will be used for decoding levels. Optional.
- * Currently only used by gpuComputePageSizes step)
+ * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
+ * be operated on Currently only used by gpuComputePageSizes step)
  */
+template <typename Filter>
 inline __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
                                           size_t num_rows,
+                                          Filter filter,
                                           bool is_decode_step)
 {
   int t = threadIdx.x;
@@ -955,7 +984,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   }
   __syncthreads();
 
-  if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
+  // return false if this is a dictionary page or it does not pass the filter condition
+  if ((s->page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 || (!filter(s->page))) { return false; }
+
   // Fetch column chunk info
   chunk_idx = s->page.chunk_idx;
   if (!t) { s->col = chunks[chunk_idx]; }

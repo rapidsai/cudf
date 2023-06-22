@@ -592,7 +592,7 @@ __global__ void __launch_bounds__(preprocess_block_size)
   rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, all_types_filter{}, false)) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   int const max_batch_size = lvl_buf_size;
@@ -756,20 +756,23 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s state_buffers;
 
-  // string cols handled elsewhere
-  if (is_string_col(pages[blockIdx.x], chunks)) { return; }
-
   page_state_s* const s          = &state_g;
   page_state_buffers_s* const sb = &state_buffers;
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
+
+  if (!setupLocalPageInfo(
+        s, &pages[page_idx], chunks, min_row, num_rows, non_string_filter{chunks}, true)) {
+    return;
+  }
+
+  // this needs to be declared after we've decided to process this page
   [[maybe_unused]] null_count_back_copier _{s, t};
-
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
-
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
+  // FIXME do this in setupLocalPageInfo
+  //
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
   // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
