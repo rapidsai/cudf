@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set
+from typing import Any, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -70,6 +70,10 @@ class BaseIndex(Serializable):
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
+
+    @property
+    def _columns(self) -> Tuple[Any, ...]:
+        raise NotImplementedError
 
     @cached_property
     def _values(self) -> ColumnBase:

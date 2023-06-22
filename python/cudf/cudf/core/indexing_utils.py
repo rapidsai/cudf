@@ -2,108 +2,152 @@
 
 from __future__ import annotations
 
-import enum
 import itertools
-from typing import TYPE_CHECKING, Any, List, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, List, Tuple
 
-import numpy as np
 from typing_extensions import TypeAlias
 
 import cudf
-import cudf._lib as libcudf
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_integer,
     is_integer_dtype,
 )
-
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
+from cudf.core import copy_types as ct
 
 
-class IndexTag(enum.IntEnum):
-    SLICE = enum.auto()
-    MASK = enum.auto()
-    MAP = enum.auto()
-    SCALAR = enum.auto()
+# Poor man's algebraic data types
+class EmptyIndexer:
+    """An indexer that will produce an empty result"""
+
+    pass
 
 
-IndexSpec: TypeAlias = Tuple[IndexTag, Union[slice, "ColumnBase"]]
+@dataclass
+class MapIndexer:
+    """An indexer for a gather map"""
+
+    gather_map: ct.GatherMap
+
+
+@dataclass
+class MaskIndexer:
+    """An indexer for a boolean mask"""
+
+    mask: ct.BooleanMask
+
+
+@dataclass
+class SliceIndexer:
+    """An indexer for a slice"""
+
+    slice: slice
+
+
+@dataclass
+class ScalarIndexer:
+    """An indexer for a scalar value"""
+
+    gather_map: ct.GatherMap
+
+
+IndexingSpec: TypeAlias = (
+    EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
+)
+
 ColumnLabels: TypeAlias = List[str]
 
 
-def unpack_iloc_key(
-    key: Any, frame: cudf.DataFrame | cudf.Series, n: int
-) -> List[Any]:
-    """Unpack a user-level key to iloc.__getitem__
+def destructure_iloc_key(
+    key: Any, frame: cudf.Series | cudf.DataFrame
+) -> tuple[Any, ...]:
+    """
+    Destructure a potentially tuple-typed key into row and column indexers
+
+    Tuple arguments to iloc indexing are treated specially. They are
+    picked apart into indexers for the row and column. If the number
+    of entries is less than the number of modes of the frame, missing
+    entries are slice-expanded.
+
+    If the user-provided key is not a tuple, it is treated as if it
+    were a singleton tuple, and then slice-expanded.
+
+    Once this destructuring has occurred, any entries that are
+    callables are then called with the indexed frame. This should
+    return a valid indexing object for the rows (respectively
+    columns), namely one of:
+
+    - A boolean mask of the same length as the frame in the given
+      dimension
+    - A scalar integer that indexes the frame
+    - An array-like of integers that index the frame
+    - A slice that indexes the frame
+
+    Integer and slice-based indexing follows usual Python conventions.
 
     Parameters
     ----------
     key
-        Key to unpack
+        The key to destructure
     frame
         DataFrame or Series to provide context
-    n
-        Number of dimensions we're expecting to unpack to.
 
     Returns
     -------
-    tuple
-        Tuple of row and (for dataframes) column keys
+    tuple of indexers with length equal to the dimension of the frame
 
     Raises
     ------
     IndexError
-        If provided a structurally invalid key
+        If there are too many indexers, or any individual indexer is a tuple.
     """
-    # This is more consistent than pandas, using a fixed point
-    # iteration to remove all callables.
-    # See https://github.com/pandas-dev/pandas/issues/53533
-    if callable(key):
-        return unpack_iloc_key(key(frame), frame, n)
+    n = len(frame.shape)
     if isinstance(key, tuple):
         indexers = tuple(
             itertools.chain(key, itertools.repeat(slice(None), n - len(key)))
         )
         if (ni := len(indexers)) > n:
             raise IndexError(f"Too many indexers: got {ni} expected {n}")
-        if any(isinstance(k, tuple) for k in indexers):
-            # Only one level of tuple-nesting allowed
-            raise IndexError(
-                "Too many indexers: can't have nested tuples for iloc"
-            )
-        # Hack, do this better
-        return list(unpack_iloc_key(k, frame, n - 1)[0] for k in indexers)
-    # No special-casing, key gets rows, and if a dataframe second part
-    # gets all columns
-    return [key, slice(None)][:n]
+    else:
+        indexers = (key, *itertools.repeat(slice(None), n - 1))
+    indexers = tuple(k(frame) if callable(k) else k for k in indexers)
+    if any(isinstance(k, tuple) for k in indexers):
+        raise IndexError(
+            "Too many indexers: can't have nested tuples in iloc indexing"
+        )
+    return indexers[:n]
 
 
-def unpack_dataframe_iloc_indexer(
+def destructure_dataframe_iloc_indexer(
     key: Any, frame: cudf.DataFrame
 ) -> Tuple[Any, Tuple[bool, ColumnLabels]]:
-    """Unpack and index key for DataFrame iloc getitem.
+    """Destructure an index key for DataFrame iloc getitem.
 
     Parameters
     ----------
     key
-        Key to unpack
+        Key to destructure
     frame
-        DataFrame for unpacking context
+        DataFrame to provide context context
 
     Returns
     -------
     tuple
         2-tuple of a key for the rows and tuple of
-        (scalar_column_index, column_names) for the columns
+        (column_index_is_scalar, column_names) for the columns
 
     Raises
     ------
     TypeError
         If the column indexer is invalid
+    IndexError
+        If the provided key does not destructure correctly
+    NotImplementedError
+        If the requested column indexer repeats columns
     """
-    rows, cols = unpack_iloc_key(key, frame, len(frame.shape))
+    rows, cols = destructure_iloc_key(key, frame)
     if cols is Ellipsis:
         cols = slice(None)
     scalar = is_integer(cols)
@@ -120,16 +164,21 @@ def unpack_dataframe_iloc_indexer(
             "Column indices must be integers, slices, "
             "or list-like of integers"
         )
+    if scalar:
+        assert (
+            len(column_names) == 1
+        ), "Scalar column indexer should not produce more than one column"
+
     return (rows, (scalar, column_names))
 
 
-def unpack_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
-    """Unpack an index key for Series iloc getitem.
+def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
+    """Destructure an index key for Series iloc getitem.
 
     Parameters
     ----------
     key
-        Key to unpack
+        Key to destructure
     frame
         Series for unpacking context
 
@@ -137,24 +186,24 @@ def unpack_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
     -------
     Single key that will index the rows
     """
-    (rows,) = unpack_iloc_key(key, frame, len(frame.shape))
+    (rows,) = destructure_iloc_key(key, frame)
     return rows
 
 
-def normalize_row_iloc_indexer(
-    key: Any, n: int, check_bounds=False
-) -> IndexSpec:
+def parse_row_iloc_indexer(
+    key: Any, n: int, check_bounds=True
+) -> IndexingSpec:
     """
     Normalize and produce structured information about a row indexer
 
-    Given a row indexer that has already been normalized by
-    :func:`unpack_iloc_key`, inspect further and produce structured
+    Given a row indexer that has already been destructured by
+    :func:`destructure_iloc_key`, inspect further and produce structured
     information for indexing operations to act upon.
 
     Parameters
     ----------
     key
-        Suitably normalized key for row indexing
+        Suitably destructured key for row indexing
     n
         Length of frame to index
     check_bounds
@@ -163,9 +212,9 @@ def normalize_row_iloc_indexer(
 
     Returns
     -------
-    IndexSpec
+    IndexingSpec
         Structured data for indexing. The first entry is a
-        :class:`Indexer` tag, the second entry is normalized
+        :class:`IndexingTag` tag, the second entry is normalized
         arguments to the tag-specific indexing routine.
 
     Raises
@@ -177,47 +226,27 @@ def normalize_row_iloc_indexer(
         If the indexing key is otherwise invalid.
     """
     if key is Ellipsis:
-        key = slice(None)
-    if isinstance(key, slice):
-        return (IndexTag.SLICE, key)
+        return SliceIndexer(slice(None))
+    elif isinstance(key, slice):
+        return SliceIndexer(key)
+    elif _is_scalar_or_zero_d_array(key):
+        return ScalarIndexer(
+            ct.as_gather_map(key, n, nullify=False, check_bounds=check_bounds)
+        )
     else:
-        if _is_scalar_or_zero_d_array(key):
-            key = np.asarray(key)
-            if not is_integer_dtype(key.dtype):
-                raise TypeError(
-                    "Cannot index by location with non-integer key"
-                )
-            if key < 0:
-                key += n
-            if not 0 <= key < n:
-                raise IndexError("Positional indexer is out-of-bounds")
-            # We make a column here because we'll do _gather then
-            # element_indexing if appropriate.
-            return (
-                IndexTag.SCALAR,
-                cudf.core.column.as_column(key.astype(np.int32)),
-            )
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
             key = key.as_numerical_column(key.codes.dtype)
         if is_bool_dtype(key.dtype):
-            if (kn := len(key)) != n:
-                raise IndexError(
-                    f"Invalid length for boolean mask (got {kn}, need {n})"
+            return MaskIndexer(ct.as_boolean_mask(key, n))
+        elif len(key) == 0:
+            return EmptyIndexer()
+        elif is_integer_dtype(key.dtype):
+            return MapIndexer(
+                ct.as_gather_map(
+                    key, n, nullify=False, check_bounds=check_bounds
                 )
-            return (IndexTag.MASK, key)
-        elif is_integer_dtype(key.dtype) or len(key) == 0:
-            if len(key):
-                if check_bounds:
-                    mi, ma = libcudf.reduce.minmax(key)
-                    # Faster than going through cudf.Scalar binop machinery.
-                    if mi.value < -n or ma.value >= n:
-                        raise IndexError("Gather map index is out of bounds.")
-            else:
-                key = cudf.core.column.column_empty(
-                    0, dtype=libcudf.types.size_type_dtype
-                )
-            return (IndexTag.MAP, key)
+            )
         else:
             raise TypeError(
                 "Cannot index by location "

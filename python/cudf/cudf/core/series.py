@@ -9,7 +9,7 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import indexing_utils
+from cudf.core import indexing_utils as iu
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -186,12 +186,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
-        tag, key = indexing_utils.normalize_row_iloc_indexer(
-            indexing_utils.unpack_series_iloc_indexer(arg, self._frame),
+        indexing_spec = iu.parse_row_iloc_indexer(
+            iu.destructure_series_iloc_indexer(arg, self._frame),
             len(self._frame),
             check_bounds=True,
         )
-        return self._frame._get(tag, key)
+        return self._frame._getitem_preprocessed(indexing_spec)
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
@@ -1301,20 +1301,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result = self.apply(arg)
         return result
 
-    def _get(
+    def _getitem_preprocessed(
         self,
-        tag: indexing_utils.IndexTag,
-        key: Union[slice, ColumnBase],
+        spec: iu.IndexingSpec,
     ) -> Union[Self, ScalarLike]:
         """Get subset of entries given structured data
 
         Parameters
         ----------
-        tag:
-            Tag indicating type of indexing to perform
-        key:
-            Preprocessed and normalized key appropriate for the
-            requested indexing type.
+        spec:
+            Indexing specification
 
         Returns
         -------
@@ -1326,27 +1322,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         This function performs no bounds-checking or massaging of the
         inputs.
         """
-        if tag is indexing_utils.IndexTag.MAP:
+        if isinstance(spec, iu.MapIndexer):
+            return self._gather(spec.gather_map, keep_index=True)
+        elif isinstance(spec, iu.MaskIndexer):
+            return self._apply_boolean_mask(spec.mask, keep_index=True)
+        elif isinstance(spec, iu.SliceIndexer):
+            return self._slice(spec.slice)
+        elif isinstance(spec, iu.ScalarIndexer):
             return self._gather(
-                key,
-                keep_index=True,
-                nullify=False,
-                normalize_and_check=False,
-            )
-        elif tag is indexing_utils.IndexTag.MASK:
-            return self._apply_boolean_mask(
-                key, keep_index=True, normalize_and_check=False
-            )
-        elif tag is indexing_utils.IndexTag.SLICE:
-            return self._slice(cast(slice, key))
-        elif tag is indexing_utils.IndexTag.SCALAR:
-            return self._gather(
-                key,
-                keep_index=False,
-                nullify=False,
-                normalize_and_check=False,
+                spec.gather_map, keep_index=False
             )._column.element_indexing(0)
-        assert_never(tag)
+        elif isinstance(spec, iu.EmptyIndexer):
+            return self._empty_like(keep_index=True)
+        assert_never(spec)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):

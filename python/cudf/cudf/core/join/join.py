@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -6,6 +6,7 @@ from typing import Any, ClassVar, List, Optional
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.core import copy_types as ct
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
     _ColumnIndexer,
@@ -190,17 +191,25 @@ class Merge:
         )
 
         gather_kwargs = {
-            "nullify": True,
-            "check_bounds": False,
             "keep_index": self._using_left_index or self._using_right_index,
         }
         left_result = (
-            self.lhs._gather(gather_map=left_rows, **gather_kwargs)
+            self.lhs._gather(
+                ct.as_gather_map(
+                    left_rows, len(self.lhs), nullify=True, check_bounds=False
+                ),
+                **gather_kwargs,
+            )
             if left_rows is not None
             else cudf.DataFrame._from_data({})
         )
         right_result = (
-            self.rhs._gather(gather_map=right_rows, **gather_kwargs)
+            self.rhs._gather(
+                ct.as_gather_map(
+                    right_rows, len(self.rhs), nullify=True, check_bounds=False
+                ),
+                **gather_kwargs,
+            )
             if right_rows is not None
             else cudf.DataFrame._from_data({})
         )
@@ -304,11 +313,15 @@ class Merge:
             by.extend([result._data[col.name] for col in self._right_keys])
         if by:
             to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
-            sort_order = to_sort.argsort()
+            sort_order = ct.as_gather_map(
+                to_sort.argsort(),
+                len(result),
+                nullify=False,
+                check_bounds=False,
+            )
             result = result._gather(
                 sort_order,
                 keep_index=self._using_left_index or self._using_right_index,
-                check_bounds=False,
             )
         return result
 

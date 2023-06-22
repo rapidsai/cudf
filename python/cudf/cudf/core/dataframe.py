@@ -23,7 +23,6 @@ from typing import (
     Set,
     Tuple,
     Union,
-    cast,
 )
 
 import cupy
@@ -58,7 +57,13 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core import (
+    column,
+    copy_types as ct,
+    df_protocol,
+    indexing_utils as iu,
+    reshape,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -266,7 +271,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if isinstance(out, slice):
                     df = columns_df._slice(out)
                 else:
-                    df = columns_df._apply_boolean_mask(out)
+                    df = columns_df._apply_boolean_mask(
+                        ct.as_boolean_mask(out, len(columns_df))
+                    )
             else:
                 tmp_arg = arg
                 if is_scalar(arg[0]):
@@ -279,7 +286,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 tmp_arg = (as_column(tmp_arg[0]), tmp_arg[1])
 
                 if is_bool_dtype(tmp_arg[0]):
-                    df = columns_df._apply_boolean_mask(tmp_arg[0])
+                    df = columns_df._apply_boolean_mask(
+                        ct.as_boolean_mask(tmp_arg[0], len(columns_df))
+                    )
                 else:
                     tmp_col_name = str(uuid4())
                     other_df = DataFrame(
@@ -399,61 +408,34 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     _frame: DataFrame
 
     def __getitem__(self, arg):
-        row_spec, (
-            col_scalar,
+        row_key, (
+            col_is_scalar,
             column_names,
-        ) = indexing_utils.unpack_dataframe_iloc_indexer(arg, self._frame)
-        row_tag, row_key = indexing_utils.normalize_row_iloc_indexer(
-            row_spec, len(self._frame), check_bounds=True
+        ) = iu.destructure_dataframe_iloc_indexer(arg, self._frame)
+        row_spec = iu.parse_row_iloc_indexer(
+            row_key, len(self._frame), check_bounds=True
         )
         ca = self._frame._data
         index = self._frame.index
-        if col_scalar:
-            # TODO column accessor should offer this interface
-            # Don't want to go through select_by_label because it does
-            # too much work and we've already turned this into
-            # appropriate indices.
-            (name,) = column_names
+        if col_is_scalar:
             s = Series._from_data(
-                ca.__class__(
-                    {name: ca[name]},
-                    multiindex=ca.multiindex,
-                    level_names=ca.level_names,
-                ),
-                index=index,
+                ca._select_by_names(column_names), index=index
             )
-            return s._get(row_tag, row_key)
+            return s._getitem_preprocessed(row_spec)
         if column_names != list(self._frame._column_names):
             frame = self._frame._from_data(
-                ca.__class__(
-                    {k: ca[k] for k in column_names},
-                    multiindex=ca.multiindex,
-                    level_names=ca.level_names,
-                ),
-                index=index,
+                ca._select_by_names(column_names), index=index
             )
         else:
             frame = self._frame
-        if row_tag is indexing_utils.IndexTag.MAP:
-            return frame._gather(
-                row_key,
-                keep_index=True,
-                nullify=False,
-                normalize_and_check=False,
-            )
-        elif row_tag is indexing_utils.IndexTag.MASK:
-            return frame._apply_boolean_mask(
-                row_key, keep_index=True, normalize_and_check=False
-            )
-        elif row_tag is indexing_utils.IndexTag.SLICE:
-            return frame._slice(cast(slice, row_key))
-        elif row_tag is indexing_utils.IndexTag.SCALAR:
-            result = frame._gather(
-                row_key,
-                keep_index=True,
-                nullify=False,
-                normalize_and_check=False,
-            )
+        if isinstance(row_spec, iu.MapIndexer):
+            return frame._gather(row_spec.gather_map, keep_index=True)
+        elif isinstance(row_spec, iu.MaskIndexer):
+            return frame._apply_boolean_mask(row_spec.mask, keep_index=True)
+        elif isinstance(row_spec, iu.SliceIndexer):
+            return frame._slice(row_spec.slice)
+        elif isinstance(row_spec, iu.ScalarIndexer):
+            result = frame._gather(row_spec.gather_map, keep_index=True)
             # Attempt to turn into series.
             try:
                 # Behaviour difference from pandas, which will merrily
@@ -469,7 +451,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             except TypeError:
                 # Couldn't find a common type, just return a 1xN dataframe.
                 return result
-        assert_never(row_tag)
+        elif isinstance(row_spec, iu.EmptyIndexer):
+            return frame._empty_like(keep_index=True)
+        assert_never(row_spec)
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
@@ -1189,7 +1173,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
-                return self._apply_boolean_mask(mask)
+                return self._apply_boolean_mask(
+                    ct.as_boolean_mask(mask, len(self))
+                )
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
@@ -4094,7 +4080,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
-            return self._apply_boolean_mask(boolmask)
+            return self._apply_boolean_mask(
+                ct.as_boolean_mask(boolmask, len(self))
+            )
 
     @_cudf_nvtx_annotate
     def apply(
