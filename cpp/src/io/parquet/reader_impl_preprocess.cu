@@ -258,7 +258,7 @@ template <typename T = uint8_t>
       if (source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
         auto buffer =
-          rmm::device_buffer(cudf::util::round_up_safe(io_size, PADDING_MODULUS), stream);
+          rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
@@ -267,7 +267,7 @@ template <typename T = uint8_t>
         auto const read_buffer = source->host_read(io_offset, io_size);
         // Buffer needs to be padded.
         auto tmp_buffer = rmm::device_buffer(
-          cudf::util::round_up_safe(read_buffer->size(), PADDING_MODULUS), stream);
+          cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
         CUDF_CUDA_TRY(cudaMemcpyAsync(
           tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
         page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
@@ -448,8 +448,8 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
 
   // Dispatch batches of pages to decompress for each codec.
   // Buffer needs to be padded.
-  rmm::device_buffer decomp_pages(cudf::util::round_up_safe(total_decomp_size, PADDING_MODULUS),
-                                  stream);
+  rmm::device_buffer decomp_pages(
+    cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 
   std::vector<device_span<uint8_t const>> comp_in;
   comp_in.reserve(num_comp_pages);
