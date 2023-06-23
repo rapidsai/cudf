@@ -3618,6 +3618,8 @@ public final class Table implements AutoCloseable {
     } catch (Throwable t) {
       try {
         ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } catch (Throwable s){
+        t.addSuppressed(s);
       } finally {
         throw t;
       }

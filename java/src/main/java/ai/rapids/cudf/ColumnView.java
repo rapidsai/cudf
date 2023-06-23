@@ -675,6 +675,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } catch (Throwable t) {
       try {
         cleanupColumnViews(nativeHandles, columnVectors, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
       } finally {
         throw t;
       }
@@ -823,6 +825,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } catch (Throwable t) {
       try {
         cleanupColumnViews(nativeHandles, columnViews, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
       } finally {
         throw t;
       }
@@ -5197,6 +5201,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } catch (Throwable t) {
       try {
         cleanupColumnViews(nativeHandles, columns, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
       } finally {
         throw t;
       }
