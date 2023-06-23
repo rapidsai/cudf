@@ -5,6 +5,9 @@ cxx_compiler_version:
   - 11
 
 cuda_compiler:
+  - cuda-nvcc
+
+cuda11_compiler:
   - nvcc
 
 sysroot_version:
@@ -28,24 +31,24 @@ dlpack_version:
 librdkafka_version:
   - ">=1.9.0,<1.10.0a0"
 
-# The CTK libraries below are missing from the conda-forge::cudatoolkit
-# package. The "*_host_*" version specifiers correspond to `11.8` packages and the
-# "*_run_*" version specifiers correspond to `11.x` packages.
-
-libcufile_host_version:
-  - "1.4.0.31"
-
-libcufile_run_version:
-  - ">=1.0.0.82,<=1.4.0.31"
-
-libcurand_host_version:
-  - "=10.3.0.86"
-
-libcurand_run_version:
-  - ">=10.2.5.43,<10.3.1"
-
 fmt_version:
   - ">=9.1.0,<10"
 
 spdlog_version:
   - ">=1.11.0,<1.12"
+
+# The CTK libraries below are missing from the conda-forge::cudatoolkit package
+# for CUDA 11. The "*_host_*" version specifiers correspond to `11.8` packages
+# and the "*_run_*" version specifiers correspond to `11.x` packages.
+
+cuda11_libcufile_host_version:
+  - "1.4.0.31"
+
+cuda11_libcufile_run_version:
+  - ">=1.0.0.82,<=1.4.0.31"
+
+cuda11_libcurand_host_version:
+  - "=10.3.0.86"
+
+cuda11_libcurand_run_version:
+  - ">=10.2.5.43,<10.3.1"

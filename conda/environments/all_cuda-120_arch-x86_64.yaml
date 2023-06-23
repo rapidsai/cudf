@@ -16,9 +16,12 @@ dependencies:
 - cachetools
 - cmake>=3.26.4
 - cubinlinker
-- cuda-python>=11.7.1,<12.0a0
-- cuda-sanitizer-api=11.8.86
-- cudatoolkit=11.8
+- cuda-cudart-dev
+- cuda-nvcc
+- cuda-nvrtc-dev
+- cuda-python>=12.0,<13.0a0
+- cuda-sanitizer-api
+- cuda-version=12.0
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=0.29,<0.30
@@ -37,10 +40,8 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow==11.0.0.*
-- libcufile-dev=1.4.0.31
-- libcufile=1.4.0.31
-- libcurand-dev=10.3.0.86
-- libcurand=10.3.0.86
+- libcufile-dev
+- libcurand-dev
 - libkvikio==23.8.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==23.8.*
@@ -54,7 +55,6 @@ dependencies:
 - numba>=0.57
 - numpy>=1.21
 - numpydoc
-- nvcc_linux-64=11.8
 - nvtx>=0.2.1
 - packaging
 - pandas>=1.3,<1.6.0dev0
@@ -92,4 +92,4 @@ dependencies:
 - typing_extensions
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
-name: all_cuda-118_arch-x86_64
+name: all_cuda-120_arch-x86_64
