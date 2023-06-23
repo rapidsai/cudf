@@ -66,20 +66,25 @@ struct token_reader_fn {
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
     auto const d_result     = d_tokens + token_offset;  // store tokens here
 
     size_type token_idx = 0;
-    size_type begin     = 0;  // characters
-    size_type end       = -1;
-    size_type last_pos  = 0;  // bytes
-    while (prog.find(prog_idx, d_str, begin, end) > 0) {
+    auto itr            = d_str.begin();
+    auto last_pos       = itr;
+    while (itr.position() <= nchars) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+
+      auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
+
       // get the token (characters just before this match)
-      auto const token =
-        string_index_pair{d_str.data() + last_pos, d_str.byte_offset(begin) - last_pos};
+      auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),
+                                           start_pos - last_pos.byte_offset()};
       // store it if we have space
       if (token_idx < token_count - 1) {
         d_result[token_idx++] = token;
@@ -91,13 +96,13 @@ struct token_reader_fn {
         d_result[token_idx - 1] = token;
       }
       // setup for next match
-      last_pos = d_str.byte_offset(end);
-      begin    = end + (begin == end);
-      end      = -1;
+      last_pos += (match->second - last_pos.position());
+      itr = last_pos + (match->first == match->second);
     }
 
     // set the last token to the remainder of the string
-    d_result[token_idx] = string_index_pair{d_str.data() + last_pos, d_str.size_bytes() - last_pos};
+    d_result[token_idx] = string_index_pair{d_str.data() + last_pos.byte_offset(),
+                                            d_str.size_bytes() - last_pos.byte_offset()};
 
     if (direction == split_direction::BACKWARD) {
       // update first entry -- this happens when max_tokens is hit before the end of the string
