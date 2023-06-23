@@ -666,6 +666,21 @@ std::unique_ptr<cudf::table> create_sequence_table(
  */
 std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                         cudf::size_type num_cols);
+
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ *
+ * @param dtype_ids Pair of requested column types
+ * @param num_cols Total number of columns in the output vector
+ * @param first_num Total number of columns of type `dtype_ids.first`
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num);
 /**
  * @brief Create a random null mask object
  *
