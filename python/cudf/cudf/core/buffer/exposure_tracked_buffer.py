@@ -66,14 +66,14 @@ def as_exposure_tracked_buffer(
     Developer Notes
     ---------------
     This function always returns slices thus all buffers in cudf will use
-    `BufferSlice` when copy-on-write is enabled. The slices implements
+    `BufferSlice` when copy-on-write is enabled. The slices implement
     copy-on-write by trigging deep copies when write access is detected
     and multiple slices points to the same exposure tracked buffer.
 
     Parameters
     ----------
     data : buffer-like or array-like
-        A buffer-like or array-like object that represent C-contiguous memory.
+        A buffer-like or array-like object that represents C-contiguous memory.
     exposed
         Mark the buffer as permanently exposed.
     subclass
