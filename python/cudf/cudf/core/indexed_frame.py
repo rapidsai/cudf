@@ -1793,12 +1793,18 @@ class IndexedFrame(Frame):
         if num_rows == 0:
             return self
         start, stop, stride = arg.indices(num_rows)
-        has_range_index = isinstance(self.index, RangeIndex)
+        index = self.index
+        has_range_index = isinstance(index, RangeIndex)
         if len(range(start, stop, stride)) == 0:
             # Avoid materialising the range index column
             result = self._empty_like(keep_index=not has_range_index)
             if has_range_index:
-                result.index = self.index[start:stop:stride]
+                lo = index.start + start * index.step
+                hi = index.start + stop * index.step
+                step = index.step * stride
+                result.index = RangeIndex(
+                    start=lo, stop=hi, step=step, name=index.name
+                )
             return result
         if start < 0:
             start = start + num_rows
