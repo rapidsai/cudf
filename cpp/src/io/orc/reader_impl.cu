@@ -325,7 +325,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
-  if (decomp_data.empty()) { return decomp_data; }
+  if (decomp_data.size() == 0) { return decomp_data; }
 
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
