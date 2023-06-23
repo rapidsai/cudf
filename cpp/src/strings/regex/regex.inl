@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,6 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/utf8.hpp>
-#include <cudf/strings/string_view.cuh>
-
-#include <thrust/optional.h>
 
 namespace cudf {
 namespace strings {
@@ -235,20 +231,18 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
  * @param group_id Index of the group to match in a multi-group regex pattern.
  * @return >0 if match found
  */
-__device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr,
-                                                          reljunk jnk,
-                                                          cudf::size_type& begin,
-                                                          cudf::size_type& end,
-                                                          cudf::size_type const group_id) const
+__device__ __forceinline__ match_result reprog_device::regexec(string_view const dstr,
+                                                               reljunk jnk,
+                                                               string_view::const_iterator itr,
+                                                               cudf::size_type end,
+                                                               cudf::size_type const group_id) const
 {
   int32_t match       = 0;
+  auto begin          = itr.position();
   auto pos            = begin;
   auto eos            = end;
-  char_utf8 c         = 0;
   auto checkstart     = jnk.starttype != 0;
   auto last_character = false;
-
-  string_view::const_iterator itr = string_view::const_iterator(dstr, pos);
 
   jnk.list1->reset();
   do {
@@ -258,12 +252,12 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
       switch (jnk.starttype) {
         case BOL:
           if (pos == 0) break;
-          if (jnk.startchar != '^') { return match; }
+          if (jnk.startchar != '^') { return thrust::nullopt; }
           --pos;
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const fidx = dstr.find(startchar, pos);
-          if (fidx == string_view::npos) { return match; }
+          if (fidx == string_view::npos) { return thrust::nullopt; }
           pos = fidx + (jnk.starttype == BOL);
           break;
         }
@@ -279,7 +273,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
 
     last_character = itr.byte_offset() >= dstr.size_bytes();
 
-    c = last_character ? 0 : *itr;
+    char_utf8 const c = last_character ? 0 : *itr;
 
     // expand the non-character types like: LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
     bool expanded = false;
@@ -394,35 +388,33 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match;
+  return match ? match_result({begin, end}) : thrust::nullopt;
 }
 
-__device__ __forceinline__ int32_t reprog_device::find(int32_t const thread_idx,
-                                                       string_view const dstr,
-                                                       cudf::size_type& begin,
-                                                       cudf::size_type& end) const
+__device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,
+                                                            string_view const dstr,
+                                                            string_view::const_iterator begin,
+                                                            cudf::size_type end) const
 {
-  auto const rtn = call_regexec(thread_idx, dstr, begin, end);
-  if (rtn <= 0) begin = end = -1;
-  return rtn;
+  return call_regexec(thread_idx, dstr, begin, end);
 }
 
 __device__ __forceinline__ match_result reprog_device::extract(int32_t const thread_idx,
                                                                string_view const dstr,
-                                                               cudf::size_type begin,
+                                                               string_view::const_iterator begin,
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
-  end = begin + 1;
-  return call_regexec(thread_idx, dstr, begin, end, group_id + 1) > 0 ? match_result({begin, end})
-                                                                      : thrust::nullopt;
+  end = begin.position() + 1;
+  return call_regexec(thread_idx, dstr, begin, end, group_id + 1);
 }
 
-__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t const thread_idx,
-                                                               string_view const dstr,
-                                                               cudf::size_type& begin,
-                                                               cudf::size_type& end,
-                                                               cudf::size_type const group_id) const
+__device__ __forceinline__ match_result
+reprog_device::call_regexec(int32_t const thread_idx,
+                            string_view const dstr,
+                            string_view::const_iterator begin,
+                            cudf::size_type end,
+                            cudf::size_type const group_id) const
 {
   auto gp_ptr = reinterpret_cast<u_char*>(_buffer);
   relist list1(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);
