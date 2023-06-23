@@ -541,7 +541,7 @@ def test_tz_localize():
 
     expect = expect.dt.tz_localize(None)
     got = got.dt.tz_localize(None)
-    assert_eq(expect, got.compute())
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
