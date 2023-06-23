@@ -24,7 +24,7 @@ sed -i "s/^name = \"dask_cudf\"/name = \"dask_cudf${CUDA_SUFFIX}\"/g" python/das
 sed -i "s/\"cudf==/\"cudf${CUDA_SUFFIX}==/g" python/dask_cudf/pyproject.toml
 
 if [[ $CUDA_SUFFIX == "-cu12" ]]; then
-    sed -i "s/cuda-python[<=>\.,0-9]*/cuda-python>=12.0,<13.0/g" python/cudf/pyproject.toml
+    sed -i "s/cuda-python[<=>\.,0-9a]*/cuda-python>=12.0,<13.0a0/g" python/cudf/pyproject.toml
     sed -i "s/cupy-cuda11x/cupy-cuda12x/g" python/{cudf,dask_cudf}/pyproject.toml
     sed -i "s/numba[<=>\.,0-9]*/numba>=0.57/g" python/{cudf,dask_cudf}/pyproject.toml
     sed -i "/ptxcompiler/d" python/cudf/pyproject.toml
