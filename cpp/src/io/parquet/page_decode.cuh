@@ -975,21 +975,22 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           bool is_decode_step)
 {
   int t = threadIdx.x;
-  int chunk_idx;
 
   // Fetch page info
   if (!t) {
     s->page         = *p;
     s->nesting_info = nullptr;
+    s->col          = chunks[s->page.chunk_idx];
   }
   __syncthreads();
 
   // return false if this is a dictionary page or it does not pass the filter condition
-  if ((s->page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 || (!filter(s->page))) { return false; }
+  if ((s->page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 || !filter(s->page)) { return false; }
 
-  // Fetch column chunk info
-  chunk_idx = s->page.chunk_idx;
-  if (!t) { s->col = chunks[chunk_idx]; }
+  // our starting row (absolute index) is
+  // col.start_row == absolute row index
+  // page.chunk-row == relative row index within the chunk
+  size_t const page_start_row = s->col.start_row + s->page.chunk_row;
 
   // if we can use the nesting decode cache, set it up now
   auto const can_use_decode_cache = s->page.nesting_info_size <= max_cacheable_nesting_decode_info;
@@ -1011,8 +1012,28 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       depth += blockDim.x;
     }
   }
+
   if (!t) {
     s->nesting_info = can_use_decode_cache ? s->nesting_decode_cache : s->page.nesting_decode;
+
+    // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be
+    // invalid/bogus during first pass of the preprocess step for nested types. this is ok
+    // because we ignore these values in that stage.
+    auto const max_row = min_row + num_rows;
+
+    // if we are totally outside the range of the input, do nothing
+    if ((page_start_row > max_row) || (page_start_row + s->page.num_rows < min_row)) {
+      s->first_row = 0;
+      s->num_rows  = 0;
+    }
+    // otherwise
+    else {
+      s->first_row             = page_start_row >= min_row ? 0 : min_row - page_start_row;
+      auto const max_page_rows = s->page.num_rows - s->first_row;
+      s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= max_row
+                                   ? max_page_rows
+                                   : max_row - (page_start_row + s->first_row);
+    }
   }
 
   __syncthreads();
@@ -1030,13 +1051,26 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   }
   __syncthreads();
 
+  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  // NOTE: this check needs to be done after the null counts have been zeroed out
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  if (is_decode_step && s->num_rows == 0 &&
+      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
+                           is_page_contained(s, min_row, num_rows)))) {
+    return false;
+  }
+
   if (!t) {
     s->error = 0;
-
-    // our starting row (absolute index) is
-    // col.start_row == absolute row index
-    // page.chunk-row == relative row index within the chunk
-    size_t page_start_row = s->col.start_row + s->page.chunk_row;
 
     // IMPORTANT : nested schemas can have 0 rows in a page but still have
     // values. The case is:
@@ -1124,27 +1158,6 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         s->dtype_len = 4;  // HASH32 output
       } else if (data_type == INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
-      }
-
-      // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be
-      // invalid/bogus during first pass of the preprocess step for nested types. this is ok
-      // because we ignore these values in that stage.
-      {
-        auto const max_row = min_row + num_rows;
-
-        // if we are totally outside the range of the input, do nothing
-        if ((page_start_row > max_row) || (page_start_row + s->page.num_rows < min_row)) {
-          s->first_row = 0;
-          s->num_rows  = 0;
-        }
-        // otherwise
-        else {
-          s->first_row             = page_start_row >= min_row ? 0 : min_row - page_start_row;
-          auto const max_page_rows = s->page.num_rows - s->first_row;
-          s->num_rows              = (page_start_row + s->first_row) + max_page_rows <= max_row
-                                       ? max_page_rows
-                                       : max_row - (page_start_row + s->first_row);
-        }
       }
 
       // during the decoding step we need to offset the global output buffers

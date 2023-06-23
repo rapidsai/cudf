@@ -761,33 +761,14 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int page_idx                   = blockIdx.x;
   int t                          = threadIdx.x;
   int out_thread0;
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(
         s, &pages[page_idx], chunks, min_row, num_rows, non_string_filter{chunks}, true)) {
     return;
   }
 
-  // this needs to be declared after we've decided to process this page
-  [[maybe_unused]] null_count_back_copier _{s, t};
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-
-  // FIXME do this in setupLocalPageInfo
-  //
-  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  //
-  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
-  // starts before this page and ends after this page:
-  //       P0        P1        P2
-  //  |---------|---------|----------|
-  //        ^------------------^
-  //      row start           row end
-  // P1 will contain 0 rows
-  //
-  if (s->num_rows == 0 &&
-      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
-                           is_page_contained(s, min_row, num_rows)))) {
-    return;
-  }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
