@@ -48,6 +48,12 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 // level decode buffer size.
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
+template<int rolling_size>
+constexpr int rolling_index(int index)
+{ 
+  return index % rolling_size;
+}
+
 /**
  * @brief Struct representing an input column in the file.
  */
@@ -84,6 +90,15 @@ enum level_type {
   REPETITION,
 
   NUM_LEVEL_TYPES
+};
+
+enum kernel_mask_bits {
+  KERNEL_MASK_FIXED_WIDTH_NO_DICT = (1<<0),
+  // KERNEL_MASK_FIXED_WIDTH_DICT,
+  // KERNEL_MASK_STRINGS,
+  // KERNEL_NESTED_
+  // etc
+  KERNEL_MASK_GENERAL             = (1<<1)
 };
 
 /**
@@ -199,6 +214,8 @@ struct PageInfo {
 
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+
+  int kernel_mask;
 };
 
 /**

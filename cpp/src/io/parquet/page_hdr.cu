@@ -154,6 +154,26 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+__device__ int get_kernel_mask(gpu::PageInfo const& page, gpu::ColumnChunkDesc const& chunk)
+{
+  if(page.flags & PAGEINFO_FLAGS_DICTIONARY){
+    return 0;
+  }
+
+  // non-string, non-nested, non-dict, non-boolean types
+  if(page.encoding == Encoding::PLAIN &&
+     chunk.max_level[level_type::REPETITION] == 0 && 
+     (chunk.data_type & 7) != BYTE_ARRAY &&
+     (chunk.data_type & 7) != BOOLEAN){
+
+    //printf("FIXED\n");
+    return KERNEL_MASK_FIXED_WIDTH_NO_DICT;
+  }
+
+  //printf("GENERAL\n");
+  return KERNEL_MASK_GENERAL;
+}
+
 /**
  * @brief Functor to set value to 32 bit integer read from byte stream
  *
@@ -370,6 +390,7 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -389,7 +410,7 @@ __global__ void __launch_bounds__(128)
         // zero out V2 info
         bs->page.num_nulls     = 0;
         bs->page.def_lvl_bytes = 0;
-        bs->page.rep_lvl_bytes = 0;
+        bs->page.rep_lvl_bytes = 0;        
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
@@ -420,13 +441,15 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          bs->page.kernel_mask = get_kernel_mask(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0){
         page_info[index_out] = bs->page;
+      }
       num_values = shuffle(num_values);
       __syncwarp();
     }
