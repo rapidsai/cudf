@@ -537,11 +537,11 @@ def test_tz_localize():
     got = dgd.from_cudf(data, 2).dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
-    assert_eq(expect, got.compute())
+    dd.assert_eq(expect, got)
 
     expect = expect.dt.tz_localize(None)
     got = got.dt.tz_localize(None)
-    assert_eq(expect, got)
+    dd.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -556,4 +556,4 @@ def test_tz_localize():
 def test_tz_convert(data):
     expect = Series(data).dt.tz_convert("US/Pacific")
     got = dgd.from_cudf(Series(data), 2).dt.tz_convert("US/Pacific")
-    assert_eq(expect, got)
+    dd.assert_eq(expect, got)
