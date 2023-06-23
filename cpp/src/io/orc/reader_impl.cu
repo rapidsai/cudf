@@ -318,11 +318,12 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     total_decomp_size += compinfo[i].max_uncompressed_size;
   }
   CUDF_EXPECTS(
-    not((num_compressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
-    "Inconsistent decompression metadata");
+    not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
+    "Inconsistent info on compression blocks");
 
   rmm::device_buffer decomp_data(total_decomp_size, stream);
   if (total_decomp_size == 0) { return decomp_data; }
+
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
