@@ -3617,11 +3617,10 @@ public final class Table implements AutoCloseable {
       result = new Table(columns);
     } catch (Throwable t) {
       try {
-        ColumnView.cleanupColumnViews(columnViewAddresses, columns);
-      } catch (Throwable s) {
-        t.addSuppressed(s);
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } finally {
+        throw t;
       }
-      throw t;
     }
 
     // close columns to leave the resulting table responsible for freeing underlying columns

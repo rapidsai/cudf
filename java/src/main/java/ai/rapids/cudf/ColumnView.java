@@ -674,11 +674,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
     } catch (Throwable t) {
       try {
-        cleanupColumnViews(nativeHandles, columnVectors);
-      } catch (Throwable s) {
-        t.addSuppressed(s);
+        cleanupColumnViews(nativeHandles, columnVectors, t);
+      } finally {
+        throw t;
       }
-      throw t;
     }
     return columnVectors;
   }
@@ -823,27 +822,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
     } catch (Throwable t) {
       try {
-        cleanupColumnViews(nativeHandles, columnViews);
-      } catch (Throwable s) {
-        t.addSuppressed(s);
+        cleanupColumnViews(nativeHandles, columnViews, t);
+      } finally {
+        throw t;
       }
-      throw t;
     }
     return columnViews;
   }
 
-  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) throws Throwable {
-    Throwable t = null;
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews, Throwable throwable) {
     for (ColumnView columnView : columnViews) {
       if (columnView != null) {
         try {
           columnView.close();
         } catch (Throwable s) {
-          if (t == null) {
-            t = s;
-          } else {
-            t.addSuppressed(s);
-          }
+          throwable.addSuppressed(s);
         }
       }
     }
@@ -852,16 +845,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         try {
           deleteColumnView(nativeHandle);
         } catch (Throwable s) {
-          if (t == null) {
-            t = s;
-          } else {
-            t.addSuppressed(s);
-          }
+          throwable.addSuppressed(s);
         }
       }
-    }
-    if (t != null) {
-      throw t;
     }
   }
 
@@ -5210,11 +5196,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       return columns;
     } catch (Throwable t) {
       try {
-        cleanupColumnViews(nativeHandles, columns);
-      } catch (Throwable s) {
-        t.addSuppressed(s);
+        cleanupColumnViews(nativeHandles, columns, t);
+      } finally {
+        throw t;
       }
-      throw t;
     }
   }
 }
