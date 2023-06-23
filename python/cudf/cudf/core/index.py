@@ -2552,10 +2552,10 @@ class DatetimeIndex(GenericIndex):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """
-        from cudf.core._internals.timezones import localize
+        from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
-            result_col = self._column._local_time
+            result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data({self.name: result_col})

@@ -222,7 +222,7 @@ enum class type_id : int32_t {
 /**
  * @brief Indicator for the logical data type of an element in a column.
  *
- * Simple types can be be entirely described by their `id()`, but some types
+ * Simple types can be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
  */
 class data_type {

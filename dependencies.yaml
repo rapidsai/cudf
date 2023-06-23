@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8"]
+      cuda: ["11.8", "12.0"]
       arch: [x86_64]
     includes:
       - build_all
@@ -195,6 +195,11 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-nvcc
+          - matrix:
               arch: x86_64
               cuda: "11.8"
             packages:
@@ -265,6 +270,13 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-cudart-dev
+              - cuda-nvrtc-dev
+              - libcurand-dev
+          - matrix:
               cuda: "11.8"
             packages:
               - cudatoolkit=11.8
@@ -295,6 +307,11 @@ dependencies:
               - *libcurand114
       - output_types: conda
         matrices:
+          - matrix:
+              cuda: "12.0"
+              arch: x86_64
+            packages:
+              - libcufile-dev
           - matrix:
               cuda: "11.8"
               arch: x86_64
@@ -381,7 +398,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - cuda-python>=11.7.1,<12.0
           - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
@@ -410,6 +426,15 @@ dependencies:
           - &cupy_pip cupy-cuda11x>=12.0.0
           - ptxcompiler
     specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-python>=12.0,<13.0a0
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cuda-python>=11.7.1,<12.0a0
       - output_types: requirements
         matrices:
           - matrix:
@@ -464,6 +489,11 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-sanitizer-api
+          - matrix:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
@@ -480,13 +510,18 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "11.5"
+              cuda: "12.0"
             packages:
-              - cuda-nvtx=11.5
+              - cuda-version=12.0
+              - cuda-nvtx
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-nvtx=11.8
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cuda-nvtx=11.5
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
