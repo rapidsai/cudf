@@ -92,8 +92,12 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      for (ColumnVector column: columns) {
-        column.close();
+      for (ColumnVector column : columns) {
+        try {
+          column.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
       }
       throw t;
     }
