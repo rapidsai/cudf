@@ -346,6 +346,7 @@ add_library(
   src/hash/md5_hash.cu
   src/hash/murmur_hash.cu
   src/hash/spark_murmur_hash.cu
+  src/hash/xxhash64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu

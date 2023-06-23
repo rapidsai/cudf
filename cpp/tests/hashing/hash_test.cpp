@@ -1106,4 +1106,25 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
 
+template <typename T>
+class HashXX64TestTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(HashXX64TestTyped, NumericTypesNoBools);
+
+TYPED_TEST(HashXX64TestTyped, TestNumeric)
+{
+  using T   = TypeParam;
+  auto col1 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
+    {-1, -1, 0, 2, 22, 0, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 0, 0},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
+    {-1, -1, 0, 2, 22, 1, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 1, -22},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+
+  auto const output1 = cudf::hash64(cudf::table_view({col1}));
+  auto const output2 = cudf::hash64(cudf::table_view({col2}));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
