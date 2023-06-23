@@ -556,4 +556,4 @@ def test_tz_localize():
 def test_tz_convert(data):
     expect = Series(data).dt.tz_convert("US/Pacific")
     got = dgd.from_cudf(Series(data), 2).dt.tz_convert("US/Pacific")
-    assert_eq(expect, got.compute())
+    assert_eq(expect, got)
