@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass
 from typing import Any, List, Tuple
 
@@ -105,19 +104,20 @@ def destructure_iloc_key(
     """
     n = len(frame.shape)
     if isinstance(key, tuple):
-        indexers = tuple(
-            itertools.chain(key, itertools.repeat(slice(None), n - len(key)))
-        )
+        # Key potentially indexes rows and columns, slice-expand to
+        # shape of frame
+        indexers = key + (slice(None),) * (n - len(key))
         if (ni := len(indexers)) > n:
             raise IndexError(f"Too many indexers: got {ni} expected {n}")
     else:
-        indexers = (key, *itertools.repeat(slice(None), n - 1))
+        # Key indexes rows, slice-expand to shape of frame
+        indexers = (key, *(slice(None),) * (n - 1))
     indexers = tuple(k(frame) if callable(k) else k for k in indexers)
     if any(isinstance(k, tuple) for k in indexers):
         raise IndexError(
             "Too many indexers: can't have nested tuples in iloc indexing"
         )
-    return indexers[:n]
+    return indexers
 
 
 def destructure_dataframe_iloc_indexer(
@@ -190,9 +190,7 @@ def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
     return rows
 
 
-def parse_row_iloc_indexer(
-    key: Any, n: int, check_bounds=True
-) -> IndexingSpec:
+def parse_row_iloc_indexer(key: Any, n: int, *, check_bounds) -> IndexingSpec:
     """
     Normalize and produce structured information about a row indexer
 
@@ -213,9 +211,7 @@ def parse_row_iloc_indexer(
     Returns
     -------
     IndexingSpec
-        Structured data for indexing. The first entry is a
-        :class:`IndexingTag` tag, the second entry is normalized
-        arguments to the tag-specific indexing routine.
+        Structured data for indexing. A tag + parsed data.
 
     Raises
     ------
