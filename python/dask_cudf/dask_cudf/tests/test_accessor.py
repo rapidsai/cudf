@@ -530,11 +530,11 @@ def test_struct_explode(data):
 
 
 def test_tz_localize():
-    data = date_range("2000-04-01", "2000-04-03", freq="H")
-    expect = Series(data).dt.tz_localize(
+    data = Series(date_range("2000-04-01", "2000-04-03", freq="H"))
+    expect = data.dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
-    got = dgd.from_cudf(Series(data), 2).dt.tz_localize(
+    got = dgd.from_cudf(data, 2).dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
     assert_eq(expect, got.compute())
