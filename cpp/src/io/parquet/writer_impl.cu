@@ -1834,6 +1834,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
 
   // Buffers need to be padded.
+  // Required by `gpuGatherPages`.
   rmm::device_buffer uncomp_bfr(
     cudf::util::round_up_safe(max_uncomp_bfr_size, BUFFER_PADDING_MULTIPLE), stream);
   rmm::device_buffer comp_bfr(cudf::util::round_up_safe(max_comp_bfr_size, BUFFER_PADDING_MULTIPLE),

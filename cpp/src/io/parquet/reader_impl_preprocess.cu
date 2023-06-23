@@ -257,6 +257,7 @@ template <typename T = uint8_t>
       auto& source = sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
+        // Required by `gpuDecodePageData`.
         auto buffer =
           rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
@@ -266,6 +267,7 @@ template <typename T = uint8_t>
       } else {
         auto const read_buffer = source->host_read(io_offset, io_size);
         // Buffer needs to be padded.
+        // Required by `gpuDecodePageData`.
         auto tmp_buffer = rmm::device_buffer(
           cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
         CUDF_CUDA_TRY(cudaMemcpyAsync(
@@ -447,7 +449,7 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // Dispatch batches of pages to decompress for each codec.
-  // Buffer needs to be padded.
+  // Buffer needs to be padded, required by `gpuDecodePageData`.
   rmm::device_buffer decomp_pages(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 

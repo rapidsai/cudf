@@ -320,6 +320,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
   // Buffer needs to be padded.
+  // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
@@ -1070,6 +1071,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
                        "Invalid index rowgroup stream data");
 
           // Buffer needs to be padded.
+          // Required by `copy_uncompressed_kernel`.
           stripe_data.emplace_back(
             cudf::util::round_up_safe(total_data_size, BUFFER_PADDING_MULTIPLE), stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
