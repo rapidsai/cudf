@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/text/device_data_chunks.hpp"
-#include "io/utilities/config_utils.hpp"
+
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -69,7 +71,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                              rmm::device_uvector<T>& device,
                              rmm::cuda_stream_view stream)
   {
-    device.resize(host.size(), stream);
+    // Buffer needs to be padded.
+    // Required by `inflate_kernel`.
+    device.resize(cudf::util::round_up_safe(host.size(), BUFFER_PADDING_MULTIPLE), stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   }
@@ -139,7 +143,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         offset_it + num_blocks(),
         span_it,
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
-                                       reinterpret_cast<uint8_t*>(d_decompressed_blocks.begin())});
+                                       reinterpret_cast<uint8_t*>(d_decompressed_blocks.data())});
       if (decompressed_size() > 0) {
         if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
           gpuinflate(d_compressed_spans,

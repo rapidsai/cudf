@@ -28,7 +28,7 @@ requires-python = ">=3.9"
 dependencies = [
     "cachetools",
     "cubinlinker",
-    "cuda-python>=11.7.1,<12.0",
+    "cuda-python>=11.7.1,<12.0a0",
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "numba>=0.57",
