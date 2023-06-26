@@ -1903,6 +1903,8 @@ def test_reader_row_index_order(data):
     assert_eq(expected, got)
 
 
+# Test the corner case where empty blocks are compressed
+# Decompressed data size is zero, even though compressed data size is non-zero
 def test_orc_reader_empty_decomp_data(datadir):
     path = datadir / "TestOrcFile.Spark.EmptyDecompData.orc"
 
