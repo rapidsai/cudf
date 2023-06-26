@@ -49,7 +49,7 @@ requirements:
     - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
-    - cudatoolkit ={{ cuda_version }}
+    - cudatoolkit
     - libcufile {{ cuda11_libcufile_host_version }}  # [linux64]
     - libcufile-dev {{ cuda11_libcufile_host_version }}  # [linux64]
     - libcurand {{ cuda11_libcurand_host_version }}
@@ -91,7 +91,7 @@ outputs:
         - cmake {{ cmake_version }}
       run:
         {% if cuda_major == "11" %}
-        - cudatoolkit {{ cuda_spec }}
+        - cudatoolkit
         - libcufile {{ cuda11_libcufile_run_version }}  # [linux64]
         {% else %}
         - cuda-nvrtc
