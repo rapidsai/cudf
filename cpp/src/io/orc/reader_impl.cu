@@ -317,12 +317,16 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
     total_decomp_size += compinfo[i].max_uncompressed_size;
   }
-  CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
+  CUDF_EXPECTS(
+    not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
+    "Inconsistent info on compression blocks");
 
   // Buffer needs to be padded.
   // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
+  if (decomp_data.size() == 0) { return decomp_data; }
+
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
