@@ -256,24 +256,18 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  auto type = input.type();  // Column that is lists of lists.
-  CUDF_EXPECTS(
-    type.id() == type_id::LIST, "Input column must be a lists column.", std::invalid_argument);
+  CUDF_EXPECTS(input.type().id() == type_id::LIST,
+               "Input column must be a lists column.",
+               std::invalid_argument);
 
-  auto col = lists_column_view(input).child();  // Rows, which are lists.
-  type     = col.type();
-  CUDF_EXPECTS(
-    type.id() == type_id::LIST, "Rows of the input column must be lists.", std::invalid_argument);
-
-  col  = lists_column_view(col).child();  // The last level entries what we need to check.
-  type = col.type();
-  CUDF_EXPECTS(type.id() == type_id::LIST || !cudf::is_nested(type),
-               "Entry of the input lists column must be of list or non-nested types.");
+  auto const child = lists_column_view(input).child();
+  CUDF_EXPECTS(child.type().id() == type_id::LIST,
+               "Child of the input lists column must also be a lists column.",
+               std::invalid_argument);
 
   if (input.size() == 0) { return cudf::empty_like(input); }
 
-  bool has_null_list = lists_column_view(input).child().has_nulls();
-
+  bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)
            ? concatenate_lists_ignore_null(input, has_null_list, stream, mr)
            : concatenate_lists_nullifying_rows(input, stream, mr);

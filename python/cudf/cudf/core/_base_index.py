@@ -1357,7 +1357,7 @@ class BaseIndex(Serializable):
         else:
             lhs = self.copy(deep=False)
             rhs = other.copy(deep=False)
-
+        same_names = lhs.names == rhs.names
         # There should be no `None` values in Joined indices,
         # so essentially it would be `left/right` or 'inner'
         # in case of MultiIndex
@@ -1377,7 +1377,7 @@ class BaseIndex(Serializable):
                 how = "inner"
         else:
             # Both are normal indices
-            on = rhs.names[0]
+            on = lhs.names[0]
             rhs.names = lhs.names
 
         lhs = lhs.to_frame()
@@ -1391,7 +1391,9 @@ class BaseIndex(Serializable):
         if self_is_multi and other_is_multi:
             return cudf.MultiIndex._from_data(output._data)
         else:
-            return cudf.core.index._index_from_data(output._data)
+            idx = cudf.core.index._index_from_data(output._data)
+            idx.name = self.name if same_names else None
+            return idx
 
     def rename(self, name, inplace=False):
         """

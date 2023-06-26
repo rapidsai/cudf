@@ -449,7 +449,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -662,7 +662,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * @brief Construct a nullable column from an initializer list of decimal elements and the
    * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
    * element.
    *
@@ -1026,7 +1026,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief Construct a nullable dictionary column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    *
    * Example:
@@ -1722,7 +1722,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                          // "a List<List<List<int>>> that's empty at the top level"
                          //
                          // { {{{1, 2, 3}}}, {4, 5, 6} }
-                         // In this case, row 1 is a a concrete List<int> with actual values.
+                         // In this case, row 1 is a concrete List<int> with actual values.
                          // There is no way to rectify the differences so we will treat it as a
                          // true column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");

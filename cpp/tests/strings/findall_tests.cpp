@@ -69,12 +69,12 @@ TEST_F(StringsFindallTests, Multiline)
 
 TEST_F(StringsFindallTests, DotAll)
 {
-  cudf::test::strings_column_wrapper input({"abc\nfa\nef", "fff\nabbc\nfff", "abcdef", ""});
+  cudf::test::strings_column_wrapper input({"abc\nfa\nef", "fff\nabbc\nfff", "abcdéf", ""});
   auto view = cudf::strings_column_view(input);
 
   auto pattern = std::string("(b.*f)");
   using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
-  LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdef"}, LCW{}});
+  LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdéf"}, LCW{}});
   auto prog    = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DOTALL);
   auto results = cudf::strings::findall(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);

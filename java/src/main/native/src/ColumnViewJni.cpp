@@ -27,6 +27,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
@@ -46,6 +47,7 @@
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
@@ -174,6 +176,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsPolicy(JNIEnv
     cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
     return release_as_jlong(cudf::replace_nulls(
         col, is_preceding ? cudf::replace_policy::PRECEDING : cudf::replace_policy::FOLLOWING));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_distinctCount(JNIEnv *env, jclass,
+                                                                    jlong j_col,
+                                                                    jboolean nulls_included) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
+
+    return cudf::distinct_count(
+        col, nulls_included ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+        cudf::nan_policy::NAN_IS_VALID);
   }
   CATCH_STD(env, 0);
 }
@@ -484,6 +501,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
 
     return release_as_jlong(
         cudf::jni::lists_distinct_by_key(lists_keys_vals, cudf::get_default_stream()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_flattenLists(JNIEnv *env, jclass,
+                                                                    jlong input_handle,
+                                                                    jboolean ignore_null) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE :
+                                           cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(input_handle);
+    return release_as_jlong(cudf::lists::concatenate_list_elements(*input_cv, null_policy));
   }
   CATCH_STD(env, 0);
 }
