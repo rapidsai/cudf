@@ -836,9 +836,25 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
-        # TODO: pandas supports directly merging RangeIndex objects and can
-        # intelligently create RangeIndex outputs depending on the type of
-        # join. We need to implement that for the supported special cases.
+        if how in {"left", "right"} or self.equals(other):
+            # pandas supports directly merging RangeIndex objects and can
+            # intelligently create RangeIndex outputs depending on the type of
+            # join. Hence falling back to performing a merge on pd.RangeIndex
+            # since the conversion is cheap.
+            if isinstance(other, RangeIndex):
+                result = self.to_pandas().join(
+                    other.to_pandas(),
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
+                )
+                if return_indexers:
+                    return tuple(
+                        cudf.from_pandas(result[0]), result[1], result[2]
+                    )
+                else:
+                    return cudf.from_pandas(result)
         return self._as_int_index().join(
             other, how, level, return_indexers, sort
         )
@@ -2536,10 +2552,10 @@ class DatetimeIndex(GenericIndex):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """
-        from cudf.core._internals.timezones import localize
+        from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
-            result_col = self._column._local_time
+            result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data({self.name: result_col})
