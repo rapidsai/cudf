@@ -83,12 +83,8 @@ public final class Table implements AutoCloseable {
    */
   public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
-    this.columns = new ColumnVector[cudfColumns.length];
+    this.columns = ColumnVector.getColumnVectorsFromPointers(cudfColumns);
     try {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        this.columns[i] = new ColumnVector(cudfColumns[i]);
-        cudfColumns[i] = 0;
-      }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
         views[i] = columns[i].getNativeView();
@@ -96,7 +92,13 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(cudfColumns, this.columns);
+      for (ColumnVector column : columns) {
+        try {
+          column.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
+      }
       throw t;
     }
   }
@@ -3462,17 +3464,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3551,17 +3543,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3626,13 +3608,21 @@ public final class Table implements AutoCloseable {
     Table result = null;
     try {
       for (int i = 0; i < columns.length; i++) {
-        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        long columnViewAddress = columnViewAddresses[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the ColumnView  constructor
         columnViewAddresses[i] = 0;
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddress, data);
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
-      throw t;
+      try {
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } catch (Throwable s){
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
 
     // close columns to leave the resulting table responsible for freeing underlying columns

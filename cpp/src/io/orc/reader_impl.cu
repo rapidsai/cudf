@@ -525,13 +525,13 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                            };
                          });
 
-        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
+        out_buffers[col_idx].set_null_mask(std::move(merged_null_mask));
 
       } else {
         // Since child column doesn't have a mask, copy parent null mask
         auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[col_idx]._null_mask =
-          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
+        out_buffers[col_idx].set_null_mask(
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr));
       }
     }
   }
