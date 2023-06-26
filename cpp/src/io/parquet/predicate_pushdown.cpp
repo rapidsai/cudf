@@ -251,6 +251,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
+    using cudf::ast::ast_operator;
     auto const operands = expr.get_operands();
     auto op             = expr.get_operator();
 
@@ -270,35 +271,33 @@ class stats_expression_converter : public ast::detail::expression_transformer {
         col1 >= val --> vmax >= val
         col1 <= val --> vmin <= val
         */
-        case ast::ast_operator::EQUAL: {
+        case ast_operator::EQUAL: {
           auto const& vmin = _col_ref.emplace_back(col_index * 2);
           auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
           auto const& op1 =
-            _operators.emplace_back(ast::ast_operator::LESS_EQUAL, vmin, operands[1].get());
+            _operators.emplace_back(ast_operator::LESS_EQUAL, vmin, operands[1].get());
           auto const& op2 =
-            _operators.emplace_back(ast::ast_operator::GREATER_EQUAL, vmax, operands[1].get());
+            _operators.emplace_back(ast_operator::GREATER_EQUAL, vmax, operands[1].get());
           _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
           break;
         }
-        case ast::ast_operator::NOT_EQUAL: {
+        case ast_operator::NOT_EQUAL: {
           auto const& vmin = _col_ref.emplace_back(col_index * 2);
           auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-          auto const& op1 =
-            _operators.emplace_back(ast::ast_operator::GREATER, vmin, operands[1].get());
-          auto const& op2 =
-            _operators.emplace_back(ast::ast_operator::LESS, vmax, operands[1].get());
-          _operators.emplace_back(ast::ast_operator::LOGICAL_OR, op1, op2);
+          auto const& op1 = _operators.emplace_back(ast_operator::GREATER, vmin, operands[1].get());
+          auto const& op2 = _operators.emplace_back(ast_operator::LESS, vmax, operands[1].get());
+          _operators.emplace_back(ast_operator::LOGICAL_OR, op1, op2);
           break;
         }
         // can these be combined in any way?
-        case ast::ast_operator::LESS: [[fallthrough]];
-        case ast::ast_operator::LESS_EQUAL: {
+        case ast_operator::LESS: [[fallthrough]];
+        case ast_operator::LESS_EQUAL: {
           auto const& vmin = _col_ref.emplace_back(col_index * 2);
           _operators.emplace_back(op, vmin, operands[1].get());
           break;
         }
-        case ast::ast_operator::GREATER: [[fallthrough]];
-        case ast::ast_operator::GREATER_EQUAL: {
+        case ast_operator::GREATER: [[fallthrough]];
+        case ast_operator::GREATER_EQUAL: {
           auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
           _operators.emplace_back(op, vmax, operands[1].get());
           break;
@@ -383,7 +382,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     auto const& dtype = output_dtypes[col_idx];
     // Only comparable types except fixed point are supported.
     if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
-      // std::cout << "compound_type[" << col_idx << "]=" << static_cast<int>(dtype.id()) << "\n";
       // placeholder only for unsupported types.
       columns.push_back(
         cudf::make_numeric_column(data_type{cudf::type_id::BOOL8}, total_row_groups));
