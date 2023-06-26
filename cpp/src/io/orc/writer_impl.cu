@@ -2144,6 +2144,8 @@ auto convert_table_to_orc_data(table_view const& input,
   gpu::collect_map_entries(stripe_dicts, stream);
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
 
+  hash_maps_storage.clear();  // TODO replace with RAII
+
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
@@ -2157,6 +2159,10 @@ auto convert_table_to_orc_data(table_view const& input,
                                 write_mode);
   auto enc_data = encode_columns(
     orc_table, std::move(dec_chunk_sizes), segmentation, streams, uncompressed_block_align, stream);
+
+  // don't need to keep the dictionary data around anymore, just the metadata (e.g. char counts)
+  dict_data_owner.clear();
+  dict_index_owner.clear();
 
   auto const num_rows = input.num_rows();
 
