@@ -25,7 +25,7 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
-int constexpr NUM_DECODERS       = 2;  // how many decode kernels are there to run
+int constexpr NUM_DECODERS       = 3;  // how many decode kernels are there to run
 int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
 int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
 
@@ -176,16 +176,30 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunk_nested_data.host_to_device_async(_stream);
   _stream.synchronize();
 
-  auto stream1 = get_stream_pool().get_stream();
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream1);
+  bool const has_delta_binary = std::any_of(pages.begin(), pages.end(), [](auto& page) {
+    return page.encoding == Encoding::DELTA_BINARY_PACKED;
+  });
+
+  auto const level_type_size = _file_itm_data.level_type_size;
+
+  // launch the catch-all page decoder
+  std::vector<rmm::cuda_stream_view> streams;
+  streams.push_back(get_stream_pool().get_stream());
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+
+  // and then the specializations
   if (has_strings) {
-    auto stream2 = get_stream_pool().get_stream();
-    chunk_nested_str_data.host_to_device_async(stream2);
-    gpu::DecodeStringPageData(
-      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream2);
-    stream2.synchronize();
+    streams.push_back(get_stream_pool().get_stream());
+    chunk_nested_str_data.host_to_device_async(streams.back());
+    gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
   }
-  stream1.synchronize();
+  if (has_delta_binary) {
+    streams.push_back(get_stream_pool().get_stream());
+    gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+  }
+
+  // synchronize the streams
+  std::for_each(streams.begin(), streams.end(), [](auto& stream) { stream.synchronize(); });
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);

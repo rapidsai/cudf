@@ -1248,6 +1248,10 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: s->dict_run = 0; break;
+        case Encoding::DELTA_BINARY_PACKED:
+          // nothing to do, just don't error
+          break;
+
         default:
           s->error = 1;  // Unsupported encoding
           break;

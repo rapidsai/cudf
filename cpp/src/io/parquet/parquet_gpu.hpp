@@ -550,6 +550,25 @@ void DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                       size_t num_rows,
+                       size_t min_row,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for initializing encoder row group fragments
  *
  * These fragments are used to calculate row group boundaries.
