@@ -194,18 +194,17 @@ struct StripeStream {
 struct stripe_dictionary {
   // input
   device_span<slot_type> map_slots;
-  uint32_t column_idx;
-  size_type start_row;       // first row in stripe
-  size_type start_rowgroup;  // first rowgroup in stripe
-  size_type num_rows;
+  uint32_t column_idx      = 0;
+  size_type start_row      = 0;  // first row in stripe
+  size_type start_rowgroup = 0;  // first rowgroup in stripe
+  size_type num_rows       = 0;
 
   // output
   device_span<uint32_t> data;   // row indices of corresponding string (row from dictionary index)
   device_span<uint32_t> index;  // dictionary index from row index
-  size_type entry_count;
-  size_type char_count;
-
-  constexpr bool is_enabled() const { return not map_slots.empty(); }
+  size_type entry_count = 0;
+  size_type char_count  = 0;
+  bool is_enabled       = false;
 };
 
 void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> map_slots,

@@ -628,7 +628,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
         size_t dict_lengths_div512 = 0;
         for (auto const& stripe : segmentation.stripes) {
           auto const sd = column.host_stripe_dict(stripe.id);
-          enable_dict   = (enable_dict && sd.is_enabled());
+          enable_dict   = (enable_dict && sd.is_enabled);
           if (enable_dict) {
             dict_strings += sd.entry_count;
             dict_lengths_div512 += (sd.entry_count + 0x1ff) >> 9;
@@ -2094,11 +2094,11 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
         thrust::make_counting_iterator(stripe.first + stripe.size),
         0,
         [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
-      auto const stripe_use_dictionary = [&]() {
+      sd.is_enabled = [&]() {
         auto const dict_index_size = varint_size(sd.entry_count);
         return sd.char_count + dict_index_size * sd.entry_count < direct_char_count;
       }();
-      if (stripe_use_dictionary) {
+      if (sd.is_enabled) {
         dict_data_owner.emplace_back(sd.entry_count, stream);
         sd.data            = dict_data_owner.back();
         col_use_dictionary = true;
