@@ -118,7 +118,7 @@ class aggregate_orc_metadata {
   std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     uint64_t skip_rows,
-    std::optional<size_type> const& num_rows_opt,
+    std::optional<size_type> const& num_rows,
     rmm::cuda_stream_view stream);
 
   /**
