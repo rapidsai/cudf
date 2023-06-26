@@ -228,6 +228,9 @@ namespace {
 template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T add_safe(T const& value, T const& delta)
 {
+  if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+    if (std::isinf(value) or std::isnan(value)) { return value; }
+  }
   // delta >= 0.
   return (value < 0 || (cuda::std::numeric_limits<T>::max() - value) >= delta)
            ? (value + delta)
@@ -255,6 +258,9 @@ __device__ T add_safe(T const& value, T const& delta)
 template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
+  if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+    if (std::isinf(value) or std::isnan(value)) { return value; }
+  }
   // delta >= 0;
   return (value >= 0 || (value - cuda::std::numeric_limits<T>::lowest()) >= delta)
            ? (value - delta)
@@ -388,6 +394,24 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
   return window_column;
 }
 
+/**
+ * @brief Comparator for numeric order-by columns, handling floating point NaN values.
+ */
+struct nan_aware_less {
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
+  __device__ bool operator()(T const& lhs, T const& rhs) const
+  {
+    return thrust::less<T>{}(lhs, rhs);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
+  __device__ bool operator()(T const& lhs, T const& rhs) const
+  {
+    if (std::isnan(lhs)) { return !std::isnan(rhs); }
+    return std::isnan(rhs) ? true : lhs < rhs;
+  }
+};
+
 /// Range window computation, with
 ///   1. no grouping keys specified
 ///   2. rows in ASCENDING order.
@@ -436,7 +460,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + group_start,
                                                     d_orderby + idx,
-                                                    lowest_in_window)) +
+                                                    lowest_in_window,
+                                                    nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -466,8 +491,11 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     auto const group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(
-              thrust::seq, d_orderby + idx, d_orderby + group_end, highest_in_window) -
+    return (thrust::upper_bound(thrust::seq,
+                                d_orderby + idx,
+                                d_orderby + group_end,
+                                highest_in_window,
+                                nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -612,7 +640,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + search_start,
                                                     d_orderby + idx,
-                                                    lowest_in_window)) +
+                                                    lowest_in_window,
+                                                    nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -653,8 +682,11 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     auto const search_end        = nulls_begin == group_start ? group_end : nulls_begin;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(
-              thrust::seq, d_orderby + idx, d_orderby + search_end, highest_in_window) -
+    return (thrust::upper_bound(thrust::seq,
+                                d_orderby + idx,
+                                d_orderby + search_end,
+                                highest_in_window,
+                                nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -664,6 +696,24 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
+
+/**
+ * @brief Comparator for numeric order-by columns, handling floating point NaN values.
+ */
+struct nan_aware_greater {
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
+  __device__ bool operator()(T const& lhs, T const& rhs) const
+  {
+    return thrust::greater<T>{}(lhs, rhs);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
+  __device__ bool operator()(T const& lhs, T const& rhs) const
+  {
+    if (std::isnan(lhs)) { return !std::isnan(rhs); }
+    return std::isnan(rhs) ? false : lhs > rhs;
+  }
+};
 
 /// Range window computation, with
 ///   1. no grouping keys specified
@@ -710,12 +760,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     auto const group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) -
-            thrust::lower_bound(thrust::seq,
-                                d_orderby + group_start,
-                                d_orderby + idx,
-                                highest_in_window,
-                                thrust::greater<decltype(highest_in_window)>())) +
+    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                    d_orderby + group_start,
+                                                    d_orderby + idx,
+                                                    highest_in_window,
+                                                    nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -749,7 +798,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + group_end,
                                 lowest_in_window,
-                                thrust::greater<decltype(lowest_in_window)>()) -
+                                nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -810,12 +859,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     auto const search_start      = nulls_begin == group_start ? nulls_end : group_start;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) -
-            thrust::lower_bound(thrust::seq,
-                                d_orderby + search_start,
-                                d_orderby + idx,
-                                highest_in_window,
-                                thrust::greater<decltype(highest_in_window)>())) +
+    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                    d_orderby + search_start,
+                                                    d_orderby + idx,
+                                                    highest_in_window,
+                                                    nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -857,7 +905,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + search_end,
                                 lowest_in_window,
-                                thrust::greater<decltype(lowest_in_window)>()) -
+                                nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };
