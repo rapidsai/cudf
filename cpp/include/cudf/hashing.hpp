@@ -36,9 +36,16 @@ using hash_value_type = uint32_t;  ///< Type of hash value
 enum class hash_id {
   HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
   HASH_MURMUR3,        ///< Murmur3 hash function
-  HASH_MURMUR3_64,     ///< Murmur3_64_128 hash function
   HASH_SPARK_MURMUR3,  ///< Spark Murmur3 hash function
   HASH_MD5             ///< MD5 hash function
+};
+
+/**
+ *  @brief Identifies the 64-bit hash function to be used
+ */
+enum class hash64_id {
+  HASH_MURMUR3_64,  ///< Murmur3_64_128 hash function
+  XXHASH_64         ///< XXHash_64 hash function
 };
 
 /**
@@ -79,7 +86,7 @@ std::unique_ptr<column> hash(
  */
 std::unique_ptr<column> hash64(
   table_view const& input,
-  hash_id hash_function               = hash_id::HASH_MURMUR3_64,
+  hash64_id hash_function             = hash64_id::HASH_MURMUR3_64,
   uint64_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

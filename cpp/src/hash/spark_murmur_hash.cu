@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ struct SparkMurmurHash3_32 {
       k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = cudf::detail::rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
       h = h * 5 + c3;
     }
     return h;
@@ -107,7 +107,7 @@ struct SparkMurmurHash3_32 {
       k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = cudf::detail::rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
       h = h * 5 + c3;
     }
 

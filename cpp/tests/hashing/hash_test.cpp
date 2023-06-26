@@ -1111,20 +1111,25 @@ class HashMurmur64TestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(HashMurmur64TestTyped, NumericTypesNoBools);
 
-TYPED_TEST(HashMurmur64TestTyped, DISABLED_TestNumeric)
+TYPED_TEST(HashMurmur64TestTyped, TestNumeric)
 {
   using T   = TypeParam;
   auto col1 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    {-1, -1, 0, 2, 22, 27, 11, 12, 0, 32, 0, 42, 0, 62, 0, 0, 1, -22},
+    {-1, -1, 0, 2, 22, 0, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 0, 0},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::fixed_width_column_wrapper<T, int32_t>{
+    {-1, -1, 0, 2, 22, 1, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 1, -22},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
 
-  auto const output = cudf::hash64(cudf::table_view({col1}));
-  cudf::test::print(output->view());
+  auto const output1 = cudf::hash64(cudf::table_view({col1}));
+  auto const output2 = cudf::hash64(cudf::table_view({col2}));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 class HashMurmur64Test : public cudf::test::BaseFixture {};
 
-TEST_F(HashMurmur64Test, DISABLED_MultiType)
+TEST_F(HashMurmur64Test, MultiType)
 {
   auto col1 = cudf::test::strings_column_wrapper(
     {"The",
@@ -1141,6 +1146,25 @@ TEST_F(HashMurmur64Test, DISABLED_MultiType)
      "!@#$%^&*(())",
      "0123456789",
      "{}|:<>?,./;[]=-"});
+
+  auto output = cudf::hash64(cudf::table_view({col1}));
+  // these were generated using the CPU compiled
+  // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+  auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({3481043174314896794ul,
+                                                                    1981901315483788749ul,
+                                                                    1418748153263580713ul,
+                                                                    11224732510765974842ul,
+                                                                    10813495276579975748ul,
+                                                                    3654904410285196488ul,
+                                                                    7289234017606107350ul,
+                                                                    225672801045596944ul,
+                                                                    14927688838032769435ul,
+                                                                    7513581995808204968ul,
+                                                                    0ul,
+                                                                    14163495587303857889ul,
+                                                                    4581940570640870180ul,
+                                                                    18164432652839101653ul});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 
   using ts = cudf::timestamp_s;
   auto col2 =
@@ -1159,8 +1183,23 @@ TEST_F(HashMurmur64Test, DISABLED_MultiType)
                                                               static_cast<ts::duration>(100),
                                                               ts::duration::max()});
 
-  auto const output = cudf::hash64(cudf::table_view({col1, col2}));
-  cudf::test::print(output->view());
+  output = cudf::hash64(cudf::table_view({col1, col2}));
+
+  expected = cudf::test::fixed_width_column_wrapper<uint64_t>({9466414547226101804ul,
+                                                               8228850782181844430ul,
+                                                               785745530268169861ul,
+                                                               4419198613737028765ul,
+                                                               8688495967673047490ul,
+                                                               16639004178923553997ul,
+                                                               5537069187226926761ul,
+                                                               1827028865561218073ul,
+                                                               11416255570436251115ul,
+                                                               17794658852294150415ul,
+                                                               5518440516384677761ul,
+                                                               18392488402293221125ul,
+                                                               14843016968729228293ul,
+                                                               12478631074270786392ul});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

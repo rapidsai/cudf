@@ -47,18 +47,22 @@ struct MurmurHash3_64 {
   constexpr MurmurHash3_64() = default;
   constexpr MurmurHash3_64(hash_value_type seed) : m_seed(seed) {}
 
-  __device__ inline uint64_t getblock64(std::byte const* data, cudf::size_type offset) const
+  __device__ inline uint32_t getblock32(std::byte const* data, cudf::size_type offset) const
   {
-    // Read an 8-byte value from the data pointer as individual bytes for safe
+    // Read a 4-byte value from the data pointer as individual bytes for safe
     // unaligned access (very likely for string types).
-    auto block      = reinterpret_cast<uint8_t const*>(data + offset);
-    uint64_t result = block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
-    block += 4;
-    result = result << 32;
-    return result | block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+    auto block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  __device__ inline uint32_t fmix64(uint64_t k) const
+  __device__ inline uint64_t getblock64(std::byte const* data, cudf::size_type offset) const
+  {
+    uint64_t result = getblock32(data, offset + 4);
+    result          = result << 32;
+    return result | getblock32(data, offset);
+  }
+
+  __device__ inline uint64_t fmix64(uint64_t k) const
   {
     k ^= k >> 33;
     k *= 0xff51afd7ed558ccdUL;
@@ -66,11 +70,6 @@ struct MurmurHash3_64 {
     k *= 0xc4ceb9fe1a85ec53UL;
     k ^= k >> 33;
     return k;
-  }
-
-  __device__ inline uint64_t rotate_bits_left(uint64_t x, uint32_t r) const noexcept
-  {
-    return (x << r) | (x >> (64 - r));
   }
 
   result_type __device__ inline operator()(Key const& key) const { return compute(key); }
@@ -91,8 +90,8 @@ struct MurmurHash3_64 {
     // Process remaining bytes that do not fill a 8-byte chunk.
     uint64_t k1     = 0;
     uint64_t k2     = 0;
-    auto const tail = reinterpret_cast<uint8_t const*>(data + tail_offset);
-    switch (len % (BLOCK_SIZE - 1)) {
+    auto const tail = reinterpret_cast<uint8_t const*>(data) + tail_offset;
+    switch (len & (BLOCK_SIZE - 1)) {
       case 15: k2 ^= static_cast<uint64_t>(tail[14]) << 48;
       case 14: k2 ^= static_cast<uint64_t>(tail[13]) << 40;
       case 13: k2 ^= static_cast<uint64_t>(tail[12]) << 32;
@@ -131,8 +130,8 @@ struct MurmurHash3_64 {
 
     // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
-      uint64_t k1 = getblock64(data, i * BLOCK_SIZE / 2);        // 1st 8 bytes
-      uint64_t k2 = getblock64(data, (i + 1) * BLOCK_SIZE / 2);  // 2nd 8 bytes
+      uint64_t k1 = getblock64(data, (i * BLOCK_SIZE));                     // 1st 8 bytes
+      uint64_t k2 = getblock64(data, (i * BLOCK_SIZE) + (BLOCK_SIZE / 2));  // 2nd 8 bytes
 
       k1 *= c1;
       k1 = rotate_bits_left(k1, 31);
