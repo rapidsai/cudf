@@ -988,7 +988,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
 
   // Select only stripes required (aka row groups)
   auto const [rows_to_skip, rows_to_read, selected_stripes] =
-    _metadata.select_stripes(skip_rows, num_rows_opt, stripes, _stream);
+    _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
 
   // If no rows or stripes to read, return empty columns
   if (rows_to_read == 0 || selected_stripes.empty()) {
