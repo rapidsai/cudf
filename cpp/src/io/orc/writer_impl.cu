@@ -2013,53 +2013,28 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
   return h_counts;
 }
 
-/**
- * @brief Perform the processing steps needed to convert the input table into the output ORC data
- * for writing, such as compression and ORC encoding.
- *
- * @param input The input table
- * @param table_meta The table metadata
- * @param max_stripe_size Maximum size of stripes in the output file
- * @param row_index_stride The row index stride
- * @param enable_dictionary Whether dictionary is enabled
- * @param compression_kind The compression kind
- * @param compression_blocksize The block size used for compression
- * @param stats_freq Column statistics granularity type for parquet/orc writers
- * @param collect_compression_stats Flag to indicate if compression statistics should be collected
- * @param write_mode Flag to indicate if there is only a single table write
- * @param out_sink Sink for writing data
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A tuple of the intermediate results containing the processed data
- */
-auto convert_table_to_orc_data(table_view const& input,
-                               table_input_metadata const& table_meta,
-                               stripe_size_limits max_stripe_size,
-                               size_type row_index_stride,
-                               bool enable_dictionary,
-                               CompressionKind compression_kind,
-                               size_t compression_blocksize,
-                               statistics_freq stats_freq,
-                               bool collect_compression_stats,
-                               single_write_mode write_mode,
-                               data_sink const& out_sink,
-                               rmm::cuda_stream_view stream)
+struct stripe_dictionaries {
+  hostdevice_2dvector<gpu::stripe_dictionary> views;
+  std::vector<rmm::device_uvector<uint32_t>> data_owner;
+  std::vector<rmm::device_uvector<uint32_t>> index_owner;
+
+  void on_encode_complete(rmm::cuda_stream_view stream)
+  {
+    data_owner.clear();
+    index_owner.clear();
+
+    for (auto& sd : views.host_view().flat_view()) {
+      sd.data  = {};
+      sd.index = {};
+    }
+    views.host_to_device_async(stream);
+  }
+};
+
+stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
+                                       file_segmentation const& segmentation,
+                                       rmm::cuda_stream_view stream)
 {
-  auto const input_tview = table_device_view::create(input, stream);
-
-  auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
-
-  // This is unused but it holds memory buffers for later access thus needs to be kept alive.
-  [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
-
-  auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
-
-  [[maybe_unused]] auto const rg_char_counts_data =
-    set_rowgroup_char_counts(orc_table, rowgroup_bounds, stream);
-
-  // Decide stripe boundaries based on rowgroups and char counts
-  auto segmentation =
-    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size);
-
   // Build stripe dictionaries
   std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
     orc_table.string_column_indices.size());
@@ -2144,8 +2119,62 @@ auto convert_table_to_orc_data(table_view const& input,
   gpu::collect_map_entries(stripe_dicts, stream);
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
 
-  hash_maps_storage.clear();  // TODO replace with RAII
+  // Clear map slots; hash map storage is deallocated at the end of this function
+  for (auto& sd : stripe_dicts.host_view().flat_view()) {
+    sd.map_slots = {};
+  }
+  stripe_dicts.host_to_device_async(stream);
 
+  return {std::move(stripe_dicts), std::move(dict_data_owner), std::move(dict_index_owner)};
+}
+/**
+ * @brief Perform the processing steps needed to convert the input table into the output ORC data
+ * for writing, such as compression and ORC encoding.
+ *
+ * @param input The input table
+ * @param table_meta The table metadata
+ * @param max_stripe_size Maximum size of stripes in the output file
+ * @param row_index_stride The row index stride
+ * @param enable_dictionary Whether dictionary is enabled
+ * @param compression_kind The compression kind
+ * @param compression_blocksize The block size used for compression
+ * @param stats_freq Column statistics granularity type for parquet/orc writers
+ * @param collect_compression_stats Flag to indicate if compression statistics should be collected
+ * @param write_mode Flag to indicate if there is only a single table write
+ * @param out_sink Sink for writing data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A tuple of the intermediate results containing the processed data
+ */
+auto convert_table_to_orc_data(table_view const& input,
+                               table_input_metadata const& table_meta,
+                               stripe_size_limits max_stripe_size,
+                               size_type row_index_stride,
+                               bool enable_dictionary,
+                               CompressionKind compression_kind,
+                               size_t compression_blocksize,
+                               statistics_freq stats_freq,
+                               bool collect_compression_stats,
+                               single_write_mode write_mode,
+                               data_sink const& out_sink,
+                               rmm::cuda_stream_view stream)
+{
+  auto const input_tview = table_device_view::create(input, stream);
+
+  auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
+
+  // This is unused but it holds memory buffers for later access thus needs to be kept alive.
+  [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
+
+  auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
+
+  [[maybe_unused]] auto const rg_char_counts_data =
+    set_rowgroup_char_counts(orc_table, rowgroup_bounds, stream);
+
+  // Decide stripe boundaries based on rowgroups and char counts
+  auto segmentation =
+    calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size);
+
+  auto stripe_dicts    = build_dictionaries(orc_table, segmentation, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
@@ -2160,9 +2189,7 @@ auto convert_table_to_orc_data(table_view const& input,
   auto enc_data = encode_columns(
     orc_table, std::move(dec_chunk_sizes), segmentation, streams, uncompressed_block_align, stream);
 
-  // don't need to keep the dictionary data around anymore, just the metadata (e.g. char counts)
-  dict_data_owner.clear();
-  dict_index_owner.clear();
+  stripe_dicts.on_encode_complete(stream);
 
   auto const num_rows = input.num_rows();
 
@@ -2184,7 +2211,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::optional<writer_compression_statistics>{},
                       std::move(streams),
                       std::move(stripes),
-                      std::move(stripe_dicts),
+                      std::move(stripe_dicts.views),
                       cudf::detail::pinned_host_vector<uint8_t>()};
   }
 
@@ -2264,7 +2291,7 @@ auto convert_table_to_orc_data(table_view const& input,
                     std::move(compression_stats),
                     std::move(streams),
                     std::move(stripes),
-                    std::move(stripe_dicts),
+                    std::move(stripe_dicts.views),
                     std::move(bounce_buffer)};
 }
 
