@@ -75,7 +75,7 @@ class reader::impl {
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
-  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for others
+  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   cudf::io::orc::detail::aggregate_orc_metadata _metadata;
   cudf::io::orc::detail::column_hierarchy const _selected_columns;  // Need to be after _metadata
 
