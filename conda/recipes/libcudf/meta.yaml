@@ -64,6 +64,7 @@ requirements:
     - libcurand-dev
     {% endif %}
     - cuda-version ={{ cuda_version }}
+    - nvcomp {{ nvcomp_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -98,6 +99,7 @@ outputs:
         - libcufile  # [linux64]
         {% endif %}
         - cuda-version {{ cuda_spec }}
+        - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
@@ -352,8 +354,6 @@ outputs:
       license_family: APACHE
       license_file: LICENSE
       summary: libcudf library
-      prelink_message:
-        - nvcomp.txt
   - name: libcudf_kafka
     version: {{ version }}
     script: install_libcudf_kafka.sh
