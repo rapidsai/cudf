@@ -1905,6 +1905,7 @@ def test_reader_row_index_order(data):
 
 # Test the corner case where empty blocks are compressed
 # Decompressed data size is zero, even though compressed data size is non-zero
+# For more information see https://github.com/rapidsai/cudf/issues/13608
 def test_orc_reader_empty_decomp_data(datadir):
     path = datadir / "TestOrcFile.Spark.EmptyDecompData.orc"
 
