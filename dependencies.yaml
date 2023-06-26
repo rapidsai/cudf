@@ -226,6 +226,20 @@ dependencies:
           - libarrow==11.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           - spdlog>=1.11.0,<1.12
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              # Align nvcomp version with rapids-cmake
+              # TODO: not yet available for aarch64 CUDA 12
+              - &nvcomp nvcomp==2.6.1
+          - matrix:
+              arch: aarch64
+              cuda: "11.8"
+            packages:
+              - *nvcomp
   build_wheels:
     common:
       - output_types: pyproject
