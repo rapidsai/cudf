@@ -4898,6 +4898,23 @@ class IndexedFrame(Frame):
             index=source._index,
         ).astype(np.float64)
 
+    def convert_dtypes(
+        self,
+        infer_objects=True,
+        convert_string=True,
+        convert_integer=True,
+        convert_boolean=True,
+        convert_floating=True,
+        dtype_backend=None,
+    ):
+        """
+        Returns a copy of the Series/DataFrame.
+
+        Unlike Pandas, this method just returns a copy. All data
+        types in cuDF are nullable, so there is no need to convert.
+        """
+        return self.copy()
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""
