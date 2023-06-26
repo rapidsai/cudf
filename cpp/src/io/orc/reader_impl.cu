@@ -248,7 +248,10 @@ rmm::device_buffer decompress_stripe_data(
   }
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
-  rmm::device_buffer decomp_data(total_decomp_size, stream);
+  // Buffer needs to be padded.
+  // Required by `gpuDecodeOrcColumnData`.
+  rmm::device_buffer decomp_data(
+    cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
@@ -462,13 +465,13 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
                            };
                          });
 
-        out_buffers[col_idx]._null_mask = std::move(merged_null_mask);
+        out_buffers[col_idx].set_null_mask(std::move(merged_null_mask));
 
       } else {
         // Since child column doesn't have a mask, copy parent null mask
         auto mask_size = bitmask_allocation_size_bytes(parent_mask_len);
-        out_buffers[col_idx]._null_mask =
-          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr);
+        out_buffers[col_idx].set_null_mask(
+          rmm::device_buffer(static_cast<void*>(parent_valid_map_base), mask_size, stream, mr));
       }
     }
   }

@@ -124,7 +124,7 @@ struct timezone_file {
     }
     CUDF_EXPECTS(
       header.typecnt > 0 && header.typecnt <= file_size / sizeof(localtime_type_record_s),
-      "Invalid number number of time types in timezone file.");
+      "Invalid number of time types in timezone file.");
     CUDF_EXPECTS(header.timecnt <= file_size,
                  "Number of transition times is larger than the file size.");
   }

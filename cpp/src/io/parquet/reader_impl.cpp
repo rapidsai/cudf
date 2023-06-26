@@ -17,10 +17,29 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <rmm/cuda_stream_pool.hpp>
 
 #include <numeric>
 
 namespace cudf::io::detail::parquet {
+
+namespace {
+
+int constexpr NUM_DECODERS       = 2;  // how many decode kernels are there to run
+int constexpr APPROX_NUM_THREADS = 4;  // guestimate from DaveB
+int constexpr STREAM_POOL_SIZE   = NUM_DECODERS * APPROX_NUM_THREADS;
+
+auto& get_stream_pool()
+{
+  // TODO: creating this on the heap because there were issues with trying to call the
+  // stream pool destructor during cuda shutdown that lead to a segmentation fault in
+  // nvbench. this allocation is being deliberately leaked to avoid the above, but still
+  // results in non-fatal warnings when running nvbench in cuda-gdb.
+  static auto pool = new rmm::cuda_stream_pool{STREAM_POOL_SIZE};
+  return *pool;
+}
+
+}  // namespace
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
@@ -37,6 +56,29 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
+  // Check to see if there are any string columns present. If so, then we need to get size info
+  // for each string page. This size info will be used to pre-allocate memory for the column,
+  // allowing the page decoder to write string data directly to the column buffer, rather than
+  // doing a gather operation later on.
+  // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
+  // chunked reader).
+  auto const has_strings = std::any_of(chunks.begin(), chunks.end(), gpu::is_string_col);
+
+  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
+  if (has_strings) {
+    gpu::ComputePageStringSizes(
+      pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
+
+    col_sizes = calculate_page_string_offsets();
+
+    // check for overflow
+    if (std::any_of(col_sizes.begin(), col_sizes.end(), [](size_t sz) {
+          return sz > std::numeric_limits<size_type>::max();
+        })) {
+      CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
+    }
+  }
+
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
@@ -44,6 +86,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     cudf::detail::hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
   auto chunk_nested_data = cudf::detail::hostdevice_vector<void*>(sum_max_depths, _stream);
   auto chunk_offsets     = std::vector<size_t>();
+  auto chunk_nested_str_data =
+    cudf::detail::hostdevice_vector<void*>(has_strings ? sum_max_depths : 0, _stream);
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, chunk_off = 0; c < chunks.size(); c++) {
@@ -63,6 +107,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     // out data
     auto data                  = chunk_nested_data.host_ptr(chunk_off);
     chunks[c].column_data_base = chunk_nested_data.device_ptr(chunk_off);
+
+    auto str_data = has_strings ? chunk_nested_str_data.host_ptr(chunk_off) : nullptr;
+    chunks[c].column_string_base =
+      has_strings ? chunk_nested_str_data.device_ptr(chunk_off) : nullptr;
 
     chunk_off += max_depth;
 
@@ -106,6 +154,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
+        // only do string buffer for leaf
+        if (out_buf.string_size() == 0 && col_sizes[chunks[c].src_col_index] > 0) {
+          out_buf.create_string_data(col_sizes[chunks[c].src_col_index], _stream);
+        }
+        if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
           static_cast<uint32_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       } else {
@@ -121,8 +174,18 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
+  _stream.synchronize();
 
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, _stream);
+  auto stream1 = get_stream_pool().get_stream();
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream1);
+  if (has_strings) {
+    auto stream2 = get_stream_pool().get_stream();
+    chunk_nested_str_data.host_to_device_async(stream2);
+    gpu::DecodeStringPageData(
+      pages, chunks, num_rows, skip_rows, _file_itm_data.level_type_size, stream2);
+    stream2.synchronize();
+  }
+  stream1.synchronize();
 
   pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
@@ -144,21 +207,28 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
-      if (out_buf.type.id() != type_id::LIST ||
-          (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED)) {
-        continue;
-      }
-      CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
-      auto& child = (*cols)[input_col.nesting[l_idx + 1]];
+      if (out_buf.type.id() == type_id::LIST &&
+          (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED) == 0) {
+        CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
+        auto const& child = (*cols)[input_col.nesting[l_idx + 1]];
 
-      // the final offset for a list at level N is the size of it's child
-      int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-      CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
-                                    &offset,
-                                    sizeof(offset),
-                                    cudaMemcpyDefault,
-                                    _stream.value()));
-      out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
+        // the final offset for a list at level N is the size of it's child
+        int const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
+                                      &offset,
+                                      sizeof(offset),
+                                      cudaMemcpyDefault,
+                                      _stream.value()));
+        out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
+      } else if (out_buf.type.id() == type_id::STRING) {
+        // need to cap off the string offsets column
+        size_type const sz = static_cast<size_type>(col_sizes[idx]);
+        cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
+                        &sz,
+                        sizeof(size_type),
+                        cudaMemcpyDefault,
+                        _stream.value());
+      }
     }
   }
 
@@ -232,7 +302,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // Don't need to do it if we read the file all at once.
   if (_chunk_read_limit > 0) {
     for (auto const& buff : _output_buffers) {
-      _output_buffers_template.emplace_back(column_buffer::empty_like(buff));
+      _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
     }
   }
 }
@@ -350,7 +420,7 @@ table_with_metadata reader::impl::read_chunk()
   if (_chunk_read_limit > 0) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
-      _output_buffers.emplace_back(column_buffer::empty_like(buff));
+      _output_buffers.emplace_back(inline_column_buffer::empty_like(buff));
     }
   }
 

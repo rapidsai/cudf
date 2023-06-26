@@ -44,9 +44,9 @@ __launch_bounds__(block_size) __global__
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / warp_size;
+  size_type const tid            = threadIdx.x + blockIdx.x * block_size;
+  int const warp_id              = tid / warp_size;
+  size_type const warps_per_grid = gridDim.x * block_size / warp_size;
 
   // begin/end indices for the column data
   size_type begin = 0;
@@ -59,7 +59,7 @@ __launch_bounds__(block_size) __global__
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
-  const int lane_id = threadIdx.x % warp_size;
+  int const lane_id = threadIdx.x % warp_size;
 
   size_type warp_valid_count{0};
 
