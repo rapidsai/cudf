@@ -24,11 +24,11 @@ namespace parquet {
 namespace gpu {
 
 void DecodePageDataFixed(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                           cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                           size_t num_rows,
-                           size_t min_row,
-                           int level_type_size,
-                           rmm::cuda_stream_view stream);
+                         cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                         size_t num_rows,
+                         size_t min_row,
+                         int level_type_size,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet

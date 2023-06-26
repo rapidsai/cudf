@@ -48,9 +48,9 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 // level decode buffer size.
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
-template<int rolling_size>
+template <int rolling_size>
 constexpr int rolling_index(int index)
-{ 
+{
   return index % rolling_size;
 }
 
@@ -93,12 +93,12 @@ enum level_type {
 };
 
 enum kernel_mask_bits {
-  KERNEL_MASK_FIXED_WIDTH_NO_DICT = (1<<0),
+  KERNEL_MASK_FIXED_WIDTH_NO_DICT = (1 << 0),
   // KERNEL_MASK_FIXED_WIDTH_DICT,
   // KERNEL_MASK_STRINGS,
   // KERNEL_NESTED_
   // etc
-  KERNEL_MASK_GENERAL             = (1<<1)
+  KERNEL_MASK_GENERAL = (1 << 1)
 };
 
 /**

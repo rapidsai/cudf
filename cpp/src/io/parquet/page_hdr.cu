@@ -156,21 +156,14 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
 
 __device__ int get_kernel_mask(gpu::PageInfo const& page, gpu::ColumnChunkDesc const& chunk)
 {
-  if(page.flags & PAGEINFO_FLAGS_DICTIONARY){
-    return 0;
-  }
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
 
   // non-string, non-nested, non-dict, non-boolean types
-  if(page.encoding == Encoding::PLAIN &&
-     chunk.max_level[level_type::REPETITION] == 0 && 
-     (chunk.data_type & 7) != BYTE_ARRAY &&
-     (chunk.data_type & 7) != BOOLEAN){
-
-    //printf("FIXED\n");
+  if (page.encoding == Encoding::PLAIN && chunk.max_nesting_depth == 1 &&
+      (chunk.data_type & 7) != BYTE_ARRAY && (chunk.data_type & 7) != BOOLEAN) {
     return KERNEL_MASK_FIXED_WIDTH_NO_DICT;
   }
 
-  //printf("GENERAL\n");
   return KERNEL_MASK_GENERAL;
 }
 
@@ -410,7 +403,7 @@ __global__ void __launch_bounds__(128)
         // zero out V2 info
         bs->page.num_nulls     = 0;
         bs->page.def_lvl_bytes = 0;
-        bs->page.rep_lvl_bytes = 0;        
+        bs->page.rep_lvl_bytes = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
@@ -447,7 +440,7 @@ __global__ void __launch_bounds__(128)
         }
       }
       index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0){
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
         page_info[index_out] = bs->page;
       }
       num_values = shuffle(num_values);

@@ -24,7 +24,7 @@ namespace gpu {
 // # of threads we're decoding with
 constexpr int preprocess_block_size = 512;
 
-// the required number of runs in shared memory we will need to provide the 
+// the required number of runs in shared memory we will need to provide the
 // rle_stream object
 constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size(preprocess_block_size);
 
@@ -51,9 +51,10 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   if (s->dict_base) {
-    auto const [new_target_pos, len] = gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
-    target_pos                       = new_target_pos;
-    str_len                          = len;
+    auto const [new_target_pos, len] =
+      gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
+    target_pos = new_target_pos;
+    str_len    = len;
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
     str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
   }
@@ -61,7 +62,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   return str_len;
 }
 
-  /**
+/**
  * @brief Update output column sizes for every nesting level based on a batch
  * of incoming decoded definition and repetition level values.
  *
@@ -224,7 +225,8 @@ __global__ void __launch_bounds__(preprocess_block_size)
   // the level stream decoders
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
-  rle_stream<level_t, preprocess_block_size> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
+  rle_stream<level_t, preprocess_block_size> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs},
+                                                                                      {rep_runs}};
 
   // setup page info
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
@@ -371,19 +373,19 @@ __global__ void __launch_bounds__(preprocess_block_size)
   }
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageSizes
  */
 void __host__ ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                      cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      bool compute_num_rows,
-                      bool compute_string_sizes,
-                      int level_type_size,
-                      rmm::cuda_stream_view stream)
+                               cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                               size_t min_row,
+                               size_t num_rows,
+                               bool compute_num_rows,
+                               bool compute_string_sizes,
+                               int level_type_size,
+                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -398,7 +400,7 @@ void __host__ ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
       pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   } else {
     gpuComputePageSizes<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-        pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
+      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   }
 }
 

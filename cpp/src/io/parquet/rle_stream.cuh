@@ -24,8 +24,7 @@ namespace cudf::io::parquet::gpu {
 
 constexpr int rle_stream_required_run_buffer_size(int num_threads)
 {
-  int num_rle_stream_decode_warps =
-    (num_threads / cudf::detail::warp_size) - 1;
+  int num_rle_stream_decode_warps = (num_threads / cudf::detail::warp_size) - 1;
   return (num_rle_stream_decode_warps * 2);
 }
 
@@ -157,7 +156,7 @@ struct rle_stream {
   uint8_t const* start;
   uint8_t const* cur;
   uint8_t const* end;
-  
+
   int max_output_values;
   int total_values;
   int cur_values;
@@ -186,7 +185,7 @@ struct rle_stream {
     start      = _start;
     cur        = _start;
     end        = _end;
-    
+
     max_output_values = _max_output_values;
     output            = _output;
 

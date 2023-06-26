@@ -17,10 +17,21 @@
 #include <io/parquet/decode_fixed.hpp>
 #include <io/parquet/decode_general.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
+
 namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
+
+// this would have to be sized appropriately taking into account how many threads might get in here
+// and how many kernels we may expect to launch on average.
+constexpr int max_streams = 16;
+auto& get_stream_pool()
+{
+  static auto pool = std::make_unique<rmm::cuda_stream_pool>(max_streams);
+  return *pool;
+}
 
 /**
  * @copydoc cudf::io::parquet::gpu::DecodePageData
@@ -32,24 +43,33 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              int level_type_size,
                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(pages.size() > 0, "There are no pages to decode");  
-  
+  CUDF_EXPECTS(pages.size() > 0, "There are no pages to decode");
+
   // determine which kernels to invoke
-  /*
   auto mask_iter = thrust::make_transform_iterator(
     pages.begin(), [] __device__(PageInfo const& p) { return p.kernel_mask; });
   int kernel_mask = thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0, thrust::bit_or<int>{});
-    */
+
+  auto& stream_pool = get_stream_pool();
+  std::vector<rmm::cuda_stream_view> used_streams;
 
   // invoke all relevant kernels. each one will only process the pages whose masks match
   // their own, and early-out on the rest.
-  //if (kernel_mask & KERNEL_MASK_FIXED_WIDTH_NO_DICT) {
-//    DecodePageDataFixed(pages, chunks, num_rows, min_row, level_type_size, stream);
-//  }
-//  if (kernel_mask & KERNEL_MASK_GENERAL) {
-    DecodePageDataGeneral(pages, chunks, num_rows, min_row, level_type_size, stream);
-//  }
+  if (kernel_mask & KERNEL_MASK_FIXED_WIDTH_NO_DICT) {
+    auto _stream = stream_pool.get_stream();
+    DecodePageDataFixed(pages, chunks, num_rows, min_row, level_type_size, _stream);
+    used_streams.push_back(_stream);
+  }
+  if (kernel_mask & KERNEL_MASK_GENERAL) {
+    auto _stream = stream_pool.get_stream();
+    DecodePageDataGeneral(pages, chunks, num_rows, min_row, level_type_size, _stream);
+    used_streams.push_back(_stream);
+  }
+
+  // synchronize all the streams we used
+  std::for_each(
+    used_streams.begin(), used_streams.end(), [](auto& stream) { stream.synchronize(); });
 }
 
 }  // namespace gpu

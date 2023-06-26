@@ -36,11 +36,8 @@ namespace {
  *
  * @return The new output position
  */
-template<typename state_buf>
-__device__ int gpuDecodeRleBooleans(page_state_s* s,
-                                    state_buf* sb,
-                                    int target_pos,
-                                    int t)
+template <typename state_buf>
+__device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int target_pos, int t)
 {
   uint8_t const* end = s->data_end;
   int pos            = s->dict_pos;
@@ -344,7 +341,7 @@ __device__ void gpuDecodeStream(
       level_run -= batch_len * 2;
     }
     if (t < batch_len) {
-      int idx                    = value_count + t;
+      int idx                                      = value_count + t;
       output[rolling_index<rolling_buf_size>(idx)] = level_val;
     }
     batch_coded_count += batch_len;
@@ -404,8 +401,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
                                            : s->lvl_count[level_type::DEFINITION];
 
     // process what we got back
-    gpuUpdateValidityOffsetsAndRowIndices<level_t>(
-      actual_leaf_count, s, sb, rep, def, t);
+    gpuUpdateValidityOffsetsAndRowIndices<level_t>(actual_leaf_count, s, sb, rep, def, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     __syncwarp();
   }
@@ -432,15 +428,15 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
                                                 rolling_buf_size,  // size of dict index buffer
                                                 rolling_buf_size>  // size of string lengths buffer
-                                                state_buffers;
+    state_buffers;
 
-  page_state_s* const s          = &state_g;
-  auto* const sb = &state_buffers;
-  int page_idx                   = blockIdx.x;
-  int t                          = threadIdx.x;
-  int out_thread0;  
+  page_state_s* const s = &state_g;
+  auto* const sb        = &state_buffers;
+  int page_idx          = blockIdx.x;
+  int t                 = threadIdx.x;
+  int out_thread0;
 
-  // if(!(pages[page_idx].kernel_mask & KERNEL_MASK_GENERAL)){ return; }
+  if (!(pages[page_idx].kernel_mask & KERNEL_MASK_GENERAL)) { return; }
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   // must come after the kernel mask check
@@ -600,24 +596,24 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   }
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 void __host__ DecodePageDataGeneral(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                           cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-                           size_t num_rows,
-                           size_t min_row,
-                           int level_type_size,
-                           rmm::cuda_stream_view stream)
+                                    cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                    size_t num_rows,
+                                    size_t min_row,
+                                    int level_type_size,
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
-    
+
   if (level_type_size == 1) {
-    gpuDecodePageData<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-        pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodePageData<uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   } else {
-    gpuDecodePageData<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-        pages.device_ptr(), chunks, min_row, num_rows);
+    gpuDecodePageData<uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   }
 }
 
