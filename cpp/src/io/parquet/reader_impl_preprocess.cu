@@ -244,7 +244,8 @@ template <typename T = uint8_t>
       size_t const next_offset = column_chunk_offsets[next_chunk];
       bool const is_next_compressed =
         (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
-      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
+      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed ||
+          chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
         // Can't merge if not contiguous or mixing compressed and uncompressed
         // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
         // freed earlier (immediately after decompression stage) to limit peak memory requirements
