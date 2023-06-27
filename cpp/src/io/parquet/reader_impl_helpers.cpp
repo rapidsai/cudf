@@ -383,7 +383,9 @@ aggregate_reader_metadata::select_row_groups(
   return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
-std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
                                           bool strings_to_categorical,
@@ -400,17 +402,17 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
              : -1;
   };
 
-  std::vector<column_buffer> output_columns;
+  std::vector<inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
   std::vector<int> nesting;
 
   // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
   // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
   // not a child of "struct1" then the function will return false for "struct1"
-  std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+  std::function<bool(column_name_info const*, int, std::vector<inline_column_buffer>&, bool)>
     build_column = [&](column_name_info const* col_name_info,
                        int schema_idx,
-                       std::vector<column_buffer>& out_col_array,
+                       std::vector<inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
       if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
@@ -431,7 +433,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
 
-      column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+      inline_column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
       if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
       // store the index of this element if inserted in out_col_array
       nesting.push_back(static_cast<int>(out_col_array.size()));
@@ -471,7 +473,7 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
             to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
-          column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+          inline_column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
           }
