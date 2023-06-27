@@ -37,20 +37,34 @@ requirements:
     - cmake {{ cmake_version }}
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - {{ compiler('cuda') }} {{ cuda_version }}
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
-    - cudatoolkit ={{ cuda_version }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    - libcufile {{ cuda11_libcufile_host_version }}  # [linux64]
+    - libcufile-dev {{ cuda11_libcufile_host_version }}  # [linux64]
+    - libcurand {{ cuda11_libcurand_host_version }}
+    - libcurand-dev {{ cuda11_libcurand_host_version }}
     - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
-    - libcufile {{ libcufile_host_version }}      # [linux64]
-    - libcufile-dev {{ libcufile_host_version }}  # [linux64]
-    - libcurand {{ libcurand_host_version }}
-    - libcurand-dev {{ libcurand_host_version }}
+    {% else %}
+    - cuda-nvrtc-dev
+    - cuda-nvtx-dev
+    - libcufile-dev  # [linux64]
+    - libcurand-dev
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
+    - nvcomp {{ nvcomp_version }}
     - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -70,17 +84,25 @@ outputs:
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
-        - {{ compiler('cuda') }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
       run:
-        - cudatoolkit {{ cuda_spec }}
+        {% if cuda_major == "11" %}
+        - cudatoolkit
+        - libcufile {{ cuda11_libcufile_run_version }}  # [linux64]
+        {% else %}
+        - cuda-nvrtc
+        - libcufile  # [linux64]
+        {% endif %}
+        - cuda-version {{ cuda_spec }}
+        - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - libarrow {{ libarrow_version }}
-        - libcufile {{ libcufile_run_version }}      # [linux64]
-        - libcufile-dev {{ libcufile_run_version }}  # [linux64]
         - dlpack {{ dlpack_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
@@ -332,19 +354,22 @@ outputs:
       license_family: APACHE
       license_file: LICENSE
       summary: libcudf library
-      prelink_message:
-        - nvcomp.txt
   - name: libcudf_kafka
     version: {{ version }}
     script: install_libcudf_kafka.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - {{ compiler('cuda') }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - librdkafka {{ librdkafka_version }}
+        - {{ pin_subpackage('libcudf', exact=True) }}
       run:
         - librdkafka {{ librdkafka_version }}
         - {{ pin_subpackage('libcudf', exact=True) }}
@@ -364,18 +389,30 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - {{ compiler('cuda') }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
-        - {{ compiler('cuda') }} {{ cuda_version }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }} ={{ cuda_version }}
+        {% else %}
+        - {{ compiler('cuda') }}
+        {% endif %}
+        - cuda-version ={{ cuda_version }}
         - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        {% if cuda_major == "11" %}
         - cuda-nvtx ={{ cuda_version }}
+        {% else %}
+        - cuda-nvtx-dev
+        {% endif %}
+        - cuda-version ={{ cuda_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
@@ -391,18 +428,34 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - {{ compiler('cuda') }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
-      run:
+      host:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
-        - cudatoolkit {{ cuda_spec }}
+        - cuda-version {{ cuda_spec }}
+        {% if cuda_major == "11" %}
+        - libcurand {{ cuda11_libcurand_run_version }}
+        {% else %}
+        - libcurand-dev
+        {% endif %}
         - benchmark {{ gbench_version }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
-        - libcurand {{ libcurand_run_version }}
+      run:
+        - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - cuda-version {{ cuda_spec }}
+        {% if cuda_major == "11" %}
+        - libcurand {{ cuda11_libcurand_run_version }}
+        {% endif %}
+        - benchmark {{ gbench_version }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0

@@ -130,7 +130,7 @@ struct TypeList<Types<TYPES...>> {
   }
 
 /**
- * @brief test macro comparing for equality of \p lhs and and \p rhs for the first \p size elements.
+ * @brief test macro comparing for equality of \p lhs and \p rhs for the first \p size elements.
  */
 #define CUDF_TEST_EXPECT_VECTOR_EQUAL(lhs, rhs, size)          \
   do {                                                         \

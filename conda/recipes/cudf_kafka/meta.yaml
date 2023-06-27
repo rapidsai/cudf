@@ -4,6 +4,7 @@
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version = environ['CONDA_PY'] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
@@ -43,17 +44,19 @@ requirements:
   host:
     - python
     - cython >=0.29,<0.30
+    - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
     - setuptools
   run:
     - python
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - libcudf_kafka ={{ version }}
     - cudf ={{ version }}
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf_kafka
 
