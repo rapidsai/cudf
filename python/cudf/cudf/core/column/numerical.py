@@ -33,14 +33,9 @@ from cudf.api.types import (
     is_float_dtype,
     is_integer,
     is_integer_dtype,
-    is_number,
     is_scalar,
 )
-from cudf.core.buffer import (
-    Buffer,
-    acquire_spill_lock,
-    cuda_array_interface_wrapper,
-)
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -57,7 +52,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
     numeric_normalize_types,
-    to_cudf_compatible_scalar,
 )
 
 from .numerical_base import NumericalBaseColumn
@@ -576,34 +570,6 @@ class NumericalColumn(NumericalBaseColumn):
                 fill_value = fill_value.astype(col.dtype)
 
         return super(NumericalColumn, col).fillna(fill_value, method)
-
-    @acquire_spill_lock()
-    def _find_value(
-        self, value: ScalarLike, closest: bool, find: Callable, compare: str
-    ) -> int:
-        value = to_cudf_compatible_scalar(value)
-        if not is_number(value):
-            raise ValueError("Expected a numeric value")
-        found = 0
-        if len(self):
-            found = find(
-                self.data_array_view(mode="read"),
-                value,
-                mask=self.mask,
-            )
-        if found == -1:
-            if self.is_monotonic_increasing and closest:
-                found = find(
-                    self.data_array_view(mode="read"),
-                    value,
-                    mask=self.mask,
-                    compare=compare,
-                )
-                if found == -1:
-                    raise ValueError("value not found")
-            else:
-                raise ValueError("value not found")
-        return found
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """

@@ -3,92 +3,14 @@
 from pickle import dumps
 
 import cachetools
-import numpy as np
 from numba import cuda
 from numba.np import numpy_support
 
-import cudf
-from cudf._lib.unary import is_non_nan
 from cudf.utils._numba import _CUDFNumbaConfig
 
 #
 # Misc kernels
 #
-
-
-# Find segments
-def find_index_of_val(arr, val, mask=None, compare="eq"):
-    """
-    Returns the indices of the occurrence of *val* in *arr*
-    as per *compare*, if not found it will be filled with
-    size of *arr*
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-    arr = cudf.core.column.as_column(arr, nan_as_null=False)
-    if arr.size > 0:
-        if compare == "gt":
-            locations = arr <= val
-        elif compare == "lt":
-            locations = arr >= val
-        else:
-            locations = is_non_nan(arr) if np.isnan(val) else arr != val
-
-        target = cudf.core.column.column.arange(0, arr.size, dtype="int32")
-        found = cudf._lib.copying._boolean_mask_scatter_scalar(
-            [cudf.Scalar(arr.size, dtype="int32").device_value],
-            [target],
-            locations,
-        )[0]
-    else:
-        found = cudf.core.column.column.column_empty(0, dtype="int32")
-    return cudf.core.column.column.as_column(found).set_mask(mask)
-
-
-def find_first(arr, val, mask=None, compare="eq"):
-    """
-    Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
-    found_col = found_col.find_and_replace([arr.size], [None], True)
-
-    min_index = found_col.min()
-    return -1 if min_index is None or np.isnan(min_index) else min_index
-
-
-def find_last(arr, val, mask=None, compare="eq"):
-    """
-    Returns the index of the last occurrence of *val* in *arr*.
-    Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-
-    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
-    found_col = found_col.find_and_replace([arr.size], [None], True)
-
-    max_index = found_col.max()
-    return -1 if max_index is None or np.isnan(max_index) else max_index
 
 
 @cuda.jit
