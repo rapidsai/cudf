@@ -228,8 +228,7 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
 }
 
 template <typename DecimalType>
-struct JsonFixedPointReaderTest : public JsonReaderTest {
-};
+struct JsonFixedPointReaderTest : public JsonReaderTest {};
 
 template <typename DecimalType>
 struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalType> {
@@ -1105,7 +1104,7 @@ TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
                                                     "-33333333333333333333333",
                                                     "-444444444444444444444444"};
   std::vector<std::string> greater_uint64_max    = {
-       "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
+    "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
   std::vector<std::string> less_int64_min = {
     "-9223372036854775807", "-9223372036854775808", "-9223372036854775809", "-9223372036854775810"};
   std::vector<std::string> mixed_range = {
