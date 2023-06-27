@@ -29,8 +29,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_max_test : public cudf::test::BaseFixture {
-};
+struct groupby_max_test : public cudf::test::BaseFixture {};
 
 using K = int32_t;
 TYPED_TEST_SUITE(groupby_max_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
@@ -129,8 +128,7 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-struct groupby_max_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_max_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_max_string_test, basic)
 {
@@ -199,8 +197,7 @@ TEST_F(groupby_max_string_test, max_sorted_strings)
                   cudf::sorted::YES);
 }
 
-struct groupby_dictionary_max_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_max_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_max_test, basic)
 {
@@ -253,8 +250,7 @@ TEST_F(groupby_dictionary_max_test, fixed_width)
 }
 
 template <typename T>
-struct GroupByMaxFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupByMaxFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByMaxFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -305,8 +301,7 @@ TYPED_TEST(GroupByMaxFixedPointTest, GroupByHashMaxDecimalAsValue)
   }
 }
 
-struct groupby_max_struct_test : public cudf::test::BaseFixture {
-};
+struct groupby_max_struct_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_max_struct_test, basic)
 {
@@ -434,8 +429,7 @@ TEST_F(groupby_max_struct_test, values_with_null_child)
 }
 
 template <typename V>
-struct groupby_max_floating_point_test : public cudf::test::BaseFixture {
-};
+struct groupby_max_floating_point_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(groupby_max_floating_point_test, cudf::test::FloatingPointTypes);
 

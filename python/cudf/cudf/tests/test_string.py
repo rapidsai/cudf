@@ -784,6 +784,12 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
+def test_string_invalid_regex():
+    gs = cudf.Series(["a"])
+    with pytest.raises(RuntimeError):
+        gs.str.extract(r"{\}")
+
+
 @pytest.mark.parametrize(
     "pat,regex",
     [
@@ -812,6 +818,17 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
         got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
+
+
+def test_string_contains_case(ps_gs):
+    ps, gs = ps_gs
+    with pytest.raises(NotImplementedError):
+        gs.str.contains("A", case=False)
+    expected = ps.str.contains("A", regex=False, case=False)
+    got = gs.str.contains("A", regex=False, case=False)
+    assert_eq(expected, got)
+    got = gs.str.contains("a", regex=False, case=False)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -1058,7 +1075,8 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    with pytest.warns(FutureWarning):
+        stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -1085,8 +1103,7 @@ def test_string_unique(item):
     gs = cudf.Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # cudf returns sorted unique with `None` placed before other strings
-    pres = pres.sort_values(na_position="first").reset_index(drop=True)
+    # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
 
@@ -2738,7 +2755,7 @@ def test_string_str_subscriptable(data, index):
     assert_eq(psr.str[index], gsr.str[index])
 
     psi = pd.Index(data)
-    gsi = StringIndex(data)
+    gsi = cudf.Index(data)
 
     assert_eq(psi.str[index], gsi.str[index])
 

@@ -137,8 +137,7 @@ TYPED_TEST(groupby_min_scan_test, null_keys_and_values)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-struct groupby_min_scan_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_scan_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_min_scan_string_test, basic)
 {
@@ -155,8 +154,7 @@ TEST_F(groupby_min_scan_string_test, basic)
 }
 
 template <typename T>
-struct GroupByMinScanFixedPointTest : public cudf::test::BaseFixture {
-};
+struct GroupByMinScanFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByMinScanFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -184,8 +182,7 @@ TYPED_TEST(GroupByMinScanFixedPointTest, GroupBySortMinScanDecimalAsValue)
   }
 }
 
-struct groupby_min_scan_struct_test : public cudf::test::BaseFixture {
-};
+struct groupby_min_scan_struct_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_min_scan_struct_test, basic)
 {

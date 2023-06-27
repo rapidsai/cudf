@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 
   auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
   auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
-  return cudf::make_strings_column(d_chars, d_offsets);
+  return cudf::make_strings_column(d_chars, d_offsets, {}, 0);
 }
 
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
@@ -109,7 +109,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),  // capacity is 2x;
     cuco::empty_key{std::numeric_limits<cudf::hash_value_type>::max()},
-    cuco::empty_value{-1},  // empty value is not used
+    cuco::empty_value{-1},                  // empty value is not used
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 

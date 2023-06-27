@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ struct hashed_vocabulary {
   std::unique_ptr<cudf::column> bin_offsets;  ///< uint16 column, containing the start index of each
                                               ///< bin in the flattened hash table
   std::unique_ptr<cudf::column>
-    cp_metadata;  ///< uint32 column, The code point metadata table to use for normalization
+    cp_metadata;   ///< uint32 column, The code point metadata table to use for normalization
   std::unique_ptr<cudf::column>
     aux_cp_table;  ///< uint64 column, The auxiliary code point table to use for normalization
 };
@@ -130,8 +130,8 @@ struct tokenizer_result {
  * strings column as working memory.
  *
  * @throw cudf::logic_error if `stride > max_sequence_length`
- * @throw cudf::logic_error if `max_sequence_length * max_rows_tensor` is
- *        larger than the max value for cudf::size_type
+ * @throw std::overflow_error if `max_sequence_length * max_rows_tensor`
+ *        exceeds the column size limit
  *
  * @param strings The input strings to tokenize.
  * @param vocabulary_table The vocabulary table pre-loaded into this object.

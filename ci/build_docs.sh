@@ -19,7 +19,7 @@ rapids-print-env
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-VERSION_NUMBER=$(rapids-get-rapids-version-from-git)
+VERSION_NUMBER="23.08"
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
@@ -47,7 +47,7 @@ sphinx-build -b text source _text
 popd
 
 
-if [[ ${RAPIDS_BUILD_TYPE} == "branch" ]]; then
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
   rapids-logger "Upload Docs to S3"
   aws s3 sync --no-progress --delete cpp/doxygen/html "s3://rapidsai-docs/libcudf/${VERSION_NUMBER}/html"
   aws s3 sync --no-progress --delete docs/cudf/_html "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/html"

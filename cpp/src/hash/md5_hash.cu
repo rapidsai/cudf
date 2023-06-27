@@ -85,10 +85,10 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&) = delete;
+  MD5Hasher(const MD5Hasher&)            = delete;
   MD5Hasher& operator=(const MD5Hasher&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
-  MD5Hasher& operator=(MD5Hasher&&) = delete;
+  MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)
@@ -276,10 +276,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       }
     });
 
-  rmm::device_buffer null_mask{0, stream, mr};
-
   return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, {});
 }
 
 }  // namespace detail

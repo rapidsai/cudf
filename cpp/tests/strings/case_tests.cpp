@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@
 
 #include <vector>
 
-struct StringsCaseTest : public cudf::test::BaseFixture {
-};
+struct StringsCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCaseTest, ToLower)
 {
@@ -201,6 +200,64 @@ TEST_F(StringsCaseTest, MultiCharLower)
   auto results = cudf::strings::to_lower(strings_view);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsCaseTest, Ascii)
+{
+  // triggering the ascii code path requires some long-ish strings
+  cudf::test::strings_column_wrapper input{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
+}
+
+TEST_F(StringsCaseTest, LongStrings)
+{
+  // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
+  cudf::test::strings_column_wrapper input{
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)

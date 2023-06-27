@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -324,7 +324,8 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     size_t{0},
     thrust::plus{});
   CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of output strings is too large for a cudf column");
+               "total size of output strings exceeds the column limit",
+               std::overflow_error);
 
   // In-place convert output sizes into offsets
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),

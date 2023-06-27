@@ -31,6 +31,7 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   build:
@@ -48,7 +49,6 @@ requirements:
   run:
     - python
     - libcudf_kafka ={{ version }}
-    - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf ={{ version }}
 
 test:

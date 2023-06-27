@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
 
 enum FindAPI { find, find_multi, contains, starts_with, ends_with };
 
-class StringFindScalar : public cudf::benchmark {
-};
+class StringFindScalar : public cudf::benchmark {};
 
 static void BM_find_scalar(benchmark::State& state, FindAPI find_api)
 {
@@ -67,7 +66,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int const len_mult   = 2;
   for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
       // avoid generating combinations that exceed the cudf column limit

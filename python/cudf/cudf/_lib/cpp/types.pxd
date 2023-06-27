@@ -8,9 +8,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef uint32_t bitmask_type
     ctypedef uint32_t char_utf8
 
-    cdef enum:
-        UNKNOWN_NULL_COUNT = -1
-
     ctypedef enum mask_state:
         UNALLOCATED "cudf::mask_state::UNALLOCATED"
         UNINITIALIZED "cudf::mask_state::UNINITIALIZED"

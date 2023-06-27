@@ -37,8 +37,7 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct ArrowIOTest : public cudf::test::BaseFixture {
-};
+struct ArrowIOTest : public cudf::test::BaseFixture {};
 
 TEST_F(ArrowIOTest, URIFileSystem)
 {

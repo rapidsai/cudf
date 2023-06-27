@@ -25,8 +25,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct ValidIfTest : public cudf::test::BaseFixture {
-};
+struct ValidIfTest : public cudf::test::BaseFixture {};
 
 struct odds_valid {
   __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }
@@ -70,8 +69,9 @@ TEST_F(ValidIfTest, OddsValid)
                                        odds_valid{},
                                        cudf::get_default_stream(),
                                        rmm::mr::get_current_device_resource());
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(5000, actual.second);
+  EXPECT_EQ(expected.second, actual.second);
 }
 
 TEST_F(ValidIfTest, AllValid)
@@ -83,8 +83,9 @@ TEST_F(ValidIfTest, AllValid)
                                        all_valid{},
                                        cudf::get_default_stream(),
                                        rmm::mr::get_current_device_resource());
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(0, actual.second);
+  EXPECT_EQ(expected.second, actual.second);
 }
 
 TEST_F(ValidIfTest, AllNull)
@@ -96,6 +97,7 @@ TEST_F(ValidIfTest, AllNull)
                                        all_null{},
                                        cudf::get_default_stream(),
                                        rmm::mr::get_current_device_resource());
-  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(10000, actual.second);
+  EXPECT_EQ(expected.second, actual.second);
 }

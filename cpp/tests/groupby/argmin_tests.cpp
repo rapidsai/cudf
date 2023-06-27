@@ -26,8 +26,7 @@
 using namespace cudf::test::iterators;
 
 template <typename V>
-struct groupby_argmin_test : public cudf::test::BaseFixture {
-};
+struct groupby_argmin_test : public cudf::test::BaseFixture {};
 using K = int32_t;
 
 TYPED_TEST_SUITE(groupby_argmin_test, cudf::test::FixedWidthTypes);
@@ -117,8 +116,7 @@ TYPED_TEST(groupby_argmin_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-struct groupby_argmin_string_test : public cudf::test::BaseFixture {
-};
+struct groupby_argmin_string_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_argmin_string_test, basic)
 {
@@ -155,8 +153,7 @@ TEST_F(groupby_argmin_string_test, zero_valid_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-struct groupby_dictionary_argmin_test : public cudf::test::BaseFixture {
-};
+struct groupby_dictionary_argmin_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_dictionary_argmin_test, basic)
 {
@@ -183,8 +180,7 @@ TEST_F(groupby_dictionary_argmin_test, basic)
                   force_use_sort_impl::YES);
 }
 
-struct groupby_argmin_struct_test : public cudf::test::BaseFixture {
-};
+struct groupby_argmin_struct_test : public cudf::test::BaseFixture {};
 
 TEST_F(groupby_argmin_struct_test, basic)
 {
