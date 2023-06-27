@@ -921,19 +921,19 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   }
 }
 
+struct mask_tform {
+  __device__ uint32_t operator()(PageInfo const& p) { return p.kernel_mask; }
+};
+
 }  // anonymous namespace
 
 uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
                         rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  // TODO: if lambda doesn't also have the __host__ decorator an 'invalid device function' exception
-  // is sometimes thrown
-  auto mask_iter = thrust::make_transform_iterator(
-    pages.d_begin(), [] __host__ __device__(PageInfo const& p) { return p.kernel_mask; });
-  auto const kernel_mask = thrust::reduce(
+  auto mask_iter = thrust::make_transform_iterator(pages.d_begin(), mask_tform{});
+  return thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
-  return kernel_mask;
 }
 
 /**
