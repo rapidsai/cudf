@@ -39,7 +39,7 @@ rapids-mamba-retry install \
 LIBCUDF_CHANNEL_20=$(rapids-get-artifact ci/cudf/pull-request/13599/adfe7c5/cudf_conda_cpp_cuda11_$(arch).tar.gz)
 CUDF_CHANNEL_20=$(rapids-get-artifact ci/cudf/pull-request/13599/adfe7c5/cudf_conda_python_cuda11_${RAPIDS_PY_VERSION//.}_$(arch).tar.gz)
 
-rapids-logger $LIBCUDF_CHANNEL
+rapids-logger $LIBCUDF_CHANNEL_20
 rapids-logger $CUDF_CHANNEL_20
 
 rapids-mamba-retry install \
