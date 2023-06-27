@@ -2,6 +2,7 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 export cudf_ROOT="$(realpath ./cpp/build)"
+
 ./build.sh -n -v \
     libcudf libcudf_kafka benchmarks tests \
     --build_metrics --incl_cache_stats \
