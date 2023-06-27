@@ -1819,7 +1819,6 @@ def test_loc_multiindex_timestamp_issue_8585(index_type):
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/8693")
 def test_loc_repeated_index_label_issue_8693():
     # https://github.com/rapidsai/cudf/issues/8693
     s = pd.Series([1, 2, 3, 4], index=[0, 1, 1, 2])
@@ -1968,7 +1967,6 @@ def test_iloc_multiindex_lookup_as_label_issue_13515(indexer):
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12833")
 def test_loc_unsorted_index_slice_lookup_keyerror_issue_12833():
     # https://github.com/rapidsai/cudf/issues/12833
     df = pd.DataFrame({"a": [1, 2, 3]}, index=[7, 0, 4])
@@ -2006,7 +2004,7 @@ class TestLocIndexWithOrder:
     def take_order(self, request):
         return request.param
 
-    @pytest.fixture(params=["float", "int", "string"])
+    @pytest.fixture(params=["float", "int", "string", "range"])
     def dtype(self, request):
         return request.param
 
@@ -2018,6 +2016,13 @@ class TestLocIndexWithOrder:
             index = [-1, 10, 7, 14]
         elif dtype == "float":
             index = [-1.5, 7.10, 2.4, 11.2]
+        elif dtype == "range":
+            if order == "increasing":
+                return cudf.RangeIndex(2, 10, 3)
+            elif order == "decreasing":
+                return cudf.RangeIndex(10, 1, -3)
+            else:
+                return cudf.RangeIndex(10, 20, 3)
         else:
             raise ValueError(f"Unhandled index dtype {dtype}")
         if order == "decreasing":
@@ -2051,12 +2056,6 @@ class TestLocIndexWithOrder:
     def test_loc_index_notinindex_slice(
         self, request, df, order, dtype, take_order
     ):
-        if not (order == "increasing" and dtype in {"int", "float"}):
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="https://github.com/rapidsai/cudf/issues/12833"
-                )
-            )
         pdf = df.to_pandas()
         lo = pdf.index[1]
         hi = pdf.index[-2]
@@ -2066,7 +2065,7 @@ class TestLocIndexWithOrder:
         else:
             lo -= 1
             hi += 1
-        if order == "neither":
+        if order == "neither" and dtype != "range":
             with pytest.raises(KeyError):
                 pdf.loc[lo:hi:take_order]
             with pytest.raises(KeyError):
