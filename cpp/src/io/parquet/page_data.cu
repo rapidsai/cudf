@@ -20,6 +20,9 @@
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 
+#include <rmm/exec_policy.hpp>
+#include <thrust/reduce.h>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -919,6 +922,25 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 }
 
 }  // anonymous namespace
+
+uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                        rmm::cuda_stream_view stream)
+{
+  // determine which kernels to invoke
+  // FIXME: when running on device I get and 'invalid device function' error
+#if 0
+  auto mask_iter = thrust::make_transform_iterator(
+    pages.d_begin(), [] __device__(auto const& p) { return p.kernel_mask; });
+  auto const kernel_mask = thrust::reduce(
+    rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
+#else
+  auto mask_iter =
+    thrust::make_transform_iterator(pages.begin(), [](auto const& p) { return p.kernel_mask; });
+  auto const kernel_mask =
+    thrust::reduce(mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
+#endif
+  return kernel_mask;
+}
 
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageSizes

@@ -154,6 +154,20 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+__device__ uint32_t get_kernel_mask(gpu::PageInfo const& page, gpu::ColumnChunkDesc const& chunk)
+{
+  if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return 0; }
+
+  // non-string, non-nested, non-dict, non-boolean types
+  if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
+    return KERNEL_MASK_DELTA_BINARY;
+  } else if (is_string_col(chunk)) {
+    return KERNEL_MASK_STRING;
+  }
+
+  return KERNEL_MASK_GENERAL;
+}
+
 /**
  * @brief Functor to set value to 32 bit integer read from byte stream
  *
@@ -370,6 +384,7 @@ __global__ void __launch_bounds__(128)
       bs->page.skipped_values      = -1;
       bs->page.skipped_leaf_values = 0;
       bs->page.str_bytes           = 0;
+      bs->page.kernel_mask         = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -420,6 +435,7 @@ __global__ void __launch_bounds__(128)
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
+          bs->page.kernel_mask = get_kernel_mask(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }

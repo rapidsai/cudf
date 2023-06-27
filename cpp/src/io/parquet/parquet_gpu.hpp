@@ -86,6 +86,16 @@ enum level_type {
   NUM_LEVEL_TYPES
 };
 
+enum kernel_mask_bits {
+  KERNEL_MASK_GENERAL      = (1 << 0),
+  KERNEL_MASK_STRING       = (1 << 1),
+  KERNEL_MASK_DELTA_BINARY = (1 << 2)
+  // KERNEL_MASK_FIXED_WIDTH_DICT,
+  // KERNEL_MASK_STRINGS,
+  // KERNEL_NESTED_
+  // etc
+};
+
 /**
  * @brief Nesting information specifically needed by the decode and preprocessing
  * kernels.
@@ -203,6 +213,8 @@ struct PageInfo {
 
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+
+  uint32_t kernel_mask;
 };
 
 /**
@@ -453,6 +465,12 @@ void DecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, rmm::cuda_st
 void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream);
+
+/**
+ * @brief Get OR'd sum of page kernel masks.
+ */
+uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
