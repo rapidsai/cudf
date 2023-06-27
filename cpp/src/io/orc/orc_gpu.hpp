@@ -45,12 +45,6 @@ auto constexpr VALUE_SENTINEL = size_type{-1};
 
 using map_type = cuco::static_map<size_type, size_type>;
 
-// Largest number of bits to use for dictionary keys
-constexpr int MAX_DICT_BITS = 24;
-
-// Total number of unsigned 24 bit values
-constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
-
 /**
  * @brief The alias of `map_type::pair_atomic_type` class.
  *
@@ -191,20 +185,23 @@ struct StripeStream {
   uint8_t pad[3];
 };
 
+/**
+ * @brief Struct to describe a stripe dictionary
+ */
 struct stripe_dictionary {
   // input
-  device_span<slot_type> map_slots;
-  uint32_t column_idx      = 0;
-  size_type start_row      = 0;  // first row in stripe
-  size_type start_rowgroup = 0;  // first rowgroup in stripe
-  size_type num_rows       = 0;
+  device_span<slot_type> map_slots;  // hash map storage
+  uint32_t column_idx      = 0;      // column index
+  size_type start_row      = 0;      // first row in the stripe
+  size_type start_rowgroup = 0;      // first rowgroup in the stripe
+  size_type num_rows       = 0;      // number of rows in the stripe
 
   // output
-  device_span<uint32_t> data;   // row indices of corresponding string (row from dictionary index)
-  device_span<uint32_t> index;  // dictionary index from row index
-  size_type entry_count = 0;
-  size_type char_count  = 0;
-  bool is_enabled       = false;
+  device_span<uint32_t> data;     // index of elements in the column to include in the dictionary
+  device_span<uint32_t> index;    // index into the dictionary for each row in the column
+  size_type entry_count = 0;      // number of entries in the dictionary
+  size_type char_count  = 0;      // number of characters in the dictionary
+  bool is_enabled       = false;  // true if dictionary encoding is enabled for this stripe
 };
 
 void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> map_slots,

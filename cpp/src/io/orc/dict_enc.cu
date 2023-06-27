@@ -169,9 +169,6 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
 
-    // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
-
     cur_row += block_size;
   }
 }
