@@ -514,12 +514,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         return True
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         return self._step > 0 or len(self) <= 1
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         return self._step < 0 or len(self) <= 1
@@ -3364,6 +3364,14 @@ class Index(BaseIndex, metaclass=IndexMeta):
         except TypeError:
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
+
+    @cached_property
+    def is_monotonic_increasing(self):
+        return super().is_monotonic_increasing
+
+    @cached_property
+    def is_monotonic_decreasing(self):
+        return super().is_monotonic_decreasing
 
 
 @_cudf_nvtx_annotate
