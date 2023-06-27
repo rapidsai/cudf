@@ -204,16 +204,42 @@ struct stripe_dictionary {
   bool is_enabled       = false;  // true if dictionary encoding is enabled for this stripe
 };
 
-void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> map_slots,
+/**
+ * @brief Initializes the hash maps storage for dictionary encoding to sentinel values.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
                                      rmm::cuda_stream_view stream);
 
+/**
+ * @brief Populates the hash maps with unique values from the stripe.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param orc_columns Pre-order flattened device array of ORC column views
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
                                    device_span<orc_column_device_view const> columns,
                                    rmm::cuda_stream_view stream);
 
+/**
+ * @brief Stores the indices of the hash map entries in the dictionary data buffer.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
                          rmm::cuda_stream_view stream);
 
+/**
+ * @brief Stores the corresponding dictionary indices for each row in the column.
+ *
+ * @param dictionaries Dictionary descriptors
+ * @param columns Pre-order flattened device array of ORC column views
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
                             device_span<orc_column_device_view const> columns,
                             rmm::cuda_stream_view stream);
@@ -333,6 +359,7 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
  * @brief Launches kernel for encoding column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array
+ * @param[in] orc_columns Pre-order flattened device array of ORC column views
  * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes
@@ -388,6 +415,15 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<compression_result> comp_res,
   rmm::cuda_stream_view stream);
 
+/**
+ * @brief Counts the number of characters in each rowgroup of each string column.
+ *
+ * @param counts Output array of character counts [column][rowgroup]
+ * @param orc_columns Pre-order flattened device array of ORC column views
+ * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param str_col_indexes Indexes of string columns in orc_columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 void rowgroup_char_counts(device_2dspan<size_type> counts,
                           device_span<orc_column_device_view const> orc_columns,
                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
