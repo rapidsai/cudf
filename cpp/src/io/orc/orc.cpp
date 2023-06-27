@@ -24,12 +24,10 @@
 
 #include <string>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc {
 
 namespace {
-[[nodiscard]] uint32_t varint_size(uint64_t val)
+[[nodiscard]] constexpr uint32_t varint_size(uint64_t val)
 {
   auto len = 1u;
   while (val > 0x7f) {
@@ -527,6 +525,4 @@ void metadata::init_parent_descriptors()
   }
 }
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc

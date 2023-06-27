@@ -122,8 +122,7 @@ __global__ void __launch_bounds__(block_size)
   __shared__ typename block_reduce::TempStorage reduce_storage;
   __shared__ size_type total_num_dict_entries;
 
-  auto col_idx = blockIdx.x;
-  // TODO currently only one block per stripe
+  auto col_idx    = blockIdx.x;
   auto stripe_idx = blockIdx.y;
   auto t          = threadIdx.x;
   auto dict       = dictionaries[col_idx][stripe_idx];

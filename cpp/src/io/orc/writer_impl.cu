@@ -241,10 +241,12 @@ class orc_column_view {
   {
     rowgroup_char_counts = counts;
   }
+
   [[nodiscard]] auto rowgroup_char_count(size_type rg_idx) const
   {
     return rowgroup_char_counts[rg_idx];
   }
+
   [[nodiscard]] auto char_count() const
   {
     return std::accumulate(rowgroup_char_counts.begin(), rowgroup_char_counts.end(), size_type{0});
@@ -265,6 +267,7 @@ class orc_column_view {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
     return stripe_dicts[stripe];
   }
+
   [[nodiscard]] auto const& device_stripe_dicts() const noexcept { return d_stripe_dicts; }
 
   // Index in the table
@@ -1987,6 +1990,8 @@ std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
   return table_meta;
 }
 
+// Computes the number of characters in each rowgroup for each string column and attaches the
+// results to the corresponding orc_column_view. The owning host vector is returned.
 auto set_rowgroup_char_counts(orc_table_view& orc_table,
                               device_2dspan<rowgroup_rows const> rowgroup_bounds,
                               rmm::cuda_stream_view stream)
@@ -2038,13 +2043,11 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                                        file_segmentation const& segmentation,
                                        rmm::cuda_stream_view stream)
 {
-  // Build stripe dictionaries
   std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
     orc_table.string_column_indices.size());
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     for (auto const& stripe : segmentation.stripes) {
-      // TODO use the number of valid rows in the stripe to save memory
       auto const stripe_num_rows =
         stripe.size == 0 ? 0
                          : segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end -
@@ -2055,6 +2058,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   hostdevice_2dvector<gpu::stripe_dictionary> stripe_dicts(
     orc_table.num_string_columns(), segmentation.num_stripes(), stream);
+  // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column       = orc_table.column(col_idx);
     auto const str_col_idx = str_column.str_index();
@@ -2079,12 +2083,13 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   gpu::initialize_dictionary_hash_maps(stripe_dicts, stream);
   gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
+  // Copy the entry counts and char counts from the device to the host
   stripe_dicts.device_to_host_sync(stream);
 
   // Data owners; can be cleared after encode
   std::vector<rmm::device_uvector<uint32_t>> dict_data_owner;
   std::vector<rmm::device_uvector<uint32_t>> dict_index_owner;
-  // Make decision about which chunks have dictionary
+  // Make decision about which stripes to encode with dictionary encoding
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
     bool col_use_dictionary{false};
@@ -2097,6 +2102,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
         thrust::make_counting_iterator(stripe.first + stripe.size),
         0,
         [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
+      // Enable dictionary encoding if the dictionary size is smaller than the direct encode size
+      // The estimate excludes the LENGTH stream size, which is present in both cases
       sd.is_enabled = [&]() {
         auto const dict_index_size = varint_size(sd.entry_count);
         return sd.char_count + dict_index_size * sd.entry_count < direct_char_count;
@@ -2106,10 +2113,12 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
         sd.data            = dict_data_owner.back();
         col_use_dictionary = true;
       } else {
+        // Clear hash map storage as dictionary encoding is not used for this stripe
         hash_maps_storage[str_col_idx][stripe_idx] = rmm::device_uvector<gpu::slot_type>(0, stream);
         sd.map_slots                               = {};
       }
     }
+    // If any stripe uses dictionary encoding, allocate index storage for the whole column
     if (col_use_dictionary) {
       dict_index_owner.emplace_back(str_column.size(), stream);
       for (auto& sd : stripe_dicts[str_column.str_index()]) {
