@@ -2013,11 +2013,13 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
   return h_counts;
 }
 
+// Holds the stripe dictionary descriptors and dictionary buffers.
 struct stripe_dictionaries {
-  hostdevice_2dvector<gpu::stripe_dictionary> views;
-  std::vector<rmm::device_uvector<uint32_t>> data_owner;
-  std::vector<rmm::device_uvector<uint32_t>> index_owner;
+  hostdevice_2dvector<gpu::stripe_dictionary> views;       // descriptors [string_column][stripe]
+  std::vector<rmm::device_uvector<uint32_t>> data_owner;   // dictionary data owner, per stripe
+  std::vector<rmm::device_uvector<uint32_t>> index_owner;  // dictionary index owner, per stripe
 
+  // Should be called after encoding is complete to deallocate the dictionary buffers.
   void on_encode_complete(rmm::cuda_stream_view stream)
   {
     data_owner.clear();
@@ -2031,6 +2033,7 @@ struct stripe_dictionaries {
   }
 };
 
+// Build stripe dictionaries for string columns
 stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                                        file_segmentation const& segmentation,
                                        rmm::cuda_stream_view stream)
@@ -2127,6 +2130,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   return {std::move(stripe_dicts), std::move(dict_data_owner), std::move(dict_index_owner)};
 }
+
 /**
  * @brief Perform the processing steps needed to convert the input table into the output ORC data
  * for writing, such as compression and ORC encoding.
