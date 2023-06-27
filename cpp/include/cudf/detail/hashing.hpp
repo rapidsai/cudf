@@ -24,18 +24,8 @@
 #include <functional>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
-
-/**
- * @copydoc cudf::hash
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> hash(table_view const& input,
-                             hash_id hash_function,
-                             uint32_t seed,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         uint32_t seed,
@@ -50,6 +40,11 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
 std::unique_ptr<column> md5_hash(table_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
+
+}  // namespace detail
+}  // namespace hashing
+
+namespace detail {
 
 /* Copyright 2005-2014 Daniel James.
  *
@@ -94,6 +89,18 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 }
 
 }  // namespace detail
+
+/**
+ * @copydoc cudf::hash
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
+                             uint32_t seed,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
+
 }  // namespace cudf
 
 // specialization of std::hash for cudf::data_type

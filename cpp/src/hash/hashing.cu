@@ -31,26 +31,8 @@
 #include <algorithm>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
-namespace {
-
-template <typename IterType>
-std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
-{
-  std::vector<column_view> leaf_columns;
-  std::for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
-    if (is_nested(col.type())) {
-      CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "unsupported nested type");
-      auto child_columns = to_leaf_columns(col.child_begin(), col.child_end());
-      leaf_columns.insert(leaf_columns.end(), child_columns.begin(), child_columns.end());
-    } else {
-      leaf_columns.emplace_back(col);
-    }
-  });
-  return leaf_columns;
-}
-
-}  // namespace
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
@@ -68,6 +50,34 @@ std::unique_ptr<column> hash(table_view const& input,
 
 }  // namespace detail
 
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmur_hash3_32(input, seed, stream, mr);
+}
+
+std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
+                                              uint32_t seed,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::spark_murmur_hash3_32(input, seed, stream, mr);
+}
+
+std::unique_ptr<column> md5_hash(table_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::md5_hash(input, stream, mr);
+}
+
+}  // namespace hashing
+
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              uint32_t seed,
@@ -75,7 +85,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, seed, stream, mr);
+  return hashing::detail::hash(input, hash_function, seed, stream, mr);
 }
 
 }  // namespace cudf
