@@ -4908,12 +4908,26 @@ class IndexedFrame(Frame):
         dtype_backend=None,
     ):
         """
-        Returns a copy of the Series/DataFrame.
+        Convert columns to the best possible nullable dtypes.
 
-        Unlike Pandas, this method just returns a copy. All data
-        types in cuDF are nullable, so there is no need to convert.
+        If the dtype is numeric, and consists of all integers, convert
+        to an appropriate integer extension type. Otherwise, convert
+        to an appropriate floating type.
+
+        All other dtypes are always returned as-is as all dtypes in
+        cudf are nullable.
         """
-        return self.copy()
+        result = self.copy()
+
+        if convert_floating:
+            # cast any floating columns to int64 if
+            # they are all integer data:
+            for name, col in result._data.items():
+                if col.dtype.kind == "f":
+                    col = col.fillna(0)
+                    if cp.allclose(col, col.astype("int64")):
+                        result._data[name] = col.astype("int64")
+        return result
 
 
 def _check_duplicate_level_names(specified, level_names):
