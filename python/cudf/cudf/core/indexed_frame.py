@@ -213,8 +213,7 @@ def _get_label_range_or_mask(index, start, stop, step):
             boolean_mask = index <= stop
         return boolean_mask
     else:
-        start, stop = index.find_label_range(start, stop)
-        return slice(start, stop, step)
+        return index.find_label_range(slice(start, stop, step))
 
 
 class _FrameIndexer:

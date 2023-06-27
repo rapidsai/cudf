@@ -459,46 +459,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def find_label_range(self, first=None, last=None):
-        """Find subrange in the ``RangeIndex``, marked by their positions, that
-        starts greater or equal to ``first`` and ends less or equal to ``last``
-
-        The range returned is assumed to be monotonically increasing. In cases
-        where there is no such range that suffice the constraint, an exception
-        will be raised.
-
-        Parameters
-        ----------
-        first, last : int, optional, Default None
-            The "start" and "stop" values of the subrange. If None, will use
-            ``self._start`` as first, ``self._stop`` as last.
-
-        Returns
-        -------
-        begin, end : 2-tuple of int
-            The starting index and the ending index.
-            The `last` value occurs at ``end - 1`` position.
-        """
-
-        first = self._start if first is None else first
-        last = self._stop if last is None else last
-
-        if self._step < 0:
-            first = -first
-            last = -last
-            start = -self._start
-            step = -self._step
-        else:
-            start = self._start
-            step = self._step
-
-        stop = start + len(self) * step
-        begin = search_range(start, stop, first, step, side="left")
-        end = search_range(start, stop, last, step, side="right")
-
-        return begin, end
-
-    @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
@@ -514,6 +474,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         Return if the index has unique values.
         """
         return True
+
+    @cached_property
+    def as_range(self):
+        return range(self._start, self._stop, self._step)
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
@@ -554,17 +518,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
-        if self._step < 0:
-            label = -label
-            start = -self._start
-            step = -self._step
-        else:
-            start = self._start
-            step = self._step
-
-        stop = start + len(self) * step
-        pos = search_range(start, stop, label, step, side=side)
-        return pos
+        return search_range(label, self.as_range, side=side)
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
@@ -1438,26 +1392,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._values.dtype
 
     @_cudf_nvtx_annotate
-    def find_label_range(self, first, last):
-        """Find range that starts with *first* and ends with *last*,
-        inclusively.
-
-        Returns
-        -------
-        begin, end : 2-tuple of int
-            The starting index and the ending index.
-            The *last* value occurs at ``end - 1`` position.
-        """
-        col = self._values
-        begin, end = None, None
-        if first is not None:
-            begin = col.find_first_value(first, closest=True)
-        if last is not None:
-            end = col.find_last_value(last, closest=True)
-            end += 1
-        return begin, end
-
-    @_cudf_nvtx_annotate
     def isna(self):
         return self._column.isnull().values
 
@@ -1470,14 +1404,32 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     notnull = notna
 
     @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
+    def get_slice_bound(self, label, side: str, kind=None):
         if kind is not None:
             warnings.warn(
                 "'kind' argument in get_slice_bound is deprecated and will be "
                 "removed in a future version.",
                 FutureWarning,
             )
-        return self._values.get_slice_bound(label, side, kind)
+        if side not in {"left", "right"}:
+            raise ValueError(f"Invalid side argument {side}")
+        if self.is_monotonic_increasing:
+            return self.searchsorted(label, side=side, ascending=True)
+        elif self.is_monotonic_decreasing:
+            return self.searchsorted(label, side=side, ascending=False)
+        else:
+            try:
+                left, right = self._values._find_first_and_last(label)
+            except ValueError:
+                raise KeyError(f"{label=} not in index")
+            if left != right:
+                raise KeyError(
+                    f"Cannot get slice bound for non-unique label {label=}"
+                )
+            if side == "left":
+                return left
+            else:
+                return right + 1
 
     def _is_numeric(self):
         return False
@@ -2056,6 +2008,18 @@ class DatetimeIndex(GenericIndex):
             data = data.copy()
 
         super().__init__(data, **kwargs)
+
+    def searchsorted(
+        self,
+        value,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
+    ):
+        value = self.dtype.type(value)
+        return super().searchsorted(
+            value, side=side, ascending=ascending, na_position=na_position
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

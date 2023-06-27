@@ -1447,6 +1447,46 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
+    def find_label_range(self, loc: slice) -> slice:
+        """
+        Translate a label-based slice to an index-based slice
+
+        Parameters
+        ----------
+        loc
+            slice to search for.
+
+        Notes
+        -----
+        As with all label-based searches, the slice is right-closed.
+
+        Returns
+        -------
+        New slice translated into integer indices of the index (right-open).
+        """
+        start = loc.start
+        stop = loc.stop
+        step = 1 if loc.step is None else loc.step
+        if step < 0:
+            start_side, stop_side = "right", "left"
+        else:
+            start_side, stop_side = "left", "right"
+        istart = (
+            None
+            if start is None
+            else self.get_slice_bound(start, side=start_side)
+        )
+        istop = (
+            None
+            if stop is None
+            else self.get_slice_bound(stop, side=stop_side)
+        )
+        if step < 0:
+            # Fencepost
+            istart = None if istart is None else max(istart - 1, 0)
+            istop = None if (istop is None or istop == 0) else istop - 1
+        return slice(istart, istop, step)
+
     def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.
