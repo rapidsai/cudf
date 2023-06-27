@@ -48,9 +48,9 @@ struct XXHash_64 {
 
   __device__ inline uint64_t getblock64(std::byte const* data, cudf::size_type offset) const
   {
-    uint64_t result = getblock32(data, offset);
+    uint64_t result = getblock32(data, offset + 4);
     result          = result << 32;
-    return result | getblock32(data, offset + 4);
+    return result | getblock32(data, offset);
   }
 
   result_type __device__ inline operator()(Key const& key) const { return compute(key); }
@@ -177,11 +177,11 @@ struct XXHash_64 {
 
  private:
   hash_value_type m_seed{};
-  static constexpr uint64_t prime1 = 11400714785074694791ul;
-  static constexpr uint64_t prime2 = 14029467366897019727ul;
-  static constexpr uint64_t prime3 = 1609587929392839161ul;
-  static constexpr uint64_t prime4 = 9650029242287828579ul;
-  static constexpr uint64_t prime5 = 2870177450012600261ul;
+  static constexpr uint64_t prime1 = 0x9e3779b185ebca87ul;
+  static constexpr uint64_t prime2 = 0xc2b2ae3d27d4eb4ful;
+  static constexpr uint64_t prime3 = 0x165667b19e3779f9ul;
+  static constexpr uint64_t prime4 = 0x85ebca77c2b2ae63ul;
+  static constexpr uint64_t prime5 = 0x27d4eb2f165667c5ul;
 };
 
 template <>

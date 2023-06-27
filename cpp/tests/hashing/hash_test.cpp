@@ -1127,4 +1127,44 @@ TYPED_TEST(HashXX64TestTyped, TestNumeric)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
+class HashXX64Test : public cudf::test::BaseFixture {};
+
+TEST_F(HashXX64Test, StringType)
+{
+  auto col1 = cudf::test::strings_column_wrapper(
+    {"The",
+     "quick",
+     "brown fox",
+     "jumps over the lazy dog.",
+     "I am Jack's complete lack of null value",
+     "A very long (greater than 128 bytes/char string) to test a a very long string",
+     "Some multi-byte characters here: ééé",
+     "ééé",
+     "ééé ééé",
+     "ééé ééé ééé ééé",
+     "",
+     "!@#$%^&*(())",
+     "0123456789",
+     "{}|:<>?,./;[]=-"});
+
+  auto output = cudf::hash64(cudf::table_view({col1}));
+
+  // these were generated using the CPU compiled version of the cuco xxhash64 source
+  auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({11648823711624848724ul,
+                                                                    10848020664967373619ul,
+                                                                    14871996948511285677ul,
+                                                                    17291005374665645904ul,
+                                                                    12382650615907311857ul,
+                                                                    11838841145970261371ul,
+                                                                    3765709498017562316ul,
+                                                                    8794998527445624677ul,
+                                                                    17430199718277149821ul,
+                                                                    16032571691393850730ul,
+                                                                    17241709254077376921ul,
+                                                                    7379359170906687646ul,
+                                                                    71989731308565429ul,
+                                                                    11645213193975881208ul});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
