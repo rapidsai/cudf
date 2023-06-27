@@ -184,6 +184,19 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        rmm::cuda_stream_view stream);
 
 /**
+ * @brief Post-processes a token stream that may contain tokens from invalid lines.
+ *
+ * @param tokens The tokens to be post-processed
+ * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param stream The cuda stream to dispatch GPU kernels to
+ * @return
+ */
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
+  device_span<PdaTokenT> tokens,
+  device_span<SymbolOffsetT> token_indices,
+  rmm::cuda_stream_view stream);
+
+/**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
  * @param tokens Vector of token types in the json string

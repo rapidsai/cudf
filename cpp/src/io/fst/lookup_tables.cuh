@@ -22,11 +22,27 @@
 
 #include <cub/cub.cuh>
 
+#include <cuda/std/iterator>
+
 #include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 namespace cudf::io::fst::detail {
+
+/**
+ * @brief Helper function object that delegates a lookup to a given lookup table without mapping any
+ * of the given arguments.
+ */
+struct IdentityOp {
+  template <typename LookUpTableT, typename... Args>
+  __host__ __device__ __forceinline__ auto operator()(LookUpTableT const& lookup_table,
+                                                      Args&&... args) const
+  {
+    return lookup_table.lookup(std::forward<Args>(args)...);
+  }
+};
 
 /**
  * @brief Class template that can be plugged into the finite-state machine to look up the symbol
@@ -34,8 +50,12 @@ namespace cudf::io::fst::detail {
  * look-ahead). The class uses shared memory for the lookups.
  *
  * @tparam SymbolT The symbol type being passed in to lookup the corresponding symbol group id
+ * @tparam PreMapOpT A function object that is invoked with `(lut, symbol)` and must return the
+ * symbol group index of `symbol`.  lut` is an instance of the lookup table and `symbol` is the
+ * symbol for which to get the symbol group index. If no particular mapping is needed, an instance
+ * of `IdentityOp` can be used.
  */
-template <typename SymbolT>
+template <typename SymbolT, typename PreMapOpT>
 class SingleSymbolSmemLUT {
  private:
   // Type used for representing a symbol group id (i.e., what we return for a given symbol)
@@ -50,32 +70,36 @@ class SingleSymbolSmemLUT {
   };
 
  public:
+  using TempStorage = cub::Uninitialized<_TempStorage>;
+
   struct KernelParameter {
+    using LookupTableT = SingleSymbolSmemLUT<SymbolT, PreMapOpT>;
+
     // sym_to_sgid[min(symbol,num_valid_entries)] -> symbol group index
-    SymbolT num_valid_entries;
+    uint32_t num_valid_entries;
 
     // sym_to_sgid[symbol] -> symbol group index
     SymbolGroupIdT sym_to_sgid[NUM_ENTRIES_PER_LUT];
-  };
 
-  using TempStorage = cub::Uninitialized<_TempStorage>;
+    // Function object that transforms a symbol to a symbol group id
+    PreMapOpT pre_map_op;
+  };
 
   /**
    * @brief Initializes the given \p sgid_init with the symbol group lookups defined by \p
    * symbol_strings.
    *
-   * @param[out] sgid_init A hostdevice_vector that will be populated
-   * @param[in] symbol_strings Array of strings, where the i-th string holds all symbols
+   * @param symbol_strings Array of strings, where the i-th string holds all symbols
    * (characters!) that correspond to the i-th symbol group index
-   * @param[in] stream The stream that shall be used to cudaMemcpyAsync the lookup table
+   * @param stream The stream that shall be used to cudaMemcpyAsync the lookup table
    * @return
    */
   template <typename SymbolGroupItT>
-  static void InitDeviceSymbolGroupIdLut(
-    cudf::detail::hostdevice_vector<KernelParameter>& sgid_init,
-    SymbolGroupItT const& symbol_strings,
-    rmm::cuda_stream_view stream)
+  static KernelParameter InitDeviceSymbolGroupIdLut(SymbolGroupItT const& symbol_strings,
+                                                    PreMapOpT pre_map_op)
   {
+    KernelParameter init_data{};
+
     // The symbol group index to be returned if none of the given symbols match
     SymbolGroupIdT no_match_id = symbol_strings.size();
 
@@ -83,9 +107,7 @@ class SingleSymbolSmemLUT {
     SymbolGroupIdT max_base_match_val = 0;
 
     // Initialize all entries: by default we return the no-match-id
-    std::fill(&sgid_init.host_ptr()->sym_to_sgid[0],
-              &sgid_init.host_ptr()->sym_to_sgid[NUM_ENTRIES_PER_LUT],
-              no_match_id);
+    std::fill(&init_data.sym_to_sgid[0], &init_data.sym_to_sgid[NUM_ENTRIES_PER_LUT], no_match_id);
 
     // Set up lookup table
     uint32_t sg_id = 0;
@@ -94,22 +116,24 @@ class SingleSymbolSmemLUT {
       // Iterate over all symbols that belong to the current symbol group
       for (auto const& sg_symbol : sg_symbols) {
         max_base_match_val = std::max(max_base_match_val, static_cast<SymbolGroupIdT>(sg_symbol));
-        sgid_init.host_ptr()->sym_to_sgid[static_cast<int32_t>(sg_symbol)] = sg_id;
+        init_data.sym_to_sgid[static_cast<int32_t>(sg_symbol)] = sg_id;
       }
       sg_id++;
     }
 
     // Initialize the out-of-bounds lookup: sym_to_sgid[max_base_match_val+1] -> no_match_id
-    sgid_init.host_ptr()->sym_to_sgid[max_base_match_val + 1] = no_match_id;
+    init_data.sym_to_sgid[max_base_match_val + 1] = no_match_id;
 
     // Alias memory / return memory requirements
-    sgid_init.host_ptr()->num_valid_entries = max_base_match_val + 1;
+    init_data.num_valid_entries = max_base_match_val + 1;
+    init_data.pre_map_op        = pre_map_op;
 
-    sgid_init.host_to_device_async(stream);
+    return init_data;
   }
 
   _TempStorage& temp_storage;
   SymbolGroupIdT num_valid_entries;
+  PreMapOpT pre_map_op;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
   {
@@ -140,7 +164,14 @@ class SingleSymbolSmemLUT {
 #endif
   }
 
-  constexpr CUDF_HOST_DEVICE int32_t operator()(SymbolT const symbol) const
+  template <typename SymbolT_>
+  constexpr CUDF_HOST_DEVICE int32_t operator()(SymbolT_ const symbol) const
+  {
+    // Look up the symbol group for given symbol
+    return pre_map_op(*this, symbol);
+  }
+
+  constexpr CUDF_HOST_DEVICE int32_t lookup(SymbolT const symbol) const
   {
     // Look up the symbol group for given symbol
     return temp_storage
@@ -148,14 +179,49 @@ class SingleSymbolSmemLUT {
   }
 };
 
+template <typename symbol_t, std::size_t NUM_SYMBOL_GROUPS, typename pre_map_op_t>
+auto make_symbol_group_lut(
+  std::array<std::vector<symbol_t>, NUM_SYMBOL_GROUPS> const& symbol_strings,
+  pre_map_op_t pre_map_op)
+{
+  using lookup_table_t = SingleSymbolSmemLUT<symbol_t, pre_map_op_t>;
+  return lookup_table_t::InitDeviceSymbolGroupIdLut(symbol_strings, pre_map_op);
+}
+
+template <std::size_t NUM_SYMBOL_GROUPS, typename pre_map_op_t>
+auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& symbol_strings,
+                           pre_map_op_t pre_map_op)
+{
+  using symbol_t       = char;
+  using lookup_table_t = SingleSymbolSmemLUT<symbol_t, pre_map_op_t>;
+  return lookup_table_t::InitDeviceSymbolGroupIdLut(symbol_strings, pre_map_op);
+}
+
+template <typename symbol_t, std::size_t NUM_SYMBOL_GROUPS>
+auto make_symbol_group_lut(
+  std::array<std::vector<symbol_t>, NUM_SYMBOL_GROUPS> const& symbol_strings)
+{
+  return make_symbol_group_lut(symbol_strings, IdentityOp{});
+}
+
+template <std::size_t NUM_SYMBOL_GROUPS>
+auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& symbol_strings)
+{
+  return make_symbol_group_lut(symbol_strings, IdentityOp{});
+}
+
 /**
  * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a new target state. The
  * class uses shared memory for the lookups.
  *
  * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @tparam PreMapOpT A function object that is invoked with `(lut, state_id, match_id)` and must
+ * return the new target state for the given `(state_id, match_id)`-combination.  lut` is an
+ * instance of the lookup table. If no particular mapping is needed, an instance of `IdentityOp`
+ * can be used.
  */
-template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES>
+template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES, typename PreMapOpT>
 class TransitionTable {
  private:
   // Type used
@@ -166,18 +232,22 @@ class TransitionTable {
   };
 
  public:
-  using TempStorage = cub::Uninitialized<_TempStorage>;
+  static constexpr int32_t NUM_STATES = MAX_NUM_STATES;
+  using TempStorage                   = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
+    using LookupTableT = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES, PreMapOpT>;
+
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
+    PreMapOpT pre_map_op;
   };
 
   template <typename StateIdT>
-  static void InitDeviceTransitionTable(
-    cudf::detail::hostdevice_vector<KernelParameter>& transition_table_init,
+  static KernelParameter InitDeviceTransitionTable(
     std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
-    rmm::cuda_stream_view stream)
+    PreMapOpT pre_map_op)
   {
+    KernelParameter init_data{};
     // translation_table[state][symbol] -> new state
     for (std::size_t state = 0; state < translation_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < translation_table[state].size(); ++symbol) {
@@ -185,18 +255,20 @@ class TransitionTable {
           static_cast<int64_t>(translation_table[state][symbol]) <=
             std::numeric_limits<ItemT>::max(),
           "Target state index value exceeds value representable by the transition table's type");
-        transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
+        init_data.transitions[symbol * MAX_NUM_STATES + state] =
           static_cast<ItemT>(translation_table[state][symbol]);
       }
     }
 
-    // Copy transition table to device
-    transition_table_init.host_to_device_async(stream);
+    // Initialize function object used for transition table lookups
+    init_data.pre_map_op = pre_map_op;
+
+    return init_data;
   }
 
   constexpr CUDF_HOST_DEVICE TransitionTable(KernelParameter const& kernel_param,
                                              TempStorage& temp_storage)
-    : temp_storage(temp_storage.Alias())
+    : temp_storage(temp_storage.Alias()), pre_map_op(kernel_param.pre_map_op)
   {
 #if CUB_PTX_ARCH > 0
     for (int i = threadIdx.x; i < MAX_NUM_STATES * MAX_NUM_SYMBOLS; i += blockDim.x) {
@@ -221,11 +293,27 @@ class TransitionTable {
   constexpr CUDF_HOST_DEVICE int32_t operator()(StateIndexT const state_id,
                                                 SymbolIndexT const match_id) const
   {
+    return pre_map_op(*this, state_id, match_id);
+  }
+
+  /**
+   * @brief Returns a random-access iterator to lookup all the state transitions for one specific
+   * symbol from an arbitrary old_state, i.e., it[old_state] -> new_state.
+   *
+   * @param state_id The DFA's current state index from which we'll transition
+   * @param match_id The symbol group id of the symbol that we just read in
+   * @return
+   */
+  template <typename StateIndexT, typename SymbolIndexT>
+  constexpr CUDF_HOST_DEVICE int32_t lookup(StateIndexT const state_id,
+                                            SymbolIndexT const match_id) const
+  {
     return temp_storage.transitions[match_id * MAX_NUM_STATES + state_id];
   }
 
  private:
   _TempStorage& temp_storage;
+  PreMapOpT pre_map_op;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
   {
@@ -235,24 +323,84 @@ class TransitionTable {
   }
 };
 
+template <typename StateIdT,
+          std::size_t MAX_NUM_SYMBOLS,
+          std::size_t MAX_NUM_STATES,
+          typename PreMapOpT>
+auto make_transition_table(
+  std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table,
+  PreMapOpT pre_map_op)
+{
+  using transition_table_t = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES, PreMapOpT>;
+  return transition_table_t::InitDeviceTransitionTable(transition_table, pre_map_op);
+}
+
+template <typename StateIdT, std::size_t MAX_NUM_SYMBOLS, std::size_t MAX_NUM_STATES>
+auto make_transition_table(
+  std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table)
+{
+  return make_transition_table(transition_table, IdentityOp{});
+}
+
+/**
+ * @brief Compile-time reflection to check if `OpT` type has the `TempStorage` and
+ * `KernelParameter` type members.
+ */
+template <typename OpT, typename = void>
+struct is_complex_op : std::false_type {};
+
+template <typename OpT>
+struct is_complex_op<OpT, std::void_t<typename OpT::TempStorage, typename OpT::KernelParameter>>
+  : std::true_type {};
+
+/**
+ * @brief The device view that is passed to the finite-state transducer algorithm. Each of the
+ * lookup tables can either be a simple function object that defines the `operator()` required for
+ * respective lookup table or a complex class.
+ *
+ * @tparam SymbolGroupIdLookupT
+ * @tparam TransitionTableT
+ * @tparam TranslationTableT
+ * @tparam NUM_STATES
+ */
 template <typename SymbolGroupIdLookupT,
           typename TransitionTableT,
           typename TranslationTableT,
           int32_t NUM_STATES>
 class dfa_device_view {
  private:
-  using sgid_lut_init_t          = typename SymbolGroupIdLookupT::KernelParameter;
-  using transition_table_init_t  = typename TransitionTableT::KernelParameter;
-  using translation_table_init_t = typename TranslationTableT::KernelParameter;
+  // Complex symbol group lookup operators need to declare a `TempStorage` and `KernelParameter`
+  // type member that is passed during device-side initialization.
+  using sgid_lut_init_t = std::conditional_t<is_complex_op<SymbolGroupIdLookupT>::value,
+                                             typename SymbolGroupIdLookupT::KernelParameter,
+                                             SymbolGroupIdLookupT>;
+
+  // Complex transition table lookup operators need to declare a `TempStorage` and
+  // `KernelParameter` type member that is passed during device-side initialization.
+  using transition_table_init_t = std::conditional_t<is_complex_op<TransitionTableT>::value,
+                                                     typename TransitionTableT::KernelParameter,
+                                                     TransitionTableT>;
+
+  // Complex translation table lookup operators need to declare a `TempStorage` and
+  // `KernelParameter` type member that is passed during device-side initialization.
+  using translation_table_init_t = std::conditional_t<is_complex_op<TranslationTableT>::value,
+                                                      typename TranslationTableT::KernelParameter,
+                                                      TranslationTableT>;
 
  public:
   // The maximum number of states supported by this DFA instance
   // This is a value queried by the DFA simulation algorithm
   static constexpr int32_t MAX_NUM_STATES = NUM_STATES;
 
-  using SymbolGroupStorageT      = typename SymbolGroupIdLookupT::TempStorage;
-  using TransitionTableStorageT  = typename TransitionTableT::TempStorage;
-  using TranslationTableStorageT = typename TranslationTableT::TempStorage;
+  using SymbolGroupStorageT      = std::conditional_t<is_complex_op<SymbolGroupIdLookupT>::value,
+                                                 typename SymbolGroupIdLookupT::TempStorage,
+                                                 typename cub::NullType>;
+  using TransitionTableStorageT  = std::conditional_t<is_complex_op<TransitionTableT>::value,
+                                                     typename TransitionTableT::TempStorage,
+                                                     typename cub::NullType>;
+  using TranslationTableStorageT = std::conditional_t<is_complex_op<TranslationTableT>::value,
+                                                      typename TranslationTableT::TempStorage,
+                                                      typename cub::NullType>;
 
   __device__ auto InitSymbolGroupLUT(SymbolGroupStorageT& temp_storage)
   {
@@ -286,20 +434,23 @@ class dfa_device_view {
 
 /**
  * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a sequence of symbols
- * that the finite-state transducer is supposed to output for each transition. The class uses shared
- * memory for the lookups.
+ * that the finite-state transducer is supposed to output for each transition. The class uses
+ * shared memory for the lookups.
  *
  * @tparam OutSymbolT The symbol type being output
- * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output symbols
+ * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output
+ * symbols
  * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
  * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
+ * be used.
  */
 template <typename OutSymbolT,
           typename OutSymbolOffsetT,
           int32_t MAX_NUM_SYMBOLS,
           int32_t MAX_NUM_STATES,
-          int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES)>
+          int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES),
+          typename PreMapOpT     = IdentityOp>
 class TransducerLookupTable {
  private:
   struct _TempStorage {
@@ -311,8 +462,16 @@ class TransducerLookupTable {
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
+    using LookupTableT = TransducerLookupTable<OutSymbolT,
+                                               OutSymbolOffsetT,
+                                               MAX_NUM_SYMBOLS,
+                                               MAX_NUM_STATES,
+                                               MAX_TABLE_SIZE,
+                                               PreMapOpT>;
+
     OutSymbolOffsetT d_out_offsets[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
     OutSymbolT d_out_symbols[MAX_TABLE_SIZE];
+    PreMapOpT pre_map_op;
   };
 
   /**
@@ -321,12 +480,12 @@ class TransducerLookupTable {
    * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
    * of the thread block to call the constructor
    */
-  static void InitDeviceTranslationTable(
-    cudf::detail::hostdevice_vector<KernelParameter>& translation_table_init,
+  static KernelParameter InitDeviceTranslationTable(
     std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
       translation_table,
-    rmm::cuda_stream_view stream)
+    PreMapOpT pre_map_op)
   {
+    KernelParameter init_data;
     std::vector<OutSymbolT> out_symbols;
     out_symbols.reserve(MAX_TABLE_SIZE);
     std::vector<OutSymbolOffsetT> out_symbol_offsets;
@@ -357,19 +516,18 @@ class TransducerLookupTable {
     CUDF_EXPECTS(out_symbols.size() <= MAX_TABLE_SIZE, "Unsupported translation table");
 
     // Prepare host-side data to be copied and passed to the device
-    std::copy(std::cbegin(out_symbol_offsets),
-              std::cend(out_symbol_offsets),
-              translation_table_init.host_ptr()->d_out_offsets);
-    std::copy(std::cbegin(out_symbols),
-              std::cend(out_symbols),
-              translation_table_init.host_ptr()->d_out_symbols);
+    std::copy(
+      std::cbegin(out_symbol_offsets), std::cend(out_symbol_offsets), init_data.d_out_offsets);
+    std::copy(std::cbegin(out_symbols), std::cend(out_symbols), init_data.d_out_symbols);
 
-    // Copy data to device
-    translation_table_init.host_to_device_async(stream);
+    init_data.pre_map_op = pre_map_op;
+
+    return init_data;
   }
 
  private:
   _TempStorage& temp_storage;
+  PreMapOpT pre_map_op;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
   {
@@ -386,7 +544,7 @@ class TransducerLookupTable {
    */
   CUDF_HOST_DEVICE TransducerLookupTable(KernelParameter const& kernel_param,
                                          TempStorage& temp_storage)
-    : temp_storage(temp_storage.Alias())
+    : temp_storage(temp_storage.Alias()), pre_map_op(kernel_param.pre_map_op)
   {
     constexpr uint32_t num_offsets = MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1;
 #if CUB_PTX_ARCH > 0
@@ -408,23 +566,135 @@ class TransducerLookupTable {
 #endif
   }
 
-  template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT>
-  constexpr CUDF_HOST_DEVICE OutSymbolT operator()(StateIndexT const state_id,
-                                                   SymbolIndexT const match_id,
-                                                   RelativeOffsetT const relative_offset) const
+  template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE auto operator()(StateIndexT const state_id,
+                                             SymbolIndexT const match_id,
+                                             RelativeOffsetT const relative_offset,
+                                             SymbolT const read_symbol) const
+  {
+    return pre_map_op(*this, state_id, match_id, relative_offset, read_symbol);
+  }
+
+  template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT operator()(StateIndexT const state_id,
+                                                         SymbolIndexT const match_id,
+                                                         SymbolT const read_symbol) const
+  {
+    return pre_map_op(*this, state_id, match_id, read_symbol);
+  }
+
+  template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE auto lookup(StateIndexT const state_id,
+                                         SymbolIndexT const match_id,
+                                         RelativeOffsetT const relative_offset,
+                                         SymbolT const /*read_symbol*/) const
   {
     auto offset = temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id] + relative_offset;
     return temp_storage.out_symbols[offset];
   }
 
-  template <typename StateIndexT, typename SymbolIndexT>
-  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT operator()(StateIndexT const state_id,
-                                                         SymbolIndexT const match_id) const
+  template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT lookup(StateIndexT const state_id,
+                                                     SymbolIndexT const match_id,
+                                                     SymbolT const /*read_symbol*/) const
   {
     return temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id + 1] -
            temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id];
   }
 };
+
+template <std::size_t MAX_TABLE_SIZE,
+          typename OutSymbolT,
+          std::size_t MAX_NUM_SYMBOLS,
+          std::size_t MAX_NUM_STATES,
+          typename PreMapOpT>
+auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>,
+                                       MAX_NUM_STATES> const& translation_table,
+                            PreMapOpT pre_map_op)
+{
+  using OutSymbolOffsetT    = int32_t;
+  using translation_table_t = TransducerLookupTable<OutSymbolT,
+                                                    OutSymbolOffsetT,
+                                                    MAX_NUM_SYMBOLS,
+                                                    MAX_NUM_STATES,
+                                                    MAX_TABLE_SIZE,
+                                                    PreMapOpT>;
+  return translation_table_t::InitDeviceTranslationTable(translation_table, pre_map_op);
+}
+
+template <std::size_t MAX_TABLE_SIZE,
+          typename OutSymbolT,
+          std::size_t MAX_NUM_SYMBOLS,
+          std::size_t MAX_NUM_STATES>
+auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>,
+                                       MAX_NUM_STATES> const& translation_table)
+{
+  return make_translation_table<MAX_TABLE_SIZE>(translation_table, IdentityOp{});
+}
+
+template <typename TranslationOpT>
+class TranslationOp {
+ private:
+  struct _TempStorage {};
+
+ public:
+  using TempStorage = cub::Uninitialized<_TempStorage>;
+
+  struct KernelParameter {
+    using LookupTableT = TranslationOp<TranslationOpT>;
+    TranslationOpT translation_op;
+  };
+
+  /**
+   * @brief Initializes the lookup table, primarily to be invoked from within device code but also
+   * provides host-side implementation for verification.
+   * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
+   * of the thread block to call the constructor
+   */
+  static KernelParameter InitDeviceTranslationTable(TranslationOpT translation_op)
+  {
+    return KernelParameter{translation_op};
+  }
+
+ private:
+  _TempStorage& temp_storage;
+  TranslationOpT translation_op;
+
+  __device__ __forceinline__ _TempStorage& PrivateStorage()
+  {
+    __shared__ _TempStorage private_storage;
+    return private_storage;
+  }
+
+ public:
+  CUDF_HOST_DEVICE TranslationOp(KernelParameter const& kernel_param, TempStorage& temp_storage)
+    : temp_storage(temp_storage.Alias()), translation_op(kernel_param.translation_op)
+  {
+  }
+
+  template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE auto operator()(StateIndexT const state_id,
+                                             SymbolIndexT const match_id,
+                                             RelativeOffsetT const relative_offset,
+                                             SymbolT const read_symbol) const
+  {
+    return translation_op(*this, state_id, match_id, relative_offset, read_symbol);
+  }
+
+  template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE auto operator()(StateIndexT const state_id,
+                                             SymbolIndexT const match_id,
+                                             SymbolT const read_symbol) const
+  {
+    return translation_op(*this, state_id, match_id, read_symbol);
+  }
+};
+
+template <typename FunctorT>
+auto make_translation_functor(FunctorT map_op)
+{
+  return TranslationOp<FunctorT>::InitDeviceTranslationTable(map_op);
+}
 
 /**
  * @brief Helper class to facilitate the specification and instantiation of a DFA (i.e., the
@@ -437,70 +707,32 @@ class TransducerLookupTable {
  * @tparam NUM_STATES The number of states defined by the DFA (the other dimension of the
  * transition table)
  */
-template <typename OutSymbolT, int32_t NUM_SYMBOLS, int32_t NUM_STATES>
+template <typename SymbolGroupIdInitT,
+          typename TransitionTableInitT,
+          typename TranslationTableInitT>
 class Dfa {
+  static constexpr int32_t single_item = 1;
+
  public:
-  // The maximum number of states supported by this DFA instance
-  // This is a value queried by the DFA simulation algorithm
-  static constexpr int32_t MAX_NUM_STATES = NUM_STATES;
-
- private:
-  // Symbol-group id lookup table
-  using SymbolGroupIdLookupT = detail::SingleSymbolSmemLUT<char>;
-  using SymbolGroupIdInitT   = typename SymbolGroupIdLookupT::KernelParameter;
-
-  // Transition table
-  using TransitionTableT     = detail::TransitionTable<NUM_SYMBOLS, NUM_STATES>;
-  using TransitionTableInitT = typename TransitionTableT::KernelParameter;
-
-  // Translation lookup table
-  using OutSymbolOffsetT      = uint32_t;
-  using TranslationTableT     = detail::TransducerLookupTable<OutSymbolT,
-                                                          OutSymbolOffsetT,
-                                                          NUM_SYMBOLS,
-                                                          NUM_STATES,
-                                                          NUM_SYMBOLS * NUM_STATES>;
-  using TranslationTableInitT = typename TranslationTableT::KernelParameter;
-
   auto get_device_view()
   {
-    return dfa_device_view<SymbolGroupIdLookupT, TransitionTableT, TranslationTableT, NUM_STATES>{
-      sgid_init.d_begin(), transition_table_init.d_begin(), translation_table_init.d_begin()};
+    return dfa_device_view<typename SymbolGroupIdInitT::LookupTableT,
+                           typename TransitionTableInitT::LookupTableT,
+                           typename TranslationTableInitT::LookupTableT,
+                           TransitionTableInitT::LookupTableT::NUM_STATES>{
+      &init_data.d_begin()->sgid_lut_init,
+      &init_data.d_begin()->transition_table_init,
+      &init_data.d_begin()->translation_table_init};
   }
 
- public:
-  /**
-   * @brief Constructs a new DFA.
-   *
-   * @param symbol_vec Sequence container of symbol groups. Each symbol group is a sequence
-   * container to symbols within that group. The index of the symbol group containing a symbol being
-   * read will be used as symbol_gid of the transition and translation tables.
-   * @param tt_vec The transition table
-   * @param out_tt_vec The translation table
-   * @param stream The stream to which memory operations and kernels are getting dispatched to
-   */
-  template <typename StateIdT, typename SymbolGroupIdItT>
-  Dfa(SymbolGroupIdItT const& symbol_vec,
-      std::array<std::array<StateIdT, NUM_SYMBOLS>, NUM_STATES> const& tt_vec,
-      std::array<std::array<std::vector<OutSymbolT>, NUM_SYMBOLS>, NUM_STATES> const& out_tt_vec,
-      cudaStream_t stream)
+  Dfa(SymbolGroupIdInitT const& sgid_lut_init,
+      TransitionTableInitT const& transition_table_init,
+      TranslationTableInitT const& translation_table_init,
+      rmm::cuda_stream_view stream)
+    : init_data{single_item, stream}
   {
-    constexpr std::size_t single_item = 1;
-
-    sgid_init = cudf::detail::hostdevice_vector<SymbolGroupIdInitT>{single_item, stream};
-    transition_table_init =
-      cudf::detail::hostdevice_vector<TransitionTableInitT>{single_item, stream};
-    translation_table_init =
-      cudf::detail::hostdevice_vector<TranslationTableInitT>{single_item, stream};
-
-    // Initialize symbol group id lookup table
-    SymbolGroupIdLookupT::InitDeviceSymbolGroupIdLut(sgid_init, symbol_vec, stream);
-
-    // Initialize state transition table
-    TransitionTableT::InitDeviceTransitionTable(transition_table_init, tt_vec, stream);
-
-    // Initialize finite-state transducer lookup table
-    TranslationTableT::InitDeviceTranslationTable(translation_table_init, out_tt_vec, stream);
+    *init_data.host_ptr() = {sgid_lut_init, transition_table_init, translation_table_init};
+    init_data.host_to_device_async(stream);
   }
 
   /**
@@ -513,8 +745,8 @@ class Dfa {
    * indexes are written.
    * @tparam TransducedCountOutItT A single-item output iterator type to which the total number of
    * output symbols is written
-   * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and (b)
-   * the output symbols
+   * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and
+   * (b) the output symbols
    * @param d_chars Pointer to the input string of symbols
    * @param num_chars The total number of input symbols to process
    * @param d_out_it Random-access output iterator to which the transduced output is
@@ -527,12 +759,12 @@ class Dfa {
    * "end-state" of the previous invocation of the algorithm.
    * @param stream CUDA stream to launch kernels within. Default is the null-stream.
    */
-  template <typename SymbolT,
+  template <typename SymbolItT,
             typename TransducedOutItT,
             typename TransducedIndexOutItT,
             typename TransducedCountOutItT,
             typename OffsetT>
-  void Transduce(SymbolT const* d_chars,
+  void Transduce(SymbolItT d_chars_it,
                  OffsetT num_chars,
                  TransducedOutItT d_out_it,
                  TransducedIndexOutItT d_out_idx_it,
@@ -545,7 +777,7 @@ class Dfa {
     DeviceTransduce(nullptr,
                     temp_storage_bytes,
                     this->get_device_view(),
-                    d_chars,
+                    d_chars_it,
                     num_chars,
                     d_out_it,
                     d_out_idx_it,
@@ -560,7 +792,7 @@ class Dfa {
     DeviceTransduce(temp_storage.data(),
                     temp_storage_bytes,
                     this->get_device_view(),
-                    d_chars,
+                    d_chars_it,
                     num_chars,
                     d_out_it,
                     d_out_idx_it,
@@ -570,9 +802,24 @@ class Dfa {
   }
 
  private:
-  cudf::detail::hostdevice_vector<SymbolGroupIdInitT> sgid_init{};
-  cudf::detail::hostdevice_vector<TransitionTableInitT> transition_table_init{};
-  cudf::detail::hostdevice_vector<TranslationTableInitT> translation_table_init{};
+  struct host_device_data {
+    SymbolGroupIdInitT sgid_lut_init;
+    TransitionTableInitT transition_table_init;
+    TranslationTableInitT translation_table_init;
+  };
+  cudf::detail::hostdevice_vector<host_device_data> init_data{};
 };
+
+template <typename SymbolGroupIdInitT,
+          typename TransitionTableInitT,
+          typename TranslationTableInitT>
+auto make_fst(SymbolGroupIdInitT const& sgid_lut_init,
+              TransitionTableInitT const& transition_table_init,
+              TranslationTableInitT const& translation_table_init,
+              rmm::cuda_stream_view stream)
+{
+  return Dfa<SymbolGroupIdInitT, TransitionTableInitT, TranslationTableInitT>(
+    sgid_lut_init, transition_table_init, translation_table_init, stream);
+}
 
 }  // namespace cudf::io::fst::detail

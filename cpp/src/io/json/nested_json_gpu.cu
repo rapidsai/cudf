@@ -40,8 +40,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/device_vector.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <limits>
 #include <stack>
@@ -95,10 +98,13 @@ namespace token_filter {
 // Type used to represent the target state in the transition table
 using StateT = char;
 
+// Type used to represent a symbol group id
+using SymbolGroupT = uint8_t;
+
 /**
  * @brief Definition of the DFA's states
  */
-enum class dfa_states_t : StateT { VALID, INVALID, NUM_STATES };
+enum class dfa_states : StateT { VALID, INVALID, NUM_STATES };
 
 // Aliases for readability of the transition table
 constexpr auto TT_INV = dfa_states::INVALID;
@@ -107,21 +113,83 @@ constexpr auto TT_VLD = dfa_states::VALID;
 /**
  * @brief Definition of the symbol groups
  */
-enum class dfa_symbol_group_id : uint8_t {
+enum class dfa_symbol_group_id : SymbolGroupT {
   ERROR,             ///< Error token symbol group
   DELIMITER,         ///< Record / line delimiter symbol group
   OTHER_SYMBOLS,     ///< Symbol group that implicitly matches all other tokens
   NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
 };
 
-constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
+constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-// The i-th string representing all the characters of a symbol group
+// Lookup table to map an input symbol (i.e., a token) to a symbol group
 std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS - 1> const symbol_groups{{
-  {token_t::ErrorBegin},  // Error token symbol group
-  {token_t::LineEnd}      // Record / line delimiter symbol group
+  {static_cast<PdaTokenT>(token_t::ErrorBegin)},  // Symbols mapping to ERROR
+  {static_cast<PdaTokenT>(token_t::LineEnd)}      // Symbols mapping to DELIMITER
 }};
+
+/**
+ * @brief Function object to map (token,token_index) tuples to a symbol group.
+ */
+struct UnwrapTokenFromSymbolOp {
+  template <typename SymbolGroupLookupTableT>
+  CUDF_HOST_DEVICE SymbolGroupT operator()(SymbolGroupLookupTableT const& sgid_lut,
+                                           thrust::tuple<PdaTokenT, SymbolOffsetT> symbol) const
+  {
+    PdaTokenT const token_type = thrust::get<0>(symbol);
+    return sgid_lut.lookup(token_type);
+  }
+};
+
+/**
+ * @brief Translation function object that discards line delimiter tokens and tokens belonging to
+ * invalid lines.
+ */
+struct TransduceToken {
+  template <typename TransducerTableT, typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE SymbolT operator()(TransducerTableT const&,
+                                                StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                RelativeOffsetT const relative_offset,
+                                                SymbolT const read_symbol) const
+  {
+    const bool is_end_of_invalid_line =
+      (state_id == static_cast<StateT>(TT_INV) &&
+       match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
+
+    if (is_end_of_invalid_line) {
+      return relative_offset == 0 ? SymbolT{token_t::StructEnd, 0}
+                                  : SymbolT{token_t::StructBegin, 0};
+    } else {
+      return read_symbol;
+    }
+  }
+
+  template <typename TransducerTableT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE int32_t operator()(TransducerTableT const&,
+                                                StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                SymbolT const read_symbol) const
+  {
+    // Number of tokens emitted on invalid lines
+    constexpr int32_t num_inv_tokens = 2;
+
+    const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
+
+    // If state is either invalid or we're entering an invalid state, we discard tokens
+    const bool is_part_of_invalid_line =
+      (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
+       state_id == static_cast<StateT>(TT_VLD));
+
+    // Indicates whether we transition from an invalid line to a potentially valid line
+    const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
+
+    int32_t const emit_count =
+      is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
+    return emit_count;
+  }
+};
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
@@ -129,14 +197,8 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const trans
    /* VALID    */ {{TT_INV, TT_VLD, TT_VLD}},
    /* INVALID  */ {{TT_INV, TT_VLD, TT_INV}}}};
 
-// Translation table (i.e., for each transition, what are the symbols that we output)
-std::array<std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
-  translation_table{{/* IN_STATE      ERROR   DELIM   OTHER */
-                     /* VALID    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}, {}}},
-                     /* INVALID  */ {{{}, {}, {}, {}, {}, {}, {}, {}}}}};
-
 // The DFA's starting state
-constexpr auto start_state = static_cast<StateT>(TT_OOS);
+constexpr auto start_state = static_cast<StateT>(TT_VLD);
 }  // namespace token_filter
 
 // JSON to stack operator DFA (Deterministic Finite Automata)
@@ -1223,18 +1285,18 @@ void get_stack_context(device_span<SymbolT const> json_in,
   rmm::device_uvector<SymbolOffsetT> stack_op_indices{json_in.size(), stream};
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
-  using ToStackOpFstT =
-    cudf::io::fst::detail::Dfa<StackSymbolT,
-                               static_cast<int32_t>(
-                                 to_stack_op::dfa_symbol_group_id::NUM_SYMBOL_GROUPS),
-                               static_cast<int32_t>(to_stack_op::dfa_states::TT_NUM_STATES)>;
+  constexpr auto max_translation_table_size =
+    to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
   // Translation table specialized on the choice of whether to reset on newlines outside of strings
   const auto translation_table =
     reset_on_new_line ? to_stack_op::resetting_translation_table : to_stack_op::translation_table;
 
-  ToStackOpFstT json_to_stack_ops_fst{
-    to_stack_op::symbol_groups, to_stack_op::transition_table, translation_table, stream};
+  auto json_to_stack_ops_fst = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(to_stack_op::symbol_groups),
+    fst::detail::make_transition_table(to_stack_op::transition_table),
+    fst::detail::make_translation_table<max_translation_table_size>(translation_table),
+    stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // of structs/lists
@@ -1274,27 +1336,47 @@ void get_stack_context(device_span<SymbolT const> json_in,
 }
 
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
-  rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>, rmm::cuda_stream_view stream)
+  device_span<PdaTokenT> tokens,
+  device_span<SymbolOffsetT> token_indices,
+  rmm::cuda_stream_view stream)
 {
-  // Prepare finite-state transducer
-  using ToStackOpFstT = cudf::io::fst::detail::Dfa<PdaTokenT, num_symbol_groups, num_states>;
+  // Instantiate FST for post-processing the token stream
+  token_filter::UnwrapTokenFromSymbolOp sgid_op{};
+  auto filter_fst =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+                          fst::detail::make_transition_table(token_filter::transition_table),
+                          fst::detail::make_translation_functor(token_filter::TransduceToken{}),
+                          stream);
 
-  // Translation table specialized on the choice of whether to reset on newlines outside of strings
-  const auto translation_table =
-    reset_on_new_line ? to_stack_op::resetting_translation_table : to_stack_op::translation_table;
+  auto const mr = rmm::mr::get_current_device_resource();
+  rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
+  rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
+  rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
+  filter_fst.Transduce(
+    thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
+                                  tokens.size()),
+    static_cast<SymbolOffsetT>(tokens.size()),
+    thrust::make_reverse_iterator(
+      thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
+      tokens.size()),
+    thrust::make_discard_iterator(),
+    d_num_selected_tokens.data(),
+    token_filter::start_state,
+    stream);
 
-  ToStackOpFstT json_to_stack_ops_fst{
-    to_stack_op::symbol_groups, to_stack_op::transition_table, translation_table, stream};
+  auto const num_total_tokens = d_num_selected_tokens.value(stream);
+  rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
+  thrust::copy(rmm::exec_policy(stream),
+               filtered_tokens_out.end() - num_total_tokens,
+               filtered_tokens_out.end(),
+               tokens_out.data());
+  thrust::copy(rmm::exec_policy(stream),
+               filtered_token_indices_out.end() - num_total_tokens,
+               filtered_token_indices_out.end(),
+               token_indices_out.data());
 
-  // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
-  // of structs/lists
-  json_to_stack_ops_fst.Transduce(json_in.begin(),
-                                  static_cast<SymbolOffsetT>(json_in.size()),
-                                  stack_ops.data(),
-                                  stack_op_indices.data(),
-                                  d_num_stack_ops.data(),
-                                  to_stack_op::start_state,
-                                  stream);
+  return std::make_pair(std::move(tokens_out), std::move(token_indices_out));
 }
 
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
@@ -1337,22 +1419,21 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     return pda_sgids;
   }();
 
-  // PDA transducer alias
-  using ToTokenStreamFstT =
-    cudf::io::fst::detail::Dfa<StackSymbolT,
-                               tokenizer_pda::NUM_PDA_SGIDS,
-                               static_cast<tokenizer_pda::StateT>(
-                                 tokenizer_pda::pda_state_t::PD_NUM_STATES)>;
-
   // Instantiating PDA transducer
-  std::vector<std::vector<char>> pda_sgid_identity{tokenizer_pda::NUM_PDA_SGIDS};
+  std::array<std::vector<char>, tokenizer_pda::NUM_PDA_SGIDS> pda_sgid_identity{};
   std::generate(std::begin(pda_sgid_identity),
                 std::end(pda_sgid_identity),
                 [i = char{0}]() mutable { return std::vector<char>{i++}; });
-  ToTokenStreamFstT json_to_tokens_fst{pda_sgid_identity,
-                                       tokenizer_pda::get_transition_table(format),
-                                       tokenizer_pda::get_translation_table(recover_from_error),
-                                       stream};
+
+  constexpr auto max_translation_table_size =
+    tokenizer_pda::NUM_PDA_SGIDS *
+    static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
+  auto json_to_tokens_fst = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(pda_sgid_identity),
+    fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
+    fst::detail::make_translation_table<max_translation_table_size>(
+      tokenizer_pda::get_translation_table(recover_from_error)),
+    stream);
 
   // Perform a PDA-transducer pass
   // Compute the maximum amount of tokens that can possibly be emitted for a given input size
@@ -1364,20 +1445,33 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
   rmm::device_scalar<std::size_t> num_written_tokens{stream};
-  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
+  // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
+  // see a JSON-line delimiter as the very first item
+  SymbolOffsetT const delimiter_offset =
+    (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
+  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count + delimiter_offset, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{
+    max_token_out_count + delimiter_offset, stream, mr};
 
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               tokens.data(),
-                               tokens_indices.data(),
+                               tokens.data() + delimiter_offset,
+                               tokens_indices.data() + delimiter_offset,
                                num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
 
-  auto const num_total_tokens = num_written_tokens.value(stream);
+  auto const num_total_tokens = num_written_tokens.value(stream) + delimiter_offset;
   tokens.resize(num_total_tokens, stream);
   tokens_indices.resize(num_total_tokens, stream);
+
+  if (delimiter_offset == 1) {
+    tokens.set_element(0, token_t::LineEnd, stream);
+    auto [filtered_tokens, filtered_tokens_indices] =
+      process_token_stream(tokens, tokens_indices, stream);
+    tokens         = std::move(filtered_tokens);
+    tokens_indices = std::move(filtered_tokens_indices);
+  }
 
   CUDF_EXPECTS(num_total_tokens <= max_token_out_count,
                "Generated token count exceeds the expected token count");
@@ -1500,6 +1594,7 @@ void make_json_column(json_column& root_column,
       case token_t::ValueBegin: return "ValueBegin";
       case token_t::ValueEnd: return "ValueEnd";
       case token_t::ErrorBegin: return "ErrorBegin";
+      case token_t::LineEnd: return "LineEnd";
       default: return "Unknown";
     }
   };

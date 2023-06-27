@@ -228,7 +228,8 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
 }
 
 template <typename DecimalType>
-struct JsonFixedPointReaderTest : public JsonReaderTest {};
+struct JsonFixedPointReaderTest : public JsonReaderTest {
+};
 
 template <typename DecimalType>
 struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalType> {
@@ -1104,7 +1105,7 @@ TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
                                                     "-33333333333333333333333",
                                                     "-444444444444444444444444"};
   std::vector<std::string> greater_uint64_max    = {
-    "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
+       "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
   std::vector<std::string> less_int64_min = {
     "-9223372036854775807", "-9223372036854775808", "-9223372036854775809", "-9223372036854775810"};
   std::vector<std::string> mixed_range = {
@@ -1767,6 +1768,52 @@ TEST_F(JsonReaderTest, TrailingCommas)
     EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
       << "Failed on test case " << i;
   }
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecovering)
+{
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"a":])"
+    "\n"
+    // 2 -> (invalid)
+    R"({"b":{"a":[321})"
+    "\n"
+    // 3 -> c: [1] (valid)
+    R"({"c":1.2})"
+    "\n"
+    "\n"
+    // 4 -> a: 123 (valid)
+    R"({"a":123})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recover_from_error(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 5);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true};
+  std::vector<bool> c_validity{false, false, false, true, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{-2, 0, 0, 0, 123}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0}, c_validity.cbegin()});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
