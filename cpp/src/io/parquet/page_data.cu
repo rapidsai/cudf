@@ -927,18 +927,12 @@ uint32_t GetKernelMasks(cudf::detail::hostdevice_vector<PageInfo>& pages,
                         rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  // FIXME: when running on device I get and 'invalid device function' error
-#if 0
+  // TODO: if lambda doesn't also have the __host__ decorator an 'invalid device function' exception
+  // is sometimes thrown
   auto mask_iter = thrust::make_transform_iterator(
-    pages.d_begin(), [] __device__(auto const& p) { return p.kernel_mask; });
+    pages.d_begin(), [] __host__ __device__(PageInfo const& p) { return p.kernel_mask; });
   auto const kernel_mask = thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
-#else
-  auto mask_iter =
-    thrust::make_transform_iterator(pages.begin(), [](auto const& p) { return p.kernel_mask; });
-  auto const kernel_mask =
-    thrust::reduce(mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
-#endif
   return kernel_mask;
 }
 
