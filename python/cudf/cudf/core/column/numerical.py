@@ -120,7 +120,11 @@ class NumericalColumn(NumericalBaseColumn):
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
-        if np.isnan(value):
+        if (
+            value is not None
+            and self.dtype.kind in {"c", "f"}
+            and np.isnan(value)
+        ):
             return column.as_column(
                 cp.argwhere(cp.isnan(self.data_array_view(mode="read"))),
                 dtype=size_type_dtype,

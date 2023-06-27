@@ -1432,6 +1432,21 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
+    def indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        """
+        Return indices corresponding to value
+
+        Parameters
+        ----------
+        value
+            Value to look for in index
+
+        Returns
+        -------
+        Column of indices
+        """
+        raise NotImplementedError
+
     def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.

@@ -27,6 +27,7 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
@@ -954,6 +955,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def append(self, other):
         return self._as_int_index().append(other)
 
+    def indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        try:
+            i = [range(self._start, self._stop, self._step).index(value)]
+        except ValueError:
+            i = []
+        return as_column(i, dtype=size_type_dtype)
+
     def isin(self, values):
         if is_scalar(values):
             raise TypeError(
@@ -1625,6 +1633,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         return self._values.isin(values).values
+
+    def indices_of(self, value):
+        """Return indices of value in index"""
+        return self._column.indices_of(value)
 
 
 class NumericIndex(GenericIndex):
