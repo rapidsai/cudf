@@ -463,9 +463,6 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
 {
   __shared__ __align__(16) page_state_s state_g;
 
-  // only count if it's a string column
-  if (not is_string_col(pages[blockIdx.x], chunks)) { return; }
-
   page_state_s* const s = &state_g;
   int const page_idx    = blockIdx.x;
   int const t           = threadIdx.x;
@@ -483,7 +480,8 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   rle_stream<level_t> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, string_filter{chunks}, false)) {
+  if (!setupLocalPageInfo(
+        s, pp, chunks, min_row, num_rows, mask_filter{KERNEL_MASK_STRING}, false)) {
     return;
   }
 
@@ -580,7 +578,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodeStringPageData(
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, string_filter{chunks}, true)) {
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_STRING}, true)) {
     return;
   }
 

@@ -27,14 +27,6 @@ namespace cudf::io::parquet::gpu {
 
 namespace {
 
-// functor for setupLocalPageInfo
-struct delta_binary_filter {
-  __device__ inline bool operator()(PageInfo const& page)
-  {
-    return page.encoding == Encoding::DELTA_BINARY_PACKED;
-  }
-};
-
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
 // only used for int32 and int64 physical types (and appears to only be used
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
@@ -55,8 +47,13 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   auto* const db                 = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, delta_binary_filter{}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{KERNEL_MASK_DELTA_BINARY},
+                          true)) {
     return;
   }
 

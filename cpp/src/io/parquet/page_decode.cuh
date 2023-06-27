@@ -934,21 +934,11 @@ struct all_types_filter {
 };
 
 /**
- * @brief Functor for setupLocalPageInfo that returns true if this is not a string column.
+ * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
  */
-struct non_string_filter {
-  device_span<ColumnChunkDesc const> chunks;
-
-  __device__ inline bool operator()(PageInfo const& page) { return !is_string_col(page, chunks); }
-};
-
-/**
- * @brief Functor for setupLocalPageInfo that returns true if this is a string column.
- */
-struct string_filter {
-  device_span<ColumnChunkDesc const> chunks;
-
-  __device__ inline bool operator()(PageInfo const& page) { return is_string_col(page, chunks); }
+struct mask_filter {
+  int mask;
+  __device__ inline bool operator()(PageInfo const& page) { return (page.kernel_mask & mask) != 0; }
 };
 
 /**

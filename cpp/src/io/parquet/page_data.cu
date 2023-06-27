@@ -739,17 +739,6 @@ __global__ void __launch_bounds__(preprocess_block_size)
   }
 }
 
-// skips strings and delta encodings
-struct catch_all_filter {
-  device_span<ColumnChunkDesc const> chunks;
-
-  __device__ inline bool operator()(PageInfo const& page)
-  {
-    return !(is_string_col(page, chunks) || page.encoding == Encoding::DELTA_BINARY_PACKED ||
-             page.encoding == Encoding::DELTA_BYTE_ARRAY);
-  }
-};
-
 /**
  * @brief Kernel for computing the column data stored in the pages
  *
@@ -778,7 +767,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, catch_all_filter{chunks}, true)) {
+        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{KERNEL_MASK_GENERAL}, true)) {
     return;
   }
 
