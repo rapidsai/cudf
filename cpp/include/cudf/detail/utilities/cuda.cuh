@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ static constexpr size_type warp_size{32};
  */
 class grid_1d {
  public:
-  const int num_threads_per_block;
-  const int num_blocks;
+  int const num_threads_per_block;
+  int const num_blocks;
   /**
    * @param overall_num_elements The number of elements the kernel needs to
    * handle/process, in its main, one-dimensional/linear input (e.g. one or more
@@ -106,6 +106,10 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
     lane_value = (lane_id < warps_per_block) ? lane_values[lane_id] : T{0};
     result     = cub::WarpReduce<T>(temp).Sum(lane_value);
   }
+  // Shared memory has block scope, so sync here to ensure no data
+  // races between successive calls to this function in the same
+  // kernel.
+  __syncthreads();
   return result;
 }
 

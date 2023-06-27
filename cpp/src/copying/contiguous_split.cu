@@ -71,7 +71,7 @@ static constexpr std::size_t desired_batch_size = 1 * 1024 * 1024;
  */
 struct src_buf_info {
   src_buf_info(cudf::type_id _type,
-               const int* _offsets,
+               int const* _offsets,
                int _offset_stack_pos,
                int _parent_offsets_index,
                bool _is_validity,
@@ -86,7 +86,7 @@ struct src_buf_info {
   }
 
   cudf::type_id type;
-  const int* offsets;        // a pointer to device memory offsets if I am an offset buffer
+  int const* offsets;        // a pointer to device memory offsets if I am an offset buffer
   int offset_stack_pos;      // position in the offset stack buffer
   int parent_offsets_index;  // immediate parent that has offsets, or -1 if none
   bool is_validity;          // if I am a validity buffer
@@ -108,7 +108,7 @@ struct dst_buf_info {
   int num_rows;  // # of rows to be copied(which may be different from num_elements in the case of
                  // validity or offset buffers)
 
-  int src_element_index;   // element index to start reading from from my associated source buffer
+  int src_element_index;   // element index to start reading from my associated source buffer
   std::size_t dst_offset;  // my offset into the per-partition allocation
   int value_shift;         // amount to shift values down by (for offset buffers)
   int bit_shift;           // # of bits to shift right by (for validity buffers)
@@ -172,7 +172,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
   stride *= 16;
   while (pos + 20 <= num_bytes) {
     // read from the nearest aligned address.
-    const uint32_t* in32 = reinterpret_cast<const uint32_t*>((src + pos) - ofs);
+    uint32_t const* in32 = reinterpret_cast<uint32_t const*>((src + pos) - ofs);
     uint4 v              = uint4{in32[0], in32[1], in32[2], in32[3]};
     if (ofs || bit_shift) {
       v.x = __funnelshift_r(v.x, v.y, ofs * 8 + bit_shift);
