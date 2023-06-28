@@ -42,9 +42,11 @@ CUDF_CHANNEL_20=$(rapids-get-artifact ci/cudf/pull-request/13599/adfe7c5/cudf_co
 rapids-logger $LIBCUDF_CHANNEL_20
 rapids-logger $CUDF_CHANNEL_20
 
+rapids-mamba-retry remove --force cudf libcudf dask-cudf pandas python-tzdata
+
 rapids-mamba-retry install \
   --channel "${CUDF_CHANNEL_20}" \
   --channel "${LIBCUDF_CHANNEL_20}" \
   --channel dask/label/dev \
   --channel conda-forge \
-  cudf libcudf dask-cudf pandas==2.0.2 python-tzdata --no-deps --force-reinstall
+  cudf libcudf dask-cudf pandas==2.0.2 python-tzdata --no-deps
