@@ -5549,4 +5549,55 @@ TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
+TEST_F(ParquetReaderTest, ReorderedReadMultipleFiles)
+{
+  constexpr auto num_rows    = 50'000;
+  constexpr auto cardinality = 20'000;
+
+  // table 1
+  auto str1 = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return "cat " + std::to_string(i % cardinality); });
+  auto cols1 = cudf::test::strings_column_wrapper(str1, str1 + num_rows);
+
+  auto int1 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % cardinality; });
+  auto coli1 = cudf::test::fixed_width_column_wrapper<int>(int1, int1 + num_rows);
+
+  auto const expected1 = table_view{{cols1, coli1}};
+  auto const swapped1  = table_view{{coli1, cols1}};
+
+  auto const filepath1 = temp_env->get_temp_filepath("LargeReorderedRead1.parquet");
+  auto out_opts1 =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath1}, expected1)
+      .compression(cudf::io::compression_type::NONE);
+  cudf::io::write_parquet(out_opts1);
+
+  // table 2
+  auto str2 = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return "dog " + std::to_string(i % cardinality); });
+  auto cols2 = cudf::test::strings_column_wrapper(str2, str2 + num_rows);
+
+  auto int2 = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return (i % cardinality) + cardinality; });
+  auto coli2 = cudf::test::fixed_width_column_wrapper<int>(int2, int2 + num_rows);
+
+  auto const expected2 = table_view{{cols2, coli2}};
+  auto const swapped2  = table_view{{coli2, cols2}};
+
+  auto const filepath2 = temp_env->get_temp_filepath("LargeReorderedRead2.parquet");
+  auto out_opts2 =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath2}, expected2)
+      .compression(cudf::io::compression_type::NONE);
+  cudf::io::write_parquet(out_opts2);
+
+  // read in both files swapping the columns
+  auto read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{filepath1, filepath2}})
+      .columns({"_col1", "_col0"});
+  auto result = cudf::io::read_parquet(read_opts);
+  auto sliced = cudf::slice(result.tbl->view(), {0, num_rows, num_rows, 2 * num_rows});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[0], swapped1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[1], swapped2);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
