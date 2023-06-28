@@ -47,7 +47,7 @@ namespace cudf::io::parquet::gpu {
 // lengths, followed by the concatenated suffix data.
 
 // TODO: The delta encodings use ULEB128 integers, but for now we're only
-// using max 64 bits. Need to see what the performance impact is of useing
+// using max 64 bits. Need to see what the performance impact is of using
 // __int128_t rather than int64_t.
 using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
