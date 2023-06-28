@@ -29,10 +29,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::gpu {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 
 /**
@@ -286,7 +283,4 @@ void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
     <<<dim_grid, block_size, 0, stream.value()>>>(dictionaries, columns);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::gpu
