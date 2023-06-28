@@ -290,7 +290,7 @@ rmm::device_buffer decompress_stripe_data(
                                  stream);
 
   // Value for checking whether we decompress successfully.
-  // It doesn't need to be atomic as there is no race condition: we only write `false` if needed.
+  // It doesn't need to be atomic as there is no race condition: we only write `true` if needed.
   cudf::detail::hostdevice_vector<bool> any_block_failure(1, stream);
   any_block_failure[0] = false;
   any_block_failure.host_to_device_async(stream);
