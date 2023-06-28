@@ -271,8 +271,8 @@ class SpillManager:
         In order to avoid deadlock, this function should not lock
         already locked buffers.
         """
-
         # Let's try to spill device memory
+
         spilled = self.spill_device_memory(nbytes=nbytes)
 
         if spilled > 0:
