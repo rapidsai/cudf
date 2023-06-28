@@ -4898,6 +4898,37 @@ class IndexedFrame(Frame):
             index=source._index,
         ).astype(np.float64)
 
+    def convert_dtypes(
+        self,
+        infer_objects=True,
+        convert_string=True,
+        convert_integer=True,
+        convert_boolean=True,
+        convert_floating=True,
+        dtype_backend=None,
+    ):
+        """
+        Convert columns to the best possible nullable dtypes.
+
+        If the dtype is numeric, and consists of all integers, convert
+        to an appropriate integer extension type. Otherwise, convert
+        to an appropriate floating type.
+
+        All other dtypes are always returned as-is as all dtypes in
+        cudf are nullable.
+        """
+        result = self.copy()
+
+        if convert_floating:
+            # cast any floating columns to int64 if
+            # they are all integer data:
+            for name, col in result._data.items():
+                if col.dtype.kind == "f":
+                    col = col.fillna(0)
+                    if cp.allclose(col, col.astype("int64")):
+                        result._data[name] = col.astype("int64")
+        return result
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""
