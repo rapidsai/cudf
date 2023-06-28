@@ -47,11 +47,11 @@ std::unique_ptr<column> hash(table_view const& input,
   }
 }
 
-std::unique_ptr<column> hash64(table_view const& input,
-                               hash64_id hash_function,
-                               uint64_t seed,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> hash64(table_view const& input,
+                              hash64_id hash_function,
+                              uint64_t seed,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
     case (hash64_id::HASH_MURMUR3_64): return murmur_hash3_64(input, seed, stream, mr);
@@ -71,11 +71,11 @@ std::unique_ptr<column> hash(table_view const& input,
   return detail::hash(input, hash_function, seed, stream, mr);
 }
 
-std::unique_ptr<column> hash64(table_view const& input,
-                               hash64_id hash_function,
-                               uint64_t seed,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> hash64(table_view const& input,
+                              hash64_id hash_function,
+                              uint64_t seed,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::hash64(input, hash_function, seed, stream, mr);

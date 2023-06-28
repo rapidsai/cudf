@@ -44,8 +44,7 @@ enum class hash_id {
  *  @brief Identifies the 64-bit hash function to be used
  */
 enum class hash64_id {
-  HASH_MURMUR3_64,  ///< Murmur3_64_128 hash function
-  XXHASH_64         ///< XXHash_64 hash function
+  HASH_MURMUR3_64  ///< Murmur3_64_128 hash function
 };
 
 /**
@@ -84,7 +83,7 @@ std::unique_ptr<column> hash(
  *
  * @returns A column where each row is the hash of a column from the input
  */
-std::unique_ptr<column> hash64(
+std::unique_ptr<table> hash64(
   table_view const& input,
   hash64_id hash_function             = hash64_id::HASH_MURMUR3_64,
   uint64_t seed                       = DEFAULT_HASH_SEED,
