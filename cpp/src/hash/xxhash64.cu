@@ -71,9 +71,9 @@ struct XXHash_64 {
       for (; offset <= nbytes - 8; offset += 8) {
         uint64_t k1 = getblock64(data, offset) * prime2;
 
-        k1 = rotate_bits_left(k1, 31) * prime1;
+        k1 = cudf::detail::rotate_bits_left(k1, 31) * prime1;
         h64 ^= k1;
-        h64 = rotate_bits_left(h64, 27) * prime1 + prime4;
+        h64 = cudf::detail::rotate_bits_left(h64, 27) * prime1 + prime4;
       }
     }
 
@@ -81,7 +81,7 @@ struct XXHash_64 {
     if (((nbytes % 32) % 8) >= 4) {
       for (; offset <= nbytes - 4; offset += 4) {
         h64 ^= (getblock32(data, offset) & 0xfffffffful) * prime1;
-        h64 = rotate_bits_left(h64, 23) * prime2 + prime3;
+        h64 = cudf::detail::rotate_bits_left(h64, 23) * prime2 + prime3;
       }
     }
 
@@ -89,7 +89,7 @@ struct XXHash_64 {
     if (nbytes % 4) {
       while (offset < nbytes) {
         h64 += (static_cast<uint8_t>(data[offset]) & 0xff) * prime5;
-        h64 = rotate_bits_left(h64, 11) * prime1;
+        h64 = cudf::detail::rotate_bits_left(h64, 11) * prime1;
         ++offset;
       }
     }
@@ -111,46 +111,46 @@ struct XXHash_64 {
       do {
         // pipeline 4*8byte computations
         v1 += getblock64(data, offset) * prime2;
-        v1 = rotate_bits_left(v1, 31);
+        v1 = cudf::detail::rotate_bits_left(v1, 31);
         v1 *= prime1;
         offset += 8;
         v2 += getblock64(data, offset) * prime2;
-        v2 = rotate_bits_left(v2, 31);
+        v2 = cudf::detail::rotate_bits_left(v2, 31);
         v2 *= prime1;
         offset += 8;
         v3 += getblock64(data, offset) * prime2;
-        v3 = rotate_bits_left(v3, 31);
+        v3 = cudf::detail::rotate_bits_left(v3, 31);
         v3 *= prime1;
         offset += 8;
         v4 += getblock64(data, offset) * prime2;
-        v4 = rotate_bits_left(v4, 31);
+        v4 = cudf::detail::rotate_bits_left(v4, 31);
         v4 *= prime1;
         offset += 8;
       } while (offset <= limit);
 
-      h64 = rotate_bits_left(v1, 1) + rotate_bits_left(v2, 7) + rotate_bits_left(v3, 12) +
-            rotate_bits_left(v4, 18);
+      h64 = cudf::detail::rotate_bits_left(v1, 1) + cudf::detail::rotate_bits_left(v2, 7) +
+            cudf::detail::rotate_bits_left(v3, 12) + cudf::detail::rotate_bits_left(v4, 18);
 
       v1 *= prime2;
-      v1 = rotate_bits_left(v1, 31);
+      v1 = cudf::detail::rotate_bits_left(v1, 31);
       v1 *= prime1;
       h64 ^= v1;
       h64 = h64 * prime1 + prime4;
 
       v2 *= prime2;
-      v2 = rotate_bits_left(v2, 31);
+      v2 = cudf::detail::rotate_bits_left(v2, 31);
       v2 *= prime1;
       h64 ^= v2;
       h64 = h64 * prime1 + prime4;
 
       v3 *= prime2;
-      v3 = rotate_bits_left(v3, 31);
+      v3 = cudf::detail::rotate_bits_left(v3, 31);
       v3 *= prime1;
       h64 ^= v3;
       h64 = h64 * prime1 + prime4;
 
       v4 *= prime2;
-      v4 = rotate_bits_left(v4, 31);
+      v4 = cudf::detail::rotate_bits_left(v4, 31);
       v4 *= prime1;
       h64 ^= v4;
       h64 = h64 * prime1 + prime4;
@@ -193,13 +193,13 @@ hash_value_type __device__ inline XXHash_64<bool>::operator()(bool const& key) c
 template <>
 hash_value_type __device__ inline XXHash_64<float>::operator()(float const& key) const
 {
-  return compute(detail::normalize_nans_and_zeros(key));
+  return compute(cudf::detail::normalize_nans_and_zeros(key));
 }
 
 template <>
 hash_value_type __device__ inline XXHash_64<double>::operator()(double const& key) const
 {
-  return compute(detail::normalize_nans_and_zeros(key));
+  return compute(cudf::detail::normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -247,7 +247,7 @@ class device_row_hasher {
 
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    return detail::accumulate(
+    return cudf::detail::accumulate(
       _table.begin(),
       _table.end(),
       _seed,

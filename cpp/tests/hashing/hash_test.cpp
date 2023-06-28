@@ -1150,6 +1150,7 @@ TEST_F(HashXX64Test, StringType)
   auto output = cudf::hash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
+  // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
   auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({11648823711624848724ul,
                                                                     10848020664967373619ul,
                                                                     14871996948511285677ul,
