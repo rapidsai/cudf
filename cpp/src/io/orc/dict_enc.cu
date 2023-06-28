@@ -118,15 +118,11 @@ __global__ void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
-  using block_reduce = cub::BlockReduce<size_type, block_size>;
-  __shared__ typename block_reduce::TempStorage reduce_storage;
-  __shared__ size_type total_num_dict_entries;
-
-  auto col_idx    = blockIdx.x;
-  auto stripe_idx = blockIdx.y;
-  auto t          = threadIdx.x;
-  auto dict       = dictionaries[col_idx][stripe_idx];
-  auto col        = columns[dict.column_idx];
+  auto const col_idx    = blockIdx.x;
+  auto const stripe_idx = blockIdx.y;
+  auto const t          = threadIdx.x;
+  auto const& dict      = dictionaries[col_idx][stripe_idx];
+  auto const col        = columns[dict.column_idx];
 
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
@@ -148,15 +144,19 @@ __global__ void __launch_bounds__(block_size)
     size_type uniq_elem_size = 0;
 
     if (is_valid) {
-      auto hash_fn     = hash_functor{col};
-      auto equality_fn = equality_functor{col};
-      is_unique        = hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
+      auto const hash_fn     = hash_functor{col};
+      auto const equality_fn = equality_functor{col};
+      is_unique = hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
       if (is_unique) { uniq_elem_size = col.element<string_view>(cur_row).size_bytes(); }
     }
 
-    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    using block_reduce = cub::BlockReduce<size_type, block_size>;
+    __shared__ typename block_reduce::TempStorage reduce_storage;
+    __shared__ size_type total_num_dict_entries;
+
+    auto const num_unique = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
-    auto char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
+    auto const char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
     __syncthreads();
 
     if (t == 0) {
@@ -178,11 +178,12 @@ __global__ void __launch_bounds__(block_size)
 {
   auto const col_idx    = blockIdx.x;
   auto const stripe_idx = blockIdx.y;
-  auto& dict            = dictionaries[col_idx][stripe_idx];
+  auto const& dict      = dictionaries[col_idx][stripe_idx];
+
   if (not dict.is_enabled) { return; }
 
-  auto t   = threadIdx.x;
-  auto map = map_type::device_view(dict.map_slots.data(),
+  auto const t = threadIdx.x;
+  auto map     = map_type::device_view(dict.map_slots.data(),
                                    dict.map_slots.size(),
                                    cuco::empty_key{KEY_SENTINEL},
                                    cuco::empty_value{VALUE_SENTINEL});
@@ -212,7 +213,7 @@ __global__ void __launch_bounds__(block_size)
 {
   auto const col_idx    = blockIdx.x;
   auto const stripe_idx = blockIdx.y;
-  auto& dict            = dictionaries[col_idx][stripe_idx];
+  auto const& dict      = dictionaries[col_idx][stripe_idx];
   auto const& col       = columns[dict.column_idx];
 
   if (not dict.is_enabled) { return; }
@@ -221,25 +222,24 @@ __global__ void __launch_bounds__(block_size)
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
 
-  auto map = map_type::device_view(dict.map_slots.data(),
-                                   dict.map_slots.size(),
-                                   cuco::empty_key{KEY_SENTINEL},
-                                   cuco::empty_value{VALUE_SENTINEL});
+  auto const map = map_type::device_view(dict.map_slots.data(),
+                                         dict.map_slots.size(),
+                                         cuco::empty_key{KEY_SENTINEL},
+                                         cuco::empty_value{VALUE_SENTINEL});
 
   auto cur_row = start_row + t;
-
   while (cur_row < end_row) {
     auto const is_valid = cur_row < col.size() and col.is_valid(cur_row);
 
     if (is_valid) {
-      auto hash_fn          = hash_functor{col};
-      auto equality_fn      = equality_functor{col};
-      auto const found_slot = map.find(cur_row, hash_fn, equality_fn);
+      auto const hash_fn     = hash_functor{col};
+      auto const equality_fn = equality_functor{col};
+      auto const found_slot  = map.find(cur_row, hash_fn, equality_fn);
       cudf_assert(found_slot != map.end() &&
                   "Unable to find value in map in dictionary index construction");
       if (found_slot != map.end()) {
         // No need for atomic as this is not going to be modified by any other thread
-        auto val_ptr        = reinterpret_cast<map_type::mapped_type const*>(&found_slot->second);
+        auto const val_ptr  = reinterpret_cast<map_type::mapped_type const*>(&found_slot->second);
         dict.index[cur_row] = *val_ptr;
       }
     }
