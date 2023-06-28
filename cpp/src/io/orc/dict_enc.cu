@@ -19,17 +19,11 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-#include <thrust/sort.h>
 
 namespace cudf::io::orc::gpu {
+
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 
 /**
