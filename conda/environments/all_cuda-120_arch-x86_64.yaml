@@ -15,7 +15,6 @@ dependencies:
 - c-compiler
 - cachetools
 - cmake>=3.26.4
-- cubinlinker
 - cuda-cudart-dev
 - cuda-nvcc
 - cuda-nvrtc-dev
@@ -63,7 +62,6 @@ dependencies:
 - pip
 - pre-commit
 - protobuf>=4.21.6,<4.22
-- ptxcompiler
 - pyarrow==11.0.0.*
 - pydata-sphinx-theme
 - pyorc
