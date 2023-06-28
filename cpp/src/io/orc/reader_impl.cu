@@ -215,11 +215,6 @@ rmm::device_buffer decompress_stripe_data(
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
-  // For checking whether we decompress successfully
-  cudf::detail::hostdevice_vector<bool> any_block_failure(1, stream);
-  any_block_failure[0] = false;
-  any_block_failure.host_to_device_async(stream);
-
   // Parse the columns' compressed info
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
     0, stream_info.size(), stream);
@@ -293,6 +288,12 @@ rmm::device_buffer decompress_stripe_data(
                                  decompressor.GetBlockSize(),
                                  decompressor.GetLog2MaxCompressionRatio(),
                                  stream);
+
+  // Value for checking whether we decompress successfully.
+  // It doesn't need to be atomic as there is no race condition: we only write `false` if needed.
+  cudf::detail::hostdevice_vector<bool> any_block_failure(1, stream);
+  any_block_failure[0] = false;
+  any_block_failure.host_to_device_async(stream);
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
