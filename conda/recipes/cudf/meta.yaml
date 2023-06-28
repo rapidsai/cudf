@@ -65,7 +65,7 @@ requirements:
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
-    - cudatoolkit ={{ cuda_version }}
+    - cudatoolkit
     {% else %}
     - cuda-cudart-dev
     - cuda-nvrtc
@@ -85,7 +85,7 @@ requirements:
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    - cudatoolkit
     - ptxcompiler >=0.7.0
     - cubinlinker  # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0a0
@@ -102,7 +102,7 @@ requirements:
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf
 
