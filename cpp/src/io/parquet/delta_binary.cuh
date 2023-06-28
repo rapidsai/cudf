@@ -52,6 +52,8 @@ namespace cudf::io::parquet::gpu {
 using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
 
+constexpr int delta_rolling_buf_size = 256;
+
 /**
  * @brief Read a ULEB128 varint integer
  *
@@ -103,7 +105,7 @@ struct delta_binary_decoder {
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 
-  uleb128_t value[non_zero_buffer_size];  // circular buffer of delta values
+  uleb128_t value[delta_rolling_buf_size];  // circular buffer of delta values
 
   // returns the number of values encoded in the block data. when is_decode is true,
   // account for the first value in the header. otherwise just count the values encoded
@@ -207,7 +209,7 @@ struct delta_binary_decoder {
       // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
       // that one only unpacks up to bitwidths of 24. simplified some since this
       // will always do batches of 32. also replaced branching with a loop.
-      int64_t delta = 0;
+      zigzag128_t delta = 0;
       if (lane_id + current_value_idx < value_count) {
         int32_t ofs      = (lane_id - warp_size) * mb_bits;
         uint8_t const* p = d_start + (ofs >> 3);
@@ -217,10 +219,10 @@ struct delta_binary_decoder {
           delta      = (*p++) >> ofs;
 
           while (c < mb_bits && p < block_end) {
-            delta |= (*p++) << c;
+            delta |= static_cast<zigzag128_t>(*p++) << c;
             c += 8;
           }
-          delta &= (1 << mb_bits) - 1;
+          delta &= (static_cast<zigzag128_t>(1) << mb_bits) - 1;
         }
       }
 
@@ -233,7 +235,9 @@ struct delta_binary_decoder {
 
       // now add first value from header or last value from previous block to get true value
       delta += last_value;
-      value[rolling_index(current_value_idx + warp_size * i + lane_id)] = delta;
+      int const value_idx =
+        rolling_index<delta_rolling_buf_size>(current_value_idx + warp_size * i + lane_id);
+      value[value_idx] = delta;
 
       // save value from last lane in warp. this will become the 'first value' added to the
       // deltas calculated in the next iteration (or invocation).

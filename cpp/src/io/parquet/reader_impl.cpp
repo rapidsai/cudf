@@ -180,20 +180,26 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   auto const level_type_size = _file_itm_data.level_type_size;
 
-  // launch the catch-all page decoder
+  // vector of launched streams
   std::vector<rmm::cuda_stream_view> streams;
-  streams.push_back(get_stream_pool().get_stream());
-  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
 
-  // and then the specializations
+  // launch string decoder
   if (has_strings) {
     streams.push_back(get_stream_pool().get_stream());
     chunk_nested_str_data.host_to_device_async(streams.back());
     gpu::DecodeStringPageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
   }
+
+  // launch delta binary decoder
   if ((kernel_mask & gpu::KERNEL_MASK_DELTA_BINARY) != 0) {
     streams.push_back(get_stream_pool().get_stream());
     gpu::DecodeDeltaBinary(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
+  }
+
+  // launch the catch-all page decoder
+  if ((kernel_mask & gpu::KERNEL_MASK_GENERAL) != 0) {
+    streams.push_back(get_stream_pool().get_stream());
+    gpu::DecodePageData(pages, chunks, num_rows, skip_rows, level_type_size, streams.back());
   }
 
   // synchronize the streams
