@@ -52,7 +52,8 @@ namespace cudf::io::parquet::gpu {
 using uleb128_t   = uint64_t;
 using zigzag128_t = int64_t;
 
-constexpr int delta_rolling_buf_size = 256;
+// we decode one mini-block at a time. max mini-block size seen is 64.
+constexpr int delta_rolling_buf_size = 128;
 
 /**
  * @brief Read a ULEB128 varint integer
