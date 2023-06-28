@@ -18,8 +18,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -37,6 +37,7 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/functional.h>
@@ -1595,7 +1596,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     thrust::copy_if(
       std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
+    // TODO: Once the public concatenate API exposes streams, use that instead.
+    auto data =
+      children.empty()
+        ? cudf::empty_like(expected_hierarchy)
+        : cudf::detail::concatenate(
+            children, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
 
     // increment depth
     depth = expected_depth + 1;
