@@ -909,7 +909,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def append(self, other):
         return self._as_int_index().append(other)
 
-    def indices_of(self, value) -> cudf.core.column.NumericalColumn:
+    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
         try:
             i = [range(self._start, self._stop, self._step).index(value)]
         except ValueError:
@@ -1586,7 +1586,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         return self._values.isin(values).values
 
-    def indices_of(self, value):
+    def _indices_of(self, value):
         """Return indices of value in index"""
         return self._column.indices_of(value)
 

@@ -307,7 +307,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                     found_index = arg
                     return found_index
             try:
-                indices = self._frame.index.indices_of(arg)
+                indices = self._frame.index._indices_of(arg)
                 if (n := len(indices)) == 0:
                     raise KeyError("Label scalar is out of bounds")
                 elif n == 1:

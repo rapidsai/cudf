@@ -1432,7 +1432,7 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def indices_of(self, value) -> cudf.core.column.NumericalColumn:
+    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
         """
         Return indices corresponding to value
 
