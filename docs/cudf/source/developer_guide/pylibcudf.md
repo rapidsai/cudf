@@ -7,7 +7,7 @@ In addition to these requirements, pylibcudf must also integrate naturally with 
 In other words, it should interoperate fairly transparently with standard Python containers, community protocols like `__cuda_array_interface__`, and common vocabulary types like CuPy arrays.
 
 
-## General Design principles
+## General Design Principles
 
 To satisfy the goals of pylibcudf, we impose the following set of design principles:
 - Every public function or method should be `cpdef`ed. This allows it to be used in both Cython and Python code. This incurs some slight overhead over `cdef` functions, but we assume that this is acceptable because 1) the vast majority of users will be using pure Python rather than Cython, and 2) the overhead of a `cpdef` function over a `cdef` function is on the order of a nanosecond, while CUDA kernel launch overhead is on the order of a microsecond, so these function overheads should be washed out by typical usage of pylibcudf.
@@ -97,3 +97,17 @@ There are a few notable points from the snippet above:
 - The `get_underlying` method must be called outside the `with nogil` block because operations on Cython classes are not permitted inside it.
 - The object returned from libcudf is immediately converted to a pylibcudf type.
 - `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter, which is mirrored by the `cdef `class OutOfBoundsPolicy` as mentioned in [the data structures example above](data-structures).
+
+## Miscellaneous Notes
+
+### Cython Scoped Enums and Casting
+Cython does not support scoped enumerations.
+It assumes that enums correspond to their underlying value types and will thus attempt operations that are invalid.
+To fix this, many places in pylibcudf Cython code contain double casts that look like
+```cython
+return <cpp_types> (
+    <underlying_type_t_cpp_type> py_policy
+)
+```
+where cpp_type is some libcudf enum with a specified underlying type.
+This double-cast will be removed when we migrate to Cython 3, which adds proper support for C++ scoped enumerations.
