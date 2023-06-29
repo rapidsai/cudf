@@ -1510,7 +1510,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """
@@ -1519,7 +1519,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """
