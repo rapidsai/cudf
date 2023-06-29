@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -79,9 +80,10 @@ class comparison_binop_generator {
  private:
   cudf::table_view const input_tview;
   bool const is_min_op;
+  rmm::cuda_stream_view stream;
+  std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
   bool const has_nulls;
   std::vector<null_order> null_orders;
-  rmm::cuda_stream_view stream;
 
   cudf::experimental::row::lexicographic::self_comparator row_comparator;
 
@@ -91,10 +93,18 @@ class comparison_binop_generator {
     : input_tview{cudf::table_view{{input_}}},
       is_min_op{is_min_op_},
       stream{stream_},
-      has_nulls{cudf::has_nested_nulls(cudf::table_view{{input_}})},
-      null_orders{[input_, is_min_op_]() {
+      flattened_input{cudf::structs::detail::flatten_nested_columns(
+        input_tview,
+        {},
+        std::vector<null_order>{DEFAULT_NULL_ORDER},
+        cudf::structs::detail::column_nullability::MATCH_INCOMING,
+        stream,
+        rmm::mr::get_current_device_resource())},
+      has_nulls{cudf::has_nested_nulls(input_tview)},
+      null_orders{[input_, is_min_op_, flattened_orders = flattened_input->null_orders()]() {
         std::vector<null_order> order{DEFAULT_NULL_ORDER};
         if (is_min_op_) {
+          order = flattened_orders;
           // If the input column has nulls (at the top level), null structs are excluded from the
           // operations, and that is equivalent to considering top-level nulls as larger than all
           // other non-null STRUCT elements (if finding for ARGMIN), or smaller than all other
@@ -105,7 +115,20 @@ class comparison_binop_generator {
         }
         return order;
       }()},
-      row_comparator{cudf::table_view{{input_}}, {}, null_orders, stream_}
+      // row_comparator{cudf::table_view{{input_}}, {}, null_orders, stream_}
+      row_comparator{[input_,
+                      is_min_op_,
+                      flattened_tview = flattened_input->flattened_columns(),
+                      orders          = null_orders,
+                      stream_]() {
+        if (is_min_op_) {
+          return cudf::experimental::row::lexicographic::self_comparator{
+            flattened_tview, {}, orders, stream_};
+        } else {
+          return cudf::experimental::row::lexicographic::self_comparator{
+            cudf::table_view{{input_}}, {}, orders, stream_};
+        }
+      }()}
   {
   }
 
