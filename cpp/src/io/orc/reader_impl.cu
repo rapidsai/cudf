@@ -1122,6 +1122,8 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
         CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                      "Invalid index rowgroup stream data");
 
+        // Buffer needs to be padded.
+        // Required by `copy_uncompressed_kernel`.
         stripe_data.emplace_back(
           cudf::util::round_up_safe(total_data_size, BUFFER_PADDING_MULTIPLE), _stream);
         auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
