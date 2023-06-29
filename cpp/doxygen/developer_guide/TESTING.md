@@ -496,8 +496,8 @@ defined in the `cudf::test` namespace enables a more stringent mode of testing. 
 the preload library instead verifies that all CUDA runtime APIs are instead called using the test
 namespace's default stream. This distinction is important because cudf internals never use
 `cudf::test::get_default_stream`, so this stream value can only appear internally if it was provided
-ot a public API and forwarded properly all the way down the call stack. While `testing` mode is more
-strict `cudf` mode, it is also more intrusive. `cudf` mode can operate with no changes to the
+to a public API and forwarded properly all the way down the call stack. While `testing` mode is more
+strict than `cudf` mode, it is also more intrusive. `cudf` mode can operate with no changes to the
 library or the tests because the preload library overwrites the relevant APIs in place. `testing`
 mode, however, can only be used to validate tests that are correctly passing
 `cudf::test::get_default_stream` to public libcudf APIs.
