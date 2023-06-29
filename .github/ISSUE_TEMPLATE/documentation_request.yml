@@ -50,4 +50,4 @@ body:
         If this is a new documentation request, please link to where you have looked.
       placeholder: |
        https://docs.rapids.ai/api/cudf/stable/ and
-       https://docs.rapids.ai/api/cudf/nightly
+       https://docs.rapids.ai/api/cudf/nightly/

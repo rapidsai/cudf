@@ -74,9 +74,9 @@ body:
       label: Environment details
       description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here.
       placeholder: |
-       + Environment location: [Bare metal, Docker, Cloud (specify cloud provider)]
-       + If method of install is Docker, provide `docker pull` & `docker run` commands used
-       + Paste output from `print_env.sh` (linked above)
+       Environment location: Bare metal, Docker, Cloud (specify cloud provider)
+       If using Docker, provide the `docker pull` & `docker run` commands used
+       Paste the output from `print_env.sh` (linked above)
 
   - type: textarea
     id: misc

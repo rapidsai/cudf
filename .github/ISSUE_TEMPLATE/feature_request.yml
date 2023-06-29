@@ -57,11 +57,11 @@ body:
     id: alternatives
     attributes:
       label: Describe any alternatives you have considered.
-      description: List any other libraries, or approaches you have looked at or tried.
-      placeholder: I have looked at library XYZ and QRS, but they do not offer GPU acceleration.
+      description: List other approaches you have looked at or tried
+      placeholder: I found a workaround but it is slow, or I couldn't find a workaround. 
 
   - type: textarea
     id: misc
     attributes:
       label: Additional context
-      description: Add any other context, code examples, or references to existing implementations about the feature request here.
+      description: Add any other context, code examples, or references to existing implementations here.
