@@ -354,7 +354,7 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rmm==23.6.*
-          - typing_extensions
+          - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
         packages:
