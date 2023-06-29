@@ -549,7 +549,7 @@ cdef class Column:
         )
 
     @staticmethod
-    def from_pylibcudf_column(
+    def from_pylibcudf(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
         # TODO: Rewrite utility for dtype conversion to not need a column view.
@@ -563,7 +563,7 @@ cdef class Column:
             offset=col.offset,
             null_count=col.null_count,
             children=tuple([
-                Column.from_pylibcudf_column(child)
+                Column.from_pylibcudf(child)
                 for child in col.children
             ])
         )
