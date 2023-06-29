@@ -17,7 +17,7 @@ from .column cimport Column
 from .table cimport Table
 
 
-cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
+cdef inline cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
     OutOfBoundsPolicy py_policy
 ) nogil:
     return <cpp_copying.out_of_bounds_policy> (
