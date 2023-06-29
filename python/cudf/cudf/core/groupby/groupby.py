@@ -1030,6 +1030,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     as_column(group_offsets),
                     [],
                     [],
+                    stable=cudf.get_option("mode.pandas_compatible"),
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?

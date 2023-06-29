@@ -149,7 +149,8 @@ def order_by(
     list columns_from_table,
     object ascending,
     str na_position,
-    bool stable=False
+    *,
+    bool stable
 ):
     """
     Get index to sort the table in ascending/descending order.
@@ -162,7 +163,7 @@ def order_by(
                 True - Ascending and False - Descending
     na_position : whether null value should show up at the "first" or "last"
                 position of **all** sorted column.
-    stable : should the sort be stable?
+    stable : should the sort be stable? (no default)
 
     Returns
     -------
@@ -234,7 +235,8 @@ def sort_by_key(
     list keys,
     object ascending,
     object na_position,
-    bool stable=False,
+    *,
+    bool stable,
 ):
     """
     Sort a table by given keys
@@ -245,15 +247,14 @@ def sort_by_key(
         Columns of the table which will be sorted
     keys : list[Column]
         Columns making up the sort key
-    ascending : list[bool], optional
+    ascending : list[bool]
         Sequence of boolean values which correspond to each column in
         keys providing the sort order (default all True).
         With True <=> ascending; False <=> descending.
-    null_precedence : list[str], optional
+    null_precedence : list[str]
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
-
-    stable : bool, optional
+    stable : bool
         Should the sort be stable?
 
     Returns
@@ -290,7 +291,8 @@ def segmented_sort_by_key(
     Column segment_offsets,
     list column_order=None,
     list null_precedence=None,
-    bool stable=False,
+    *,
+    bool stable,
 ):
     """
     Sort segments of a table by given keys
@@ -311,7 +313,7 @@ def segmented_sort_by_key(
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
 
-    stable : bool, optional
+    stable : bool
         Should the sort be stable?
 
     Returns
