@@ -438,10 +438,11 @@ dependencies:
           - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
           - ptxcompiler-cu11
+          - &cupy_pip cupy-cuda11x>=12.0.0
       - output_types: pyproject
         packages:
           - cubinlinker
-          - &cupy_pip cupy-cuda11x>=12.0.0
+          - *cupy_pip
           - ptxcompiler
     specific:
       - output_types: [conda, requirements, pyproject]
@@ -453,16 +454,6 @@ dependencies:
           - matrix: # All CUDA 11 versions
             packages:
               - cuda-python>=11.7.1,<12.0a0
-      - output_types: requirements
-        matrices:
-          - matrix:
-              arch: x86_64
-            packages:
-              - cupy-cuda115>=12.0.0
-          - matrix:
-              arch: aarch64
-            packages:
-              - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
