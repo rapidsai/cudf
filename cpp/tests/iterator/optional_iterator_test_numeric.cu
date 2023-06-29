@@ -61,7 +61,7 @@ struct transformer_optional_meanvar {
 
 template <typename T>
 struct optional_to_meanvar {
-  CUDF_HOST_DEVICE inline T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
+  CUDF_HOST_DEVICE inline T operator()(thrust::optional<T> const& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__
@@ -74,7 +74,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   using T_output = cudf::meanvar<T>;
   transformer_optional_meanvar<T> transformer{};
 
-  const int column_size{50};
+  int const column_size{50};
   const T init{0};
 
   // data and valid arrays

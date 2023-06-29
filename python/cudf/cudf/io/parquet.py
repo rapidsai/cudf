@@ -448,6 +448,12 @@ def read_parquet(
 ):
     """{docstring}"""
 
+    if strings_to_categorical is not False:
+        warnings.warn(
+            "`strings_to_categorical` is deprecated and will be removed in "
+            "a future version of cudf.",
+            FutureWarning,
+        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:

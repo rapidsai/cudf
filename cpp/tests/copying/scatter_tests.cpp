@@ -437,16 +437,16 @@ class ScatterStringsTests : public cudf::test::BaseFixture {};
 
 TEST_F(ScatterStringsTests, ScatterNoNulls)
 {
-  std::vector<const char*> h_source{"dog", "the", "jumps", "brown", "the"};
+  std::vector<char const*> h_source{"dog", "the", "jumps", "brown", "the"};
   cudf::test::strings_column_wrapper source(h_source.begin(), h_source.end());
 
-  std::vector<const char*> h_target{
+  std::vector<char const*> h_target{
     "a", "quick", "fire", "fox", "browses", "over", "a", "lazy", "web"};
   cudf::test::strings_column_wrapper target(h_target.begin(), h_target.end());
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({-1, -3, -5, 2, 0});
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"};
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 
@@ -465,13 +465,13 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
-  std::vector<const char*> h_target{
+  std::vector<char const*> h_target{
     "Buffalo", "bison", "Buffalo", "bison", "bully", "bully", "Buffalo", "bison"};
   cudf::test::strings_column_wrapper target(h_target.begin(), h_target.end());
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({1, 3, -4, -3, -1});
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "Buffalo", "buffalo", "Buffalo", "buffalo", "buffalo", "buffalo", "Buffalo", "buffalo"};
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 

@@ -51,7 +51,7 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
+  int64_t const data_size_in_bytes = sizeof(T) * input_view.size();
 
   auto data_buffer = allocate_arrow_buffer(data_size_in_bytes, ar_mr);
 
@@ -71,7 +71,7 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
+  int64_t const mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
 
   if (input_view.has_nulls()) {
     auto mask_buffer = allocate_arrow_bitmap(static_cast<int64_t>(input_view.size()), ar_mr);
