@@ -157,13 +157,17 @@ def order_by(
 
     Parameters
     ----------
-    columns_from_table : columns from the table which will be sorted
-    ascending : sequence of boolean values which correspond to each column
-                in source_table signifying order of each column
-                True - Ascending and False - Descending
-    na_position : whether null value should show up at the "first" or "last"
-                position of **all** sorted column.
-    stable : should the sort be stable? (no default)
+    columns_from_table : list[Column]
+        Columns from the table which will be sorted
+    ascending : sequence[bool]
+         Sequence of boolean values which correspond to each column
+         in the to-be-sorted table signifying order of each column
+         True - Ascending and False - Descending
+    na_position : str
+        whether null value should show up at the "first" or "last"
+        position of **all** sorted column.
+    stable : bool
+        Should the sort be stable? (no default)
 
     Returns
     -------
@@ -255,7 +259,7 @@ def sort_by_key(
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
     stable : bool
-        Should the sort be stable?
+        Should the sort be stable? (no default)
 
     Returns
     -------
@@ -312,9 +316,8 @@ def segmented_sort_by_key(
     null_precedence : list[str], optional
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
-
     stable : bool
-        Should the sort be stable?
+        Should the sort be stable? (no default)
 
     Returns
     -------
