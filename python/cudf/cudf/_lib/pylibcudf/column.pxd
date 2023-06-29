@@ -20,7 +20,7 @@ cdef class Column:
         size_type null_count
         offset_type offset
         # children: List[Column]
-        object children
+        list children
 
         # Internals
         unique_ptr[column_view] _view
