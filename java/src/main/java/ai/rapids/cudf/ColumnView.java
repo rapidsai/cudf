@@ -669,8 +669,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
-        columnVectors[i] = new ColumnVector(nativeHandles[i]);
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
         nativeHandles[i] = 0;
+        columnVectors[i] = new ColumnVector(nativeHandle);
       }
     } catch (Throwable t) {
       try {
@@ -819,8 +822,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
-        columnViews[i] = new ColumnView(nativeHandles[i]);
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
         nativeHandles[i] = 0;
+        columnViews[i] = new ColumnView(nativeHandle);
       }
     } catch (Throwable t) {
       try {
