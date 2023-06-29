@@ -35,8 +35,8 @@ cpdef Table gather(
     OutOfBoundsPolicy bounds_policy
 ):
     cdef unique_ptr[table] c_result
-    cdef table_view* c_src = source_table.get_underlying()
-    cdef column_view* c_col = gather_map.get_underlying()
+    cdef table_view* c_src = source_table.view()
+    cdef column_view* c_col = gather_map.view()
     with nogil:
         c_result = move(
             cpp_copying.gather(

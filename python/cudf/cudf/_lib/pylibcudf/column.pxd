@@ -23,7 +23,7 @@ cdef class Column:
         object children
 
         # Internals
-        unique_ptr[column_view] _underlying
+        unique_ptr[column_view] _view
 
     # We store a unique pointer and return a raw pointer to that object here
     # rather than storing a column_view and returning by value each time to
@@ -37,7 +37,7 @@ cdef class Column:
     # guarantees that the generated code will not be amenable to copy elision.
     # As such, this pointer-based approach is the only way to avoid a large
     # number of additional copies from being made.
-    cdef column_view* get_underlying(self)
+    cdef column_view* view(self)
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)

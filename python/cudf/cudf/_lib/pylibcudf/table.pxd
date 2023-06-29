@@ -10,12 +10,12 @@ cdef class Table:
     # List[pylibcudf.Column]
     cdef object columns
 
-    cdef unique_ptr[table_view] _underlying
+    cdef unique_ptr[table_view] _view
 
-    # See the corresponding pylibcudf.Column.get_underlying function for an
+    # See the corresponding pylibcudf.Column.view function for an
     # explanation of why we store a unique_ptr and return a raw pointer rather
     # than simply storing and returning table_view by value.
-    cdef table_view* get_underlying(self)
+    cdef table_view* view(self)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)

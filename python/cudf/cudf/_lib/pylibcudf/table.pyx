@@ -17,17 +17,17 @@ cdef class Table:
     def __init__(self, object columns):
         self.columns = columns
 
-    cdef table_view* get_underlying(self):
+    cdef table_view* view(self):
         cdef vector[column_view] c_columns
         cdef Column col
 
-        if not self._underlying:
+        if not self._view:
             for col in self.columns:
-                c_columns.push_back(dereference(col.get_underlying()))
+                c_columns.push_back(dereference(col.view()))
 
-            self._underlying.reset(new table_view(c_columns))
+            self._view.reset(new table_view(c_columns))
 
-        return self._underlying.get()
+        return self._view.get()
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):

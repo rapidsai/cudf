@@ -553,7 +553,7 @@ cdef class Column:
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
         # TODO: Rewrite utility for dtype conversion to not need a column view.
-        dtype = dtype_from_column_view(dereference(col.get_underlying()))
+        dtype = dtype_from_column_view(dereference(col.view()))
 
         return cudf.core.column.build_column(
             data=as_buffer(col.data.obj) if col.data is not None else None,

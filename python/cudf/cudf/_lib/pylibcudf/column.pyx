@@ -30,13 +30,13 @@ cdef class Column:
         self.offset = offset
         self.children = children
 
-    cdef column_view* get_underlying(self):
+    cdef column_view* view(self):
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
         cdef vector[column_view] c_children
         cdef Column child
 
-        if not self._underlying:
+        if not self._view:
             if self.data is not None:
                 data = int_to_void_ptr(self.data.ptr)
             if self.mask is not None:
@@ -44,15 +44,15 @@ cdef class Column:
 
             if self.children is not None:
                 for child in self.children:
-                    c_children.push_back(dereference(child.get_underlying()))
+                    c_children.push_back(dereference(child.view()))
 
-            self._underlying.reset(
+            self._view.reset(
                 new column_view(
                     self.data_type.c_obj, self.size, data, null_mask,
                     self.null_count, self.offset, c_children
                 )
             )
-        return self._underlying.get()
+        return self._view.get()
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
