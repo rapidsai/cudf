@@ -1990,10 +1990,13 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary, pd.Series) and isinstance(
-            arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
-        ):
-            return as_column(arbitrary.array)
+        if isinstance(arbitrary, pd.Series):
+            if isinstance(
+                arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
+            ):
+                return as_column(arbitrary.array)
+            elif PANDAS_GE_150 and isinstance(arbitrary.dtype, pd.ArrowDtype):
+                return as_column(pa.array(arbitrary.array, from_pandas=True))
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif is_interval_dtype(arbitrary.dtype):

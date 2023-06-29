@@ -247,27 +247,36 @@ __device__ T add_safe(T const& value, T const& delta)
 }
 
 /**
- * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for signed types.
+ * @brief Subtract `delta` from value, and cap at numeric_limits::lowest(), for signed types.
+ *
+ * Note: We use numeric_limits::lowest() instead of min() because for floats, lowest() returns
+ * the smallest finite value, as opposed to min() which returns the smallest _positive_ value.
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
-  return (value >= 0 || (value - cuda::std::numeric_limits<T>::min()) >= delta)
+  return (value >= 0 || (value - cuda::std::numeric_limits<T>::lowest()) >= delta)
            ? (value - delta)
-           : cuda::std::numeric_limits<T>::min();
+           : cuda::std::numeric_limits<T>::lowest();
 }
 
 /**
- * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for unsigned types.
+ * @brief Subtract `delta` from value, and cap at numeric_limits::lowest(), for unsigned types.
+ *
+ * Note: We use numeric_limits::lowest() instead of min() because for floats, lowest() returns
+ * the smallest finite value, as opposed to min() which returns the smallest _positive_ value.
+ *
+ * This distinction isn't truly relevant for this overload (because float is signed).
+ * lowest() is kept for uniformity.
  */
 template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
-  return ((value - cuda::std::numeric_limits<T>::min()) >= delta)
+  return ((value - cuda::std::numeric_limits<T>::lowest()) >= delta)
            ? (value - delta)
-           : cuda::std::numeric_limits<T>::min();
+           : cuda::std::numeric_limits<T>::lowest();
 }
 
 /**
@@ -314,7 +323,7 @@ struct device_value_accessor {
    *
    * @param[in] col_ column device view of cudf column
    */
-  __device__ device_value_accessor(column_device_view const& col_) : col{col_}
+  explicit __device__ device_value_accessor(column_device_view const& col_) : col{col_}
   {
     cudf_assert(type_id_matches_device_storage_type<T>(col.type().id()) &&
                 "the data type mismatch");

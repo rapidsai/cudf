@@ -32,6 +32,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -1831,8 +1832,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // Initialize data pointers in batch
   uint32_t const num_stats_bfr =
     (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+
+  // Buffers need to be padded.
+  // Required by `gpuGatherPages`.
+  rmm::device_buffer uncomp_bfr(
+    cudf::util::round_up_safe(max_uncomp_bfr_size, BUFFER_PADDING_MULTIPLE), stream);
+  rmm::device_buffer comp_bfr(cudf::util::round_up_safe(max_comp_bfr_size, BUFFER_PADDING_MULTIPLE),
+                              stream);
+
   rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 

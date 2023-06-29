@@ -392,6 +392,7 @@ add_library(
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
+  src/io/parquet/page_string_decode.cu
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_helpers.cpp
