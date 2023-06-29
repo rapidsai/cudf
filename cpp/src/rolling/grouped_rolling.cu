@@ -396,6 +396,16 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
 
 /**
  * @brief Comparator for numeric order-by columns, handling floating point NaN values.
+ *
+ * This is required for binary search through sorted vectors that contain NaN values.
+ * With ascending sort, NaN values are stored at the end of the sequence, even
+ * greater than infinity.
+ * But thrust::less would have trouble locating it because:
+ * 1. thrust::less(NaN, 10) returns false
+ * 2. thrust::less(10, NaN) also returns false
+ *
+ * This comparator honours the position of NaN values vis-à-vis non-NaN values.
+ *
  */
 struct nan_aware_less {
   template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
@@ -408,7 +418,7 @@ struct nan_aware_less {
   __device__ bool operator()(T const& lhs, T const& rhs) const
   {
     if (std::isnan(lhs)) { return !std::isnan(rhs); }
-    return std::isnan(rhs) ? true : lhs < rhs;
+    return std::isnan(rhs) ? true : thrust::less<T>{}(lhs, rhs);
   }
 };
 
@@ -698,7 +708,17 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
 }
 
 /**
- * @brief Comparator for numeric order-by columns, handling floating point NaN values.
+ * @brief Comparator for numeric order-by columns, handling floating point NaN values. *
+ *
+ * This is required for binary search through sorted vectors that contain NaN values.
+ * With descending sort, NaN values are stored at the beginning of the sequence, even
+ * greater than infinity.
+ * But thrust::greater would have trouble locating it because:
+ * 1. thrust::greater(NaN, 10) returns false
+ * 2. thrust::greater(10, NaN) also returns false
+ *
+ * This comparator honours the position of NaN values vis-à-vis non-NaN values.
+ *
  */
 struct nan_aware_greater {
   template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
@@ -711,7 +731,7 @@ struct nan_aware_greater {
   __device__ bool operator()(T const& lhs, T const& rhs) const
   {
     if (std::isnan(lhs)) { return !std::isnan(rhs); }
-    return std::isnan(rhs) ? false : lhs > rhs;
+    return std::isnan(rhs) ? false : thrust::greater<T>{}(lhs, rhs);
   }
 };
 
