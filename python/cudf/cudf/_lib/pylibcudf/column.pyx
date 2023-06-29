@@ -20,8 +20,6 @@ cdef class Column:
     def __init__(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, offset_type offset,
-        # TODO: Not sure what the best input is for children, for now just
-        # using a List[Column]
         object children
     ):
         self.data_type = data_type

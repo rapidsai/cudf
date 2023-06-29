@@ -19,8 +19,7 @@ cdef class Column:
         gpumemoryview mask
         size_type null_count
         offset_type offset
-        # TODO: Is there a more efficient container I could use than a list
-        # here? For now defaulting to List[gpumemoryview]
+        # children: List[Column]
         object children
 
         # Internals
