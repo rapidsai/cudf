@@ -208,7 +208,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ascending: bool = True,
         na_position: str = "last",
     ):
-        assert ascending == (self._step > 0), "Invalid ascending flag"
+        assert (len(self) <= 1) or (
+            ascending == (self._step > 0)
+        ), "Invalid ascending flag"
         return search_range(value, self.as_range, side=side)
 
     @property  # type: ignore
