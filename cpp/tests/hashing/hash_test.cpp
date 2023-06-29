@@ -1151,20 +1151,20 @@ TEST_F(HashXX64Test, StringType)
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
-  auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({11648823711624848724ul,
-                                                                    10848020664967373619ul,
-                                                                    14871996948511285677ul,
+  auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({4686269239494003989ul,
+                                                                    6715983472207430822ul,
+                                                                    8148134898123095730ul,
                                                                     17291005374665645904ul,
-                                                                    12382650615907311857ul,
-                                                                    11838841145970261371ul,
-                                                                    3765709498017562316ul,
-                                                                    8794998527445624677ul,
-                                                                    17430199718277149821ul,
-                                                                    16032571691393850730ul,
+                                                                    2631835514925512071ul,
+                                                                    17518648592268952189ul,
+                                                                    8749004388517322364ul,
+                                                                    17701789113925815768ul,
+                                                                    8612485687958712810ul,
+                                                                    5148645515269989956ul,
                                                                     17241709254077376921ul,
                                                                     7379359170906687646ul,
-                                                                    71989731308565429ul,
-                                                                    11645213193975881208ul});
+                                                                    4566581271137380327ul,
+                                                                    17962149534752128981ul});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 

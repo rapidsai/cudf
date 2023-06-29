@@ -88,7 +88,7 @@ struct XXHash_64 {
     // and the rest
     if (nbytes % 4) {
       while (offset < nbytes) {
-        h64 += (static_cast<uint8_t>(data[offset]) & 0xff) * prime5;
+        h64 ^= (static_cast<uint8_t>(data[offset]) & 0xff) * prime5;
         h64 = cudf::detail::rotate_bits_left(h64, 11) * prime1;
         ++offset;
       }
