@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union
 
 from typing_extensions import TypeAlias
 
@@ -52,15 +52,15 @@ class ScalarIndexer:
     gather_map: ct.GatherMap
 
 
-IndexingSpec: TypeAlias = (
-    EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
-)
+IndexingSpec: TypeAlias = Union[
+    EmptyIndexer, MapIndexer, MaskIndexer, ScalarIndexer, SliceIndexer
+]
 
 ColumnLabels: TypeAlias = List[str]
 
 
 def destructure_iloc_key(
-    key: Any, frame: cudf.Series | cudf.DataFrame
+    key: Any, frame: Union[cudf.Series, cudf.DataFrame]
 ) -> tuple[Any, ...]:
     """
     Destructure a potentially tuple-typed key into row and column indexers
