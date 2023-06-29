@@ -25,7 +25,7 @@ cdef class DataType:
         return self.c_obj.scale()
 
     @staticmethod
-    cdef DataType from_data_type(data_type dt):
+    cdef DataType from_libcudf(data_type dt):
         # Spoof an empty data type then swap in the real one.
         cdef DataType ret = DataType.__new__(DataType, TypeId.EMPTY)
         ret.c_obj = dt

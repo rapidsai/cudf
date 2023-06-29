@@ -60,4 +60,4 @@ cdef class DataType:
     cpdef int32_t scale(self)
 
     @staticmethod
-    cdef DataType from_data_type(data_type dt)
+    cdef DataType from_libcudf(data_type dt)

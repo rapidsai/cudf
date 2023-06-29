@@ -56,7 +56,7 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
-        cdef DataType dtype = DataType.from_data_type(libcudf_col.get().type())
+        cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
         cdef size_type null_count = libcudf_col.get().null_count()
 
