@@ -56,9 +56,6 @@ requirements:
 
 test:
   requires:
-    {% if cuda_major == "11" %}
-    - cudatoolkit ={{ cuda_version }}
-    {% endif %}
     - cuda-version ={{ cuda_version }}
   imports:
     - cudf_kafka
