@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
+from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -122,6 +123,11 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
+    elif is_datetime64tz_dtype(s.dtype):
+        from cudf.utils.dtypes import get_time_unit
+
+        data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
+        data = data.tz_localize(str(s.dtype.tz))._column
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
             data = cudf.core.column.as_column(
@@ -368,6 +374,36 @@ try:
             ).to_pandas(),
             n,
         )
+
+except ImportError:
+    pass
+
+try:
+    # Requires dask>2023.6.0
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _cudf_to_table(obj, preserve_index=True, **kwargs):
+        if kwargs:
+            warnings.warn(
+                "Ignoring the following arguments to "
+                f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
+            )
+        return obj.to_arrow(preserve_index=preserve_index)
+
+    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
+        # cudf ignores self_destruct.
+        kwargs.pop("self_destruct", None)
+        if kwargs:
+            warnings.warn(
+                f"Ignoring the following arguments to "
+                f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
+            )
+        return obj.from_arrow(table)
 
 except ImportError:
     pass

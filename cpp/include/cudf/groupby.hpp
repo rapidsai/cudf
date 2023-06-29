@@ -294,7 +294,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
     table_view const& values,
     host_span<size_type const> offsets,
-    std::vector<std::reference_wrapper<const scalar>> const& fill_values,
+    std::vector<std::reference_wrapper<scalar const>> const& fill_values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

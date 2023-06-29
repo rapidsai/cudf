@@ -2077,88 +2077,43 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
   std::vector<T> v_some = convert_values<T>(some_values);
   cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
+  auto any_agg = cudf::make_any_aggregation<reduce_aggregation>();
+  auto all_agg = cudf::make_all_aggregation<reduce_aggregation>();
+
   // without nulls
   {
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 2}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {1, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 2}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
   // with nulls
   {
     std::vector<bool> valid({1, 1, 0, 1});
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end(), valid.begin());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {0, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 4}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {0, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 4}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
 }
 
