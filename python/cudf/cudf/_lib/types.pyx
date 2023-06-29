@@ -97,26 +97,8 @@ SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
 }
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
-    np.dtype("int8"): pylibcudf.TypeId.INT8,
-    np.dtype("int16"): pylibcudf.TypeId.INT16,
-    np.dtype("int32"): pylibcudf.TypeId.INT32,
-    np.dtype("int64"): pylibcudf.TypeId.INT64,
-    np.dtype("uint8"): pylibcudf.TypeId.UINT8,
-    np.dtype("uint16"): pylibcudf.TypeId.UINT16,
-    np.dtype("uint32"): pylibcudf.TypeId.UINT32,
-    np.dtype("uint64"): pylibcudf.TypeId.UINT64,
-    np.dtype("float32"): pylibcudf.TypeId.FLOAT32,
-    np.dtype("float64"): pylibcudf.TypeId.FLOAT64,
-    np.dtype("datetime64[s]"): pylibcudf.TypeId.TIMESTAMP_SECONDS,
-    np.dtype("datetime64[ms]"): pylibcudf.TypeId.TIMESTAMP_MILLISECONDS,
-    np.dtype("datetime64[us]"): pylibcudf.TypeId.TIMESTAMP_MICROSECONDS,
-    np.dtype("datetime64[ns]"): pylibcudf.TypeId.TIMESTAMP_NANOSECONDS,
-    np.dtype("object"): pylibcudf.TypeId.STRING,
-    np.dtype("bool"): pylibcudf.TypeId.BOOL8,
-    np.dtype("timedelta64[s]"): pylibcudf.TypeId.DURATION_SECONDS,
-    np.dtype("timedelta64[ms]"): pylibcudf.TypeId.DURATION_MILLISECONDS,
-    np.dtype("timedelta64[us]"): pylibcudf.TypeId.DURATION_MICROSECONDS,
-    np.dtype("timedelta64[ns]"): pylibcudf.TypeId.DURATION_NANOSECONDS,
+    k: pylibcudf.TypeId(v).value
+    for k, v in SUPPORTED_NUMPY_TO_LIBCUDF_TYPES.items()
 }
 
 LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
