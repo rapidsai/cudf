@@ -201,6 +201,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # have an underlying column.
         return self
 
+    def searchsorted(
+        self,
+        value: int,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
+    ):
+        assert ascending == self._step > 0, "Invalid ascending flag"
+        return search_range(value, self.as_range, side=side)
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def name(self):
@@ -488,37 +498,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         return self._step < 0 or len(self) <= 1
-
-    @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side, kind=None):
-        """
-        Calculate slice bound that corresponds to given label.
-        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
-        of given label.
-
-        Parameters
-        ----------
-        label : int
-            A valid value in the ``RangeIndex``
-        side : {'left', 'right'}
-        kind : Unused
-            To keep consistency with other index types.
-
-        Returns
-        -------
-        int
-            Index of label.
-        """
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
-        if side not in {"left", "right"}:
-            raise ValueError(f"Unrecognized side parameter: {side}")
-
-        return search_range(label, self.as_range, side=side)
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
@@ -1402,34 +1381,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._column.notnull().values
 
     notnull = notna
-
-    @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side: str, kind=None):
-        if kind is not None:
-            warnings.warn(
-                "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.",
-                FutureWarning,
-            )
-        if side not in {"left", "right"}:
-            raise ValueError(f"Invalid side argument {side}")
-        if self.is_monotonic_increasing:
-            return self.searchsorted(label, side=side, ascending=True)
-        elif self.is_monotonic_decreasing:
-            return self.searchsorted(label, side=side, ascending=False)
-        else:
-            try:
-                left, right = self._values._find_first_and_last(label)
-            except ValueError:
-                raise KeyError(f"{label=} not in index")
-            if left != right:
-                raise KeyError(
-                    f"Cannot get slice bound for non-unique label {label=}"
-                )
-            if side == "left":
-                return left
-            else:
-                return right + 1
 
     def _is_numeric(self):
         return False
