@@ -429,13 +429,13 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             frame = self._frame
         if isinstance(row_spec, iu.MapIndexer):
-            return frame._gather(row_spec.gather_map, keep_index=True)
+            return frame._gather(row_spec.key, keep_index=True)
         elif isinstance(row_spec, iu.MaskIndexer):
-            return frame._apply_boolean_mask(row_spec.mask, keep_index=True)
+            return frame._apply_boolean_mask(row_spec.key, keep_index=True)
         elif isinstance(row_spec, iu.SliceIndexer):
-            return frame._slice(row_spec.slice)
+            return frame._slice(row_spec.key)
         elif isinstance(row_spec, iu.ScalarIndexer):
-            result = frame._gather(row_spec.gather_map, keep_index=True)
+            result = frame._gather(row_spec.key, keep_index=True)
             # Attempt to turn into series.
             try:
                 # Behaviour difference from pandas, which will merrily

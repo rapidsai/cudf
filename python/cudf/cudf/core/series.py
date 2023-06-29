@@ -1323,14 +1323,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         inputs.
         """
         if isinstance(spec, iu.MapIndexer):
-            return self._gather(spec.gather_map, keep_index=True)
+            return self._gather(spec.key, keep_index=True)
         elif isinstance(spec, iu.MaskIndexer):
-            return self._apply_boolean_mask(spec.mask, keep_index=True)
+            return self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, iu.SliceIndexer):
-            return self._slice(spec.slice)
+            return self._slice(spec.key)
         elif isinstance(spec, iu.ScalarIndexer):
             return self._gather(
-                spec.gather_map, keep_index=False
+                spec.key, keep_index=False
             )._column.element_indexing(0)
         elif isinstance(spec, iu.EmptyIndexer):
             return self._empty_like(keep_index=True)

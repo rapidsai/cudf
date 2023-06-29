@@ -28,28 +28,28 @@ class EmptyIndexer:
 class MapIndexer:
     """An indexer for a gather map"""
 
-    gather_map: ct.GatherMap
+    key: ct.GatherMap
 
 
 @dataclass
 class MaskIndexer:
     """An indexer for a boolean mask"""
 
-    mask: ct.BooleanMask
+    key: ct.BooleanMask
 
 
 @dataclass
 class SliceIndexer:
     """An indexer for a slice"""
 
-    slice: slice
+    key: slice
 
 
 @dataclass
 class ScalarIndexer:
     """An indexer for a scalar value"""
 
-    gather_map: ct.GatherMap
+    key: ct.GatherMap
 
 
 IndexingSpec: TypeAlias = Union[
