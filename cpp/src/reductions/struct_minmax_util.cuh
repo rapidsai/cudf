@@ -116,17 +116,17 @@ class comparison_binop_generator {
         return order;
       }()},
       // row_comparator{cudf::table_view{{input_}}, {}, null_orders, stream_}
-      row_comparator{[input_,
+      row_comparator{[input_tview = input_tview,
                       is_min_op_,
                       flattened_tview = flattened_input->flattened_columns(),
-                      orders          = null_orders,
+                      null_orders     = null_orders,
                       stream_]() {
         if (is_min_op_) {
           return cudf::experimental::row::lexicographic::self_comparator{
-            flattened_tview, {}, orders, stream_};
+            flattened_tview, {}, null_orders, stream_};
         } else {
           return cudf::experimental::row::lexicographic::self_comparator{
-            cudf::table_view{{input_}}, {}, orders, stream_};
+            input_tview, {}, null_orders, stream_};
         }
       }()}
   {
