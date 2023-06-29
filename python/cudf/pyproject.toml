@@ -17,7 +17,7 @@ requires = [
 
 [project]
 name = "cudf"
-version = "23.06.00"
+version = "23.06.01"
 description = "cuDF - GPU Dataframe"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
