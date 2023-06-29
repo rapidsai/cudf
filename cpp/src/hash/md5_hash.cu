@@ -215,9 +215,9 @@ inline bool md5_leaf_type_check(data_type dt)
 
 }  // namespace
 
-std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.

@@ -96,7 +96,7 @@ std::unique_ptr<column> murmur_hash3_32(
  * @brief Computes the MurmurHash3_32 of each row in the given table
  *
  * This function computes the hash similar to MurmurHash3_32 with special processing
- * to match Sparks implementation results.
+ * to match Spark's implementation results.
  *
  * @param input The table of columns to hash
  * @param seed Optional seed value to use for the hash function
@@ -120,7 +120,7 @@ std::unique_ptr<column> spark_murmur_hash3_32(
  *
  * @returns A column where each row is the hash of a row from the input
  */
-std::unique_ptr<column> md5_hash(
+std::unique_ptr<column> md5(
   table_view const& input,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

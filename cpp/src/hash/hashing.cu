@@ -43,7 +43,7 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
-    case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
+    case (hash_id::HASH_MD5): return md5(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }
 }
@@ -68,12 +68,12 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   return detail::spark_murmur_hash3_32(input, seed, stream, mr);
 }
 
-std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::md5_hash(input, stream, mr);
+  return detail::md5(input, stream, mr);
 }
 
 }  // namespace hashing

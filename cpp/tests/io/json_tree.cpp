@@ -466,18 +466,18 @@ records_orient_tree_traversal_cpu(cudf::host_span<cuio_json::SymbolT const> inpu
   auto hash_path = [&](auto node_id) {
     size_t seed = 0;
     while (node_id != top_node) {
-      seed = cudf::detail::hash_combine(
+      seed = cudf::hashing::detail::hash_combine(
         seed, std::hash<cuio_json::TreeDepthT>{}(tree.node_levels[node_id]));
-      seed = cudf::detail::hash_combine(
+      seed = cudf::hashing::detail::hash_combine(
         seed, std::hash<cuio_json::NodeT>{}(tree.node_categories[node_id]));
       if (tree.node_categories[node_id] == cuio_json::node_t::NC_FN) {
         auto field_name =
           std::string_view(input.data() + tree.node_range_begin[node_id],
                            tree.node_range_end[node_id] - tree.node_range_begin[node_id]);
-        seed = cudf::detail::hash_combine(seed, std::hash<std::string_view>{}(field_name));
+        seed = cudf::hashing::detail::hash_combine(seed, std::hash<std::string_view>{}(field_name));
       }
       if (is_array_of_arrays and tree.node_levels[node_id] == row_array_children_level)
-        seed = cudf::detail::hash_combine(seed, list_indices[node_id]);
+        seed = cudf::hashing::detail::hash_combine(seed, list_indices[node_id]);
       node_id = tree.parent_node_ids[node_id];
     }
     return seed;

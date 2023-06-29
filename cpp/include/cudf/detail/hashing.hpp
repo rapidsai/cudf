@@ -37,14 +37,9 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
                                               rmm::cuda_stream_view,
                                               rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
-
-}  // namespace detail
-}  // namespace hashing
-
-namespace detail {
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr);
 
 /* Copyright 2005-2014 Daniel James.
  *
@@ -100,7 +95,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
-
+}  // namespace hashing
 }  // namespace cudf
 
 // specialization of std::hash for cudf::data_type
@@ -109,8 +104,8 @@ template <>
 struct hash<cudf::data_type> {
   std::size_t operator()(cudf::data_type const& type) const noexcept
   {
-    return cudf::detail::hash_combine(std::hash<int32_t>{}(static_cast<int32_t>(type.id())),
-                                      std::hash<int32_t>{}(type.scale()));
+    return cudf::hashing::detail::hash_combine(
+      std::hash<int32_t>{}(static_cast<int32_t>(type.id())), std::hash<int32_t>{}(type.scale()));
   }
 };
 }  // namespace std
