@@ -17,10 +17,6 @@ from .column cimport Column
 from .table cimport Table
 
 
-# Cython doesn't support scoped enumerations. It assumes that enums correspond
-# to their underlying value types and will thus attempt operations that are
-# invalid. This code will ensure that these values are explicitly cast to the
-# underlying type before casting to the final type.
 cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
     OutOfBoundsPolicy py_policy
 ) nogil:

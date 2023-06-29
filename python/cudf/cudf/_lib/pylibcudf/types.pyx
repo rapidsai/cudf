@@ -5,10 +5,6 @@ from libc.stdint cimport int32_t
 from cudf._lib.cpp.types cimport type_id
 
 
-# Cython doesn't support scoped enumerations. It assumes that enums correspond
-# to their underlying value types and will thus attempt operations that are
-# invalid. This code will ensure that these values are explicitly cast to the
-# underlying type before casting to the final type.
 cdef type_id py_type_to_c_type(TypeId py_type_id) nogil:
     return <type_id> (<underlying_type_t_type_id> py_type_id)
 
