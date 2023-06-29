@@ -560,6 +560,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             self._compute_levels_and_codes()
         return self._codes
 
+    def get_slice_bound(self, label, side, kind=None):
+        raise NotImplementedError()
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nlevels(self):
