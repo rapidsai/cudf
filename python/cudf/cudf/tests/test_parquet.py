@@ -1306,6 +1306,29 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+def test_delta_binary(tmpdir):
+    nrows = 100000
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.DataFrame(
+        {
+            "col_int32": np.random.randint(0, nrows, nrows).astype("int32"),
+            "col_int64": np.random.randint(
+                -0x10000000000, 0x10000000000, nrows
+            ).astype("int64"),
+        },
+    )
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BINARY_PACKED",
+        data_page_version="2.0",
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    assert_eq(cudf.read_parquet(pdf_fname), test_pdf)
+
+
 @pytest.mark.parametrize(
     "data",
     [
