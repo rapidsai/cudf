@@ -424,20 +424,16 @@ dependencies:
           - *protobuf
       - output_types: conda
         packages:
-          - cubinlinker
           - cupy>=12.0.0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-          - ptxcompiler
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.ngc.nvidia.com
-          - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
-          - ptxcompiler-cu11
           - &cupy_pip cupy-cuda11x>=12.0.0
       - output_types: pyproject
         packages:
@@ -454,6 +450,24 @@ dependencies:
           - matrix: # All CUDA 11 versions
             packages:
               - cuda-python>=11.7.1,<12.0a0
+      - output_types: [conda, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cubinlinker
+              - ptxcompiler
+      - output_types: requirements
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cubinlinker-cu11
+              - ptxcompiler-cu11
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
