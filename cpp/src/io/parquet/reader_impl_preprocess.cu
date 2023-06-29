@@ -244,7 +244,8 @@ template <typename T = uint8_t>
       size_t const next_offset = column_chunk_offsets[next_chunk];
       bool const is_next_compressed =
         (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
-      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
+      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed ||
+          chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
         // Can't merge if not contiguous or mixing compressed and uncompressed
         // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
         // freed earlier (immediately after decompression stage) to limit peak memory requirements
@@ -256,15 +257,23 @@ template <typename T = uint8_t>
     if (io_size != 0) {
       auto& source = sources[chunk_source_map[chunk]];
       if (source->is_device_read_preferred(io_size)) {
-        auto buffer        = rmm::device_buffer(io_size, stream);
+        // Buffer needs to be padded.
+        // Required by `gpuDecodePageData`.
+        auto buffer =
+          rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
         page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
-        auto const buffer = source->host_read(io_offset, io_size);
-        page_data[chunk] =
-          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
+        auto const read_buffer = source->host_read(io_offset, io_size);
+        // Buffer needs to be padded.
+        // Required by `gpuDecodePageData`.
+        auto tmp_buffer = rmm::device_buffer(
+          cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
+        page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
       }
       auto d_compdata = page_data[chunk]->data();
       do {
@@ -440,8 +449,10 @@ int decode_page_headers(cudf::detail::hostdevice_vector<gpu::ColumnChunkDesc>& c
     }
   }
 
-  // Dispatch batches of pages to decompress for each codec
-  rmm::device_buffer decomp_pages(total_decomp_size, stream);
+  // Dispatch batches of pages to decompress for each codec.
+  // Buffer needs to be padded, required by `gpuDecodePageData`.
+  rmm::device_buffer decomp_pages(
+    cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 
   std::vector<device_span<uint8_t const>> comp_in;
   comp_in.reserve(num_comp_pages);
@@ -1259,8 +1270,12 @@ struct get_page_num_rows {
   __device__ size_type operator()(gpu::PageInfo const& page) { return page.num_rows; }
 };
 
-struct get_page_schema {
-  __device__ size_type operator()(gpu::PageInfo const& page) { return page.src_col_schema; }
+struct get_page_column_index {
+  gpu::ColumnChunkDesc const* chunks;
+  __device__ size_type operator()(gpu::PageInfo const& page)
+  {
+    return chunks[page.chunk_idx].src_col_index;
+  }
 };
 
 struct input_col_info {
@@ -1483,6 +1498,43 @@ void detect_malformed_pages(cudf::detail::hostdevice_vector<gpu::PageInfo>& page
   }
 }
 
+struct page_to_string_size {
+  gpu::PageInfo* pages;
+  gpu::ColumnChunkDesc const* chunks;
+
+  __device__ size_t operator()(size_type page_idx) const
+  {
+    auto const page  = pages[page_idx];
+    auto const chunk = chunks[page.chunk_idx];
+
+    if (not is_string_col(chunk) || (page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) != 0) {
+      return 0;
+    }
+    return pages[page_idx].str_bytes;
+  }
+};
+
+struct page_offset_output_iter {
+  gpu::PageInfo* p;
+  size_type const* index;
+
+  using value_type        = size_type;
+  using difference_type   = size_type;
+  using pointer           = size_type*;
+  using reference         = size_type&;
+  using iterator_category = thrust::output_device_iterator_tag;
+
+  __host__ __device__ page_offset_output_iter operator+(int i)
+  {
+    return page_offset_output_iter{p, index + i};
+  }
+
+  __host__ __device__ void operator++() { index++; }
+
+  __device__ reference operator[](int i) { return p[index[i]].str_offset; }
+  __device__ reference operator*() { return p[*index].str_offset; }
+};
+
 }  // anonymous namespace
 
 void reader::impl::preprocess_pages(size_t skip_rows,
@@ -1519,7 +1571,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
                       pages.device_ptr(),
                       pages.device_ptr() + pages.size(),
                       page_keys.begin(),
-                      get_page_schema{});
+                      get_page_column_index{chunks.device_ptr()});
 
     thrust::sequence(rmm::exec_policy(_stream), page_index.begin(), page_index.end());
     thrust::stable_sort_by_key(rmm::exec_policy(_stream),
@@ -1638,15 +1690,15 @@ void reader::impl::preprocess_pages(size_t skip_rows,
                                   page_input,
                                   chunk_row_output_iter{pages.device_ptr()});
 
-    // preserve page ordering data
-    _chunk_itm_data.page_keys  = std::move(page_keys);
-    _chunk_itm_data.page_index = std::move(page_index);
-
     // retrieve pages back
     pages.device_to_host_sync(_stream);
 
     // print_pages(pages, _stream);
   }
+
+  // preserve page ordering data for string decoder
+  _chunk_itm_data.page_keys  = std::move(page_keys);
+  _chunk_itm_data.page_index = std::move(page_index);
 
   // compute splits if necessary. otherwise return a single split representing
   // the whole file.
@@ -1788,6 +1840,46 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       }
     }
   }
+}
+
+std::vector<size_t> reader::impl::calculate_page_string_offsets()
+{
+  auto& chunks           = _file_itm_data.chunks;
+  auto& pages            = _file_itm_data.pages_info;
+  auto const& page_keys  = _chunk_itm_data.page_keys;
+  auto const& page_index = _chunk_itm_data.page_index;
+
+  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
+  rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
+
+  // use page_index to fetch page string sizes in the proper order
+  auto val_iter = thrust::make_transform_iterator(
+    page_index.begin(), page_to_string_size{pages.device_ptr(), chunks.device_ptr()});
+
+  // do scan by key to calculate string offsets for each page
+  thrust::exclusive_scan_by_key(rmm::exec_policy(_stream),
+                                page_keys.begin(),
+                                page_keys.end(),
+                                val_iter,
+                                page_offset_output_iter{pages.device_ptr(), page_index.data()});
+
+  // now sum up page sizes
+  rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
+  thrust::reduce_by_key(rmm::exec_policy(_stream),
+                        page_keys.begin(),
+                        page_keys.end(),
+                        val_iter,
+                        reduce_keys.begin(),
+                        d_col_sizes.begin());
+
+  cudaMemcpyAsync(col_sizes.data(),
+                  d_col_sizes.data(),
+                  sizeof(size_t) * col_sizes.size(),
+                  cudaMemcpyDeviceToHost,
+                  _stream);
+  _stream.synchronize();
+
+  return col_sizes;
 }
 
 }  // namespace cudf::io::detail::parquet

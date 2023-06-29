@@ -156,18 +156,16 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
-  int64_t skip_rows_opt,
-  std::optional<size_type> const& num_rows_opt,
+  uint64_t skip_rows,
+  std::optional<size_type> const& num_rows,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(
-    (skip_rows_opt == 0 and not num_rows_opt.has_value()) or user_specified_stripes.empty(),
-    "Can't use both the row selection and the stripe selection");
+  CUDF_EXPECTS((skip_rows == 0 and not num_rows.has_value()) or user_specified_stripes.empty(),
+               "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not user_specified_stripes.empty()) { return std::pair<uint64_t, size_type>{0, 0}; }
-    return cudf::io::detail::skip_rows_num_rows_from_options(
-      skip_rows_opt, num_rows_opt, get_num_rows());
+    return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
   }();
 
   std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
@@ -250,7 +248,7 @@ aggregate_orc_metadata::select_stripes(
 }
 
 column_hierarchy aggregate_orc_metadata::select_columns(
-  std::optional<std::vector<std::string>> const& column_paths)
+  std::optional<std::vector<std::string>> const& column_paths) const
 {
   auto const& pfm = per_file_metadata[0];
 

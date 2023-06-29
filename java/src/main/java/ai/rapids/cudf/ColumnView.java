@@ -56,12 +56,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.offHeap = null;
     try {
       AssertEmptyNulls.assertNullsAreEmpty(this);
-    } catch (AssertionError ae) {
+    } catch (Throwable t) {
       // offHeap state is null, so there is nothing to clean in offHeap
       // delete ColumnView to avoid memory leak
       deleteColumnView(viewHandle);
       viewHandle = 0;
-      throw ae;
+      throw t;
     }
   }
 
@@ -81,11 +81,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     nullCount = ColumnView.getNativeNullCount(viewHandle);
     try {
       AssertEmptyNulls.assertNullsAreEmpty(this);
-    } catch (AssertionError ae) {
+    } catch (Throwable t) {
       // cleanup offHeap
       offHeap.clean(false);
       viewHandle = 0;
-      throw ae;
+      throw t;
     }
   }
 
@@ -673,8 +673,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      cleanupColumnViews(nativeHandles, columnVectors);
-      throw t;
+      try {
+        cleanupColumnViews(nativeHandles, columnVectors, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnVectors;
   }
@@ -818,21 +823,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         nativeHandles[i] = 0;
       }
     } catch (Throwable t) {
-      cleanupColumnViews(nativeHandles, columnViews);
-      throw t;
+      try {
+        cleanupColumnViews(nativeHandles, columnViews, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnViews;
   }
 
-  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews) {
-    for (ColumnView columnView: columnViews) {
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews, Throwable throwable) {
+    for (ColumnView columnView : columnViews) {
       if (columnView != null) {
-        columnView.close();
+        try {
+          columnView.close();
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
       }
     }
-    for (long nativeHandle: nativeHandles) {
+    for (long nativeHandle : nativeHandles) {
       if (nativeHandle != 0) {
-        deleteColumnView(nativeHandle);
+        try {
+          deleteColumnView(nativeHandle);
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
       }
     }
   }
@@ -2491,6 +2509,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists() {
+    return flattenLists(false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   *
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists(boolean ignoreNull) {
+    return new ColumnVector(flattenLists(getNativeView(), ignoreNull));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -3967,6 +4010,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ((actualBytes + 63) >> 6) << 6;
   }
 
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * @param nullPolicy if nulls should be included or not.
+   */
+  public int distinctCount(NullPolicy nullPolicy) {
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
+  }
+
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * Nulls are included.
+   */
+  public int distinctCount() {
+    return distinctCount(getNativeView(), true);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3999,6 +4058,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
+  private static native int distinctCount(long handle, boolean nullsIncluded);
+
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
@@ -4448,6 +4509,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long dropListDuplicates(long nativeView);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
 
   /**
    * Native method for list lookup
@@ -5122,5 +5185,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector purgeNonEmptyNulls() {
     return new ColumnVector(purgeNonEmptyNulls(viewHandle));
+  }
+
+  static ColumnView[] getColumnViewsFromPointers(long[] nativeHandles) {
+    ColumnView[] columns = new ColumnView[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnView(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columns, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
+    }
   }
 }

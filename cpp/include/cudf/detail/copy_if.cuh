@@ -126,7 +126,7 @@ __launch_bounds__(block_size) __global__
 
     cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
-    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
+    cudf::size_type const local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
     block_sum += tmp_block_sum;
 
     if (has_validity) {
@@ -141,7 +141,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
+        cudf::size_type const aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -161,10 +161,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::detail::warp_size;
+      int const last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      int const last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      int const wid        = threadIdx.x / cudf::detail::warp_size;
+      int const lane       = threadIdx.x % cudf::detail::warp_size;
 
       cudf::size_type tmp_warp_valid_counts{0};
 

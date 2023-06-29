@@ -217,7 +217,7 @@ struct extract_day_num_of_year {
   }
 };
 
-// Extract the the quarter to which the timestamp belongs to
+// Extract the quarter to which the timestamp belongs to
 struct extract_quarter_op {
   template <typename Timestamp>
   __device__ inline int16_t operator()(Timestamp const ts) const
