@@ -440,15 +440,18 @@ libcudf throws under different circumstances, see the [section on error handling
 
 ## Streams
 
-libcudf supports asynchronous execution using CUDA streams. In order to facilitate the usage of
-streams, all libcudf APIs that allocate device memory or execute a kernel should accept an
-`rmm::cuda_stream_view` parameter at the end with a default value of `cudf::get_default_stream()`.
-There is one exception to this rule: if the API also accepts a memory resource parameter, the stream
-parameter should be placed just *before* the memory resource. This API should then forward the call
-to a corresponding `detail` API with an identical signature, except that the `detail` API should not
-have a default parameter for the stream ([detail APIs should always avoid default
-parameters](#default-parameters)). The implementation should be wholly contained in the `detail` API
-definition and use only asynchronous versions of CUDA APIs with the stream parameter.
+libcudf is in the process of adding support for asynchronous execution using
+CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
+that allocate device memory or execute a kernel should accept an
+`rmm::cuda_stream_view` parameter at the end with a default value of
+`cudf::get_default_stream()`.  There is one exception to this rule: if the API
+also accepts a memory resource parameter, the stream parameter should be placed
+just *before* the memory resource. This API should then forward the call to a
+corresponding `detail` API with an identical signature, except that the
+`detail` API should not have a default parameter for the stream ([detail APIs
+should always avoid default parameters](#default-parameters)). The
+implementation should be wholly contained in the `detail` API definition and
+use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
