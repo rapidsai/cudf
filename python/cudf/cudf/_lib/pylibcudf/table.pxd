@@ -12,6 +12,9 @@ cdef class Table:
 
     cdef unique_ptr[table_view] _underlying
 
+    # See the corresponding pylibcudf.Column.get_underlying function for an
+    # explanation of why we store a unique_ptr and return a raw pointer rather
+    # than simply storing and returning table_view by value.
     cdef table_view* get_underlying(self)
 
     @staticmethod
