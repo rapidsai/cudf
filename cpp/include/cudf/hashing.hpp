@@ -31,14 +31,12 @@ namespace cudf {
 /**
  * @brief Type of hash value
  *
- * @deprecated Since 23.08
  */
 using hash_value_type = uint32_t;
 
 /**
  * @brief Identifies the hash function to be used
  *
- * @deprecated Since 23.08. This will be moved to partitioning.hpp after 23.10
  */
 enum class hash_id {
   HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
