@@ -115,7 +115,6 @@ class comparison_binop_generator {
         }
         return order;
       }()},
-      // row_comparator{cudf::table_view{{input_}}, {}, null_orders, stream_}
       row_comparator{[input_tview = input_tview,
                       is_min_op_,
                       flattened_tview = flattened_input->flattened_columns(),
