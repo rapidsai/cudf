@@ -441,7 +441,9 @@ cdef class Column:
     cpdef pylibcudf.Column to_pylibcudf(self):
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
-        # categoricals due to the ordering question.
+        # categoricals because cudf supports ordered and unordered categoricals
+        # while libcudf supports only unordered categoricals (see
+        # https://github.com/rapidsai/cudf/pull/8567).
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:
@@ -470,10 +472,6 @@ cdef class Column:
             self.size,
             data,
             mask,
-            # TODO: We may need to do some extra work to ensure that
-            # self.null_count is not None. However, that would be out of scope
-            # for this PR and would probably need to be resolved as part of the
-            # UNKNOWN_NULL_COUNT removal.
             self.null_count,
             self.offset,
             children,
