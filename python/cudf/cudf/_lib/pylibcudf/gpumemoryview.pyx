@@ -1,5 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
+from functools import cached_property
+
 
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer."""
@@ -15,6 +17,6 @@ cdef class gpumemoryview:
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
-    @property
+    @cached_property
     def __cuda_array_interface__(self):
         return self.obj.__cuda_array_interface__
