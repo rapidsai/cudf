@@ -228,7 +228,7 @@ namespace {
 template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T add_safe(T const& value, T const& delta)
 {
-  if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+  if constexpr (std::is_floating_point_v<T>) {
     if (std::isinf(value) or std::isnan(value)) { return value; }
   }
   // delta >= 0.
@@ -258,7 +258,7 @@ __device__ T add_safe(T const& value, T const& delta)
 template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
-  if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+  if constexpr (std::is_floating_point_v<T>) {
     if (std::isinf(value) or std::isnan(value)) { return value; }
   }
   // delta >= 0;
