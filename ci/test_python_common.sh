@@ -49,4 +49,4 @@ rapids-mamba-retry install \
   --channel "${LIBCUDF_CHANNEL_20}" \
   --channel dask/label/dev \
   --channel conda-forge \
-  cudf libcudf dask-cudf pandas==2.0.2 python-tzdata --no-deps
+  cudf libcudf dask-cudf pandas==2.0.2 python-tzdata
