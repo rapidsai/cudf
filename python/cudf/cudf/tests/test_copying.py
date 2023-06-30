@@ -113,6 +113,8 @@ def test_series_setitem_partial_slice_cow_on():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
+        # TODO: when COW and spilling has been unified, find a clean way to
+        # test this without accessing the internal attributes _base and _ptr
         assert (
             new_slice._column.base_data._base._ptr
             == actual._column.base_data._base._ptr
