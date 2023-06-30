@@ -4,7 +4,6 @@ import functools
 import hashlib
 import os
 import traceback
-import warnings
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -189,49 +188,6 @@ def initfunc(f):
 
     wrapper.initialized = False
     return wrapper
-
-
-@initfunc
-def set_allocator(
-    allocator="default",
-    pool=False,
-    initial_pool_size=None,
-    enable_logging=False,
-):
-    """
-    Set the GPU memory allocator. This function should be run only once,
-    before any cudf objects are created.
-
-    allocator : {"default", "managed"}
-        "default": use default allocator.
-        "managed": use managed memory allocator.
-    pool : bool
-        Enable memory pool.
-    initial_pool_size : int
-        Memory pool size in bytes. If ``None`` (default), 1/2 of total
-        GPU memory is used. If ``pool=False``, this argument is ignored.
-    enable_logging : bool, optional
-        Enable logging (default ``False``).
-        Enabling this option will introduce performance overhead.
-    """
-    # TODO: Remove this in 23.04 to give users some time to switch.
-    warnings.warn(
-        "The cudf.set_allocator function is deprecated and will be removed in "
-        "a future release. Please use rmm.reinitialize "
-        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
-        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
-        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
-        FutureWarning,
-    )
-
-    use_managed_memory = allocator == "managed"
-
-    rmm.reinitialize(
-        pool_allocator=pool,
-        managed_memory=use_managed_memory,
-        initial_pool_size=initial_pool_size,
-        logging=enable_logging,
-    )
 
 
 def clear_cache():

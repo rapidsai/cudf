@@ -80,7 +80,7 @@ struct token_reader_fn {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
-      auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
+      auto const start_pos = thrust::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
 
       // get the token (characters just before this match)
       auto const token = string_index_pair{d_str.data() + last_pos.byte_offset(),

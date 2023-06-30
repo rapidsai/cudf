@@ -41,9 +41,6 @@ requirements:
     - dask >=2023.5.1
     - dask-core >=2023.5.1
     - distributed >=2023.5.1
-    {% if cuda_major == "11" %}
-    - cudatoolkit ={{ cuda_version }}
-    {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
     - python
@@ -51,16 +48,10 @@ requirements:
     - dask >=2023.5.1
     - dask-core >=2023.5.1
     - distributed >=2023.5.1
-    {% if cuda_major == "11" %}
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
-    {% endif %}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:
   requires:
-    {% if cuda_major == "11" %}
-    - cudatoolkit ={{ cuda_version }}
-    {% endif %}
     - cuda-version ={{ cuda_version }}
   imports:
     - dask_cudf
