@@ -3960,7 +3960,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         on the kind of join:
         - For inner joins, the result will be the intersection of the
         categories
-        - For left or right joins, the result will be the the left or
+        - For left or right joins, the result will be the left or
         right dtype respectively. This extends to semi and anti joins.
         - For outer joins, the result will be the union of categories
         from both sides.
@@ -4360,7 +4360,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.apply(f, axis=1)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
-        used to manipulate string data, see the the UDF guide,
+        used to manipulate string data, see the UDF guide,
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
         """
         if axis != 1:

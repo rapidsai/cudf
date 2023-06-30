@@ -119,7 +119,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
  * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
- * to true, the the bit is set to `1`. If false, set to `0`.
+ * to true, the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:
  * begin1:        zero-based counting iterator,

@@ -148,6 +148,7 @@
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_combine Combining
+ *   @defgroup lists_modify Modifying
  *   @defgroup lists_extract Extracting
  *   @defgroup lists_filling Filling
  *   @defgroup lists_contains Searching

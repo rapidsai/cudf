@@ -226,7 +226,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
 TEST_F(StringsExtractTests, ExtractAllTest)
 {
   std::vector<char const*> h_input(
-    {"123 banana 7 eleven", "41 apple", "6 pear 0 pair", nullptr, "", "bees", "4 pare"});
+    {"123 banana 7 eleven", "41 apple", "6 péar 0 pair", nullptr, "", "bees", "4 paré"});
   auto validity =
     thrust::make_transform_iterator(h_input.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper input(h_input.begin(), h_input.end(), validity);
@@ -238,11 +238,11 @@ TEST_F(StringsExtractTests, ExtractAllTest)
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"123", "banana", "7", "eleven"},
                 LCW{"41", "apple"},
-                LCW{"6", "pear", "0", "pair"},
+                LCW{"6", "péar", "0", "pair"},
                 LCW{},
                 LCW{},
                 LCW{},
-                LCW{"4", "pare"}},
+                LCW{"4", "paré"}},
                valids);
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::extract_all_record(sv, *prog);

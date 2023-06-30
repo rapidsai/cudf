@@ -2219,3 +2219,13 @@ def test_dataframe_join_on():
     df = cudf.DataFrame({"a": [1, 2, 3]})
     with pytest.raises(NotImplementedError):
         df.join(df, on="a")
+
+
+@pytest.mark.parametrize("how", ["inner", "outer"])
+def test_index_join_names(how):
+    idx1 = cudf.Index([10, 1, 2, 4, 2, 1], name="a")
+    idx2 = cudf.Index([-10, 2, 3, 1, 2], name="b")
+
+    expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
+    actual = idx1.join(idx2, how=how)
+    assert_join_results_equal(actual, expected, how=how)

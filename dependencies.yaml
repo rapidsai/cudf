@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8"]
+      cuda: ["11.8", "12.0"]
       arch: [x86_64]
     includes:
       - build_all
@@ -195,6 +195,11 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-nvcc
+          - matrix:
               arch: x86_64
               cuda: "11.8"
             packages:
@@ -221,6 +226,20 @@ dependencies:
           - libarrow==11.0.0.*
           - librdkafka>=1.9.0,<1.10.0a0
           - spdlog>=1.11.0,<1.12
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              # Align nvcomp version with rapids-cmake
+              # TODO: not yet available for aarch64 CUDA 12
+              - &nvcomp nvcomp==2.6.1
+          - matrix:
+              arch: aarch64
+              cuda: "11.8"
+            packages:
+              - *nvcomp
   build_wheels:
     common:
       - output_types: pyproject
@@ -265,15 +284,24 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-cudart-dev
+              - cuda-nvrtc-dev
+              - libcurand-dev
+          - matrix:
               cuda: "11.8"
             packages:
-              - cudatoolkit=11.8
+              - cuda-version=11.8
+              - cudatoolkit
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86
           - matrix:
               cuda: "11.5"
             packages:
-              - cudatoolkit=11.5
+              - cuda-version=11.5
+              - cudatoolkit
                 # Can't hard pin the version since 11.x is missing many
                 # packages for specific versions
               - libcurand-dev>=10.2.6.48,<=10.2.7.107
@@ -281,13 +309,15 @@ dependencies:
           - matrix:
               cuda: "11.4"
             packages:
-              - cudatoolkit=11.4
+              - cuda-version=11.4
+              - cudatoolkit
               - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
               - &libcurand114 libcurand>=10.2.5.43,<=10.2.5.120
           - matrix:
               cuda: "11.2"
             packages:
-              - cudatoolkit=11.2
+              - cuda-version=11.2
+              - cudatoolkit
                 # The NVIDIA channel doesn't publish pkgs older than 11.4 for
                 # these libs, so 11.2 uses 11.4 packages (the oldest
                 # available).
@@ -295,6 +325,11 @@ dependencies:
               - *libcurand114
       - output_types: conda
         matrices:
+          - matrix:
+              cuda: "12.0"
+              arch: x86_64
+            packages:
+              - libcufile-dev
           - matrix:
               cuda: "11.8"
               arch: x86_64
@@ -381,45 +416,58 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - cuda-python>=11.7.1,<12.0
           - &numba numba>=0.57
           - nvtx>=0.2.1
           - packaging
           - rmm==23.8.*
-          - typing_extensions
+          - typing_extensions>=4.0.0
           - *protobuf
       - output_types: conda
         packages:
-          - cubinlinker
           - cupy>=12.0.0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-          - ptxcompiler
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.ngc.nvidia.com
-          - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
-          - ptxcompiler-cu11
+          - &cupy_pip cupy-cuda11x>=12.0.0
       - output_types: pyproject
         packages:
           - cubinlinker
-          - &cupy_pip cupy-cuda11x>=12.0.0
+          - *cupy_pip
           - ptxcompiler
     specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-python>=12.0,<13.0a0
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cuda-python>=11.7.1,<12.0a0
+      - output_types: [conda, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+          - matrix: # All CUDA 11 versions
+            packages:
+              - cubinlinker
+              - ptxcompiler
       - output_types: requirements
         matrices:
           - matrix:
-              arch: x86_64
+              cuda: "12.0"
             packages:
-              - cupy-cuda115>=12.0.0
-          - matrix:
-              arch: aarch64
+          - matrix: # All CUDA 11 versions
             packages:
-              - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
+              - cubinlinker-cu11
+              - ptxcompiler-cu11
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -464,6 +512,11 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+              - cuda-sanitizer-api
+          - matrix:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
@@ -480,13 +533,18 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "11.5"
+              cuda: "12.0"
             packages:
-              - cuda-nvtx=11.5
+              - cuda-version=12.0
+              - cuda-nvtx
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-nvtx=11.8
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cuda-nvtx=11.5
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]

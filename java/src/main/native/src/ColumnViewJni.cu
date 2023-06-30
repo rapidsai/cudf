@@ -146,7 +146,7 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
 
                      // Here, the input lists satisfy all the conditions below so we output a
                      // null:
-                     //  - Both of the the input lists have no non-null common element, and
+                     //  - Both of the input lists have no non-null common element, and
                      //  - They are both non-empty, and
                      //  - Either of them contains null elements.
                      return false;
