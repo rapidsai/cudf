@@ -102,7 +102,7 @@ constexpr int prefetch_size      = (1 << log2_prefetch_size);
 
 /// @brief Prefetcher state
 struct prefetch_queue_s {
-  const uint8_t* cur_p;  ///< Prefetch location
+  uint8_t const* cur_p;  ///< Prefetch location
   int run;               ///< prefetcher will exit when run=0
   uint8_t pref_data[prefetch_size];
 };
@@ -222,7 +222,7 @@ __device__ uint32_t getbits(inflate_state_s* s, uint32_t n)
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
  */
-__device__ int decode(inflate_state_s* s, const int16_t* counts, const int16_t* symbols)
+__device__ int decode(inflate_state_s* s, int16_t const* counts, int16_t const* symbols)
 {
   unsigned int len;    // current number of bits in code
   unsigned int code;   // len bits being decoded
@@ -279,7 +279,7 @@ __device__ int decode(inflate_state_s* s, const int16_t* counts, const int16_t* 
  *   the code bits definition.
  */
 __device__ int construct(
-  inflate_state_s* s, int16_t* counts, int16_t* symbols, const int16_t* length, int n)
+  inflate_state_s* s, int16_t* counts, int16_t* symbols, int16_t const* length, int n)
 {
   int symbol;  // current symbol when stepping through length[]
   int len;     // current length when stepping through counts[]
@@ -553,7 +553,7 @@ __device__ void decode_symbols(inflate_state_s* s)
       } else {
         // Slow length path
         uint32_t next32r       = __brev(next32);
-        const int16_t* symbols = &s->lensym[s->index_slow_len];
+        int16_t const* symbols = &s->lensym[s->index_slow_len];
         unsigned int first     = s->first_slow_len;
         int lext;
 #pragma unroll 1
@@ -592,7 +592,7 @@ __device__ void decode_symbols(inflate_state_s* s)
           cur += 4;
 #else
           cur += 8;
-          bitbuf.y = (cur < end) ? *(const uint32_t*)cur : 0;
+          bitbuf.y = (cur < end) ? *(uint32_t const*)cur : 0;
           cur -= 4;
 #endif
           bitpos &= 0x1f;
@@ -608,7 +608,7 @@ __device__ void decode_symbols(inflate_state_s* s)
           len += dext;
         } else {
           uint32_t next32r       = __brev(next32);
-          const int16_t* symbols = &s->distsym[s->index_slow_dist];
+          int16_t const* symbols = &s->distsym[s->index_slow_dist];
           unsigned int first     = s->first_slow_dist;
 #pragma unroll 1
           for (len = log2_dist_lut + 1; len <= max_bits; len++) {
@@ -645,7 +645,7 @@ __device__ void decode_symbols(inflate_state_s* s)
 #else
         cur += 8;
         if (cur < end) {
-          bitbuf.y = *(const uint32_t*)cur;
+          bitbuf.y = *(uint32_t const*)cur;
           cur -= 4;
         } else {
           bitbuf.y = 0;
@@ -686,8 +686,8 @@ __device__ void init_length_lut(inflate_state_s* s, int t)
   int32_t* lut = s->u.lut.lenlut;
 
   for (uint32_t bits = t; bits < (1 << log2_len_lut); bits += blockDim.x) {
-    const int16_t* cnt     = s->lencnt;
-    const int16_t* symbols = s->lensym;
+    int16_t const* cnt     = s->lencnt;
+    int16_t const* symbols = s->lensym;
     int sym                = -10 << 5;
     unsigned int first     = 0;
     unsigned int rbits     = __brev(bits) >> (32 - log2_len_lut);
@@ -713,7 +713,7 @@ __device__ void init_length_lut(inflate_state_s* s, int t)
   if (!t) {
     unsigned int first = 0;
     unsigned int index = 0;
-    const int16_t* cnt = s->lencnt;
+    int16_t const* cnt = s->lencnt;
     for (unsigned int len = 1; len <= log2_len_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
@@ -734,8 +734,8 @@ __device__ void init_distance_lut(inflate_state_s* s, int t)
   int32_t* lut = s->u.lut.distlut;
 
   for (uint32_t bits = t; bits < (1 << log2_dist_lut); bits += blockDim.x) {
-    const int16_t* cnt     = s->distcnt;
-    const int16_t* symbols = s->distsym;
+    int16_t const* cnt     = s->distcnt;
+    int16_t const* symbols = s->distsym;
     int sym                = 0;
     unsigned int first     = 0;
     unsigned int rbits     = __brev(bits) >> (32 - log2_dist_lut);
@@ -758,7 +758,7 @@ __device__ void init_distance_lut(inflate_state_s* s, int t)
   if (!t) {
     unsigned int first = 0;
     unsigned int index = 0;
-    const int16_t* cnt = s->distcnt;
+    int16_t const* cnt = s->distcnt;
     for (unsigned int len = 1; len <= log2_dist_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
@@ -774,8 +774,8 @@ __device__ void init_distance_lut(inflate_state_s* s, int t)
 __device__ void process_symbols(inflate_state_s* s, int t)
 {
   uint8_t* out           = s->out;
-  const uint8_t* outend  = s->outend;
-  const uint8_t* outbase = s->outbase;
+  uint8_t const* outend  = s->outend;
+  uint8_t const* outbase = s->outbase;
   int batch              = 0;
 
   do {
@@ -804,7 +804,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       len    = max((symbol & 0xffff) - 256, 0);  // max should be unnecessary, but just in case
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
-        const uint8_t* src = out + ((i >= dist) ? (i % dist) : i) - dist;
+        uint8_t const* src = out + ((i >= dist) ? (i % dist) : i) - dist;
         uint8_t b          = (src < outbase) ? 0 : *src;
         if (out + i < outend) { out[i] = b; }
       }
@@ -897,12 +897,12 @@ __device__ void copy_stored(inflate_state_s* s, int t)
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
       uint4 u;
-      u.x = *reinterpret_cast<const uint32_t*>(cur4 + i + 0 * 4);
-      u.y = *reinterpret_cast<const uint32_t*>(cur4 + i + 1 * 4);
-      u.z = *reinterpret_cast<const uint32_t*>(cur4 + i + 2 * 4);
-      u.w = *reinterpret_cast<const uint32_t*>(cur4 + i + 3 * 4);
+      u.x = *reinterpret_cast<uint32_t const*>(cur4 + i + 0 * 4);
+      u.y = *reinterpret_cast<uint32_t const*>(cur4 + i + 1 * 4);
+      u.z = *reinterpret_cast<uint32_t const*>(cur4 + i + 2 * 4);
+      u.w = *reinterpret_cast<uint32_t const*>(cur4 + i + 3 * 4);
       if (bitpos != 0) {
-        uint32_t v = (bitpos != 0) ? *reinterpret_cast<const uint32_t*>(cur4 + i + 4 * 4) : 0;
+        uint32_t v = (bitpos != 0) ? *reinterpret_cast<uint32_t const*>(cur4 + i + 4 * 4) : 0;
         u.x        = __funnelshift_rc(u.x, u.y, bitpos);
         u.y        = __funnelshift_rc(u.y, u.z, bitpos);
         u.z        = __funnelshift_rc(u.z, u.w, bitpos);
@@ -947,15 +947,15 @@ __device__ void init_prefetcher(inflate_state_s* s, int t)
 
 __device__ void prefetch_warp(volatile inflate_state_s* s, int t)
 {
-  const uint8_t* cur_p = s->pref.cur_p;
-  const uint8_t* end   = s->end;
+  uint8_t const* cur_p = s->pref.cur_p;
+  uint8_t const* end   = s->end;
   while (shuffle((t == 0) ? s->pref.run : 0)) {
     auto cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
       shuffle((t == 0) ? (cur_lo - *(volatile int32_t*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
-      const uint8_t* p             = cur_p + 4 * t;
-      *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t*>(p) : 0;
+      uint8_t const* p             = cur_p + 4 * t;
+      *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
       cur_p += 4 * 32;
       __threadfence_block();
       __syncwarp();
@@ -972,7 +972,7 @@ __device__ void prefetch_warp(volatile inflate_state_s* s, int t)
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
  */
-__device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
+__device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
 {
   int hdr_len = -1;
 
@@ -1156,13 +1156,13 @@ __global__ void __launch_bounds__(1024)
   copy_uncompressed_kernel(device_span<device_span<uint8_t const> const> inputs,
                            device_span<device_span<uint8_t> const> outputs)
 {
-  __shared__ const uint8_t* volatile src_g;
+  __shared__ uint8_t const* volatile src_g;
   __shared__ uint8_t* volatile dst_g;
   __shared__ uint32_t volatile copy_len_g;
 
   uint32_t t = threadIdx.x;
   uint32_t z = blockIdx.x;
-  const uint8_t* src;
+  uint8_t const* src;
   uint8_t* dst;
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
@@ -1190,7 +1190,7 @@ __global__ void __launch_bounds__(1024)
   src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
   src_align_bits  = src_align_bytes << 3;
   while (len >= 32) {
-    const auto* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
+    auto const* src32 = reinterpret_cast<uint32_t const*>(src - src_align_bytes);
     uint32_t copy_cnt = min(len >> 2, 1024);
     if (t < copy_cnt) {
       uint32_t v = src32[t];

@@ -23,6 +23,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -290,7 +291,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     auto content          = output->release();
 
     // Build new children columns.
-    const auto null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    auto const null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
     std::for_each(content.children.begin(),
                   content.children.end(),
                   [null_mask, null_count, stream, mr](auto& child) {

@@ -353,7 +353,7 @@ struct AgentDFA {
                                             OffsetT const num_total_symbols)
   {
     // Check if pointer is aligned to four bytes
-    if (((uintptr_t)(const void*)(d_chars + block_offset) % 4) == 0) {
+    if (((uintptr_t)(void const*)(d_chars + block_offset) % 4) == 0) {
       if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
         LoadBlock(
           d_chars, block_offset, num_total_symbols, cub::Int2Type<true>(), cub::Int2Type<4>());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ inline size_t compute_hash_table_size(cudf::size_type num_keys_to_insert,
 }
 
 template <typename pair_type>
-__forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __restrict__ const ptr)
+__forceinline__ __device__ pair_type load_pair_vectorized(pair_type const* __restrict__ const ptr)
 {
   if (sizeof(uint4) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -57,7 +57,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
       pair_type pair_val;
     };
     pair_type2vec_type converter = {0, 0, 0, 0};
-    converter.vec_val            = *reinterpret_cast<const uint4*>(ptr);
+    converter.vec_val            = *reinterpret_cast<uint4 const*>(ptr);
     return converter.pair_val;
   } else if (sizeof(uint2) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -65,7 +65,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
       pair_type pair_val;
     };
     pair_type2vec_type converter = {0, 0};
-    converter.vec_val            = *reinterpret_cast<const uint2*>(ptr);
+    converter.vec_val            = *reinterpret_cast<uint2 const*>(ptr);
     return converter.pair_val;
   } else if (sizeof(int) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -73,7 +73,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
       pair_type pair_val;
     };
     pair_type2vec_type converter = {0};
-    converter.vec_val            = *reinterpret_cast<const int*>(ptr);
+    converter.vec_val            = *reinterpret_cast<int const*>(ptr);
     return converter.pair_val;
   } else if (sizeof(short) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -81,7 +81,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
       pair_type pair_val;
     };
     pair_type2vec_type converter = {0};
-    converter.vec_val            = *reinterpret_cast<const short*>(ptr);
+    converter.vec_val            = *reinterpret_cast<short const*>(ptr);
     return converter.pair_val;
   } else {
     return *ptr;
@@ -90,7 +90,7 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
 
 template <typename pair_type>
 __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ const ptr,
-                                                      const pair_type val)
+                                                      pair_type const val)
 {
   if (sizeof(uint4) == sizeof(pair_type)) {
     union pair_type2vec_type {
@@ -131,11 +131,11 @@ __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ co
 
 template <typename value_type, typename size_type, typename key_type, typename elem_type>
 __global__ void init_hashtbl(value_type* __restrict__ const hashtbl_values,
-                             const size_type n,
-                             const key_type key_val,
-                             const elem_type elem_val)
+                             size_type const n,
+                             key_type const key_val,
+                             elem_type const elem_val)
 {
-  const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  size_type const idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < n) {
     store_pair_vectorized(hashtbl_values + idx, thrust::make_pair(key_val, elem_val));
   }
@@ -147,7 +147,7 @@ struct equal_to {
   using first_argument_type  = T;
   using second_argument_type = T;
   __forceinline__ __host__ __device__ constexpr bool operator()(
-    const first_argument_type& lhs, const second_argument_type& rhs) const
+    first_argument_type const& lhs, second_argument_type const& rhs) const
   {
     return lhs == rhs;
   }
@@ -164,9 +164,9 @@ class cycle_iterator_adapter {
 
   cycle_iterator_adapter() = delete;
 
-  __host__ __device__ explicit cycle_iterator_adapter(const iterator_type& begin,
-                                                      const iterator_type& end,
-                                                      const iterator_type& current)
+  __host__ __device__ explicit cycle_iterator_adapter(iterator_type const& begin,
+                                                      iterator_type const& end,
+                                                      iterator_type const& current)
     : m_begin(begin), m_end(end), m_current(current)
   {
   }
@@ -180,7 +180,7 @@ class cycle_iterator_adapter {
     return *this;
   }
 
-  __host__ __device__ const cycle_iterator_adapter& operator++() const
+  __host__ __device__ cycle_iterator_adapter const& operator++() const
   {
     if (m_end == (m_current + 1))
       m_current = m_begin;
@@ -199,7 +199,7 @@ class cycle_iterator_adapter {
     return old;
   }
 
-  __host__ __device__ const cycle_iterator_adapter& operator++(int) const
+  __host__ __device__ cycle_iterator_adapter const& operator++(int) const
   {
     cycle_iterator_adapter<iterator_type> old(m_begin, m_end, m_current);
     if (m_end == (m_current + 1))
@@ -209,14 +209,14 @@ class cycle_iterator_adapter {
     return old;
   }
 
-  __host__ __device__ bool equal(const cycle_iterator_adapter<iterator_type>& other) const
+  __host__ __device__ bool equal(cycle_iterator_adapter<iterator_type> const& other) const
   {
     return m_current == other.m_current && m_begin == other.m_begin && m_end == other.m_end;
   }
 
   __host__ __device__ reference& operator*() { return *m_current; }
 
-  __host__ __device__ const reference& operator*() const { return *m_current; }
+  __host__ __device__ reference const& operator*() const { return *m_current; }
 
   __host__ __device__ const pointer operator->() const { return m_current.operator->(); }
 
@@ -229,15 +229,15 @@ class cycle_iterator_adapter {
 };
 
 template <class T>
-__host__ __device__ bool operator==(const cycle_iterator_adapter<T>& lhs,
-                                    const cycle_iterator_adapter<T>& rhs)
+__host__ __device__ bool operator==(cycle_iterator_adapter<T> const& lhs,
+                                    cycle_iterator_adapter<T> const& rhs)
 {
   return lhs.equal(rhs);
 }
 
 template <class T>
-__host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs,
-                                    const cycle_iterator_adapter<T>& rhs)
+__host__ __device__ bool operator!=(cycle_iterator_adapter<T> const& lhs,
+                                    cycle_iterator_adapter<T> const& rhs)
 {
   return !lhs.equal(rhs);
 }

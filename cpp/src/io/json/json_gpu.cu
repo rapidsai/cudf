@@ -170,8 +170,8 @@ struct field_descriptor {
  * nullptr is passed when the input file does not consist of objects.
  * @return Descriptor of the parsed field
  */
-__device__ field_descriptor next_field_descriptor(const char* begin,
-                                                  const char* end,
+__device__ field_descriptor next_field_descriptor(char const* begin,
+                                                  char const* end,
                                                   parse_options_view const& opts,
                                                   cudf::size_type field_idx,
                                                   col_map_type col_map)
@@ -256,7 +256,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                                device_span<bitmask_type* const> const valid_fields,
                                                device_span<cudf::size_type> const num_valid_fields)
 {
-  const auto rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
+  auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
 
   auto const row_data_range = get_row_data_range(data, row_offsets, rec_id);
@@ -272,7 +272,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
 
     current = desc.value_end + 1;
 
-    using string_index_pair = thrust::pair<const char*, size_type>;
+    using string_index_pair = thrust::pair<char const*, size_type>;
 
     if (!serialized_trie_contains(opts.trie_na,
                                   {desc.value_begin - is_quoted, value_len + is_quoted * 2})) {
@@ -373,7 +373,7 @@ __global__ void detect_data_types_kernel(
     int exponent_count = 0;
     int other_count    = 0;
 
-    const bool maybe_hex =
+    bool const maybe_hex =
       ((value_len > 2 && *desc.value_begin == '0' && *(desc.value_begin + 1) == 'x') ||
        (value_len > 3 && *desc.value_begin == '-' && *(desc.value_begin + 1) == '0' &&
         *(desc.value_begin + 2) == 'x'));
@@ -494,7 +494,7 @@ __global__ void collect_keys_info_kernel(parse_options_view const options,
 
   auto const row_data_range = get_row_data_range(data, row_offsets, rec_id);
 
-  auto advance = [&](const char* begin) {
+  auto advance = [&](char const* begin) {
     return get_next_key_value_range(begin, row_data_range.second, options);
   };
   for (auto field_range = advance(row_data_range.first);
@@ -532,7 +532,7 @@ void convert_json_to_columns(parse_options_view const& opts,
   CUDF_CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
     &min_grid_size, &block_size, convert_data_to_columns_kernel));
 
-  const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
+  int const grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
   convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream.value()>>>(opts,
                                                                                data,
@@ -551,7 +551,7 @@ void convert_json_to_columns(parse_options_view const& opts,
  */
 
 std::vector<cudf::io::column_type_histogram> detect_data_types(
-  const parse_options_view& options,
+  parse_options_view const& options,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
   bool do_set_null_count,
@@ -583,7 +583,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   }();
 
   // Calculate actual block count to use based on records count
-  const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
+  int const grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
   detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, *col_map, num_columns, d_column_infos);
@@ -607,7 +607,7 @@ void collect_keys_info(parse_options_view const& options,
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, collect_keys_info_kernel));
 
   // Calculate actual block count to use based on records count
-  const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
+  int const grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
   collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);

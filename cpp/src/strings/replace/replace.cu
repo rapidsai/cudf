@@ -80,7 +80,7 @@ struct replace_row_parallel_fn {
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
-    const char* in_ptr = d_str.data();
+    char const* in_ptr = d_str.data();
 
     char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto max_n    = (max_repl < 0) ? d_str.length() : max_repl;

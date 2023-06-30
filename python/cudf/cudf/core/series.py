@@ -2493,7 +2493,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> sr.apply(f)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
-        used to manipulate string data, see the the UDF guide,
+        used to manipulate string data, see the UDF guide,
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
 
         """
@@ -4632,10 +4632,10 @@ class DatetimeProperties:
 
     @copy_docstring(DatetimeIndex.tz_localize)
     def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
-        from cudf.core._internals.timezones import localize
+        from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
-            result_col = self.series._column._local_time
+            result_col = delocalize(self.series._column)
         else:
             result_col = localize(
                 self.series._column, tz, ambiguous, nonexistent

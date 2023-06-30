@@ -940,10 +940,10 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
-    def sort_by_values(
+    def sort_values(
         self, ascending: bool = True, na_position="last"
-    ) -> Tuple[CategoricalColumn, NumericalColumn]:
-        codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
+    ) -> CategoricalColumn:
+        codes = self.as_numerical.sort_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -951,7 +951,7 @@ class CategoricalColumn(column.ColumnBase):
             size=codes.size,
             ordered=self.dtype.ordered,
         )
-        return col, inds
+        return col
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.as_numerical.element_indexing(index)

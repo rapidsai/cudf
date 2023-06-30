@@ -306,6 +306,7 @@ ConfigureNVBench(
   string/contains.cpp
   string/count.cpp
   string/extract.cpp
+  string/gather.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp

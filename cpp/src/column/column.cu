@@ -205,7 +205,7 @@ struct create_column_from_view {
       view.type(),
       view.size(),
       rmm::device_buffer{
-        static_cast<const char*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
+        static_cast<char const*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},

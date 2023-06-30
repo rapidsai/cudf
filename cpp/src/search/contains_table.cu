@@ -106,7 +106,7 @@ struct strong_index_comparator_adapter {
 /**
  * @brief Build a row bitmask for the input table.
  *
- * The output bitmask will have invalid bits corresponding to the the input rows having nulls (at
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
  * any nested level) and vice versa.
  *
  * @param input The input table

@@ -48,7 +48,7 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a string
  */
-static inline __device__ uint32_t hash_string(const string_view val)
+static inline __device__ uint32_t hash_string(string_view const val)
 {
   if (val.empty()) {
     return 0;
@@ -77,7 +77,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s* s,
     __syncthreads();
   }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += block_size) {
-    const uint32_t* valid_map = s->chunk.leaf_column->null_mask();
+    uint32_t const* valid_map = s->chunk.leaf_column->null_mask();
     auto column_offset        = s->chunk.leaf_column->offset();
     uint32_t is_valid, nz_pos;
     if (t < block_size / 32) {
@@ -316,14 +316,14 @@ __global__ void __launch_bounds__(1024)
 {
   __shared__ __align__(16) StripeDictionary stripe_g;
   __shared__ __align__(16) DictionaryChunk chunk_g;
-  __shared__ const uint32_t* volatile ck_curptr_g;
+  __shared__ uint32_t const* volatile ck_curptr_g;
   __shared__ uint32_t volatile ck_curlen_g;
 
   uint32_t col_id    = blockIdx.x;
   uint32_t stripe_id = blockIdx.y;
   uint32_t chunk_len;
   int t = threadIdx.x;
-  const uint32_t* src;
+  uint32_t const* src;
   uint32_t* dst;
 
   if (t == 0) stripe_g = stripes[stripe_id][col_id];
@@ -469,7 +469,7 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
         thrust::sort(rmm::exec_policy(stream),
                      dict_data_ptr,
                      dict_data_ptr + stripe_dict.num_strings,
-                     [string_column] __device__(const uint32_t& lhs, const uint32_t& rhs) {
+                     [string_column] __device__(uint32_t const& lhs, uint32_t const& rhs) {
                        return string_column->element<string_view>(lhs) <
                               string_column->element<string_view>(rhs);
                      });

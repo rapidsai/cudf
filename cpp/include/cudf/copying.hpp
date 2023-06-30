@@ -193,7 +193,7 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& source,
+  std::vector<std::reference_wrapper<scalar const>> const& source,
   column_view const& indices,
   table_view const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -716,7 +716,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& input,
+  std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

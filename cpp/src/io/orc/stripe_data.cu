@@ -44,7 +44,7 @@ inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
 struct orc_bytestream_s {
-  const uint8_t* base;
+  uint8_t const* base;
   uint32_t pos;
   uint32_t len;
   uint32_t fill_pos;
@@ -143,7 +143,7 @@ struct orcdec_state_s {
  * @param[in] len Stream length in bytes
  */
 static __device__ void bytestream_init(volatile orc_bytestream_s* bs,
-                                       const uint8_t* base,
+                                       uint8_t const* base,
                                        uint32_t len)
 {
   uint32_t pos   = (len > 0) ? static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base)) : 0;
@@ -1108,15 +1108,15 @@ __global__ void __launch_bounds__(block_size)
   } temp_storage;
 
   orcdec_state_s* const s = &state_g;
-  const bool is_nulldec   = (blockIdx.y >= num_stripes);
-  const uint32_t column   = blockIdx.x;
-  const uint32_t stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
-  const uint32_t chunk_id = stripe * num_columns + column;
+  bool const is_nulldec   = (blockIdx.y >= num_stripes);
+  uint32_t const column   = blockIdx.x;
+  uint32_t const stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
+  uint32_t const chunk_id = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
+  size_t const max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1313,7 +1313,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       auto r         = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid = (t < nrows && r < rmax)
-                         ? (((const uint8_t*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
+                         ? (((uint8_t const*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
                          : 0;
       volatile auto* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
       uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
@@ -1403,8 +1403,8 @@ __global__ void __launch_bounds__(block_size)
   }
   __syncthreads();
   // Struct doesn't have any data in itself, so skip
-  const bool is_valid       = s->chunk.type_kind != STRUCT;
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  bool const is_valid       = s->chunk.type_kind != STRUCT;
+  size_t const max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
