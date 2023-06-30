@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -76,7 +76,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[cudf_io_types.partition_info] partitions
         ) except +
         void set_metadata(
-            cudf_io_types.table_input_metadata *m
+            cudf_io_types.table_input_metadata m
         ) except +
         void set_key_value_metadata(
             vector[map[string, string]] kvm
@@ -161,7 +161,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_type get_max_page_size_rows() except +
 
         void set_metadata(
-            cudf_io_types.table_input_metadata *m
+            cudf_io_types.table_input_metadata m
         ) except +
         void set_key_value_metadata(
             vector[map[string, string]] kvm

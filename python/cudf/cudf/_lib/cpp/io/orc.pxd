@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -78,7 +78,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void set_stripe_size_rows(size_type val) except +
         void set_row_index_stride(size_type val) except +
         void set_table(cudf_table_view.table_view tbl) except +
-        void set_metadata(cudf_io_types.table_input_metadata* meta) except +
+        void set_metadata(cudf_io_types.table_input_metadata meta) except +
         void set_key_value_metadata(map[string, string] kvm) except +
 
         @staticmethod
@@ -130,7 +130,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void set_row_index_stride(size_type val) except +
         void set_table(cudf_table_view.table_view tbl) except +
         void set_metadata(
-            cudf_io_types.table_input_metadata* meta
+            cudf_io_types.table_input_metadata meta
         ) except +
         void set_key_value_metadata(map[string, string] kvm) except +
 
