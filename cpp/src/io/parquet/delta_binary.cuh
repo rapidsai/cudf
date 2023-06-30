@@ -247,6 +247,8 @@ struct delta_binary_decoder {
     }
   }
 
+  // decodes and skips values until the block containing the value after `skip` is reached.
+  // called by all threads in a thread block.
   inline __device__ void skip_values(int skip)
   {
     int const t       = threadIdx.x;
@@ -261,6 +263,8 @@ struct delta_binary_decoder {
     }
   }
 
+  // decodes the current mini block and stores the values obtained. should only be called by
+  // a single warp.
   inline __device__ void decode_batch()
   {
     int const t       = threadIdx.x;
