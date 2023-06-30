@@ -112,7 +112,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[cudf_io_types.partition_info] partitions
         ) except +
         parquet_writer_options_builder& metadata(
-            cudf_io_types.table_input_metadata *m
+            cudf_io_types.table_input_metadata m
         ) except +
         parquet_writer_options_builder& key_value_metadata(
             vector[map[string, string]] kvm
@@ -153,7 +153,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.sink_info get_sink() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
-        cudf_io_types.table_input_metadata* get_metadata(
+        cudf_io_types.table_input_metadata& get_metadata(
         ) except +
         size_t get_row_group_size_bytes() except +
         size_type get_row_group_size_rows() except +
@@ -188,7 +188,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.sink_info sink_,
         ) except +
         chunked_parquet_writer_options_builder& metadata(
-            cudf_io_types.table_input_metadata *m
+            cudf_io_types.table_input_metadata m
         ) except +
         chunked_parquet_writer_options_builder& key_value_metadata(
             vector[map[string, string]] kvm

@@ -333,7 +333,7 @@ def write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
@@ -346,9 +346,9 @@ def write_parquet(
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table_view_from_table(table)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         for level, idx_name in enumerate(table._index.names):
-            tbl_meta.get().column_metadata[level].set_name(
+            tbl_meta.column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
@@ -356,17 +356,17 @@ def write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
             raise ValueError("parquet must have string column names")
 
-        tbl_meta.get().column_metadata[i].set_name(name.encode())
+        tbl_meta.column_metadata[i].set_name(name.encode())
         _set_col_metadata(
             table[name]._column,
-            tbl_meta.get().column_metadata[i],
+            tbl_meta.column_metadata[i],
             force_nullable_schema
         )
 
@@ -396,7 +396,7 @@ def write_parquet(
     # Perform write
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
-        .metadata(tbl_meta.get())
+        .metadata(tbl_meta)
         .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
@@ -477,7 +477,7 @@ cdef class ParquetWriter:
     """
     cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
     cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -577,31 +577,31 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](
+        self.tbl_meta = table_input_metadata(
             table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv)
+                self.tbl_meta = table_input_metadata(tv)
                 for level, idx_name in enumerate(table._index.names):
-                    self.tbl_meta.get().column_metadata[level].set_name(
+                    self.tbl_meta.column_metadata[level].set_name(
                         (str.encode(idx_name))
                     )
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
                     tv = table_view_from_table(table)
-                    self.tbl_meta = make_unique[table_input_metadata](tv)
-                    self.tbl_meta.get().column_metadata[0].set_name(
+                    self.tbl_meta = table_input_metadata(tv)
+                    self.tbl_meta.column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
-            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            self.tbl_meta.column_metadata[i].set_name(name.encode())
             _set_col_metadata(
                 table[name]._column,
-                self.tbl_meta.get().column_metadata[i],
+                self.tbl_meta.column_metadata[i],
             )
 
         index = (
@@ -617,7 +617,7 @@ cdef class ParquetWriter:
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
-                .metadata(self.tbl_meta.get())
+                .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
