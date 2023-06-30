@@ -417,7 +417,7 @@ struct nan_aware_less {
   template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
   __device__ bool operator()(T const& lhs, T const& rhs) const
   {
-    if (std::isnan(lhs)) { return !std::isnan(rhs); }
+    if (std::isnan(lhs)) { return false; }
     return std::isnan(rhs) ? true : thrust::less<T>{}(lhs, rhs);
   }
 };
