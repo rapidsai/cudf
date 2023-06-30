@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "detail/range_comparators.cuh"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
 #include "detail/rolling_jit.hpp"
@@ -394,34 +395,6 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
   return window_column;
 }
 
-/**
- * @brief Comparator for numeric order-by columns, handling floating point NaN values.
- *
- * This is required for binary search through sorted vectors that contain NaN values.
- * With ascending sort, NaN values are stored at the end of the sequence, even
- * greater than infinity.
- * But thrust::less would have trouble locating it because:
- * 1. thrust::less(NaN, 10) returns false
- * 2. thrust::less(10, NaN) also returns false
- *
- * This comparator honours the position of NaN values vis-à-vis non-NaN values.
- *
- */
-struct nan_aware_less {
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
-  __device__ bool operator()(T const& lhs, T const& rhs) const
-  {
-    return thrust::less<T>{}(lhs, rhs);
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
-  __device__ bool operator()(T const& lhs, T const& rhs) const
-  {
-    if (std::isnan(lhs)) { return false; }
-    return std::isnan(rhs) ? true : thrust::less<T>{}(lhs, rhs);
-  }
-};
-
 /// Range window computation, with
 ///   1. no grouping keys specified
 ///   2. rows in ASCENDING order.
@@ -471,7 +444,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                                     d_orderby + group_start,
                                                     d_orderby + idx,
                                                     lowest_in_window,
-                                                    nan_aware_less{})) +
+                                                    cudf::detail::nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -505,7 +478,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + group_end,
                                 highest_in_window,
-                                nan_aware_less{}) -
+                                cudf::detail::nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -651,7 +624,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                                     d_orderby + search_start,
                                                     d_orderby + idx,
                                                     lowest_in_window,
-                                                    nan_aware_less{})) +
+                                                    cudf::detail::nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -696,7 +669,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + search_end,
                                 highest_in_window,
-                                nan_aware_less{}) -
+                                cudf::detail::nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -706,34 +679,6 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
-
-/**
- * @brief Comparator for numeric order-by columns, handling floating point NaN values. *
- *
- * This is required for binary search through sorted vectors that contain NaN values.
- * With descending sort, NaN values are stored at the beginning of the sequence, even
- * greater than infinity.
- * But thrust::greater would have trouble locating it because:
- * 1. thrust::greater(NaN, 10) returns false
- * 2. thrust::greater(10, NaN) also returns false
- *
- * This comparator honours the position of NaN values vis-à-vis non-NaN values.
- *
- */
-struct nan_aware_greater {
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_floating_point<T>())>
-  __device__ bool operator()(T const& lhs, T const& rhs) const
-  {
-    return thrust::greater<T>{}(lhs, rhs);
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
-  __device__ bool operator()(T const& lhs, T const& rhs) const
-  {
-    if (std::isnan(lhs)) { return !std::isnan(rhs); }
-    return std::isnan(rhs) ? false : thrust::greater<T>{}(lhs, rhs);
-  }
-};
 
 /// Range window computation, with
 ///   1. no grouping keys specified
@@ -784,7 +729,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                                     d_orderby + group_start,
                                                     d_orderby + idx,
                                                     highest_in_window,
-                                                    nan_aware_greater{})) +
+                                                    cudf::detail::nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -818,7 +763,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + group_end,
                                 lowest_in_window,
-                                nan_aware_greater{}) -
+                                cudf::detail::nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -883,7 +828,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                                     d_orderby + search_start,
                                                     d_orderby + idx,
                                                     highest_in_window,
-                                                    nan_aware_greater{})) +
+                                                    cudf::detail::nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -925,7 +870,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + search_end,
                                 lowest_in_window,
-                                nan_aware_greater{}) -
+                                cudf::detail::nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };
