@@ -161,10 +161,10 @@ def order_by(
         Columns from the table which will be sorted
     ascending : sequence[bool]
          Sequence of boolean values which correspond to each column
-         in the to-be-sorted table signifying order of each column
+         in the table to be sorted signifying the order of each column
          True - Ascending and False - Descending
     na_position : str
-        whether null value should show up at the "first" or "last"
+        Whether null values should show up at the "first" or "last"
         position of **all** sorted column.
     stable : bool
         Should the sort be stable? (no default)
@@ -252,10 +252,10 @@ def sort_by_key(
     keys : list[Column]
         Columns making up the sort key
     ascending : list[bool]
-        Sequence of boolean values which correspond to each column in
-        keys providing the sort order (default all True).
-        With True <=> ascending; False <=> descending.
-    null_precedence : list[str]
+        Sequence of boolean values which correspond to each column
+        in the table to be sorted signifying the order of each column
+        True - Ascending and False - Descending
+    na_position : list[str]
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
     stable : bool
