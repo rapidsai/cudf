@@ -193,13 +193,13 @@ hash_value_type __device__ inline XXHash_64<bool>::operator()(bool const& key) c
 template <>
 hash_value_type __device__ inline XXHash_64<float>::operator()(float const& key) const
 {
-  return compute(cudf::detail::normalize_nans_and_zeros(key));
+  return compute(cudf::detail::normalize_nans(key));
 }
 
 template <>
 hash_value_type __device__ inline XXHash_64<double>::operator()(double const& key) const
 {
-  return compute(cudf::detail::normalize_nans_and_zeros(key));
+  return compute(cudf::detail::normalize_nans(key));
 }
 
 template <>
