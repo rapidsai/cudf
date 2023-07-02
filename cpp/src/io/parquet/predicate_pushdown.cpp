@@ -61,7 +61,7 @@ struct stats_caster {
   }
   // uses storage type as T
   template <typename T>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
     switch (type) {
       case BOOLEAN: return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
@@ -99,14 +99,14 @@ struct stats_caster {
     }
   }
 
-  // Casts statistics (min,max) of a column to device columns
+  // Creates device columns from column statistics (min, max)
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
     size_t col_idx, cudf::data_type dtype) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (is_compound<T>() && !std::is_same_v<T, string_view>)
-      CUDF_FAIL("Compound types does not have statistics");
+      CUDF_FAIL("Compound types do not have statistics");
     else {
       // Local struct to hold host columns
       struct host_column {
@@ -176,8 +176,7 @@ struct stats_caster {
       host_column min(total_row_groups);
       host_column max(total_row_groups);
 
-      int stats_idx = 0;
-      // std::cout << "col_idx[" << col_idx << "]:min, max\n";
+      size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
@@ -206,7 +205,7 @@ struct stats_caster {
  * @brief Converts AST expression to StatsAST for comparing with column statistics
  * This is used in row group filtering based on predicate.
  * statistics min value of a column is referenced by column_index*2
- * statistics min value of a column is referenced by column_index*2+1
+ * statistics max value of a column is referenced by column_index*2+1
  *
  */
 class stats_expression_converter : public ast::detail::expression_transformer {
@@ -255,7 +254,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   {
     using cudf::ast::ast_operator;
     auto const operands = expr.get_operands();
-    auto op             = expr.get_operator();
+    auto const op       = expr.get_operator();
 
     if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
       // First operand should be column reference, second should be literal.
@@ -293,7 +292,6 @@ class stats_expression_converter : public ast::detail::expression_transformer {
           _operators.emplace_back(ast_operator::LOGICAL_OR, op1, op2);
           break;
         }
-        // can these be combined in any way?
         case ast_operator::LESS: [[fallthrough]];
         case ast_operator::LESS_EQUAL: {
           auto const& vmin = _col_ref.emplace_back(col_index * 2);
@@ -326,7 +324,6 @@ class stats_expression_converter : public ast::detail::expression_transformer {
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const
   {
-    // if(!_stats_expr.has_value()) _stats_expr = ast::operation(ast_operator::IDENTITY, expr)
     return _stats_expr.value().get();
   }
 
@@ -438,7 +435,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     for (auto const rg_idx : input_row_group_indices[src_idx]) {
       if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
         filtered_row_groups.push_back(rg_idx);
-        // std::cout << "Read [src_idx, rg_idx]=[" << src_idx << "," << rg_idx << "]\n";
       }
       ++is_required_idx;
     }
