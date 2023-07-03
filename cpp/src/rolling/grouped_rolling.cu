@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "detail/range_comparators.cuh"
+#include "detail/range_comparator_utils.cuh"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
 #include "detail/rolling_jit.hpp"
@@ -219,73 +219,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
 namespace {
 
-/// For order-by columns of signed types, bounds calculation might cause accidental
-/// overflow/underflows. This needs to be detected and handled appropriately
-/// for signed and unsigned types.
-
-/**
- * @brief Add `delta` to value, and cap at numeric_limits::max(), for signed types.
- */
-template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
-__device__ T add_safe(T const& value, T const& delta)
-{
-  if constexpr (std::is_floating_point_v<T>) {
-    if (std::isinf(value) or std::isnan(value)) { return value; }
-  }
-  // delta >= 0.
-  return (value < 0 || (cuda::std::numeric_limits<T>::max() - value) >= delta)
-           ? (value + delta)
-           : cuda::std::numeric_limits<T>::max();
-}
-
-/**
- * @brief Add `delta` to value, and cap at numeric_limits::max(), for unsigned types.
- */
-template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
-__device__ T add_safe(T const& value, T const& delta)
-{
-  // delta >= 0.
-  return ((cuda::std::numeric_limits<T>::max() - value) >= delta)
-           ? (value + delta)
-           : cuda::std::numeric_limits<T>::max();
-}
-
-/**
- * @brief Subtract `delta` from value, and cap at numeric_limits::lowest(), for signed types.
- *
- * Note: We use numeric_limits::lowest() instead of min() because for floats, lowest() returns
- * the smallest finite value, as opposed to min() which returns the smallest _positive_ value.
- */
-template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
-__device__ T subtract_safe(T const& value, T const& delta)
-{
-  if constexpr (std::is_floating_point_v<T>) {
-    if (std::isinf(value) or std::isnan(value)) { return value; }
-  }
-  // delta >= 0;
-  return (value >= 0 || (value - cuda::std::numeric_limits<T>::lowest()) >= delta)
-           ? (value - delta)
-           : cuda::std::numeric_limits<T>::lowest();
-}
-
-/**
- * @brief Subtract `delta` from value, and cap at numeric_limits::lowest(), for unsigned types.
- *
- * Note: We use numeric_limits::lowest() instead of min() because for floats, lowest() returns
- * the smallest finite value, as opposed to min() which returns the smallest _positive_ value.
- *
- * This distinction isn't truly relevant for this overload (because float is signed).
- * lowest() is kept for uniformity.
- */
-template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
-__device__ T subtract_safe(T const& value, T const& delta)
-{
-  // delta >= 0;
-  return ((value - cuda::std::numeric_limits<T>::lowest()) >= delta)
-           ? (value - delta)
-           : cuda::std::numeric_limits<T>::lowest();
-}
-
 /**
  * @brief For a specified idx, find the lowest value of the (sorted) orderby column that
  * participates in a range-window query.
@@ -298,7 +231,7 @@ __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
   } else {
-    return subtract_safe(orderby_iter[idx], delta);
+    return cudf::detail::subtract_safe(orderby_iter[idx], delta);
   }
 }
 
@@ -314,7 +247,7 @@ __device__ ElementT compute_highest_in_window(ElementIter orderby_iter,
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
   } else {
-    return add_safe(orderby_iter[idx], delta);
+    return cudf::detail::add_safe(orderby_iter[idx], delta);
   }
 }
 

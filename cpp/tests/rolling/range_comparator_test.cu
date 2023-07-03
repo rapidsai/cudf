@@ -18,7 +18,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <src/rolling/detail/range_comparators.cuh>
+#include <src/rolling/detail/range_comparator_utils.cuh>
 
 struct RangeComparatorTest : cudf::test::BaseFixture {};
 
@@ -97,5 +97,49 @@ TYPED_TEST(RangeComparatorTypedTest, TestGreaterComparator)
     EXPECT_FALSE(greater(ten, NaN));
     EXPECT_FALSE(greater(ten, Inf));
     EXPECT_TRUE(greater(ten, -Inf));
+  }
+}
+
+TYPED_TEST(RangeComparatorTypedTest, TestAddSafe)
+{
+  using T = TypeParam;
+  EXPECT_EQ(cudf::detail::add_safe(T{3}, T{4}), T{7});
+
+  if constexpr (cuda::std::numeric_limits<T>::is_signed) {
+    EXPECT_EQ(cudf::detail::add_safe(T{-3}, T{4}), T{1});
+  }
+
+  auto constexpr max = cuda::std::numeric_limits<T>::max();
+  EXPECT_EQ(cudf::detail::add_safe(T{max - 5}, T{4}), max - 1);
+  EXPECT_EQ(cudf::detail::add_safe(T{max - 3}, T{4}), max);
+  EXPECT_EQ(cudf::detail::add_safe(max, T{4}), max);
+
+  if constexpr (std::is_floating_point_v<T>) {
+    auto const NaN = std::numeric_limits<T>::quiet_NaN();
+    auto const Inf = std::numeric_limits<T>::infinity();
+    EXPECT_TRUE(std::isnan(cudf::detail::add_safe(NaN, T{4})));
+    EXPECT_EQ(cudf::detail::add_safe(Inf, T{4}), Inf);
+  }
+}
+
+TYPED_TEST(RangeComparatorTypedTest, TestSubtractSafe)
+{
+  using T = TypeParam;
+  EXPECT_EQ(cudf::detail::subtract_safe(T{4}, T{3}), T{1});
+
+  if constexpr (cuda::std::numeric_limits<T>::is_signed) {
+    EXPECT_EQ(cudf::detail::subtract_safe(T{3}, T{4}), T{-1});
+  }
+
+  auto constexpr min = cuda::std::numeric_limits<T>::lowest();
+  EXPECT_EQ(cudf::detail::subtract_safe(T{min + 5}, T{4}), min + 1);
+  EXPECT_EQ(cudf::detail::subtract_safe(T{min + 3}, T{4}), min);
+  EXPECT_EQ(cudf::detail::subtract_safe(min, T{4}), min);
+
+  if constexpr (std::is_floating_point_v<T>) {
+    auto const NaN = std::numeric_limits<T>::quiet_NaN();
+    auto const Inf = std::numeric_limits<T>::infinity();
+    EXPECT_TRUE(std::isnan(cudf::detail::subtract_safe(NaN, T{4})));
+    EXPECT_EQ(cudf::detail::subtract_safe(-Inf, T{4}), -Inf);
   }
 }
