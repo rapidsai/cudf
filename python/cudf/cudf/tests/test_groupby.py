@@ -3302,4 +3302,3 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
-

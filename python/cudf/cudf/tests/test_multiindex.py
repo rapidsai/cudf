@@ -345,7 +345,6 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     with cudf.option_context("mode.pandas_compatible", True):
         got = gdf.loc[key_tuple]
     assert_eq(expected, got)
-        
 
 
 @pytest.mark.parametrize(
