@@ -1580,12 +1580,11 @@ class Frame(BinaryOperand, Scannable):
         if np.isscalar(ascending):
             ascending = [ascending] * len(to_sort)
 
-        # Only use a stable sort in pandas-compat mode
         return libcudf.sort.order_by(
             to_sort,
             ascending,
             na_position,
-            stable=cudf.get_option("mode.pandas_compatible"),
+            stable=True,
         )
 
     @_cudf_nvtx_annotate
