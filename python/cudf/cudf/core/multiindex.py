@@ -905,6 +905,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # Sort indices in pandas compatible mode
             # because we want the indices to be fetched
             # in a deterministic order.
+            # TODO: Remove this after merge/join
+            # obtain deterministic ordering.
             indices = indices.sort_values()
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
