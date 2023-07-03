@@ -13,10 +13,9 @@ from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -31,6 +30,7 @@ from cudf.core.index import (
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from pandas._config import get_option
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -898,6 +898,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             df.index, row_tuple, len(df.index)
         )
         indices = cudf.Series(valid_indices)
+        if cudf.get_option("mode.pandas_compatible"):
+            # Sort indices in pandas compatible mode
+            # because we want the indices to be fetched
+            # in a deterministic order.
+            indices = indices.sort_values()
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
