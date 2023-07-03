@@ -24,19 +24,19 @@
 namespace cudf::io::detail {
 
 std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
-  uint64_t skip_rows_opt, std::optional<size_type> const& num_rows_opt, uint64_t num_source_rows)
+  uint64_t skip_rows, std::optional<size_type> const& num_rows, uint64_t num_source_rows)
 {
-  auto const rows_to_skip = std::min(skip_rows_opt, num_source_rows);
-  if (not num_rows_opt.has_value()) {
+  auto const rows_to_skip = std::min(skip_rows, num_source_rows);
+  if (not num_rows.has_value()) {
     CUDF_EXPECTS(num_source_rows - rows_to_skip <= std::numeric_limits<size_type>::max(),
                  "The requested number of rows exceeds the column size limit",
                  std::overflow_error);
     return {rows_to_skip, num_source_rows - rows_to_skip};
   }
   // Limit the number of rows to the end of the input
-  return {rows_to_skip,
-          static_cast<size_type>(
-            std::min<uint64_t>(num_rows_opt.value(), num_source_rows - rows_to_skip))};
+  return {
+    rows_to_skip,
+    static_cast<size_type>(std::min<uint64_t>(num_rows.value(), num_source_rows - rows_to_skip))};
 }
 
 }  // namespace cudf::io::detail
