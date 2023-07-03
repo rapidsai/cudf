@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ class thread_pool {
    * will be twice the number of CPU cores. If the argument is zero, the default value will be used
    * instead.
    */
-  thread_pool(const ui32& _thread_count = std::thread::hardware_concurrency())
+  thread_pool(ui32 const& _thread_count = std::thread::hardware_concurrency())
     : thread_count(_thread_count ? _thread_count : std::thread::hardware_concurrency()),
       threads(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()])
   {
@@ -81,7 +81,7 @@ class thread_pool {
    */
   [[nodiscard]] size_t get_tasks_queued() const
   {
-    const std::scoped_lock lock(queue_mutex);
+    std::scoped_lock const lock(queue_mutex);
     return tasks.size();
   }
 
@@ -121,7 +121,7 @@ class thread_pool {
    * number of threads in the pool.
    */
   template <typename T, typename F>
-  void parallelize_loop(T first_index, T last_index, const F& loop, ui32 num_tasks = 0)
+  void parallelize_loop(T first_index, T last_index, F const& loop, ui32 num_tasks = 0)
   {
     if (num_tasks == 0) num_tasks = thread_count;
     if (last_index < first_index) std::swap(last_index, first_index);
@@ -154,11 +154,11 @@ class thread_pool {
    * @param task The function to push.
    */
   template <typename F>
-  void push_task(const F& task)
+  void push_task(F const& task)
   {
     tasks_total++;
     {
-      const std::scoped_lock lock(queue_mutex);
+      std::scoped_lock const lock(queue_mutex);
       tasks.push(std::function<void()>(task));
     }
   }
@@ -176,7 +176,7 @@ class thread_pool {
    * @param args The arguments to pass to the function.
    */
   template <typename F, typename... A>
-  void push_task(const F& task, const A&... args)
+  void push_task(F const& task, A const&... args)
   {
     push_task([task, args...] { task(args...); });
   }
@@ -193,7 +193,7 @@ class thread_pool {
    * will be twice the number of CPU cores. If the argument is zero, the default value will be used
    * instead.
    */
-  void reset(const ui32& _thread_count = std::thread::hardware_concurrency())
+  void reset(ui32 const& _thread_count = std::thread::hardware_concurrency())
   {
     bool was_paused = paused;
     paused          = true;
@@ -222,7 +222,7 @@ class thread_pool {
   template <typename F,
             typename... A,
             typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
-  std::future<R> submit(const F& task, const A&... args)
+  std::future<R> submit(F const& task, A const&... args)
   {
     std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
     std::future<R> future = promise->get_future();
@@ -305,7 +305,7 @@ class thread_pool {
    */
   bool pop_task(std::function<void()>& task)
   {
-    const std::scoped_lock lock(queue_mutex);
+    std::scoped_lock const lock(queue_mutex);
     if (tasks.empty())
       return false;
     else {

@@ -2,9 +2,10 @@
 
 import glob
 import os
+import sys
 import warnings
 
-from numba import config
+from numba import config as numba_config
 
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
@@ -64,6 +65,25 @@ def _get_ptx_file(path, prefix):
         return regular_result[1]
 
 
+def _patch_numba_mvc():
+    # Enable the config option for minor version compatibility
+    numba_config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+
+    if "numba.cuda" in sys.modules:
+        # Patch numba for version 0.57.0 MVC support, which must know the
+        # config value at import time. We cannot guarantee the order of imports
+        # between cudf and numba.cuda so we patch numba to ensure it has these
+        # names available.
+        # See https://github.com/numba/numba/issues/8977 for details.
+        import numba.cuda
+        from cubinlinker import CubinLinker, CubinLinkerError
+        from ptxcompiler import compile_ptx
+
+        numba.cuda.cudadrv.driver.compile_ptx = compile_ptx
+        numba.cuda.cudadrv.driver.CubinLinker = CubinLinker
+        numba.cuda.cudadrv.driver.CubinLinkerError = CubinLinkerError
+
+
 def _setup_numba():
     """
     Configure the numba linker for use with cuDF. This consists of
@@ -108,7 +128,7 @@ def _setup_numba():
             if (driver_version < ptx_toolkit_version) or (
                 driver_version < runtime_version
             ):
-                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+                _patch_numba_mvc()
 
 
 def _get_cuda_version_from_ptx_file(path):
@@ -164,8 +184,8 @@ def _get_cuda_version_from_ptx_file(path):
 
 class _CUDFNumbaConfig:
     def __enter__(self):
-        self.enter_val = config.CUDA_LOW_OCCUPANCY_WARNINGS
-        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+        self.enter_val = numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
     def __exit__(self, exc_type, exc_value, traceback):
-        config.CUDA_LOW_OCCUPANCY_WARNINGS = self.enter_val
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = self.enter_val

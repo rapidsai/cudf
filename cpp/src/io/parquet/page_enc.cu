@@ -1471,7 +1471,7 @@ class header_encoder {
     current_header_ptr = cpw_put_uint8(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
   }
 
-  inline __device__ void put_binary(const void* value, uint32_t length)
+  inline __device__ void put_binary(void const* value, uint32_t length)
   {
     current_header_ptr = cpw_put_uint32(current_header_ptr, length);
     memcpy(current_header_ptr, value, length);
@@ -1500,7 +1500,7 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void field_binary(int field, const void* value, uint32_t length)
+  inline __device__ void field_binary(int field, void const* value, uint32_t length)
   {
     current_header_ptr =
       cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
@@ -1607,7 +1607,7 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
+__device__ std::pair<void const*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
                                                           bool is_min,
                                                           void* scratch,
                                                           int32_t truncate_length)
@@ -1647,7 +1647,7 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+__device__ std::pair<void const*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
                                                             bool is_min,
                                                             void* scratch,
                                                             int32_t truncate_length)
@@ -1674,7 +1674,7 @@ __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t 
 /**
  * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
  */
-__device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+__device__ std::pair<void const*, uint32_t> truncate_string(string_view const& str,
                                                             bool is_min,
                                                             void* scratch,
                                                             int32_t truncate_length)
@@ -1698,8 +1698,8 @@ __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& s
 /**
  * @brief Attempt to truncate a binary array to at most truncate_length bytes.
  */
-__device__ std::pair<const void*, uint32_t> truncate_byte_array(
-  const statistics::byte_array_view& arr, bool is_min, void* scratch, int32_t truncate_length)
+__device__ std::pair<void const*, uint32_t> truncate_byte_array(
+  statistics::byte_array_view const& arr, bool is_min, void* scratch, int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
     return {arr.data(), arr.size_bytes()};
@@ -1719,7 +1719,7 @@ __device__ std::pair<const void*, uint32_t> truncate_byte_array(
  * valid min or max binary value.  String and byte array types will be truncated if they exceed
  * truncate_length.
  */
-__device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+__device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* stats_val,
                                                          statistics_dtype dtype,
                                                          void* scratch,
                                                          bool is_min,
@@ -1753,7 +1753,7 @@ __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* s
 }  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
-                                     const statistics_chunk* s,
+                                     statistics_chunk const* s,
                                      statistics_dtype dtype,
                                      void* scratch)
 {
@@ -1777,7 +1777,7 @@ __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk* chunk_stats)
+                       statistics_chunk const* chunk_stats)
 {
   // When this whole kernel becomes single thread, the following variables need not be __shared__
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1867,7 +1867,7 @@ __global__ void __launch_bounds__(1024)
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
-  const EncPage* first_page;
+  EncPage const* first_page;
   uint32_t num_pages, uncompressed_size;
 
   if (t == 0) ck_g = chunks[blockIdx.x];
@@ -1880,7 +1880,7 @@ __global__ void __launch_bounds__(1024)
   dst_base          = dst;
   uncompressed_size = ck_g.bfr_size;
   for (uint32_t page = 0; page < num_pages; page++) {
-    const uint8_t* src;
+    uint8_t const* src;
     uint32_t hdr_len, data_len;
 
     if (t == 0) { page_g = first_page[page]; }
@@ -1945,8 +1945,8 @@ constexpr __device__ int32_t compare(T& v1, T& v2)
  */
 __device__ int32_t compare_values(Type ptype,
                                   ConvertedType ctype,
-                                  const statistics_val& v1,
-                                  const statistics_val& v2)
+                                  statistics_val const& v1,
+                                  statistics_val const& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1974,7 +1974,7 @@ __device__ int32_t compare_values(Type ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-__device__ bool is_ascending(const statistics_chunk* s,
+__device__ bool is_ascending(statistics_chunk const* s,
                              Type ptype,
                              ConvertedType ctype,
                              uint32_t num_pages)
@@ -1991,7 +1991,7 @@ __device__ bool is_ascending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-__device__ bool is_descending(const statistics_chunk* s,
+__device__ bool is_descending(statistics_chunk const* s,
                               Type ptype,
                               ConvertedType ctype,
                               uint32_t num_pages)
@@ -2008,7 +2008,7 @@ __device__ bool is_descending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-__device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+__device__ int32_t calculate_boundary_order(statistics_chunk const* s,
                                             Type ptype,
                                             ConvertedType ctype,
                                             uint32_t num_pages)
@@ -2187,7 +2187,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk* chunk_stats,
+                       statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream)
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the

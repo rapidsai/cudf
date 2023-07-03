@@ -374,7 +374,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<const char*, size_type> const> strings,
+  cudf::device_span<thrust::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -406,7 +406,7 @@ std::unique_ptr<column> make_strings_column(
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<string_view const> string_views,
-  const string_view null_placeholder,
+  string_view const null_placeholder,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

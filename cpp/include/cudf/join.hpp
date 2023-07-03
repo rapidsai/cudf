@@ -167,7 +167,7 @@ full_join(cudf::table_view const& left_keys,
           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a vector of row indices corresponding to a left semi join
+ * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
  * The returned vector contains the row indices from the left table
@@ -179,13 +179,9 @@ full_join(cudf::table_view const& left_keys,
  * Result: {1, 2}
  * @endcode
  *
- * @throw cudf::logic_error if number of columns in either
- * `left_keys` or `right_keys` table is 0 or exceeds MAX_JOIN_SIZE
- *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left_keys The left table
+ * @param right_keys The right table
+ * @param compare_nulls Controls whether null join-key values should match or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct
@@ -302,7 +298,7 @@ class hash_join {
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
-   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
    */
   hash_join(cudf::table_view const& build,
@@ -326,7 +322,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -351,7 +347,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -376,7 +372,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -396,7 +392,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing an inner join between two tables with
-   * `build` and `probe` as the the join keys .
+   * `build` and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -412,7 +408,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a left join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -430,7 +426,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
@@ -438,7 +434,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  const std::unique_ptr<const impl_type> _impl;
+  const std::unique_ptr<impl_type const> _impl;
 };
 
 /**

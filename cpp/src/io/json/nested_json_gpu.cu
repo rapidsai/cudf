@@ -1194,7 +1194,7 @@ void make_json_column(json_column& root_column,
   CUDF_FUNC_RANGE();
 
   // Parse the JSON and get the token stream
-  const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
+  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
   thrust::host_vector<PdaTokenT> tokens =
@@ -1636,7 +1636,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
         offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<const char*, std::size_t>{
+          return thrust::pair<char const*, std::size_t>{
             data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
         });
 
@@ -1823,7 +1823,7 @@ table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
 
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
-        [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
+        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
           auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
                        ? std::optional<schema_element>{{user_dtypes[column_index]}}
                        : std::optional<schema_element>{};

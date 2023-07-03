@@ -46,7 +46,7 @@ struct all_fn {
       if (*d_result && (iter[idx] != *d_result)) atomicAnd(d_result, false);
     }
     Iterator iter;
-    bool* d_result;
+    int32_t* d_result;
   };
 
   template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
@@ -61,12 +61,12 @@ struct all_fn {
         cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dict, input.has_nulls());
       return thrust::make_transform_iterator(pair_iter, null_iter);
     }();
-    auto result = std::make_unique<numeric_scalar<bool>>(true, true, stream, mr);
+    auto d_result = rmm::device_scalar<int32_t>(1, stream, rmm::mr::get_current_device_resource());
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
-                       all_true_fn<decltype(iter)>{iter, result->data()});
-    return result;
+                       all_true_fn<decltype(iter)>{iter, d_result.data()});
+    return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);
   }
   template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,

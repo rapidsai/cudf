@@ -153,7 +153,6 @@ def test_setitem_dataframe_series_inplace(df):
     ],
 )
 def test_series_set_equal_length_object_by_mask(replace_data):
-
     psr = pd.Series([1, 2, 3, 4, 5], dtype="Int64")
     gsr = cudf.from_pandas(psr)
 
@@ -368,3 +367,99 @@ def test_setitem_str_trailing_null(n):
     assert s[0] == ""
     s[0] = "\x00"
     assert s[0] == "\x00"
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/7448")
+def test_iloc_setitem_7448():
+    index = pd.MultiIndex.from_product([(1, 2), (3, 4)])
+    expect = cudf.Series([1, 2, 3, 4], index=index)
+    actual = cudf.from_pandas(expect)
+    expect[(1, 3)] = 101
+    actual[(1, 3)] = 101
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "7",
+        pytest.param(
+            ["7", "8"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11298"
+            ),
+        ),
+    ],
+)
+def test_loc_setitem_string_11298(value):
+    df = pd.DataFrame({"a": ["a", "b", "c"]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[:1, "a"] = value
+
+    cdf.loc[:1, "a"] = value
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11944")
+def test_loc_setitem_list_11944():
+    df = pd.DataFrame(
+        data={"a": ["yes", "no"], "b": [["l1", "l2"], ["c", "d"]]}
+    )
+    cdf = cudf.from_pandas(df)
+    df.loc[df.a == "yes", "b"] = [["hello"]]
+    cdf.loc[df.a == "yes", "b"] = [["hello"]]
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12504")
+def test_loc_setitem_extend_empty_12504():
+    df = pd.DataFrame(columns=["a"])
+    cdf = cudf.from_pandas(df)
+
+    df.loc[0] = [1]
+
+    cdf.loc[0] = [1]
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12505")
+def test_loc_setitem_extend_existing_12505():
+    df = pd.DataFrame({"a": [0]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[1] = 1
+
+    cdf.loc[1] = 1
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12801")
+def test_loc_setitem_add_column_partial_12801():
+    df = pd.DataFrame({"a": [0, 1, 2]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[df.a < 2, "b"] = 1
+
+    cdf.loc[cdf.a < 2, "b"] = 1
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13031")
+@pytest.mark.parametrize("other_index", [["1", "3", "2"], [1, 2, 3]])
+def test_loc_setitem_series_index_alignment_13031(other_index):
+    s = pd.Series([1, 2, 3], index=["1", "2", "3"])
+    other = pd.Series([5, 6, 7], index=other_index)
+
+    cs = cudf.from_pandas(s)
+    cother = cudf.from_pandas(other)
+
+    s.loc[["1", "3"]] = other
+
+    cs.loc[["1", "3"]] = cother
+
+    assert_eq(s, cs)

@@ -343,7 +343,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 {
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
   cudf::strings_column_view input_s(input);
-  const cudf::string_scalar& repl = static_cast<const cudf::string_scalar&>(replacement);
+  cudf::string_scalar const& repl = static_cast<cudf::string_scalar const&>(replacement);
   return cudf::strings::detail::replace_nulls(input_s, repl, stream, mr);
 }
 

@@ -65,7 +65,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "invalid gather map size");
+               "gather map size exceeds the column size limit",
+               std::overflow_error);
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(gather_map.size()),
                              gather_map.data(),

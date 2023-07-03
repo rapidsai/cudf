@@ -426,7 +426,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
 
         dtype = object if dtype is None else dtype
-        if not pd.core.dtypes.common.is_object_dtype(dtype):
+        if not pd.api.types.is_object_dtype(dtype):
             raise TypeError("Dtype for MultiIndex only supports object type.")
 
         # ._data needs to be rebuilt
@@ -559,6 +559,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    def get_slice_bound(self, label, side, kind=None):
+        raise NotImplementedError()
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1510,7 +1513,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """
@@ -1519,7 +1522,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """

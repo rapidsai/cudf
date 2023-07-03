@@ -26,7 +26,7 @@ struct DictionaryDecodeTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryDecodeTest, StringColumn)
 {
-  std::vector<const char*> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
+  std::vector<char const*> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
   auto dictionary = cudf::dictionary::encode(strings);

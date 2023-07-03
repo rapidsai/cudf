@@ -301,10 +301,7 @@ class literal : public expression {
   [[nodiscard]] generic_scalar_device_view get_value() const { return value; }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
@@ -397,10 +394,7 @@ class column_reference : public expression {
   }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
@@ -460,10 +454,7 @@ class operation : public expression {
   std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 

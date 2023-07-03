@@ -68,7 +68,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   std::optional<ResultType> const initial_value = [&] {
     if (init.has_value() && init.value().get().is_valid()) {
       using ScalarType = cudf::scalar_type_t<ElementType>;
-      auto input_value = static_cast<const ScalarType*>(&init.value().get())->value(stream);
+      auto input_value = static_cast<ScalarType const*>(&init.value().get())->value(stream);
       return std::optional<ResultType>(static_cast<ResultType>(input_value));
     } else {
       return std::optional<ResultType>(std::nullopt);

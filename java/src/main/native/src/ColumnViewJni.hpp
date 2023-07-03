@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ generate_list_offsets(cudf::column_view const &list_length,
  * The function `arrays_overlap` of Apache Spark has a special behavior that needs to be addressed.
  * In particular, the result of checking overlap between two lists will be a null element instead of
  * a `false` value (as output by `cudf::lists::have_overlap`) if:
- *  - Both of the the input lists have no non-null common element, and
+ *  - Both of the input lists have no non-null common element, and
  *  - They are both non-empty, and
  *  - Either of them contains null elements.
  *

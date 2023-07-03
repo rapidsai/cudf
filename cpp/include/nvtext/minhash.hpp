@@ -69,6 +69,7 @@ std::unique_ptr<cudf::column> minhash(
  * @throw std::invalid_argument if the width < 2
  * @throw std::invalid_argument if hash_function is not HASH_MURMUR3
  * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seeds Seed values used for the MurmurHash3_32 algorithm

@@ -136,7 +136,7 @@ namespace jit {
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      const std::string& ptx,
+                      std::string const& ptx,
                       rmm::cuda_stream_view stream)
 {
   std::string const output_type_name = cudf::type_to_name(out.type());

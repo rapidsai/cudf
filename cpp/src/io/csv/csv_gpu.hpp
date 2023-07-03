@@ -183,7 +183,7 @@ size_t count_blank_rows(cudf::io::parse_options_view const& options,
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-device_span<uint64_t> remove_blank_rows(const cudf::io::parse_options_view& options,
+device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& options,
                                         device_span<char const> data,
                                         device_span<uint64_t> row_offsets,
                                         rmm::cuda_stream_view stream);

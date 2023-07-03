@@ -940,10 +940,10 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
-    def sort_by_values(
+    def sort_values(
         self, ascending: bool = True, na_position="last"
-    ) -> Tuple[CategoricalColumn, NumericalColumn]:
-        codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
+    ) -> CategoricalColumn:
+        codes = self.as_numerical.sort_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -951,7 +951,7 @@ class CategoricalColumn(column.ColumnBase):
             size=codes.size,
             ordered=self.dtype.ordered,
         )
-        return col, inds
+        return col
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.as_numerical.element_indexing(index)
@@ -1286,19 +1286,10 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches
-        """
-        return self.as_numerical.find_first_value(self._encode(value))
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches
-        """
-        return self.as_numerical.find_last_value(self._encode(value))
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
+        return self.as_numerical.indices_of(self._encode(value))
 
     @property
     def is_monotonic_increasing(self) -> bool:

@@ -157,7 +157,7 @@ struct base_whitespace_split_tokenizer {
   [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
-    const string_view d_str = d_strings.element<string_view>(idx);
+    string_view const d_str = d_strings.element<string_view>(idx);
     size_type token_count   = 0;
     // run of whitespace is considered a single delimiter
     bool spaces = true;

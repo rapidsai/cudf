@@ -123,16 +123,16 @@ class schema_parser {
 
  public:
   schema_parser() {}
-  bool parse(std::vector<schema_entry>& schema, const std::string& str);
+  bool parse(std::vector<schema_entry>& schema, std::string const& str);
 
  protected:
   [[nodiscard]] bool more_data() const { return (m_cur < m_end); }
   std::string get_str();
 
  protected:
-  const char* m_base;
-  const char* m_cur;
-  const char* m_end;
+  char const* m_base;
+  char const* m_cur;
+  char const* m_end;
 };
 
 /**
@@ -165,7 +165,7 @@ class container {
 
  protected:
   // Base address of the file data.  This will always point to the file's metadata.
-  const uint8_t* m_base;
+  uint8_t const* m_base;
 
   // Start, current, and end pointers for the file.  These pointers refer to the
   // actual data content of the file, not the metadata.  `m_cur` and `m_start`
@@ -174,9 +174,9 @@ class container {
   // the first row to be processed.  `m_cur` is updated as the file is parsed,
   // until either `m_end` is reached, or the number of rows requested by the user
   // is reached.
-  const uint8_t* m_start;
-  const uint8_t* m_cur;
-  const uint8_t* m_end;
+  uint8_t const* m_start;
+  uint8_t const* m_cur;
+  uint8_t const* m_end;
 };
 
 }  // namespace avro

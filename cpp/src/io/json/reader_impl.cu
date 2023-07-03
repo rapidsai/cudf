@@ -222,7 +222,7 @@ std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> c
   CUDF_FUNC_RANGE();
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
-  for (const auto& source : sources) {
+  for (auto const& source : sources) {
     total_source_size += source->size();
   }
   total_source_size = total_source_size - (range_offset * sources.size());
@@ -230,7 +230,7 @@ std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> c
   auto buffer = std::vector<uint8_t>(total_source_size);
 
   size_t bytes_read = 0;
-  for (const auto& source : sources) {
+  for (auto const& source : sources) {
     if (!source->is_empty()) {
       auto data_size   = (range_size_padded != 0) ? range_size_padded : source->size();
       auto destination = buffer.data() + bytes_read;
@@ -337,7 +337,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
                     rec_starts.begin(),
                     thrust::minus<uint64_t>());
 
-  const size_t bytes_to_upload = end_offset - start_offset;
+  size_t const bytes_to_upload = end_offset - start_offset;
   CUDF_EXPECTS(bytes_to_upload <= h_data.size(),
                "Error finding the record within the specified byte range.\n");
 
@@ -372,8 +372,8 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   //   JSON array - [val1, val2, ...] and
   //   JSON object - {"col1":val1, "col2":val2, ...}
   // based on the top level opening bracket
-  const auto first_square_bracket = std::find(first_row.begin(), first_row.end(), '[');
-  const auto first_curly_bracket  = std::find(first_row.begin(), first_row.end(), '{');
+  auto const first_square_bracket = std::find(first_row.begin(), first_row.end(), '[');
+  auto const first_curly_bracket  = std::find(first_row.begin(), first_row.end(), '{');
   CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
@@ -408,16 +408,16 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                                       rmm::cuda_stream_view stream)
 {
   bool has_to_infer_column_types =
-    std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
+    std::visit([](auto const& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
 
   if (!has_to_infer_column_types) {
     return std::visit(
       cudf::detail::visitor_overload{
-        [&](const std::vector<data_type>& dtypes) {
+        [&](std::vector<data_type> const& dtypes) {
           CUDF_EXPECTS(dtypes.size() == column_names.size(), "Must specify types for all columns");
           return dtypes;
         },
-        [&](const std::map<std::string, data_type>& dtypes) {
+        [&](std::map<std::string, data_type> const& dtypes) {
           std::vector<data_type> sorted_dtypes;
           std::transform(std::cbegin(column_names),
                          std::cend(column_names),
@@ -429,7 +429,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                          });
           return sorted_dtypes;
         },
-        [&](const std::map<std::string, schema_element>& dtypes) {
+        [&](std::map<std::string, schema_element> const& dtypes) {
           std::vector<data_type> sorted_dtypes;
           std::transform(std::cbegin(column_names),
                          std::cend(column_names),
@@ -495,8 +495,8 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  const auto num_columns = dtypes.size();
-  const auto num_records = rec_starts.size();
+  auto const num_columns = dtypes.size();
+  auto const num_records = rec_starts.size();
 
   // alloc output buffers.
   std::vector<cudf::io::detail::column_buffer> out_buffers;

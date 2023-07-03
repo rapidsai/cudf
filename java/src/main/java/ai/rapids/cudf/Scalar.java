@@ -677,26 +677,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
 
     long[] childHandles = getChildrenFromStructScalar(getScalarHandle());
-    ColumnView[] children = new ColumnView[childHandles.length];
-    try {
-      for (int i = 0; i < children.length; i++) {
-        children[i] = new ColumnView(childHandles[i]);
-      }
-    } catch (Exception ex) {
-      // close all created ColumnViews if exception thrown
-      for (ColumnView child : children) {
-        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
-        if (child == null) break;
-        // make sure the close process is exception-free
-        try {
-          child.close();
-        } catch (Exception suppressed) {
-          ex.addSuppressed(suppressed);
-        }
-      }
-      throw ex;
-    }
-    return children;
+    return ColumnView.getColumnViewsFromPointers(childHandles);
   }
 
   @Override

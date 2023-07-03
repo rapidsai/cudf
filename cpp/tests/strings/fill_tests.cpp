@@ -29,14 +29,14 @@ struct StringsFillTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFillTest, Fill)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper input(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
 
   {
     auto results = cudf::fill(input, 1, 5, cudf::string_scalar("zz"));
 
-    std::vector<const char*> h_expected{"eee", "zz", "zz", "zz", "zz", "bbb", "ééé"};
+    std::vector<char const*> h_expected{"eee", "zz", "zz", "zz", "zz", "bbb", "ééé"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
@@ -44,7 +44,7 @@ TEST_F(StringsFillTest, Fill)
   {
     auto results = cudf::fill(input, 2, 4, cudf::string_scalar("", false));
 
-    std::vector<const char*> h_expected{"eee", "bb", nullptr, nullptr, "aa", "bbb", "ééé"};
+    std::vector<char const*> h_expected{"eee", "bb", nullptr, nullptr, "aa", "bbb", "ééé"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
@@ -77,7 +77,7 @@ TEST_F(StringsFillTest, ZeroSizeStringsColumns)
 
 TEST_F(StringsFillTest, FillRangeError)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper input(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
 

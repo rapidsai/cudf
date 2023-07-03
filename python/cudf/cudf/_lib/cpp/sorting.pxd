@@ -45,3 +45,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& segment_offsets,
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence) except +
+
+    cdef unique_ptr[table] sort(
+        table_view source_table,
+        vector[libcudf_types.order] column_order,
+        vector[libcudf_types.null_order] null_precedence) except +
