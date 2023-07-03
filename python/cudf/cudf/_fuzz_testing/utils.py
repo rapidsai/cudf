@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import random
 from collections import OrderedDict
@@ -24,6 +24,8 @@ _PANDAS_TO_AVRO_SCHEMA_MAP = {
     pd.Int16Dtype(): ["int", "null"],
     pd.Int32Dtype(): ["int", "null"],
     pd.Int64Dtype(): ["long", "null"],
+    pd.Float32Dtype(): ["float", "null"],
+    pd.Float64Dtype(): ["double", "null"],
     pd.BooleanDtype(): ["boolean", "null"],
     pd.StringDtype(): ["string", "null"],
     cudf.dtype("bool_"): "boolean",
@@ -45,6 +47,8 @@ PANDAS_TO_ORC_TYPES = {
     pd.Int16Dtype(): pyorc.SmallInt(),
     pd.Int32Dtype(): pyorc.Int(),
     pd.Int64Dtype(): pyorc.BigInt(),
+    pd.Float32Dtype(): pyorc.Float(),
+    pd.Float64Dtype(): pyorc.Double(),
     pd.BooleanDtype(): pyorc.Boolean(),
     cudf.dtype("bool_"): pyorc.Boolean(),
     cudf.dtype("int16"): pyorc.SmallInt(),
@@ -65,9 +69,9 @@ ORC_TO_PANDAS_TYPES = {
     pyorc.Boolean().name: pd.BooleanDtype(),
     pyorc.SmallInt().name: pd.Int16Dtype(),
     pyorc.BigInt().name: pd.Int64Dtype(),
-    pyorc.String().name: cudf.dtype("O"),
-    pyorc.Float().name: cudf.dtype("float32"),
-    pyorc.Double().name: cudf.dtype("float64"),
+    pyorc.String().name: pd.StringDtype(),
+    pyorc.Float().name: pd.Float32Dtype(),
+    pyorc.Double().name: pd.Float64Dtype(),
     pyorc.Timestamp().name: cudf.dtype("<M8[ns]"),
 }
 
