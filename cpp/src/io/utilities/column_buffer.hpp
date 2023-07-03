@@ -141,7 +141,6 @@ class column_buffer_base {
    */
   void set_stream(rmm::cuda_stream_view stream) noexcept
   {
-    if (_strings) _strings->set_stream(stream);
     _data.set_stream(stream);
     _null_mask.set_stream(stream);
     for (auto& child : children) {
@@ -201,6 +200,11 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
 
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
+
  public:
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
 };
@@ -238,6 +242,11 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void* string_data() { return _string_data.data(); }
   void const* string_data() const { return _string_data.data(); }
   size_t string_size() const { return _string_data.size(); }
+
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
 
  private:
   rmm::device_buffer _string_data{};

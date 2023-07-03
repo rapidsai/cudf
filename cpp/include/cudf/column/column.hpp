@@ -322,14 +322,7 @@ class column {
   /**
    * @brief Sets the stream to be used for deallocation of internal buffers
    */
-  void set_stream(rmm::cuda_stream_view stream) noexcept
-  {
-    _data.set_stream(stream);
-    _null_mask.set_stream(stream);
-    for (auto& child : _children) {
-      child->set_stream(stream);
-    }
-  }
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
 
  private:
   cudf::data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
