@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -298,10 +299,10 @@ class murmur_device_row_hasher {
 
 }  // namespace
 
-std::unique_ptr<table> murmur_hash3_64(table_view const& input,
-                                       uint64_t seed,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> murmur_hash3_64_128(table_view const& input,
+                                           uint64_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto output1 = make_numeric_column(
     data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
@@ -328,4 +329,14 @@ std::unique_ptr<table> murmur_hash3_64(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<table> murmur_hash3_64_128(table_view const& input,
+                                           uint64_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmur_hash3_64_128(input, seed, stream, mr);
+}
+
 }  // namespace cudf
