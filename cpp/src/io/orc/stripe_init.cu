@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf {
 namespace io {
@@ -39,12 +41,8 @@ struct compressed_stream_s {
 };
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8)
-  gpuParseCompressedStripeData(CompressedStreamInfo* strm_info,
-                               int32_t num_streams,
-                               uint32_t block_size,
-                               uint32_t log2maxcr,
-                               bool allow_block_size_estimate)
+__global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
+  CompressedStreamInfo* strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr)
 {
   __shared__ compressed_stream_s strm_g[4];
 
@@ -57,8 +55,8 @@ __global__ void __launch_bounds__(128, 8)
   __syncthreads();
   if (strm_id < num_streams) {
     // Walk through the compressed blocks
-    const uint8_t* cur                   = s->info.compressed_data;
-    const uint8_t* end                   = cur + s->info.compressed_data_size;
+    uint8_t const* cur                   = s->info.compressed_data;
+    uint8_t const* end                   = cur + s->info.compressed_data_size;
     uint8_t* uncompressed                = s->info.uncompressed_data;
     size_t max_uncompressed_size         = 0;
     uint32_t max_uncompressed_block_size = 0;
@@ -82,10 +80,9 @@ __global__ void __launch_bounds__(128, 8)
       // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
       // uncompressed size and avoid waste due to block size alignment For now, rely on the max
       // compression ratio to limit waste for the most extreme cases (small single-block streams)
-      uncompressed_size = (is_uncompressed) ? block_len
-                          : allow_block_size_estimate && (block_len < (block_size >> log2maxcr))
-                            ? block_len << log2maxcr
-                            : block_size;
+      uncompressed_size = (is_uncompressed)                         ? block_len
+                          : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr
+                                                                    : block_size;
       if (is_uncompressed) {
         if (uncompressed_size <= 32) {
           // For short blocks, copy the uncompressed data to output
@@ -157,8 +154,8 @@ __global__ void __launch_bounds__(128, 8)
       s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 &&
       s->info.max_uncompressed_size > 0) {
     // Walk through the compressed blocks
-    const uint8_t* cur              = s->info.compressed_data;
-    const uint8_t* end              = cur + s->info.compressed_data_size;
+    uint8_t const* cur              = s->info.compressed_data;
+    uint8_t const* end              = cur + s->info.compressed_data_size;
     auto dec_out                    = s->info.dec_out_ctl;
     auto dec_result                 = s->info.dec_res;
     uint8_t* uncompressed_actual    = s->info.uncompressed_data;
@@ -232,6 +229,30 @@ enum row_entry_state_e {
 };
 
 /**
+ * @brief Calculates the order of index streams based on the index types present in the column.
+ *
+ * @param index_types_bitmap The bitmap of index types showing which index streams are present
+ *
+ * @return The order of index streams
+ */
+static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
+{
+  constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
+
+  std::array<uint32_t, full_order.size()> partial_order;
+  thrust::copy_if(thrust::seq,
+                  full_order.cbegin(),
+                  full_order.cend(),
+                  partial_order.begin(),
+                  [index_types_bitmap] __device__(auto index_type) {
+                    // Check if the index type is present
+                    return index_types_bitmap & (1 << index_type);
+                  });
+
+  return partial_order;
+}
+
+/**
  * @brief Decode a single row group index entry
  *
  * @param[in,out] s row group index state
@@ -244,11 +265,14 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
                                                       uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
+  auto const stream_order                = index_order_from_index_types(s->chunk.skip_count);
 
-  const uint8_t* cur      = start;
+  uint8_t const* cur      = start;
   row_entry_state_e state = NOT_FOUND;
-  uint32_t length = 0, strm_idx_id = s->chunk.skip_count >> 8, idx_id = 1, ci_id = CI_PRESENT,
-           pos_end = 0;
+  uint32_t length         = 0;
+  uint32_t idx_id         = 0;
+  uint32_t pos_end        = 0;
+  uint32_t ci_id          = CI_NUM_STREAMS;
   while (cur < end) {
     uint32_t v = 0;
     for (uint32_t l = 0; l <= 28; l += 7) {
@@ -288,10 +312,8 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
         }
         break;
       case STORE_INDEX0:
-        ci_id = (idx_id == (strm_idx_id & 0xff))          ? CI_DATA
-                : (idx_id == ((strm_idx_id >> 8) & 0xff)) ? CI_DATA2
-                                                          : CI_PRESENT;
-        idx_id++;
+        // Start of a new entry; determine the stream index types
+        ci_id = stream_order[idx_id++];
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;
           if (cur >= start + pos_end) return length;
@@ -335,7 +357,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
  */
 static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s* s, int num_rowgroups)
 {
-  const uint8_t* index_data = s->chunk.streams[CI_INDEX];
+  uint8_t const* index_data = s->chunk.streams[CI_INDEX];
   int index_data_len        = s->chunk.strm_len[CI_INDEX];
   for (int i = 0; i < num_rowgroups; i++) {
     s->row_index_entry[0][0] = 0;
@@ -376,9 +398,9 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
     if (compressed_offset > 0) {
-      const uint8_t* start   = s->strm_info[ci_id].compressed_data;
-      const uint8_t* cur     = start;
-      const uint8_t* end     = cur + s->strm_info[ci_id].compressed_data_size;
+      uint8_t const* start   = s->strm_info[ci_id].compressed_data;
+      uint8_t const* cur     = start;
+      uint8_t const* end     = cur + s->strm_info[ci_id].compressed_data_size;
       auto dec_result        = s->strm_info[ci_id].dec_res.data();
       uint32_t uncomp_offset = 0;
       for (;;) {
@@ -532,13 +554,12 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                         int32_t num_streams,
                                         uint32_t compression_block_size,
                                         uint32_t log2maxcr,
-                                        bool allow_block_size_estimate,
                                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    strm_info, num_streams, compression_block_size, log2maxcr, allow_block_size_estimate);
+    strm_info, num_streams, compression_block_size, log2maxcr);
 }
 
 void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,

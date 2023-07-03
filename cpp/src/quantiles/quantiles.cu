@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ std::unique_ptr<table> quantiles(table_view const& input,
     return detail::select_quantile<size_type>(selector, size, q, interp);
   };
 
-  auto const q_device = cudf::detail::make_device_uvector_async(q, stream);
+  auto const q_device =
+    cudf::detail::make_device_uvector_async(q, stream, rmm::mr::get_current_device_resource());
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
@@ -79,16 +80,12 @@ std::unique_ptr<table> quantiles(table_view const& input,
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(input,
-                             thrust::make_counting_iterator<size_type>(0),
-                             q,
-                             interp,
-                             cudf::get_default_stream(),
-                             mr);
-  } else {
-    auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
     return detail::quantiles(
-      input, sorted_idx->view().data<size_type>(), q, interp, cudf::get_default_stream(), mr);
+      input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, mr);
+  } else {
+    auto sorted_idx = detail::sorted_order(
+      input, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
+    return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, mr);
   }
 }
 

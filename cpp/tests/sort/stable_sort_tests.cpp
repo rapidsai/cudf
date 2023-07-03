@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,7 @@ using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integ
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
-struct StableSort : public cudf::test::BaseFixture {
-};
+struct StableSort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(StableSort, TestTypes);
 
@@ -223,8 +222,7 @@ TYPED_TEST(StableSort, ZeroSizedColumns)
   run_stable_sort_test(input, expected, column_order);
 }
 
-struct StableSortByKey : public cudf::test::BaseFixture {
-};
+struct StableSortByKey : public cudf::test::BaseFixture {};
 
 TEST_F(StableSortByKey, ValueKeysSizeMismatch)
 {
@@ -242,8 +240,7 @@ TEST_F(StableSortByKey, ValueKeysSizeMismatch)
 }
 
 template <typename T>
-struct StableSortFixedPoint : public cudf::test::BaseFixture {
-};
+struct StableSortFixedPoint : public cudf::test::BaseFixture {};
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;

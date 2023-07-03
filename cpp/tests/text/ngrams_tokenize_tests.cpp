@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,11 @@
 
 #include <vector>
 
-struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {
-};
+struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextNgramsTokenizeTest, Tokenize)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      " the cat chased the mouse ",
                                      nullptr,

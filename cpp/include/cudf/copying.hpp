@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ enum class out_of_bounds_policy : bool {
  * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
  * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
- * @return std::unique_ptr<table> Result of the gather
+ * @return Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
@@ -193,7 +193,7 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& source,
+  std::vector<std::reference_wrapper<scalar const>> const& source,
   column_view const& indices,
   table_view const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -211,7 +211,7 @@ enum class mask_allocation_policy {
  * @brief Initializes and returns an empty column of the same type as the `input`.
  *
  * @param[in] input Immutable view of input column to emulate
- * @return std::unique_ptr<column> An empty column of same type as `input`
+ * @return An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view const& input);
 
@@ -219,7 +219,7 @@ std::unique_ptr<column> empty_like(column_view const& input);
  * @brief Initializes and returns an empty column of the same type as the `input`.
  *
  * @param[in] input Scalar to emulate
- * @return std::unique_ptr<column> An empty column of same type as `input`
+ * @return An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(scalar const& input);
 
@@ -227,6 +227,9 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
  *
  * Supports only fixed-width types.
+ *
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
  *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
@@ -243,6 +246,9 @@ std::unique_ptr<column> allocate_like(
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  *
  * Supports only fixed-width types.
+ *
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
  *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
@@ -264,7 +270,7 @@ std::unique_ptr<column> allocate_like(
  * memory for the column's data or bitmask.
  *
  * @param[in] input_table Immutable view of input table to emulate
- * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in
+ * @return A table of empty columns with the same types as the columns in
  * `input_table`
  */
 std::unique_ptr<table> empty_like(table_view const& input_table);
@@ -333,7 +339,7 @@ void copy_range_in_place(column_view const& source,
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result target column
+ * @return The result target column
  */
 std::unique_ptr<column> copy_range(
   column_view const& source,
@@ -542,200 +548,6 @@ std::vector<table_view> split(table_view const& input, host_span<size_type const
 std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
 
 /**
- * @brief Column data in a serialized format
- *
- * @ingroup copy_split
- *
- * Contains data from an array of columns in two contiguous buffers: one on host, which contains
- * table metadata and one on device which contains the table data.
- */
-struct packed_columns {
-  /**
-   * @brief Host-side metadata buffer used for reconstructing columns via unpack.
-   *
-   * @ingroup copy_split
-   */
-  struct metadata {
-    metadata() = default;
-
-    /**
-     * @brief Construct a new metadata object
-     *
-     * @param v Host-side buffer containing metadata
-     */
-    metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-
-    /**
-     * @brief Returns pointer to the host-side metadata buffer data
-     *
-     * @return Pointer to the host-side metadata buffer
-     */
-    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
-
-    /**
-     * @brief Returns size of the metadata buffer
-     *
-     * @return Size of the metadata buffer
-     */
-    [[nodiscard]] size_t size() const { return data_.size(); }
-
-   private:
-    std::vector<uint8_t> data_;
-  };
-
-  packed_columns()
-    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
-  {
-  }
-
-  /**
-   * @brief Construct a new packed columns object
-   *
-   * @param md Host-side metadata buffer
-   * @param gd Device-side data buffer
-   */
-  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
-    : metadata_(std::move(md)), gpu_data(std::move(gd))
-  {
-  }
-
-  std::unique_ptr<metadata> metadata_;           ///< Host-side metadata buffer
-  std::unique_ptr<rmm::device_buffer> gpu_data;  ///< Device-side data buffer
-};
-
-/**
- * @brief The result(s) of a cudf::contiguous_split
- *
- * @ingroup copy_split
- *
- * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `packed_table`.  The table_view and internal
- * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory and metadata is instead owned by the `data` field and is in one
- * contiguous block.
- *
- * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `data`
- */
-struct packed_table {
-  cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
-  packed_columns data;     ///< Column data owned
-};
-
-/**
- * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single
- * contiguous block of memory.
- *
- * @ingroup copy_split
- *
- * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
- * in the `packed_table`. There is no top-level owning table.
- *
- * The returned views of `input` are constructed from a vector of indices, that indicate
- * where each split should occur. The `i`th returned `table_view` is sliced as
- * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `[splits[i-1], splits[i]]` otherwise.
- *
- * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
- * For a `splits` size N, there will always be N+1 splits in the output
- *
- * @note It is the caller's responsibility to ensure that the returned views
- * do not outlive the viewed device memory contained in the `all_data` field of the
- * returned packed_table.
- *
- * @code{.pseudo}
- * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
- *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
- * splits:  {2, 5, 9}
- * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
- *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
- * @endcode
- *
- *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
- *
- * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
- * @param[in] mr Device memory resource used to allocate the returned result's device memory
- * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
- * buffer.
- */
-std::vector<packed_table> contiguous_split(
-  cudf::table_view const& input,
-  std::vector<size_type> const& splits,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Deep-copy a `table_view` into a serialized contiguous memory format
- *
- * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
- * `table_view` is copied into a `device_buffer`. Pass the output of this function into
- * `cudf::unpack` to deserialize.
- *
- * @param input View of the table to pack
- * @param[in] mr Optional, The resource to use for all returned device allocations
- * @return packed_columns A struct containing the serialized metadata and data in contiguous host
- *         and device memory respectively
- */
-packed_columns pack(cudf::table_view const& input,
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
- *
- * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
- * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
- * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
- *
- * @param table View of the table to pack
- * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
- * by the columns in `table`
- * @param buffer_size The size of `contiguous_buffer`
- * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct
- */
-packed_columns::metadata pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size);
-
-/**
- * @brief Deserialize the result of `cudf::pack`
- *
- * Converts the result of a serialized table into a `table_view` that points to the data stored in
- * the contiguous device buffer contained in `input`.
- *
- * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
- * the data in the input.
- *
- * No new device memory is allocated in this function.
- *
- * @param input The packed columns to unpack
- * @return The unpacked `table_view`
- */
-table_view unpack(packed_columns const& input);
-
-/**
- * @brief Deserialize the result of `cudf::pack`
- *
- * Converts the result of a serialized table into a `table_view` that points to the data stored in
- * the contiguous device buffer contained in `gpu_data` using the metadata contained in the host
- * buffer `metadata`.
- *
- * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
- * the data in the input.
- *
- * No new device memory is allocated in this function.
- *
- * @param metadata The host-side metadata buffer resulting from the initial pack() call
- * @param gpu_data The device-side contiguous buffer storing the data that will be referenced by
- * the resulting `table_view`
- * @return The unpacked `table_view`
- */
-table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
-
-/**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
  *
@@ -904,7 +716,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& input,
+  std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -920,7 +732,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return std::unique_ptr<scalar> Scalar containing the single value
+ * @return Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
   column_view const& input,
@@ -960,7 +772,7 @@ enum class sample_with_replacement : bool {
  * @param seed Seed value to initiate random number generator
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
- * @return std::unique_ptr<table> Table containing samples from `input`
+ * @return Table containing samples from `input`
  */
 std::unique_ptr<table> sample(
   table_view const& input,
@@ -1012,12 +824,19 @@ bool has_nonempty_nulls(column_view const& input);
 bool may_have_nonempty_nulls(column_view const& input);
 
 /**
- * @brief Copies `input`, purging any non-empty null rows in the column or its descendants
+ * @brief Copy `input` into output while purging any non-empty null rows in the column or its
+ * descendants.
  *
- * LIST columns may have non-empty null rows.
- * For example:
+ * If the input column is not of compound type (LIST/STRING/STRUCT/DICTIONARY), the output will be
+ * the same as input.
+ *
+ * The purge operation only applies directly to LIST and STRING columns, but it applies indirectly
+ * to STRUCT/DICTIONARY columns as well, since these columns may have child columns that
+ * are LIST or STRING.
+ *
+ * Examples:
+ *
  * @code{.pseudo}
- *
  * auto const lists   = lists_column_wrapper<int32_t>{ {0,1}, {2,3}, {4,5} }.release();
  * cudf::detail::set_null_mask(lists->null_mask(), 1, 2, false);
  *
@@ -1027,33 +846,13 @@ bool may_have_nonempty_nulls(column_view const& input);
  *   Offsets:  [0, 2, 4, 6]
  *   Child:    [0, 1, 2, 3, 4, 5]
  *
- * After purging the contents of the list's null rows, the column's contents
- * will be:
+ * After purging the contents of the list's null rows, the column's contents will be:
  *   Validity: 101
  *   Offsets:  [0, 2, 2, 4]
  *   Child:    [0, 1, 4, 5]
  * @endcode
  *
- * The purge operation only applies directly to LIST and STRING columns, but it
- * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/descendant columns that are LIST or STRING.
- *
- * @param input The column whose null rows are to be checked and purged
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> Column with equivalent contents to `input`, but with
- * the contents of null rows purged
- */
-std::unique_ptr<column> purge_nonempty_nulls(
-  lists_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Copies `input`, purging any non-empty null rows in the column or its descendants
- *
- * STRING columns may have non-empty null rows.
- * For example:
  * @code{.pseudo}
- *
  * auto const strings = strings_column_wrapper{ "AB", "CD", "EF" }.release();
  * cudf::detail::set_null_mask(strings->null_mask(), 1, 2, false);
  *
@@ -1070,26 +869,7 @@ std::unique_ptr<column> purge_nonempty_nulls(
  *   Child:    [A, B, E, F]
  * @endcode
  *
- * The purge operation only applies directly to LIST and STRING columns, but it
- * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/descendant columns that are LIST or STRING.
- *
- * @param input The column whose null rows are to be checked and purged
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> Column with equivalent contents to `input`, but with
- * the contents of null rows purged
- */
-std::unique_ptr<column> purge_nonempty_nulls(
-  strings_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Copies `input`, purging any non-empty null rows in the column or its descendants
- *
- * STRUCTS columns may have null rows, with non-empty child rows.
- * For example:
  * @code{.pseudo}
- *
  * auto const lists   = lists_column_wrapper<int32_t>{ {0,1}, {2,3}, {4,5} };
  * auto const structs = structs_column_wrapper{ {lists}, null_at(1) };
  *
@@ -1106,17 +886,12 @@ std::unique_ptr<column> purge_nonempty_nulls(
  *   Child:    [0, 1, 4, 5]
  * @endcode
  *
- * The purge operation only applies directly to LIST and STRING columns, but it
- * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/descendant columns that are LIST or STRING.
- *
  * @param input The column whose null rows are to be checked and purged
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> Column with equivalent contents to `input`, but with
- * the contents of null rows purged
+ * @return A new column with equivalent contents to `input`, but with null rows purged
  */
 std::unique_ptr<column> purge_nonempty_nulls(
-  structs_column_view const& input,
+  column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */

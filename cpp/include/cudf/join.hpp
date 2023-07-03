@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,7 +167,7 @@ full_join(cudf::table_view const& left_keys,
           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a vector of row indices corresponding to a left semi join
+ * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
  * The returned vector contains the row indices from the left table
@@ -179,13 +179,9 @@ full_join(cudf::table_view const& left_keys,
  * Result: {1, 2}
  * @endcode
  *
- * @throw cudf::logic_error if number of columns in either
- * `left_keys` or `right_keys` table is 0 or exceeds MAX_JOIN_SIZE
- *
- * @param[in] left_keys The left table
- * @param[in] right_keys The right table
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
+ * @param left_keys The left table
+ * @param right_keys The right table
+ * @param compare_nulls Controls whether null join-key values should match or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct
@@ -257,6 +253,16 @@ std::unique_ptr<cudf::table> cross_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief The enum class to specify if any of the input join tables (`build` table and any later
+ * `probe` table) has nulls.
+ *
+ * This is used upon hash_join object construction to specify the existence of nulls in all the
+ * possible input tables. If such null existence is unknown, `YES` should be used as the default
+ * option.
+ */
+enum class nullable_join : bool { YES, NO };
+
+/**
  * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
  * member functions.
  *
@@ -270,10 +276,10 @@ class hash_join {
 
   hash_join() = delete;
   ~hash_join();
-  hash_join(hash_join const&) = delete;
-  hash_join(hash_join&&)      = delete;
+  hash_join(hash_join const&)            = delete;
+  hash_join(hash_join&&)                 = delete;
   hash_join& operator=(hash_join const&) = delete;
-  hash_join& operator=(hash_join&&) = delete;
+  hash_join& operator=(hash_join&&)      = delete;
 
   /**
    * @brief Construct a hash join object for subsequent probe calls.
@@ -290,6 +296,17 @@ class hash_join {
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
+   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
+   *        any `probe` table that will be used later for join
+   */
+  hash_join(cudf::table_view const& build,
+            nullable_join has_nulls,
+            null_equality compare_nulls,
+            rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
    * Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
@@ -300,9 +317,12 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -322,9 +342,12 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -344,9 +367,12 @@ class hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -362,8 +388,11 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return The exact number of output when performing an inner join between two tables with
-   * `build` and `probe` as the the join keys .
+   * `build` and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -375,8 +404,11 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return The exact number of output when performing a left join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -390,8 +422,11 @@ class hash_join {
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
    * @return The exact number of output when performing a full join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
@@ -399,7 +434,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  const std::unique_ptr<const impl_type> _impl;
+  const std::unique_ptr<impl_type const> _impl;
 };
 
 /**

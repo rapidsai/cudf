@@ -50,7 +50,7 @@ def test_query(data, fn, nulls):
     pdf["a"] = np.arange(nelem)
     pdf["b"] = np.random.random(nelem) * nelem
     if nulls:
-        pdf["a"][::2] = None
+        pdf.loc[::2, "a"] = None
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.query(query_expr), gdf.query(query_expr))
 

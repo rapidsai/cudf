@@ -1,18 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
-import versioneer
+import pyarrow as pa
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
-
-install_requires = ["cudf", "cython"]
-
-extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
@@ -42,7 +38,7 @@ CUDF_ROOT = os.environ.get(
     ),
 )
 CUDF_KAFKA_ROOT = os.environ.get(
-    "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
+    "CUDF_KAFKA_ROOT", "../../cpp/libcudf_kafka/build"
 )
 
 try:
@@ -68,32 +64,24 @@ extensions = [
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
+            pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
+        library_dirs=(
+            [
+                get_python_lib(),
+                os.path.join(os.sys.prefix, "lib"),
+                CUDF_KAFKA_ROOT,
+            ]
+        ),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++17"],
+        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1"],
     )
 ]
 
+packages = find_packages(include=["cudf_kafka*"])
 setup(
-    name="cudf_kafka",
-    version=versioneer.get_version(),
-    description="cuDF Kafka Datasource",
-    url="https://github.com/rapidsai/cudf",
-    author="NVIDIA Corporation",
-    license="Apache 2.0",
-    classifiers=[
-        "Intended Audience :: Developers",
-        "Topic :: Streaming",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Apache Kafka",
-        "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-    ],
     # Include the separately-compiled shared library
     ext_modules=cythonize(
         extensions,
@@ -102,13 +90,7 @@ setup(
             profile=False, language_level=3, embedsignature=True
         ),
     ),
-    packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
-    package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]),
-        ["*.pxd"],
-    ),
-    cmdclass=versioneer.get_cmdclass(),
-    install_requires=install_requires,
-    extras_require=extras_require,
+    packages=packages,
+    package_data={key: ["*.pxd"] for key in packages},
     zip_safe=False,
 )

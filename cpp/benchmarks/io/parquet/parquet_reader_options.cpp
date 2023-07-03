@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,16 +25,23 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr std::size_t data_size      = 512 << 20;
 constexpr std::size_t row_group_size = 128 << 20;
 
-std::vector<std::string> get_col_names(cudf::io::source_info const& source)
+std::vector<std::string> get_top_level_col_names(cudf::io::source_info const& source)
 {
   cudf::io::parquet_reader_options const read_options =
     cudf::io::parquet_reader_options::builder(source);
-  return cudf::io::read_parquet(read_options).metadata.column_names;
+  auto const schema = cudf::io::read_parquet(read_options).metadata.schema_info;
+
+  std::vector<std::string> names;
+  names.reserve(schema.size());
+  std::transform(schema.cbegin(), schema.cend(), std::back_inserter(names), [](auto const& c) {
+    return c.name;
+  });
+  return names;
 }
 
 template <column_selection ColSelection,
@@ -49,8 +56,6 @@ void BM_parquet_read_options(nvbench::state& state,
                                                 nvbench::enum_type<UsesPandasMetadata>,
                                                 nvbench::enum_type<Timestamp>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto constexpr str_to_categories = ConvertsStrings == converts_strings::YES;
   auto constexpr uses_pd_metadata  = UsesPandasMetadata == uses_pandas_metadata::YES;
 
@@ -75,7 +80,7 @@ void BM_parquet_read_options(nvbench::state& state,
   cudf::io::write_parquet(options);
 
   auto const cols_to_read =
-    select_column_names(get_col_names(source_sink.make_source_info()), ColSelection);
+    select_column_names(get_top_level_col_names(source_sink.make_source_info()), ColSelection);
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)

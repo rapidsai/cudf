@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
       return static_cast<size_t>(col.size());
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
-  auto d_input_offsets   = cudf::detail::make_device_uvector_async(input_offsets, stream);
+  auto d_input_offsets = cudf::detail::make_device_uvector_async(
+    input_offsets, stream, rmm::mr::get_current_device_resource());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column
@@ -137,7 +138,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
     auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
-      - input_data[input_view.offset()]               // subract first offset if non-zero
+      - input_data[input_view.offset()]               // subtract first offset if non-zero
       + partition_offsets[partition_index];           // add offset of source column
 
     if (Nullable) {
@@ -215,9 +216,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total number of strings is too large for cudf column");
+               "total number of strings exceeds the column size limit",
+               std::overflow_error);
   CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings is too large for cudf column");
+               "total size of strings exceeds the column size limit",
+               std::overflow_error);
 
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
@@ -293,7 +296,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           bytes_offset;
 
         CUDF_CUDA_TRY(
-          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
+          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
 
         // get ready for the next column
         d_new_chars += bytes;

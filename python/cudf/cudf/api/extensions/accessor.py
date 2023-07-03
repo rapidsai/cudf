@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import warnings
 
@@ -132,7 +132,7 @@ doc_register_series_accessor = docfmt_partial(
 def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
-            msg = f"Attribute {name} will be overidden in {cls.__name__}"
+            msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
         cached_accessor = CachedAccessor(name, accessor)
         cls._accessors.add(name)

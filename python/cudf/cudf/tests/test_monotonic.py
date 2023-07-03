@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 """
 Tests related to is_unique and is_monotonic attributes
@@ -14,14 +14,12 @@ from cudf.core.index import (
     DatetimeIndex,
     GenericIndex,
     RangeIndex,
-    StringIndex,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import assert_eq, expect_warning_if
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
 def test_range_index(testrange):
-
     index = RangeIndex(
         start=testrange[0], stop=testrange[1], step=testrange[2]
     )
@@ -30,7 +28,11 @@ def test_range_index(testrange):
     )
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -49,12 +51,15 @@ def test_range_index(testrange):
     ],
 )
 def test_generic_index(testlist):
-
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -69,12 +74,15 @@ def test_generic_index(testlist):
     ],
 )
 def test_string_index(testlist):
-
-    index = StringIndex(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -83,14 +91,17 @@ def test_string_index(testlist):
     "testlist", [["c", "d", "e", "f"], ["z", "y", "x", "r"]]
 )
 def test_categorical_index(testlist):
-
     # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
     index = CategoricalIndex(raw_cat)
     index_pd = pd.CategoricalIndex(raw_cat)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -126,12 +137,15 @@ def test_categorical_index(testlist):
     ],
 )
 def test_datetime_index(testlist):
-
     index = DatetimeIndex(testlist)
     index_pd = pd.DatetimeIndex(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -154,7 +168,11 @@ def test_series(testlist):
     series_pd = pd.Series(testlist)
 
     assert series.is_unique == series_pd.is_unique
-    assert series.is_monotonic == series_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = series_pd.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = series.index.is_monotonic
+    assert got == expect
     assert series.is_monotonic_increasing == series_pd.is_monotonic_increasing
     assert series.is_monotonic_decreasing == series_pd.is_monotonic_decreasing
 
@@ -179,7 +197,11 @@ def test_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     assert pdf.index.is_unique == gdf.index.is_unique
-    assert pdf.index.is_monotonic == gdf.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = pdf.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = gdf.index.is_monotonic
+    assert got == expect
     assert (
         pdf.index.is_monotonic_increasing == gdf.index.is_monotonic_increasing
     )
@@ -214,7 +236,11 @@ def test_multiindex_tuples(testarr):
     index_pd = pd.MultiIndex.from_tuples(tuples, names=testarr[1])
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -234,9 +260,11 @@ def test_get_slice_bound(testlist, side, kind):
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
-        assert index.get_slice_bound(
-            label, side, kind
-        ) == index_pd.get_slice_bound(label, side, kind)
+        with pytest.warns(FutureWarning):
+            expect = index_pd.get_slice_bound(label, side, kind)
+        with expect_warning_if(kind is not None, FutureWarning):
+            got = index.get_slice_bound(label, side, kind)
+        assert got == expect
 
 
 @pytest.mark.parametrize("bounds", [(0, 10), (0, 1), (3, 4), (0, 0), (3, 3)])
@@ -251,8 +279,10 @@ def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
     pd_index = pd.RangeIndex(start, stop)
     cudf_index = RangeIndex(start, stop)
     for idx in indices:
-        expect = pd_index.get_slice_bound(idx, side, kind)
-        got = cudf_index.get_slice_bound(idx, side, kind)
+        with pytest.warns(FutureWarning):
+            expect = pd_index.get_slice_bound(idx, side, kind)
+        with expect_warning_if(kind is not None, FutureWarning):
+            got = cudf_index.get_slice_bound(idx, side, kind)
         assert expect == got
 
 
@@ -271,8 +301,10 @@ def test_rangeindex_get_slice_bound_step(bounds, label, side, kind):
     pd_index = pd.RangeIndex(start, stop, step)
     cudf_index = RangeIndex(start, stop, step)
 
-    expect = pd_index.get_slice_bound(label, side, kind)
-    got = cudf_index.get_slice_bound(label, side, kind)
+    with pytest.warns(FutureWarning):
+        expect = pd_index.get_slice_bound(label, side, kind)
+    with expect_warning_if(kind is not None, FutureWarning):
+        got = cudf_index.get_slice_bound(label, side, kind)
     assert expect == got
 
 
@@ -283,23 +315,25 @@ def test_get_slice_bound_missing(label, side, kind):
     mylist = [2, 4, 6, 8, 10]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    assert index.get_slice_bound(
-        label, side, kind
-    ) == index_pd.get_slice_bound(label, side, kind)
+
+    with pytest.warns(FutureWarning):
+        expect = index_pd.get_slice_bound(label, side, kind)
+    with expect_warning_if(kind is not None, FutureWarning):
+        got = index.get_slice_bound(label, side, kind)
+    assert got == expect
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize("label", ["a", "c", "e", "g"])
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound_missing_str(label, side):
-    # Slicing for monotonic string indices not yet supported
-    # when missing values are specified (allowed in pandas)
     mylist = ["b", "d", "f"]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    assert index.get_slice_bound(
-        label, side, "getitem"
-    ) == index_pd.get_slice_bound(label, side, "getitem")
+    with pytest.warns(FutureWarning):
+        got = index.get_slice_bound(label, side, "getitem")
+    with pytest.warns(FutureWarning):
+        expect = index_pd.get_slice_bound(label, side, "getitem")
+    assert got == expect
 
 
 testdata = [

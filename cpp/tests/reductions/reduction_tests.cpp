@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,8 +85,7 @@ std::vector<T> replace_nulls(std::vector<T> const& values,
 template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
-  static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic_v<T> || std::is_same_v<T, bool>) ? true : false;
+  static constexpr bool ret_non_arithmetic = (std::is_arithmetic_v<T> || std::is_same_v<T, bool>);
 
   ReductionTest() {}
 
@@ -121,8 +120,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct MinMaxReductionTest : public ReductionTest<T> {
-};
+struct MinMaxReductionTest : public ReductionTest<T> {};
 
 using MinMaxTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
@@ -147,9 +145,9 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_result      = *(std::min_element(v.begin(), v.end()));
   T expected_max_result      = *(std::max_element(v.begin(), v.end()));
   T expected_min_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::min<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::min<T>(a, b); });
   T expected_max_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::max<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::max<T>(a, b); });
 
   EXPECT_EQ(
     this->template reduction_test<T>(col, *cudf::make_min_aggregation<reduce_aggregation>()).first,
@@ -185,11 +183,11 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_null_result = *(std::min_element(r_min.begin(), r_min.end()));
   T expected_max_null_result = *(std::max_element(r_max.begin(), r_max.end()));
   T expected_min_init_null_result =
-    std::accumulate(r_min.begin(), r_min.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_min.begin(), r_min.end(), init_value, [](T const& a, T const& b) {
       return std::min<T>(a, b);
     });
   T expected_max_init_null_result =
-    std::accumulate(r_max.begin(), r_max.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_max.begin(), r_max.end(), init_value, [](T const& a, T const& b) {
       return std::max<T>(a, b);
     });
 
@@ -251,8 +249,7 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
 }
 
 template <typename T>
-struct SumReductionTest : public ReductionTest<T> {
-};
+struct SumReductionTest : public ReductionTest<T> {};
 using SumTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(SumReductionTest, SumTypes);
 
@@ -295,7 +292,6 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-using ReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -384,8 +380,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 }
 
 template <typename T>
-struct ReductionAnyAllTest : public ReductionTest<bool> {
-};
+struct ReductionAnyAllTest : public ReductionTest<bool> {};
 using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
 TYPED_TEST_SUITE(ReductionAnyAllTest, AnyAllTypes);
 
@@ -518,8 +513,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 // ----------------------------------------------------------------------------
 
 template <typename T>
-struct MultiStepReductionTest : public ReductionTest<T> {
-};
+struct MultiStepReductionTest : public ReductionTest<T> {};
 using MultiStepReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MultiStepReductionTest, MultiStepReductionTypes);
 
@@ -863,11 +857,10 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {
-};
+struct ReductionEmptyTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
-TEST_F(ReductionErrorTest, empty_column)
+TEST_F(ReductionEmptyTest, empty_column)
 {
   using T        = int32_t;
   auto statement = [](cudf::column_view const& col) {
@@ -894,15 +887,32 @@ TEST_F(ReductionErrorTest, empty_column)
   std::vector<T> col_data(col_size);
   std::vector<bool> valids(col_size, 0);
 
-  cudf::test::fixed_width_column_wrapper<T> col_empty = construct_null_column(col_data, valids);
-  CUDF_EXPECT_NO_THROW(statement(col_empty));
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(col_data, valids);
+  CUDF_EXPECT_NO_THROW(statement(col_nulls));
+
+  auto any_agg   = cudf::make_any_aggregation<cudf::reduce_aggregation>();
+  auto all_agg   = cudf::make_all_aggregation<cudf::reduce_aggregation>();
+  auto bool_type = cudf::data_type{cudf::type_id::BOOL8};
+
+  auto result = cudf::reduce(col0, *any_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+  result = cudf::reduce(col_nulls, *any_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+
+  result = cudf::reduce(col0, *all_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
+  result = cudf::reduce(col_nulls, *all_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
 }
 
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {
-};
+                            public ::testing::WithParamInterface<cudf::size_type> {};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -988,10 +998,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType                     = cudf::scalar_type_t<cudf::string_view>;
       auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
@@ -1017,10 +1027,10 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType = cudf::scalar_type_t<cudf::string_view>;
       auto result1     = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      if (!result1->is_valid())
-        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
-      EXPECT_EQ(expected_value, result1->to_string())
-        << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      if (result1->is_valid()) {
+        EXPECT_EQ(expected_value, result1->to_string())
+          << (agg.kind == aggregation::MIN ? "MIN" : "MAX");
+      }
     };
 
     if (succeeded_condition) {
@@ -1345,8 +1355,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
@@ -1762,8 +1771,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 2, 3, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
@@ -1783,8 +1792,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{10, 20, 20, 30, 30, 40}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
@@ -1804,8 +1813,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 3, 4, 5}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
@@ -1828,8 +1837,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
     auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
@@ -1846,8 +1855,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {
-};
+struct Decimal128Only : public cudf::test::BaseFixture {};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -2013,8 +2021,7 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {
-};
+struct DictionaryStringReductionTest : public StringReductionTest {};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
@@ -2056,8 +2063,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 }
 
 template <typename T>
-struct DictionaryAnyAllTest : public ReductionTest<bool> {
-};
+struct DictionaryAnyAllTest : public ReductionTest<bool> {};
 using DictionaryAnyAllTypes = cudf::test::Types<int16_t, int32_t, float, double, bool>;
 TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
@@ -2071,94 +2077,48 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
   std::vector<T> v_some = convert_values<T>(some_values);
   cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
+  auto any_agg = cudf::make_any_aggregation<reduce_aggregation>();
+  auto all_agg = cudf::make_all_aggregation<reduce_aggregation>();
+
   // without nulls
   {
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 2}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {1, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 2}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
   // with nulls
   {
     std::vector<bool> valid({1, 1, 0, 1});
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end(), valid.begin());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {0, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 4}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {0, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 4}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
 }
 
 template <typename T>
-struct DictionaryReductionTest : public ReductionTest<T> {
-};
+struct DictionaryReductionTest : public ReductionTest<T> {};
 
 using DictionaryTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);

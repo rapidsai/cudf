@@ -1,10 +1,11 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
 import numbers
 import pickle
+import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -20,7 +21,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -100,7 +101,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         name=None,
         **kwargs,
     ):
-
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
         if name is not None:
@@ -155,7 +155,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         source_data = {}
         for i, (column_name, col) in enumerate(codes._data.items()):
-            if -1 in col.values:
+            if -1 in col:
                 level = cudf.DataFrame(
                     {column_name: [None] + list(levels[i])},
                     index=range(-1, len(levels[i])),
@@ -335,11 +335,29 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             Names for each of the index levels.
         dtype : object, optional (default None)
             MultiIndex dtype, only supports None or object type
+
+            .. deprecated:: 23.02
+
+               The `dtype` parameter is deprecated and will be removed in
+               a future version of cudf. Use the `astype` method instead.
+
         levels : sequence of arrays, optional (default None)
             The unique labels for each level. Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `levels` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         codes : sequence of arrays, optional (default None)
             Integers for each level designating which label at each location.
             Original values used if None.
+
+            .. deprecated:: 23.02
+
+               The `codes` parameter is deprecated and will be removed in
+               a future version of cudf.
+
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
@@ -382,8 +400,33 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         """
 
+        # TODO: Update message when set_levels is implemented.
+        # https://github.com/rapidsai/cudf/issues/12307
+        if levels is not None:
+            warnings.warn(
+                "parameter levels is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
+
+        # TODO: Update message when set_codes is implemented.
+        # https://github.com/rapidsai/cudf/issues/12308
+        if codes is not None:
+            warnings.warn(
+                "parameter codes is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
+
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
+
         dtype = object if dtype is None else dtype
-        if not pd.core.dtypes.common.is_object_dtype(dtype):
+        if not pd.api.types.is_object_dtype(dtype):
             raise TypeError("Dtype for MultiIndex only supports object type.")
 
         # ._data needs to be rebuilt
@@ -451,7 +494,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if PANDAS_GE_120 and not PANDAS_GE_150:
+            if not PANDAS_GE_150:
                 # Need this whole `if` block,
                 # this is a workaround for the following issue:
                 # https://github.com/pandas-dev/pandas/issues/39984
@@ -516,6 +559,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    def get_slice_bound(self, label, side, kind=None):
+        raise NotImplementedError()
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -695,7 +741,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         codes = {}
         for name, col in self._data.items():
-            code, cats = cudf.Series._from_data({None: col}).factorize()
+            with warnings.catch_warnings():
+                # TODO: Remove this filter when
+                # `na_sentinel` is removed from `factorize`.
+                # This is a filter to not let the warnings from
+                # `factorize` show up in other parts of public APIs.
+                warnings.simplefilter("ignore")
+                code, cats = cudf.Series._from_data({None: col}).factorize()
             codes[name] = code.astype(np.int64)
             levels.append(cudf.Series(cats, name=None))
 
@@ -761,7 +813,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def _index_and_downcast(self, result, index, index_key):
-
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
         if (
@@ -995,31 +1046,30 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
-    def is_numeric(self):
+    def _is_numeric(self):
         return False
 
-    def is_boolean(self):
+    def _is_boolean(self):
         return False
 
-    def is_integer(self):
+    def _is_integer(self):
         return False
 
-    def is_floating(self):
+    def _is_floating(self):
         return False
 
-    def is_object(self):
+    def _is_object(self):
         return False
 
-    def is_categorical(self):
+    def _is_categorical(self):
         return False
 
-    def is_interval(self):
+    def _is_interval(self):
         return False
 
     @classmethod
     @_cudf_nvtx_annotate
     def _concat(cls, objs):
-
         source_data = [o.to_frame(index=False) for o in objs]
 
         # TODO: Verify if this is really necessary or if we can rely on
@@ -1463,7 +1513,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """
@@ -1472,7 +1522,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """
@@ -1724,7 +1774,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method is not None:
             raise NotImplementedError(

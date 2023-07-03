@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,8 +66,10 @@ __global__ void offset_bitmask_binop(Binop op,
                                      size_type source_size_bits,
                                      size_type* count_ptr)
 {
-  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+  auto const last_bit_index  = source_size_bits - 1;
+  auto const last_word_index = cudf::word_index(last_bit_index);
 
   size_type thread_count = 0;
 
@@ -86,18 +88,17 @@ __global__ void offset_bitmask_binop(Binop op,
                                                          source_begin_bits[i] + source_size_bits));
     }
 
+    if (destination_word_index == last_word_index) {
+      // mask out any bits not part of this word
+      auto const num_bits_in_last_word = intra_word_index(last_bit_index);
+      if (num_bits_in_last_word <
+          static_cast<size_type>(detail::size_in_bits<bitmask_type>() - 1)) {
+        destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
+      }
+    }
+
     destination[destination_word_index] = destination_word;
     thread_count += __popc(destination_word);
-  }
-
-  // Subtract any slack bits from the last word
-  if (tid == 0) {
-    size_type const last_bit_index = source_size_bits - 1;
-    size_type const num_slack_bits = word_size - (last_bit_index % word_size) - 1;
-    if (num_slack_bits > 0) {
-      size_type const word_index = cudf::word_index(last_bit_index);
-      thread_count -= __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
-    }
   }
 
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
@@ -114,13 +115,12 @@ __global__ void offset_bitmask_binop(Binop op,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <typename Binop>
-std::pair<rmm::device_buffer, size_type> bitmask_binop(
-  Binop op,
-  host_span<bitmask_type const* const> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::pair<rmm::device_buffer, size_type> bitmask_binop(Binop op,
+                                                       host_span<bitmask_type const* const> masks,
+                                                       host_span<size_type const> masks_begin_bits,
+                                                       size_type mask_size_bits,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
   auto null_count =
@@ -169,11 +169,11 @@ size_type inplace_bitmask_binop(Binop op,
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
+    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
                                 masks_begin_bits.data(),
                                 masks_begin_bits.size_bytes(),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
 
   auto constexpr block_size = 256;
@@ -263,7 +263,7 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  */
 struct bit_to_word_index {
   bit_to_word_index(bool inclusive) : inclusive(inclusive) {}
-  __device__ inline size_type operator()(const size_type& bit_index) const
+  __device__ inline size_type operator()(size_type const& bit_index) const
   {
     return word_index(bit_index) + ((inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
@@ -379,13 +379,13 @@ size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator 
 }
 
 struct index_alternator {
-  __device__ inline size_type operator()(const size_type& i) const
+  __device__ inline size_type operator()(size_type const& i) const
   {
     return *(d_indices + 2 * i + (is_end ? 1 : 0));
   }
 
   bool const is_end = false;
-  const size_type* d_indices;
+  size_type const* d_indices;
 };
 
 /**
@@ -426,7 +426,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 
   // Construct a contiguous host buffer of indices and copy to device.
   auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
-  auto const d_indices = make_device_uvector_async(h_indices, stream);
+  auto const d_indices =
+    make_device_uvector_async(h_indices, stream, rmm::mr::get_current_device_resource());
 
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(

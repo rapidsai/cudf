@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -53,7 +53,8 @@ struct equality_functor {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
     // We don't call this for nulls so this is fine
-    return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
+    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };
 
@@ -124,11 +125,10 @@ __global__ void __launch_bounds__(block_size)
   column_device_view const& data_col = *col->leaf_column;
 
   // Make a view of the hash map
-  auto hash_map_mutable =
-    map_type::device_mutable_view(chunk->dict_map_slots,
-                                  chunk->dict_map_size,
-                                  cuco::sentinel::empty_key{KEY_SENTINEL},
-                                  cuco::sentinel::empty_value{VALUE_SENTINEL});
+  auto hash_map_mutable = map_type::device_mutable_view(chunk->dict_map_slots,
+                                                        chunk->dict_map_size,
+                                                        cuco::empty_key{KEY_SENTINEL},
+                                                        cuco::empty_value{VALUE_SENTINEL});
 
   __shared__ size_type total_num_dict_entries;
   size_type val_idx = s_start_value_idx + t;
@@ -200,8 +200,8 @@ __global__ void __launch_bounds__(block_size)
   auto t   = threadIdx.x;
   auto map = map_type::device_view(chunk.dict_map_slots,
                                    chunk.dict_map_size,
-                                   cuco::sentinel::empty_key{KEY_SENTINEL},
-                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
 
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
@@ -249,8 +249,8 @@ __global__ void __launch_bounds__(block_size)
 
   auto map = map_type::device_view(chunk->dict_map_slots,
                                    chunk->dict_map_size,
-                                   cuco::sentinel::empty_key{KEY_SENTINEL},
-                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
 
   auto val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {

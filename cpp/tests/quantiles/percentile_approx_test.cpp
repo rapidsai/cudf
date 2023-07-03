@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -46,14 +46,14 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
   CUDF_CUDA_TRY(cudaMemcpy(h_values.data(),
                            sorted_values.data<double>(),
                            sizeof(double) * sorted_values.size(),
-                           cudaMemcpyDeviceToHost));
+                           cudaMemcpyDefault));
   std::vector<char> h_validity(sorted_values.size());
   if (sorted_values.null_mask() != nullptr) {
     auto validity = cudf::mask_to_bools(sorted_values.null_mask(), 0, sorted_values.size());
     CUDF_CUDA_TRY(cudaMemcpy(h_validity.data(),
                              (validity->view().data<char>()),
                              sizeof(char) * sorted_values.size(),
-                             cudaMemcpyDeviceToHost));
+                             cudaMemcpyDefault));
   }
 
   // generate the tdigest
@@ -103,7 +103,7 @@ struct percentile_approx_dispatch {
     cudf::tdigest::tdigest_column_view tdv(*agg_result);
     auto result = cudf::percentile_approx(tdv, g_percentages);
 
-    cudf::test::expect_columns_equivalent(
+    cudf::test::detail::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
 
     return result;
@@ -251,7 +251,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
                            h_keys.data(),
                            h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyHostToDevice));
+                           cudaMemcpyDefault));
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
     percentile_approx_test(
@@ -261,9 +261,8 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
 
 std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(cudf::column_view const& col)
 {
-  auto itr  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-  auto mask = cudf::test::detail::make_null_mask(itr, itr + col.size());
-  return std::make_pair(std::move(mask), col.size() / 2);
+  auto itr = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  return cudf::test::detail::make_null_mask(itr, itr + col.size());
 }
 
 void simple_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<int, int>> params)
@@ -297,7 +296,7 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
                            h_keys.data(),
                            h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyHostToDevice));
+                           cudaMemcpyDefault));
 
   // add a null mask
   auto mask = make_null_mask(*values);
@@ -320,8 +319,7 @@ using PercentileApproxTypes =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 
 template <typename T>
-struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {
-};
+struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(PercentileApproxInputTypesTest, PercentileApproxTypes);
 
 TYPED_TEST(PercentileApproxInputTypesTest, Simple)
@@ -368,12 +366,12 @@ TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
                            {10, cudf::test::default_ulp * 6}});
 }
 
-struct PercentileApproxTest : public cudf::test::BaseFixture {
-};
+struct PercentileApproxTest : public cudf::test::BaseFixture {};
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {
-  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto empty_ = cudf::tdigest::detail::make_empty_tdigest_column(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<cudf::column_view> input;
@@ -387,12 +385,13 @@ TEST_F(PercentileApproxTest, EmptyInput)
 
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0, 0};
   std::vector<bool> nulls{0, 0, 0};
-  auto expected =
-    cudf::make_lists_column(3,
-                            offsets.release(),
-                            cudf::make_empty_column(cudf::type_id::FLOAT64),
-                            3,
-                            cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
+
+  auto expected = cudf::make_lists_column(3,
+                                          offsets.release(),
+                                          cudf::make_empty_column(cudf::type_id::FLOAT64),
+                                          null_count,
+                                          std::move(null_mask));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -418,13 +417,13 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
 
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0};
   std::vector<bool> nulls{0, 0};
-  auto expected =
-    cudf::make_lists_column(2,
-                            offsets.release(),
-                            cudf::make_empty_column(cudf::type_id::FLOAT64),
-                            2,
-                            cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
-  // cudf::detail::create_null_mask(2, cudf::mask_state::ALL_NULL, cudf::get_default_stream()));
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
+
+  auto expected = cudf::make_lists_column(2,
+                                          offsets.release(),
+                                          cudf::make_empty_column(cudf::type_id::FLOAT64),
+                                          null_count,
+                                          std::move(null_mask));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

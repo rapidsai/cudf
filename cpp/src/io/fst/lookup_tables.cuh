@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,9 +71,10 @@ class SingleSymbolSmemLUT {
    * @return
    */
   template <typename SymbolGroupItT>
-  static void InitDeviceSymbolGroupIdLut(hostdevice_vector<KernelParameter>& sgid_init,
-                                         SymbolGroupItT const& symbol_strings,
-                                         rmm::cuda_stream_view stream)
+  static void InitDeviceSymbolGroupIdLut(
+    cudf::detail::hostdevice_vector<KernelParameter>& sgid_init,
+    SymbolGroupItT const& symbol_strings,
+    rmm::cuda_stream_view stream)
   {
     // The symbol group index to be returned if none of the given symbols match
     SymbolGroupIdT no_match_id = symbol_strings.size();
@@ -101,10 +102,10 @@ class SingleSymbolSmemLUT {
     // Initialize the out-of-bounds lookup: sym_to_sgid[max_base_match_val+1] -> no_match_id
     sgid_init.host_ptr()->sym_to_sgid[max_base_match_val + 1] = no_match_id;
 
-    // Alias memory / return memory requiremenets
+    // Alias memory / return memory requirements
     sgid_init.host_ptr()->num_valid_entries = max_base_match_val + 1;
 
-    sgid_init.host_to_device(stream);
+    sgid_init.host_to_device_async(stream);
   }
 
   _TempStorage& temp_storage;
@@ -173,7 +174,7 @@ class TransitionTable {
 
   template <typename StateIdT>
   static void InitDeviceTransitionTable(
-    hostdevice_vector<KernelParameter>& transition_table_init,
+    cudf::detail::hostdevice_vector<KernelParameter>& transition_table_init,
     std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
     rmm::cuda_stream_view stream)
   {
@@ -190,10 +191,10 @@ class TransitionTable {
     }
 
     // Copy transition table to device
-    transition_table_init.host_to_device(stream);
+    transition_table_init.host_to_device_async(stream);
   }
 
-  constexpr CUDF_HOST_DEVICE TransitionTable(const KernelParameter& kernel_param,
+  constexpr CUDF_HOST_DEVICE TransitionTable(KernelParameter const& kernel_param,
                                              TempStorage& temp_storage)
     : temp_storage(temp_storage.Alias())
   {
@@ -321,7 +322,7 @@ class TransducerLookupTable {
    * of the thread block to call the constructor
    */
   static void InitDeviceTranslationTable(
-    hostdevice_vector<KernelParameter>& translation_table_init,
+    cudf::detail::hostdevice_vector<KernelParameter>& translation_table_init,
     std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
       translation_table,
     rmm::cuda_stream_view stream)
@@ -364,7 +365,7 @@ class TransducerLookupTable {
               translation_table_init.host_ptr()->d_out_symbols);
 
     // Copy data to device
-    translation_table_init.host_to_device(stream);
+    translation_table_init.host_to_device_async(stream);
   }
 
  private:
@@ -486,9 +487,11 @@ class Dfa {
   {
     constexpr std::size_t single_item = 1;
 
-    sgid_init              = hostdevice_vector<SymbolGroupIdInitT>{single_item, stream};
-    transition_table_init  = hostdevice_vector<TransitionTableInitT>{single_item, stream};
-    translation_table_init = hostdevice_vector<TranslationTableInitT>{single_item, stream};
+    sgid_init = cudf::detail::hostdevice_vector<SymbolGroupIdInitT>{single_item, stream};
+    transition_table_init =
+      cudf::detail::hostdevice_vector<TransitionTableInitT>{single_item, stream};
+    translation_table_init =
+      cudf::detail::hostdevice_vector<TranslationTableInitT>{single_item, stream};
 
     // Initialize symbol group id lookup table
     SymbolGroupIdLookupT::InitDeviceSymbolGroupIdLut(sgid_init, symbol_vec, stream);
@@ -534,7 +537,7 @@ class Dfa {
                  TransducedOutItT d_out_it,
                  TransducedIndexOutItT d_out_idx_it,
                  TransducedCountOutItT d_num_transduced_out_it,
-                 const uint32_t seed_state,
+                 uint32_t const seed_state,
                  rmm::cuda_stream_view stream)
   {
     std::size_t temp_storage_bytes = 0;
@@ -567,9 +570,9 @@ class Dfa {
   }
 
  private:
-  hostdevice_vector<SymbolGroupIdInitT> sgid_init{};
-  hostdevice_vector<TransitionTableInitT> transition_table_init{};
-  hostdevice_vector<TranslationTableInitT> translation_table_init{};
+  cudf::detail::hostdevice_vector<SymbolGroupIdInitT> sgid_init{};
+  cudf::detail::hostdevice_vector<TransitionTableInitT> transition_table_init{};
+  cudf::detail::hostdevice_vector<TranslationTableInitT> translation_table_init{};
 };
 
 }  // namespace cudf::io::fst::detail

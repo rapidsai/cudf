@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include <thrust/scan.h>
 
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 /**
  * @brief Computes the size of each output row
@@ -144,7 +144,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   thrust::exclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
   // last element is the total output size
-  // (device-to-host copy of 1 integer -- includes synching the stream)
+  // (device-to-host copy of 1 integer -- includes syncing the stream)
   cudf::size_type output_size = offsets.back_element(stream);
 
   //  create chars vector
@@ -155,7 +155,8 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
     *d_names, *d_visibilities, offsets.data(), chars.data());
 
   // create column from offsets and chars vectors (no copy is performed)
-  auto result = cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars));
+  auto result =
+    cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars), {}, 0);
 
   // wait for all of the above to finish
   stream.synchronize();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ struct make_pair_function {
   /**
    * @brief Hash the merge pair entry
    */
-  __device__ cuco::pair_type<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
+  __device__ cuco::pair<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
   {
     auto const result = _hasher(d_strings.element<cudf::string_view>(idx));
     return cuco::make_pair(result, idx);
@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 
   auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
   auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
-  return cudf::make_strings_column(d_chars, d_offsets);
+  return cudf::make_strings_column(d_chars, d_offsets, {}, 0);
 }
 
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
@@ -108,8 +108,8 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),  // capacity is 2x;
-    cuco::sentinel::empty_key{std::numeric_limits<cudf::hash_value_type>::max()},
-    cuco::sentinel::empty_value{-1},  // empty value is not used
+    cuco::empty_key{std::numeric_limits<cudf::hash_value_type>::max()},
+    cuco::empty_value{-1},                  // empty value is not used
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
@@ -119,7 +119,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 
   merge_pairs_map->insert(iter,
                           iter + input.size(),
-                          cuco::detail::MurmurHash3_32<cudf::hash_value_type>{},
+                          cuco::murmurhash3_32<cudf::hash_value_type>{},
                           thrust::equal_to<cudf::hash_value_type>{},
                           stream.value());
 

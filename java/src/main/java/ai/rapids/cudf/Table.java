@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -83,11 +83,8 @@ public final class Table implements AutoCloseable {
    */
   public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
-    this.columns = new ColumnVector[cudfColumns.length];
+    this.columns = ColumnVector.getColumnVectorsFromPointers(cudfColumns);
     try {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        this.columns[i] = new ColumnVector(cudfColumns[i]);
-      }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
         views[i] = columns[i].getNativeView();
@@ -95,11 +92,11 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        if (this.columns[i] != null) {
-          this.columns[i].close();
-        } else {
-          ColumnVector.deleteCudfColumn(cudfColumns[i]);
+      for (ColumnVector column : columns) {
+        try {
+          column.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
         }
       }
       throw t;
@@ -187,6 +184,8 @@ public final class Table implements AutoCloseable {
 
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long makeChunkedPack(long inputTable, long bounceBufferSize, long tempMemoryResource);
+
   private static native long[] partition(long inputTable, long partitionView,
       int numberOfPartitions, int[] outputOffsets);
 
@@ -194,6 +193,7 @@ public final class Table implements AutoCloseable {
                                              int[] columnsToHash,
                                              int hashTypeId,
                                              int numberOfPartitions,
+                                             int seed,
                                              int[] outputOffsets) throws CudfException;
 
   private static native long[] roundRobinPartition(long inputTable,
@@ -220,6 +220,7 @@ public final class Table implements AutoCloseable {
    * @param length            the length of the buffer to read from.
    * @param headerRow         the 0 based index row of the header can be -1
    * @param delim             character deliminator (must be ASCII).
+   * @param quoteStyle        quote style expected to be used in the input (represented as int)
    * @param quote             character quote (must be ASCII).
    * @param comment           character that starts a comment line (must be ASCII) use '\0'
    * @param nullValues        values that should be treated as nulls
@@ -230,11 +231,14 @@ public final class Table implements AutoCloseable {
                                        int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       int headerRow, byte delim, byte quote,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
-  private static native long[] readJSON(String[] columnNames,
+  /**
+   * read JSON data and return a pointer to a TableWithMeta object.
+   */
+  private static native long readJSON(String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
@@ -545,7 +549,7 @@ public final class Table implements AutoCloseable {
 
   private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
                                                            int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                           long[] preceding, long[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing,
+                                                           long[] preceding, long[] following, int[] precedingRangeExtent, int[] followingRangeExtent,
                                                            boolean ignoreNullKeys) throws CudfException;
 
   private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
@@ -749,6 +753,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
+  private static native int distinctCount(long handle, boolean nullsEqual);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -777,6 +783,7 @@ public final class Table implements AutoCloseable {
             0, 0,
             opts.getHeaderRow(),
             opts.getDelim(),
+            opts.getQuoteStyle().nativeId,
             opts.getQuote(),
             opts.getComment(),
             opts.getNullValues(),
@@ -850,11 +857,91 @@ public final class Table implements AutoCloseable {
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
+        opts.getQuoteStyle().nativeId,
         opts.getQuote(),
         opts.getComment(),
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  private static native void writeCSVToFile(long table,
+                                            String[] columnNames,
+                                            boolean includeHeader,
+                                            String rowDelimiter,
+                                            byte fieldDelimiter,
+                                            String nullValue,
+                                            String trueValue,
+                                            String falseValue,
+                                            int quoteStyle,
+                                            String outputPath) throws CudfException;
+
+  public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
+    writeCSVToFile(nativeHandle,
+                   options.getColumnNames(),
+                   options.getIncludeHeader(),
+                   options.getRowDelimiter(),
+                   options.getFieldDelimiter(),
+                   options.getNullValue(),
+                   options.getTrueValue(),
+                   options.getFalseValue(),
+                   options.getQuoteStyle().nativeId,
+                   outputPath);
+  }
+
+  private static native long startWriteCSVToBuffer(String[] columnNames,
+                                                   boolean includeHeader,
+                                                   String rowDelimiter,
+                                                   byte fieldDelimiter,
+                                                   String nullValue,
+                                                   String trueValue,
+                                                   String falseValue,
+                                                   int quoteStyle,
+                                                   HostBufferConsumer buffer) throws CudfException;
+
+  private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
+
+  private static native void endWriteCSVToBuffer(long writerHandle);
+
+  private static class CSVTableWriter extends TableWriter {
+    private HostBufferConsumer consumer;
+
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+      super(startWriteCSVToBuffer(options.getColumnNames(),
+          options.getIncludeHeader(),
+          options.getRowDelimiter(),
+          options.getFieldDelimiter(),
+          options.getNullValue(),
+          options.getTrueValue(),
+          options.getFalseValue(),
+          options.getQuoteStyle().nativeId,
+          consumer));
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (writerHandle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeCSVChunkToBuffer(writerHandle, table.nativeHandle);
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (writerHandle != 0) {
+        endWriteCSVToBuffer(writerHandle);
+        writerHandle = 0;
+      }
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
+  }
+
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
+    return new CSVTableWriter(options, bufferConsumer);
   }
 
   /**
@@ -888,6 +975,42 @@ public final class Table implements AutoCloseable {
     return readJSON(schema, opts, buffer, 0, buffer.length);
   }
 
+  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
+    String[] neededColumns = schema.getColumnNames();
+    if (neededColumns == null || neededColumns.length == 0) {
+      return twm.releaseTable();
+    } else {
+      String[] foundNames = twm.getColumnNames();
+      HashMap<String, Integer> indices = new HashMap<>();
+      for (int i = 0; i < foundNames.length; i++) {
+        indices.put(foundNames[i], i);
+      }
+      // We might need to rearrange the columns to match what we want.
+      DType[] types = schema.getTypes();
+      ColumnVector[] columns = new ColumnVector[neededColumns.length];
+      try (Table tbl = twm.releaseTable()) {
+        for (int i = 0; i < columns.length; i++) {
+          String neededColumnName = neededColumns[i];
+          Integer index = indices.get(neededColumnName);
+          if (index != null) {
+            columns[i] = tbl.getColumn(index).incRefCount();
+          } else {
+            try (Scalar s = Scalar.fromNull(types[i])) {
+              columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
+            }
+          }
+        }
+        return new Table(columns);
+      } finally {
+        for (ColumnVector c: columns) {
+          if (c != null) {
+            c.close();
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Read a JSON file.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
@@ -896,11 +1019,14 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
-    return new Table(
-        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
-            path.getAbsolutePath(),
-            0, 0,
-            opts.isDayFirst(), opts.isLines()));
+    try (TableWithMeta twm = new TableWithMeta(
+            readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+                    path.getAbsolutePath(),
+                    0, 0,
+                    opts.isDayFirst(), opts.isLines()))) {
+
+      return gatherJSONColumns(schema, twm);
+    }
   }
 
   /**
@@ -963,9 +1089,11 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
-        null, buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+    try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
+            schema.getTypeIds(), schema.getTypeScales(), null,
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+      return gatherJSONColumns(schema, twm);
+    }
   }
 
   /**
@@ -1208,82 +1336,61 @@ public final class Table implements AutoCloseable {
         opts.getDecimal128Columns()));
   }
 
-  private static class ParquetTableWriter implements TableWriter {
-    private long handle;
+  private static class ParquetTableWriter extends TableWriter {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      boolean[] isMapValues = options.getFlatIsMap();
-      boolean[] isBinaryValues = options.getFlatIsBinary();
-      int[] precisions = options.getFlatPrecision();
-      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
-      int[] parquetFieldIds = options.getFlatParquetFieldId();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
-      this.consumer = null;
-      this.handle = writeParquetFileBegin(columnNames,
+      super(writeParquetFileBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
-          flatNumChildren,
-          columnNullabilities,
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
-          isMapValues,
-          isBinaryValues,
-          hasParquetFieldIds,
-          parquetFieldIds,
-          outputFile.getAbsolutePath());
+          options.getFlatIsTimeTypeInt96(),
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
+          options.getFlatIsBinary(),
+          options.getFlatHasParquetFieldId(),
+          options.getFlatParquetFieldId(),
+          outputFile.getAbsolutePath()));
+      this.consumer = null;
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      boolean[] isMapValues = options.getFlatIsMap();
-      boolean[] isBinaryValues = options.getFlatIsBinary();
-      int[] precisions = options.getFlatPrecision();
-      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
-      int[] parquetFieldIds = options.getFlatParquetFieldId();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
-      this.consumer = consumer;
-      this.handle = writeParquetBufferBegin(columnNames,
+      super(writeParquetBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
-          flatNumChildren,
-          columnNullabilities,
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
-          isMapValues,
-          isBinaryValues,
-          hasParquetFieldIds,
-          parquetFieldIds,
-          consumer);
+          options.getFlatIsTimeTypeInt96(),
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
+          options.getFlatIsBinary(),
+          options.getFlatHasParquetFieldId(),
+          options.getFlatParquetFieldId(),
+          consumer));
+      this.consumer = consumer;
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeParquetChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+      writeParquetChunk(writerHandle, table.nativeHandle, table.getDeviceMemorySize());
     }
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeParquetEnd(handle);
+      if (writerHandle != 0) {
+        writeParquetEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -1346,19 +1453,18 @@ public final class Table implements AutoCloseable {
         for (ColumnView cv : columnViews) {
           total += cv.getDeviceMemorySize();
         }
-        writeParquetChunk(writer.handle, nativeHandle, total);
+        writeParquetChunk(writer.writerHandle, nativeHandle, total);
       }
     } finally {
       deleteCudfTable(nativeHandle);
     }
   }
 
-  private static class ORCTableWriter implements TableWriter {
-    private long handle;
+  private static class ORCTableWriter extends TableWriter {
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+      super(writeORCFileBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
           options.getFlatIsNullable(),
@@ -1367,12 +1473,12 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          outputFile.getAbsolutePath());
+          outputFile.getAbsolutePath()));
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+      super(writeORCBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
           options.getFlatIsNullable(),
@@ -1381,24 +1487,24 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          consumer);
+          consumer));
       this.consumer = consumer;
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeORCChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+      writeORCChunk(writerHandle, table.nativeHandle, table.getDeviceMemorySize());
     }
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeORCEnd(handle);
+      if (writerHandle != 0) {
+        writeORCEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -1427,41 +1533,34 @@ public final class Table implements AutoCloseable {
     return new ORCTableWriter(options, consumer);
   }
 
-  private static class ArrowIPCTableWriter implements TableWriter {
+  private static class ArrowIPCTableWriter extends TableWriter {
     private final ArrowIPCWriterOptions.DoneOnGpu callback;
-    private long handle;
     private HostBufferConsumer consumer;
     private long maxChunkSize;
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
-                                File outputFile) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, File outputFile) {
+      super(writeArrowIPCFileBegin(options.getColumnNames(), outputFile.getAbsolutePath()));
       this.callback = options.getCallback();
       this.consumer = null;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCFileBegin(
-              options.getColumnNames(),
-              outputFile.getAbsolutePath());
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
-                                HostBufferConsumer consumer) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
+      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer));
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
-      this.handle = writeArrowIPCBufferBegin(
-              options.getColumnNames(),
-              consumer);
     }
 
     @Override
     public void write(Table table) {
-      if (handle == 0) {
+      if (writerHandle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      long arrowHandle = convertCudfToArrowTable(handle, table.nativeHandle);
+      long arrowHandle = convertCudfToArrowTable(writerHandle, table.nativeHandle);
       try {
         callback.doneWithTheGpu(table);
-        writeArrowIPCArrowChunk(handle, arrowHandle, maxChunkSize);
+        writeArrowIPCArrowChunk(writerHandle, arrowHandle, maxChunkSize);
       } finally {
         closeArrowTable(arrowHandle);
       }
@@ -1469,10 +1568,10 @@ public final class Table implements AutoCloseable {
 
     @Override
     public void close() throws CudfException {
-      if (handle != 0) {
-        writeArrowIPCEnd(handle);
+      if (writerHandle != 0) {
+        writeArrowIPCEnd(writerHandle);
       }
-      handle = 0;
+      writerHandle = 0;
       if (consumer != null) {
         consumer.done();
         consumer = null;
@@ -2066,6 +2165,22 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Count how many rows in the table are distinct from one another.
+   * @param nullEqual if nulls should be considered equal to each other or not.
+   */
+  public int distinctCount(NullEquality nullsEqual) {
+    return distinctCount(nativeHandle, nullsEqual.nullsEqual);
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * Nulls are considered to be equal to one another.
+   */
+  public int distinctCount() {
+    return distinctCount(nativeHandle, true);
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -2085,6 +2200,44 @@ public final class Table implements AutoCloseable {
    */
   public ContiguousTable[] contiguousSplit(int... indices) {
     return contiguousSplit(nativeHandle, indices);
+  }
+
+  /**
+   * Create an instance of `ChunkedPack` which can be used to pack this table
+   * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
+   *
+   * This version of `makeChunkedPack` takes a `RmmDviceMemoryResource`, which can be used
+   * to pre-allocate all scratch and temporary space required for the state of `cudf::chunked_pack`.
+   *
+   * The caller is responsible for calling close on the returned `ChunkedPack` object.
+   *
+   * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
+   * @param tempMemoryResource A memory resource that is used to satisfy allocations for
+   *                           temporary and thrust scratch space.
+   * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
+   */
+  public ChunkedPack makeChunkedPack(
+      long bounceBufferSize, RmmDeviceMemoryResource tempMemoryResource) {
+    long tempMemoryResourceHandle = tempMemoryResource.getHandle();
+    return new ChunkedPack(
+      makeChunkedPack(nativeHandle, bounceBufferSize, tempMemoryResourceHandle));
+  }
+
+  /**
+   * Create an instance of `ChunkedPack` which can be used to pack this table
+   * contiguously in memory utilizing a bounce buffer of size `bounceBufferSize`.
+   *
+   * This version of `makeChunkedPack` makes use of the default per-device memory resource,
+   * for scratch and temporary space required for the state of `cudf::chunked_pack`.
+   *
+   * The caller is responsible for calling close on the returned `ChunkedPack` object.
+   *
+   * @param bounceBufferSize The size of bounce buffer that will be utilized to pack into
+   * @return An instance of `ChunkedPack` that the caller must use to finish the operation.
+   */
+  public ChunkedPack makeChunkedPack(long bounceBufferSize) {
+    return new ChunkedPack(
+      makeChunkedPack(nativeHandle, bounceBufferSize, 0));
   }
 
   /**
@@ -3306,16 +3459,12 @@ public final class Table implements AutoCloseable {
    * {@link #convertToRowsFixedWidthOptimized()}.
    *
    * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
-   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle roughly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
    * can only handle columns less than 100
    */
   public ColumnVector[] convertToRows() {
     long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3394,11 +3543,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
-    }
-    return ret;
+    return ColumnVector.getColumnVectorsFromPointers(ptrs);
   }
 
   /**
@@ -3463,20 +3608,21 @@ public final class Table implements AutoCloseable {
     Table result = null;
     try {
       for (int i = 0; i < columns.length; i++) {
-        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        long columnViewAddress = columnViewAddresses[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the ColumnView  constructor
         columnViewAddresses[i] = 0;
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddress, data);
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      for (int i = 0; i < columns.length; i++) {
-        if (columns[i] != null) {
-          columns[i].close();
-        }
-        if (columnViewAddresses[i] != 0) {
-          ColumnView.deleteColumnView(columnViewAddresses[i]);
-        }
+      try {
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } catch (Throwable s){
+        t.addSuppressed(s);
+      } finally {
+        throw t;
       }
-      throw t;
     }
 
     // close columns to leave the resulting table responsible for freeing underlying columns
@@ -3889,6 +4035,8 @@ public final class Table implements AutoCloseable {
           case UINT16:
           case UINT32:
           case UINT64:
+          case FLOAT32:
+          case FLOAT64:
           case TIMESTAMP_MILLISECONDS:
           case TIMESTAMP_SECONDS:
           case TIMESTAMP_DAYS:
@@ -3897,10 +4045,11 @@ public final class Table implements AutoCloseable {
           case DECIMAL32:
           case DECIMAL64:
           case DECIMAL128:
+          case STRING:
             break;
           default:
             throw new IllegalArgumentException("Expected range-based window orderBy's " +
-                "type: integral (Boolean-exclusive), decimal, and timestamp");
+                "type: integral (Boolean-exclusive), decimal, timestamp, and string");
         }
 
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -3914,8 +4063,8 @@ public final class Table implements AutoCloseable {
       long[] aggPrecedingWindows = new long[totalOps];
       long[] aggFollowingWindows = new long[totalOps];
       try {
-        boolean[] aggPrecedingWindowsUnbounded = new boolean[totalOps];
-        boolean[] aggFollowingWindowsUnbounded = new boolean[totalOps];
+        int[] aggPrecedingWindowsExtent = new int[totalOps];
+        int[] aggFollowingWindowsExtent = new int[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
@@ -3923,18 +4072,19 @@ public final class Table implements AutoCloseable {
           for (AggregationOverWindow op: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
             aggInstances[opIndex] = op.createNativeInstance();
-            Scalar p = op.getWindowOptions().getPrecedingScalar();
-            Scalar f = op.getWindowOptions().getFollowingScalar();
-            if ((p == null || !p.isValid()) && !op.getWindowOptions().isUnboundedPreceding()) {
+            WindowOptions windowOptions = op.getWindowOptions();
+            Scalar p = windowOptions.getPrecedingScalar();
+            Scalar f = windowOptions.getFollowingScalar();
+            if ((p == null || !p.isValid()) && !(windowOptions.isUnboundedPreceding() || windowOptions.isCurrentRowPreceding())) {
               throw new IllegalArgumentException("Some kind of preceding must be set and a preceding column is not currently supported");
             }
-            if ((f == null || !f.isValid()) && !op.getWindowOptions().isUnboundedFollowing()) {
+            if ((f == null || !f.isValid()) && !(windowOptions.isUnboundedFollowing() || windowOptions.isCurrentRowFollowing())) {
               throw new IllegalArgumentException("some kind of following must be set and a follow column is not currently supported");
             }
             aggPrecedingWindows[opIndex] = p == null ? 0 : p.getScalarHandle();
             aggFollowingWindows[opIndex] = f == null ? 0 : f.getScalarHandle();
-            aggPrecedingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedPreceding();
-            aggFollowingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedFollowing();
+            aggPrecedingWindowsExtent[opIndex] = windowOptions.getPrecedingBoundsExtent().nominalValue;
+            aggFollowingWindowsExtent[opIndex] = windowOptions.getFollowingBoundsExtent().nominalValue;
             aggMinPeriods[opIndex] = op.getWindowOptions().getMinPeriods();
             assert (op.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
             orderByColumnIndexes[opIndex] = op.getWindowOptions().getOrderByColumnIndex();
@@ -3956,7 +4106,7 @@ public final class Table implements AutoCloseable {
             isOrderByOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-            aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
+            aggPrecedingWindowsExtent, aggFollowingWindowsExtent,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -4170,12 +4320,27 @@ public final class Table implements AutoCloseable {
      * {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
+      final int DEFAULT_HASH_SEED = 0;
+      return hashPartition(type, numberOfPartitions, DEFAULT_HASH_SEED);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions number of partitions to use
+     * @param seed the seed value for hashing
+     * @return Table that exposes a limited functionality of the {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
       int[] partitionOffsets = new int[numberOfPartitions];
       return new PartitionedTable(new Table(Table.hashPartition(
           operation.table.nativeHandle,
           operation.indices,
           type.nativeId,
           partitionOffsets.length,
+          seed,
           partitionOffsets)), partitionOffsets);
     }
   }

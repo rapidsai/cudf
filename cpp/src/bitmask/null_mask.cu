@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,10 +50,9 @@ size_type state_null_count(mask_state state, size_type size)
 {
   switch (state) {
     case mask_state::UNALLOCATED: return 0;
-    case mask_state::UNINITIALIZED: return UNKNOWN_NULL_COUNT;
     case mask_state::ALL_NULL: return size;
     case mask_state::ALL_VALID: return 0;
-    default: CUDF_FAIL("Invalid null mask state.");
+    default: CUDF_FAIL("Invalid null mask state.", std::invalid_argument);
   }
 }
 
@@ -106,8 +105,8 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                      size_type number_of_mask_words)
 {
   auto x                  = destination + word_index(begin_bit);
-  const auto last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = (valid == true) ? 0xffff'ffff : 0;
+  auto const last_word    = word_index(end_bit) - word_index(begin_bit);
+  bitmask_type fill_value = valid ? 0xffff'ffff : 0;
 
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
@@ -121,7 +120,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
         mask = mask & set_least_significant_bits(intra_word_index(end_bit));
       }
       x[destination_word_index] =
-        (valid == true) ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
+        valid ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
     } else {
       x[destination_word_index] = fill_value;
     }
@@ -373,32 +372,32 @@ cudf::size_type null_count(bitmask_type const* bitmask,
 }
 
 // Count non-zero bits in the specified ranges of a bitmask
-std::vector<size_type> segmented_count_set_bits(const bitmask_type* bitmask,
-                                                host_span<const size_type> indices,
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream)
 {
   return detail::segmented_count_set_bits(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count zero bits in the specified ranges of a bitmask
-std::vector<size_type> segmented_count_unset_bits(const bitmask_type* bitmask,
-                                                  host_span<const size_type> indices,
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream)
 {
   return detail::segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count valid elements in the specified ranges of a validity bitmask
-std::vector<size_type> segmented_valid_count(const bitmask_type* bitmask,
-                                             host_span<const size_type> indices,
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
   return detail::segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
 }
 
 // Count null elements in the specified ranges of a validity bitmask
-std::vector<size_type> segmented_null_count(const bitmask_type* bitmask,
-                                            host_span<const size_type> indices,
+std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
+                                            host_span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
   return detail::segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
@@ -529,6 +528,12 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::mr::device_memory_resource* mr)
 {
   return detail::bitmask_or(view, cudf::get_default_stream(), mr);
+}
+
+// Count non-zero bits in the specified range
+cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop)
+{
+  return detail::null_count(bitmask, start, stop, cudf::get_default_stream());
 }
 
 }  // namespace cudf

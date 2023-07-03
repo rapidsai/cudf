@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -26,15 +27,28 @@
 // We disable warning 611 because some Arrow subclasses of
 // `arrow::fs::FileSystem` only partially override the `Equals` method,
 // triggering warning 611-D from nvcc.
+#ifdef __CUDACC__
 #pragma nv_diag_suppress 611
+#endif
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
+#ifdef __CUDACC__
 #pragma nv_diag_default 611
+#endif
+
+// We disable warning 2810 to workaround the compile issue (warning treated as error):
+// result.h(263): error #2810-D: ignoring return value type with "nodiscard" attribute
+#ifdef __CUDACC__
+#pragma nv_diag_suppress 2810
+#endif
+#include <arrow/result.h>
+#ifdef __CUDACC__
+#pragma nv_diag_default 2810
+#endif
 
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include <arrow/result.h>
 #include <arrow/status.h>
 
 #include <future>
@@ -99,17 +113,35 @@ class datasource {
    * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(const std::string& filepath,
+  static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset = 0,
                                             size_t size   = 0);
 
   /**
-   * @brief Creates a source from a memory buffer.
+   * @brief Creates a source from a host memory buffer.
+   *
+   # @deprecated Since 23.04
    *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
+
+  /**
+   * @brief Creates a source from a host memory buffer.
+   *
+   * @param[in] buffer Host buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(cudf::host_span<std::byte const> buffer);
+
+  /**
+   * @brief Creates a source from a device memory buffer.
+   *
+   * @param buffer Device buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
@@ -272,14 +304,14 @@ class datasource {
   /**
    * @brief Returns the size of the data in the source.
    *
-   * @return size_t The size of the source data in bytes
+   * @return The size of the source data in bytes
    */
   [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
-   * @return bool True if there is data, False otherwise
+   * @return True if there is data, False otherwise
    */
   [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 
@@ -296,7 +328,7 @@ class datasource {
      * @param data The data buffer
      * @param size The size of the data buffer
      */
-    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+    non_owning_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
 
     /**
      * @brief Returns the size of the buffer.
@@ -313,8 +345,8 @@ class datasource {
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{nullptr};
-    size_t const _size{0};
+    uint8_t const* _data{nullptr};
+    size_t _size{0};
   };
 
   /**
@@ -402,8 +434,8 @@ class arrow_io_source : public datasource {
    */
   explicit arrow_io_source(std::string_view arrow_uri)
   {
-    const std::string uri_start_delimiter = "//";
-    const std::string uri_end_delimiter   = "?";
+    std::string const uri_start_delimiter = "//";
+    std::string const uri_end_delimiter   = "?";
 
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
       arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));

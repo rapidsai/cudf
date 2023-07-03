@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,15 +34,14 @@
 
 namespace cudf {
 namespace detail {
-constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
-using pair_type = cuco::pair_type<hash_value_type, size_type>;
+using pair_type = cuco::pair<hash_value_type, size_type>;
 
-using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
@@ -60,9 +59,9 @@ using mixed_multimap_type = cuco::static_multimap<hash_value_type,
 using semi_map_type = cuco::
   static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+using row_hash_legacy = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
-using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
+using row_equality_legacy = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace detail

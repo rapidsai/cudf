@@ -1,9 +1,9 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import datetime
-from typing import Any, Sequence, cast
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -80,10 +80,10 @@ class TimeDeltaColumn(ColumnBase):
         self,
         data: Buffer,
         dtype: Dtype,
-        size: int = None,  # TODO: make non-optional
-        mask: Buffer = None,
+        size: Optional[int] = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -125,11 +125,16 @@ class TimeDeltaColumn(ColumnBase):
             "TimeDelta Arrays is not yet implemented in cudf"
         )
 
+    @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
+            mask = pa.py_buffer(
+                self.mask_array_view(mode="read").copy_to_host()
+            )
+        data = pa.py_buffer(
+            self.as_numerical.data_array_view(mode="read").copy_to_host()
+        )
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,
@@ -181,17 +186,17 @@ class TimeDeltaColumn(ColumnBase):
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                this = self.astype(common_dtype).astype("float64")
+                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
                         other = other.value.astype(common_dtype).astype(
-                            "float64"
+                            out_dtype
                         )
                     else:
-                        other = cudf.Scalar(None, "float64")
+                        other = cudf.Scalar(None, out_dtype)
                 else:
-                    other = other.astype(common_dtype).astype("float64")
-                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                    other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
         elif other.dtype.kind in {"f", "i", "u"}:
@@ -200,9 +205,6 @@ class TimeDeltaColumn(ColumnBase):
 
         if out_dtype is None:
             return NotImplemented
-
-        if op == "__floordiv__":
-            op = "__truediv__"
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
@@ -249,7 +251,10 @@ class TimeDeltaColumn(ColumnBase):
         return self._time_unit
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> TimeDeltaColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -311,7 +316,7 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         )
 
-    def median(self, skipna: bool = None) -> pd.Timedelta:
+    def median(self, skipna: Optional[bool] = None) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -338,9 +343,9 @@ class TimeDeltaColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
-        dtype: Dtype = None,
+        dtype: Optional[Dtype] = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
@@ -354,7 +359,7 @@ class TimeDeltaColumn(ColumnBase):
 
     def std(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -53,8 +53,7 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
 {
   // Materialize offsets column.
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
-  auto sizes =
-    make_fixed_width_column(size_data_type, input_size, mask_state::UNALLOCATED, stream, mr);
+  auto sizes = make_fixed_width_column(size_data_type, input_size, mask_state::UNALLOCATED, stream);
   auto mutable_sizes = sizes->mutable_view();
 
   // Consider the following preceding/following values:
@@ -77,8 +76,9 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                     });
 
   // Convert `sizes` to an offsets column, via inclusive_scan():
-  return strings::detail::make_offsets_child_column(
-    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
+  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr));
+  return offsets_column;
 }
 
 /**
@@ -116,7 +116,7 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
     thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
     gather_map->mutable_view().template begin<size_type>(),
     [d_offsets =
-       child_offsets.template begin<size_type>(),  // E.g. [0,   2,     5,     8,     11, 13]
+       child_offsets.template begin<size_type>(),    // E.g. [0,   2,     5,     8,     11, 13]
      d_groups =
        per_row_mapping.template begin<size_type>(),  // E.g. [0,0, 1,1,1, 2,2,2, 3,3,3, 4,4]
      d_prev = preceding_iter] __device__(auto i) {

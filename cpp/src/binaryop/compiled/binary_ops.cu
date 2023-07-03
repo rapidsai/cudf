@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -50,8 +50,11 @@ struct scalar_as_column_view {
   return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
-    auto col_v =
-      column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
+    auto col_v               = column_view(s.type(),
+                             1,
+                             h_scalar_type_view.data(),
+                             reinterpret_cast<bitmask_type const*>(s.validity_data()),
+                             !s.is_valid());
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
@@ -71,17 +74,17 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   // build offsets column from the string size
   auto offsets_transformer_itr =
     thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
-  auto offsets_column = strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr);
+  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+    offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
-  auto chars_column_v =
-    column_view(data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data());
+  auto chars_column_v = column_view(
+    data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data(), nullptr, 0);
   // Construct string column_view
   auto col_v = column_view(s.type(),
                            1,
                            nullptr,
-                           (bitmask_type const*)s.validity_data(),
-                           cudf::UNKNOWN_NULL_COUNT,
+                           reinterpret_cast<bitmask_type const*>(s.validity_data()),
+                           static_cast<size_type>(!s.is_valid(stream)),
                            0,
                            {offsets_column->view(), chars_column_v});
   return std::pair{col_v, std::move(offsets_column)};

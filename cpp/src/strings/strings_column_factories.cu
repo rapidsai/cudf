@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,11 @@ namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
-  __device__ thrust::pair<const char*, size_type> operator()(const string_view& i)
+  __device__ thrust::pair<char const*, size_type> operator()(string_view const& i)
   {
     return (i.data() == null_placeholder.data())
-             ? thrust::pair<const char*, size_type>{nullptr, 0}
-             : thrust::pair<const char*, size_type>{i.data(), i.size_bytes()};
+             ? thrust::pair<char const*, size_type>{nullptr, 0}
+             : thrust::pair<char const*, size_type>{i.data(), i.size_bytes()};
   }
 };
 
@@ -47,7 +47,7 @@ struct string_view_to_pair {
 
 // Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
-  device_span<thrust::pair<const char*, size_type> const> strings,
+  device_span<thrust::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -7,6 +7,7 @@ import io
 import pyarrow as pa
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 try:
     import ujson as json
@@ -169,23 +170,23 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     allow_range_index = True
     if columns is not None:
         cpp_columns.reserve(len(columns))
-        allow_range_index = False
+        allow_range_index = len(columns) > 0
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
 
     # Read Parquet
-    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_result
 
     with nogil:
-        c_out_table = move(parquet_reader(args))
+        c_result = move(parquet_reader(args))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
 
     # Access the Parquet per_file_user_data to find the index
     index_col = None
     cdef vector[unordered_map[string, string]] per_file_user_data = \
-        c_out_table.metadata.per_file_user_data
+        c_result.metadata.per_file_user_data
 
     index_col_names = None
     is_range_index = True
@@ -206,11 +207,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                             index_col_names[idx_col] = c['name']
 
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_out_table.tbl),
-        column_names=column_names
+        move(c_result.tbl),
+        column_names=names
     ))
 
-    update_struct_field_names(df, c_out_table.metadata.schema_info)
+    update_struct_field_names(df, c_result.metadata.schema_info)
 
     if meta is not None:
         # Book keep each column metadata as the order
@@ -221,7 +222,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         }
 
         # update the decimal precision of each column
-        for col in column_names:
+        for col in names:
             if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
@@ -285,7 +286,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 )
 
             df._index = idx
-        elif set(index_col).issubset(column_names):
+        elif set(index_col).issubset(names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
@@ -306,19 +307,23 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     return df
 
-cpdef write_parquet(
-        table,
-        object filepaths_or_buffers,
-        object index=None,
-        object compression="snappy",
-        object statistics="ROWGROUP",
-        object metadata_file_path=None,
-        object int96_timestamps=False,
-        object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
-        object row_group_size_rows=None,
-        object max_page_size_bytes=None,
-        object max_page_size_rows=None,
-        object partitions_info=None):
+
+@acquire_spill_lock()
+def write_parquet(
+    table,
+    object filepaths_or_buffers,
+    object index=None,
+    object compression="snappy",
+    object statistics="ROWGROUP",
+    object metadata_file_path=None,
+    object int96_timestamps=False,
+    object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    object row_group_size_rows=None,
+    object max_page_size_bytes=None,
+    object max_page_size_rows=None,
+    object partitions_info=None,
+    object force_nullable_schema=False,
+):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -360,7 +365,9 @@ cpdef write_parquet(
 
         tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
-            table[name]._column, tbl_meta.get().column_metadata[i]
+            table[name]._column,
+            tbl_meta.get().column_metadata[i],
+            force_nullable_schema
         )
 
     cdef map[string, string] tmp_user_data
@@ -593,7 +600,8 @@ cdef class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
             _set_col_metadata(
-                table[name]._column, self.tbl_meta.get().column_metadata[i]
+                table[name]._column,
+                self.tbl_meta.get().column_metadata[i],
             )
 
         index = (
@@ -671,15 +679,32 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef _set_col_metadata(Column col, column_in_metadata& col_meta):
+cdef _set_col_metadata(
+    Column col,
+    column_in_metadata& col_meta,
+    bool force_nullable_schema=False,
+):
+    if force_nullable_schema:
+        # Only set nullability if `force_nullable_schema`
+        # is true.
+        col_meta.set_nullability(True)
+
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_metadata(child_col, col_meta.child(i))
+            _set_col_metadata(
+                child_col,
+                col_meta.child(i),
+                force_nullable_schema
+            )
     elif is_list_dtype(col):
-        _set_col_metadata(col.children[1], col_meta.child(1))
+        _set_col_metadata(
+            col.children[1],
+            col_meta.child(1),
+            force_nullable_schema
+        )
     else:
         if is_decimal_dtype(col):
             col_meta.set_decimal_precision(col.dtype.precision)

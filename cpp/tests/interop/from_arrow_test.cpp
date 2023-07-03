@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,12 +55,10 @@ std::unique_ptr<cudf::table> get_cudf_table()
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-struct FromArrowTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -88,7 +86,7 @@ TEST_F(FromArrowTest, DateTimeTable)
   std::shared_ptr<arrow::Array> arr;
   arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(data);
+  CUDF_EXPECTS(timestamp_builder.AppendValues(data).ok(), "Failed to append values");
   CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -121,7 +119,8 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
     default: CUDF_FAIL("Unsupported duration unit in arrow");
   }
   arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
-  duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  CUDF_EXPECTS(duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok(),
+               "Failed to append values");
   CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -185,10 +184,10 @@ TEST_F(FromArrowTest, StructColumn)
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
-  auto mask =
+  auto [null_mask, null_count] =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), null_count, std::move(*null_mask));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
@@ -263,7 +262,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
@@ -328,8 +327,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
 struct FromArrowTestSlice
   : public FromArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {

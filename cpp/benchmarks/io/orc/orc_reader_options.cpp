@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,14 +26,14 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
 // The number of separate read calls to use when reading files in multiple chunks
 // Each call reads roughly equal amounts of data
 constexpr int32_t chunked_read_num_chunks = 8;
 
-std::vector<std::string> get_col_names(cudf::io::source_info const& source)
+std::vector<std::string> get_top_level_col_names(cudf::io::source_info const& source)
 {
   auto const top_lvl_cols = cudf::io::read_orc_metadata(source).schema().root().children();
   std::vector<std::string> col_names;
@@ -56,8 +56,6 @@ void BM_orc_read_varying_options(nvbench::state& state,
                                                     nvbench::enum_type<UsesNumpyDType>,
                                                     nvbench::enum_type<Timestamp>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const num_chunks = RowSelection == row_selection::ALL ? 1 : chunked_read_num_chunks;
 
   auto const use_index     = UsesIndex == uses_index::YES;
@@ -81,7 +79,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
   cudf::io::write_orc(options);
 
   auto const cols_to_read =
-    select_column_names(get_col_names(source_sink.make_source_info()), ColSelection);
+    select_column_names(get_top_level_col_names(source_sink.make_source_info()), ColSelection);
   cudf::io::orc_reader_options read_options =
     cudf::io::orc_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)

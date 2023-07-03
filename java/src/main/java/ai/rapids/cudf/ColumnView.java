@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -43,30 +43,50 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final ColumnVector.OffHeapState offHeap;
 
   /**
-   * Constructs a Column View given a native view address
+   * Constructs a Column View given a native view address. This asserts that if the ColumnView is
+   * of nested-type it doesn't contain non-empty nulls
    * @param address the view handle
+   * @throws AssertionError if the address points to a nested-type view with non-empty nulls
    */
   ColumnView(long address) {
     this.viewHandle = address;
-    this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    this.rows = ColumnView.getNativeRowCount(viewHandle);
-    this.nullCount = ColumnView.getNativeNullCount(viewHandle);
-    this.offHeap = null;
+    try {
+      this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      this.rows = ColumnView.getNativeRowCount(viewHandle);
+      this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+      this.offHeap = null;
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // offHeap state is null, so there is nothing to clean in offHeap
+      // delete ColumnView to avoid memory leak
+      deleteColumnView(viewHandle);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
 
   /**
    * Intended to be called from ColumnVector when it is being constructed. Because state creates a
    * cudf::column_view instance and will close it in all cases, we don't want to have to double
-   * close it.
+   * close it. This asserts that if the offHeapState is of nested-type it doesn't contain non-empty nulls
    * @param state the state this view is based off of.
+   * @throws AssertionError if offHeapState points to a nested-type view with non-empty nulls
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
-    viewHandle = state.getViewHandle();
-    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    rows = ColumnView.getNativeRowCount(viewHandle);
-    nullCount = ColumnView.getNativeNullCount(viewHandle);
+    try {
+      viewHandle = state.getViewHandle();
+      type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      rows = ColumnView.getNativeRowCount(viewHandle);
+      nullCount = ColumnView.getNativeNullCount(viewHandle);
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // cleanup offHeap
+      offHeap.clean(false);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
   /**
@@ -647,8 +667,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] slice(int... indices) {
     long[] nativeHandles = slice(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnVectors[i] = new ColumnVector(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnVectors, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnVectors;
   }
@@ -786,10 +820,45 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public ColumnView[] splitAsViews(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnViews[i] = new ColumnView(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnViews[i] = new ColumnView(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnViews, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnViews;
+  }
+
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews, Throwable throwable) {
+    for (ColumnView columnView : columnViews) {
+      if (columnView != null) {
+        try {
+          columnView.close();
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
+    for (long nativeHandle : nativeHandles) {
+      if (nativeHandle != 0) {
+        try {
+          deleteColumnView(nativeHandle);
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
   }
 
   /**
@@ -814,8 +883,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
+   * The result will be sanitized to not contain any non-empty nulls in case of nested types
    *
-   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
@@ -2445,9 +2515,46 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists() {
+    return flattenLists(false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   *
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists(boolean ignoreNull) {
+    return new ColumnVector(flattenLists(getNativeView(), ignoreNull));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Copy the current column to a new column, each string or list of the output column will have
+   * reverse order of characters or elements.
+   *
+   * @return A new column with lists or strings having reverse order.
+   */
+  public final ColumnVector reverseStringsOrLists() {
+    assert type.equals(DType.STRING) || type.equals(DType.LIST) :
+        "A column of type string or list is required, actual: " + type;
+    return new ColumnVector(reverseStringsOrLists(getNativeView()));
+  }
 
   /**
    * Convert a string to upper case.
@@ -2519,12 +2626,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return list of strings columns as a table.
    */
+  @Deprecated
   public final Table stringSplit(String pattern, int limit, boolean splitByRegex) {
+    if (splitByRegex) {
+      return stringSplit(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
+    } else {
+      return stringSplit(pattern, limit);
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
+   * all nulls in the corresponding rows of the output columns.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return list of strings columns as a table.
+   */
+  public final Table stringSplit(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern is null";
-    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), pattern, limit, splitByRegex));
+    return new Table(stringSplitRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                   regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2538,6 +2667,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return list of strings columns as a table.
    */
+  @Deprecated
   public final Table stringSplit(String pattern, boolean splitByRegex) {
     return stringSplit(pattern, -1, splitByRegex);
   }
@@ -2555,7 +2685,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter, int limit) {
-    return stringSplit(delimiter, limit, false);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert delimiter != null : "delimiter is null";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
+    return new Table(stringSplit(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2568,7 +2701,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter) {
-    return stringSplit(delimiter, -1, false);
+    return stringSplit(delimiter, -1);
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
+   * all nulls in the corresponding rows of the output columns.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @return list of strings columns as a table.
+   */
+  public final Table stringSplit(RegexProgram regexProg) {
+    return stringSplit(regexProg, -1);
   }
 
   /**
@@ -2583,13 +2730,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return a LIST column of string elements.
    */
+  @Deprecated
   public final ColumnVector stringSplitRecord(String pattern, int limit, boolean splitByRegex) {
+    if (splitByRegex) {
+      return stringSplitRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
+    } else {
+      return stringSplitRecord(pattern, limit);
+    }
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regex program pattern.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be String";
-    assert pattern != null : "pattern is null";
-    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), pattern, limit, splitByRegex));
+        stringSplitRecordRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                            regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2601,6 +2768,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return a LIST column of string elements.
    */
+  @Deprecated
   public final ColumnVector stringSplitRecord(String pattern, boolean splitByRegex) {
     return stringSplitRecord(pattern, -1, splitByRegex);
   }
@@ -2616,7 +2784,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter, int limit) {
-    return stringSplitRecord(delimiter, limit, false);
+    assert type.equals(DType.STRING) : "column type must be String";
+    assert delimiter != null : "delimiter is null";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
+    return new ColumnVector(stringSplitRecord(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2627,17 +2798,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter) {
-    return stringSplitRecord(delimiter, -1, false);
+    return stringSplitRecord(delimiter, -1);
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regex program pattern.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(RegexProgram regexProg) {
+    return stringSplitRecord(regexProg, -1);
   }
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * Overloading subString to support if end index is not provided. Appending -1 to indicate to
-   * read until end of string.
+   * The character positions to retrieve in each string are `[start, <the string end>)`..
+   *
    * @param start first character index to begin the substring(inclusive).
    */
   public final ColumnVector substring(int start) {
-    return substring(start, -1);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(substringS(getNativeView(), start));
   }
 
   /**
@@ -2756,9 +2940,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *  - A null input string will always result in a null output string regardless of the value of
    *    the <code>repeatTimes</code> parameter.
    *
-   * The caller is responsible for checking the output column size will not exceed the maximum size
-   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
-   *
    * @param repeatTimes The number of times each input string is repeated.
    * @return A new java column vector containing repeated strings.
    */
@@ -2778,70 +2959,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
    *    corresponding input string is not null, the output string will be an empty string.
    *
-   * The caller is responsible for checking the output column size will not exceed the maximum size
-   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
-   *
    * @param repeatTimes The column containing numbers of times each input string is repeated.
    * @return A new java column vector containing repeated strings.
    */
   public final ColumnVector repeatStrings(ColumnView repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be String";
     return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
-            repeatTimes.getNativeView(), 0));
-  }
-
-  /**
-   * This function is an overloaded version of {@link #repeatStrings(ColumnView) repeatStrings},
-   * with an additional parameter <code>outputStringSizes</code> that provides a column containing
-   * the pre-computed sizes of the output strings.
-   *
-   * @param repeatTimes The column containing numbers of times each input string is repeated.
-   * @param outputStringSizes A numeric column providing the pre-computed sizes of the output strings.
-   * @return A new java column vector containing repeated strings.
-   */
-  public final ColumnVector repeatStrings(ColumnView repeatTimes, ColumnView outputStringSizes) {
-    assert type.equals(DType.STRING) : "column type must be String";
-    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
-            repeatTimes.getNativeView(), outputStringSizes.getNativeView()));
-  }
-
-  /** Struct to return the computed strings size column and total size */
-  public static final class StringSizes implements AutoCloseable {
-    private final ColumnVector stringSizes;
-    private final long totalSize;
-
-    StringSizes(ColumnVector stringSizes, long totalSize) {
-      this.stringSizes = stringSizes;
-      this.totalSize = totalSize;
-    }
-
-    public ColumnVector getStringSizes() { return stringSizes; }
-    public long getTotalSize() { return totalSize; }
-
-    /** Close the underlying resources */
-    @Override
-    public void close() {
-      if (stringSizes != null) {
-        stringSizes.close();
-      }
-    }
-  };
-
-  /**
-   * Compute sizes of the output strings if each string in an input strings column is repeated by
-   * a different number of times given by the corresponding row in a <code>repeatTimes</code>
-   * numeric column (i.e., compute sizes of the strings resulted from
-   * {@link #repeatStringsWithColumnRepeatTimes}).
-   *
-   * @param repeatTimes The column containing numbers of times each input string is repeated.
-   * @return An instance of StringSizes class which stores a Java column vector containing
-   *         the computed sizes of the repeated strings, and a long value storing sum of all these
-   *         computed sizes.
-   */
-  public final StringSizes repeatStringsSizes(ColumnView repeatTimes) {
-    assert type.equals(DType.STRING) : "column type must be String";
-    final long[] sizes = repeatStringsSizes(getNativeView(), repeatTimes.getNativeView());
-    return new StringSizes(new ColumnVector(sizes[0]), sizes[1]);
+            repeatTimes.getNativeView()));
   }
 
    /**
@@ -2866,7 +2990,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * replacement string.
    * The replacement proceeds from the beginning of the string to the end, for example,
    * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
-   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Specifying an empty string for replace will essentially remove the target string if found in each string.
    * Null string entries will return null output string entries.
    * target Scalar should be string and should not be empty or null.
    *
@@ -2886,6 +3010,41 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column where target strings with each string are replaced with
+   * corresponding replacement strings. For each string in the column, the list of targets
+   * is searched within that string. If a target string is found, it is replaced by the
+   * corresponding entry in the repls column. All occurrences found in each string are replaced.
+   * The repls argument can optionally contain a single string. In this case, all matching
+   * target substrings will be replaced by that single string.
+   *
+   * Example:
+   * cv = ["hello", "goodbye"]
+   * targets = ["e","o"]
+   * repls = ["EE","OO"]
+   * r1 = cv.stringReplace(targets, repls)
+   * r1 is now ["hEEllO", "gOOOOdbyEE"]
+   *
+   * targets = ["e", "o"]
+   * repls = ["_"]
+   * r2 = cv.stringReplace(targets, repls)
+   * r2 is now ["h_ll_", "g__dby_"]
+   *
+   * @param targets Strings to search for in each string.
+   * @param repls Corresponding replacement strings for target strings.
+   * @return A new java column vector containing the replaced strings.
+   */
+  public final ColumnVector stringReplace(ColumnView targets, ColumnView repls) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets != null : "target list may not be null";
+    assert targets.getType().equals(DType.STRING) : "target list must be a string column";
+    assert repls != null : "replacement list may not be null";
+    assert repls.getType().equals(DType.STRING) : "replacement list must be a string column";
+
+    return new ColumnVector(stringReplaceMulti(getNativeView(), targets.getNativeView(),
+        repls.getNativeView()));
+  }
+
+  /**
    * For each string, replaces any character sequence matching the given pattern using the
    * replacement string scalar.
    *
@@ -2893,8 +3052,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl The string scalar to replace for each pattern match.
    * @return A new column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl) {
-    return replaceRegex(pattern, repl, -1);
+    return replaceRegex(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), repl);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given regex program pattern
+   * using the replacement string scalar.
+   *
+   * @param regexProg The regex program with pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(RegexProgram regexProg, Scalar repl) {
+    return replaceRegex(regexProg, repl, -1);
   }
 
   /**
@@ -2906,12 +3078,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxRepl The maximum number of times a replacement should occur within each string.
    * @return A new column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl, int maxRepl) {
+    return replaceRegex(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), repl, maxRepl);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given regex program pattern
+   * using the replacement string scalar.
+   *
+   * @param regexProg The regex program with pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @param maxRepl The maximum number of times a replacement should occur within each string.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(RegexProgram regexProg, Scalar repl, int maxRepl) {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
-    return new ColumnVector(replaceRegex(getNativeView(), pattern, repl.getScalarHandle(),
-        maxRepl));
+    assert regexProg != null : "regex program may not be null";
+    return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                         regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
   }
 
   /**
@@ -2937,9 +3124,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return A new java column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
-    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
-        replace));
+    return stringReplaceWithBackrefs(new RegexProgram(pattern), replace);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given regex program
+   * pattern using the replace template for back-references.
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param regexProg The regex program with pattern to search within each string.
+   * @param replace The replacement template for creating the output string.
+   * @return A new java column vector containing the string results.
+   */
+  public final ColumnVector stringReplaceWithBackrefs(RegexProgram regexProg, String replace) {
+    assert regexProg != null : "regex program may not be null";
+    return new ColumnVector(
+        stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                  regexProg.capture().nativeId, replace));
   }
 
   /**
@@ -3200,8 +3404,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * result = cv.matchesRe("\\d+")
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3211,11 +3415,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector matchesRe(String pattern) {
+    return matchesRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given regex program pattern but only at the beginning of the string.
+   *
+   * ```
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.matchesRe(p)
+   * r is now [false, true, false]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
+   * @param regexProg Regex program to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector matchesRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(),
+                                      regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3223,8 +3450,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * r = cv.containsRe("\\d+")
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3234,11 +3461,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector containsRe(String pattern) {
+    return containsRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given RegexProgram pattern starting at any location.
+   *
+   * ```
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.containsRe(p)
+   * r is now [false, true, true]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
+   * @param regexProg Regex program to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector containsRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(),
+                                       regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3253,10 +3503,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
+  @Deprecated
   public final Table extractRe(String pattern) throws CudfException {
+    return extractRe(new RegexProgram(pattern));
+  }
+
+  /**
+   * For each captured group specified in the given regex program
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg the regex program to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the regex
+   * program does not contain any capture groups.
+   */
+  public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    return new Table(extractRe(this.getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),
+                               regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3269,11 +3537,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
+  @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
+    if (idx == 0) {
+      return extractAllRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), idx);
+    }
+    return extractAllRecord(new RegexProgram(pattern), idx);
+  }
+
+  /**
+   * Extracts all strings that match the given regex program pattern and corresponds to the
+   * regular expression group index. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg The regex program
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(RegexProgram regexProg, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-
-    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+    assert regexProg != null : "regex program may not be null";
+    return new ColumnVector(
+        extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                         regexProg.capture().nativeId, idx));
   }
 
   /**
@@ -3728,6 +4016,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ((actualBytes + 63) >> 6) << 6;
   }
 
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * @param nullPolicy if nulls should be included or not.
+   */
+  public int distinctCount(NullPolicy nullPolicy) {
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
+  }
+
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * Nulls are included.
+   */
+  public int distinctCount() {
+    return distinctCount(getNativeView(), true);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3760,6 +4064,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
+  private static native int distinctCount(long handle, boolean nullsIncluded);
+
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
@@ -3847,9 +4153,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *  - A null input string will always result in a null output string regardless of the value of
    *    the <code>repeatTimes</code> parameter.
    *
-   * The caller is responsible for checking the output column size will not exceed the maximum size
-   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
-   *
    * @param viewHandle long holding the native handle of the column containing strings to repeat.
    * @param repeatTimes The number of times each input string is repeated.
    * @return native handle of the resulting cudf strings column containing repeated strings.
@@ -3867,37 +4170,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
    *    corresponding input string is not null, the output string will be an empty string.
    *
-   * The caller is responsible for checking the output column size will not exceed the maximum size
-   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
-   *
    * If the input <code>repeatTimesHandle</code> column does not have a numeric type, or it has a
    * size that is different from size of the input strings column, an exception will be thrown.
    *
    * @param stringsHandle long holding the native handle of the column containing strings to repeat.
-   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
+   * @param repeatTimesHandle long holding the native handle of the column containing the numbers
    *        of times each input string is repeated.
-   * @param outputStringSizesHandle long holding the native handle of the column containing the
-   *                                pre-computed sizes of the output strings, can be specified as
-   *                                <code>0</code> value if that column is not available.
    * @return native handle of the resulting cudf strings column containing repeated strings.
    */
-    private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
-      long repeatTimesHandle, long outputStringSizesHandle);
+  private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
+    long repeatTimesHandle);
 
-  /**
-   * Native method to compute sizes of the output strings if each string in the input strings
-   * column is repeated by a different number of times given by the corresponding row in a
-   * <code>repeatTimes</code> numeric column (i.e., compute sizes of the strings resulted from
-   * {@link #repeatStringsWithColumnRepeatTimes}).
-   *
-   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
-   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
-   *        of times each input string is repeated.
-   * @return An array of two long values, the first one holds native handle of a numeric column
-   *         containing the computed sizes of the repeated strings, and the second value is the sum
-   *         of all those string sizes.
-   */
-  private static native long[] repeatStringsSizes(long stringsHandle, long repeatTimesHandle);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
@@ -3944,36 +4227,64 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Returns a list of columns by splitting each string using the specified pattern. The number of
-   * rows in the output columns will be the same as the input column. Null entries are added for a
-   * row where split results have been exhausted. Null input entries result in all nulls in the
-   * corresponding rows of the output columns.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long nativeHandle, String pattern, int limit,
-                                           boolean splitByRegex);
+  private static native long[] stringSplit(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regular expression
+   * pattern. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long[] stringSplitRe(long nativeHandle, String pattern, int flags,
+                                             int capture, int limit);
 
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long stringSplitRecord(long nativeHandle, String pattern, int limit,
-                                               boolean splitByRegex);
+  private static native long stringSplitRecord(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regular expression pattern.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long stringSplitRecordRe(long nativeHandle, String pattern, int flags,
+                                                 int capture, int limit);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -3982,6 +4293,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end        last character index to stop the substring(exclusive).
    */
   private static native long substring(long columnView, int start, int end) throws CudfException;
+
+  /**
+   * Native method to extract substrings from a given strings column.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substrings (inclusive).
+   */
+  private static native long substringS(long columnView, int start) throws CudfException;
 
   /**
    * Native method to calculate substring from a given string column.
@@ -4001,15 +4319,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
 
   /**
+   * Native method to replace target strings by corresponding repl strings.
+   * @param inputCV native handle of the cudf::column_view being operated on.
+   * @param targetsCV handle of column containing the strings being searched.
+   * @param replsCV handle of column containing the strings to replace (can optionally contain a single string).
+   */
+  private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
+
+  /**
    * Native method for replacing each regular expression pattern match with the specified
    * replacement string.
    * @param columnView native handle of the cudf::column_view being operated on.
-   * @param pattern The regular expression pattern to search within each string.
+   * @param pattern regular expression pattern to search within each string.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
    * @param repl native handle of the cudf::scalar containing the replacement string.
    * @param maxRepl maximum number of times to replace the pattern within a string
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private static native long replaceRegex(long columnView, String pattern,
+  private static native long replaceRegex(long columnView, String pattern, int flags, int capture,
                                           long repl, long maxRepl) throws CudfException;
 
   /**
@@ -4023,15 +4351,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                long repls) throws CudfException;
 
   /**
-   * Native method for replacing any character sequence matching the given pattern
-   * using the replace template for back-references.
+   * Native method for replacing any character sequence matching the given regex program
+   * pattern using the replace template for back-references.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param pattern The regular expression patterns to search within each string.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
-                                                       String replace) throws CudfException;
+  private static native long stringReplaceWithBackrefs(long columnView, String pattern, int flags,
+                                                       int capture, String replace) throws CudfException;
 
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.
@@ -4058,21 +4388,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern from the
+   * Native method for checking if strings match the passed in regex program pattern from the
    * beginning of the string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long matchesRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern starting at any location.
+   * Native method for checking if strings match the passed in regex program pattern starting at any location.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long containsRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in like pattern
@@ -4093,19 +4427,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
-   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   * Native method for extracting results from a regex program pattern. Returns a table handle.
+   *
+   * @param cudfViewHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    */
-  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long[] extractRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for extracting all results corresponding to group idx from a regular expression.
+   * Native method for extracting all results corresponding to group idx from a regex program pattern.
    *
    * @param nativeHandle Native handle of the cudf::column_view being operated on.
    * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param idx Regex group index. A 0 value means matching the entire regex.
    * @return Native handle of a string column of the result.
    */
-  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+  private static native long extractAllRecord(long nativeHandle, String pattern, int flags, int capture, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
@@ -4175,6 +4516,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
 
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
+
   /**
    * Native method for list lookup
    * @param nativeView the column view handle of the list
@@ -4243,6 +4586,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
+
+  private static native long reverseStringsOrLists(long inputHandle);
+
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
@@ -4450,6 +4796,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long generateListOffsets(long handle) throws CudfException;
 
   static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
+
+  static native boolean hasNonEmptyNulls(long handle) throws CudfException;
+
+  static native long purgeNonEmptyNulls(long handle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
@@ -4806,6 +5156,61 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostValidityBuffer.close();
           }
         }
+      }
+    }
+  }
+
+  /**
+   * Exact check if a column or its descendants have non-empty null rows
+   *
+   * @return Whether the column or its descendants have non-empty null rows
+   */
+  public boolean hasNonEmptyNulls() {
+    return hasNonEmptyNulls(viewHandle);
+  }
+
+  /**
+   * Copies this column into output while purging any non-empty null rows in the column or its
+   * descendants.
+   *
+   * If this column is not of compound type (LIST/STRING/STRUCT/DICTIONARY), the output will be
+   * the same as input.
+   *
+   * The purge operation only applies directly to LIST and STRING columns, but it applies indirectly
+   * to STRUCT/DICTIONARY columns as well, since these columns may have child columns that
+   * are LIST or STRING.
+   *
+   * Examples:
+   * lists = data: [{{0,1}, {2,3}, {4,5}} validity: {true, false, true}]
+   * lists[1] is null, but the list's child column still stores `{2,3}`.
+   *
+   * After purging the contents of the list's null rows, the column's contents will be:
+   * lists = [data: {{0,1}, {4,5}} validity: {true, false, true}]
+   *
+   * @return A new column with equivalent contents to `input`, but with null rows purged
+   */
+  public ColumnVector purgeNonEmptyNulls() {
+    return new ColumnVector(purgeNonEmptyNulls(viewHandle));
+  }
+
+  static ColumnView[] getColumnViewsFromPointers(long[] nativeHandles) {
+    ColumnView[] columns = new ColumnView[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnView(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columns, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
       }
     }
   }

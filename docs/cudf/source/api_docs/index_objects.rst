@@ -23,6 +23,8 @@ Properties
 
    Index.empty
    Index.has_duplicates
+   Index.duplicated
+   Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
@@ -281,6 +283,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.tz_localize
 
 Conversion
 ~~~~~~~~~~

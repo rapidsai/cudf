@@ -143,9 +143,48 @@ struct TrueDiv {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct FloorDiv {
+  template <typename OutT                                                         = TypeOut,
+            typename LhsT                                                         = TypeLhs,
+            typename RhsT                                                         = TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<LhsT, RhsT>> and
+                              std::is_signed_v<std::common_type_t<LhsT, RhsT>>)>* = nullptr>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(floor(static_cast<double>(lhs) / static_cast<double>(rhs)));
+    if ((lhs ^ rhs) >= 0) {
+      return lhs / rhs;
+    } else {
+      auto const quotient  = lhs / rhs;
+      auto const remainder = lhs % rhs;
+      return quotient - !!remainder;
+    }
+  }
+
+  template <typename OutT                                                          = TypeOut,
+            typename LhsT                                                          = TypeLhs,
+            typename RhsT                                                          = TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<LhsT, RhsT>> and
+                              !std::is_signed_v<std::common_type_t<LhsT, RhsT>>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return lhs / rhs;
+  }
+
+  template <typename OutT                                                              = TypeOut,
+            typename LhsT                                                              = TypeLhs,
+            typename RhsT                                                              = TypeRhs,
+            std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, float>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
+  }
+
+  template <typename OutT                                                               = TypeOut,
+            typename LhsT                                                               = TypeLhs,
+            typename RhsT                                                               = TypeRhs,
+            std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, double>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
   }
 };
 

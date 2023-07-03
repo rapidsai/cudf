@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -31,6 +32,42 @@
 
 namespace cudf {
 namespace detail {
+
+template <typename ColumnView>
+ColumnView slice(ColumnView const& input,
+                 size_type begin,
+                 size_type end,
+                 rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
+  CUDF_EXPECTS(end >= begin, "Invalid end of range.");
+  CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
+
+  std::vector<ColumnView> children{};
+  children.reserve(input.num_children());
+  for (size_type index = 0; index < input.num_children(); index++) {
+    children.emplace_back(input.child(index));
+  }
+
+  return ColumnView(
+    input.type(),
+    end - begin,
+    input.head(),
+    input.null_mask(),
+    input.null_count() ? cudf::detail::null_count(input.null_mask(), begin, end, stream) : 0,
+    input.offset() + begin,
+    children);
+}
+
+template column_view slice<column_view>(column_view const&,
+                                        size_type,
+                                        size_type,
+                                        rmm::cuda_stream_view);
+template mutable_column_view slice<mutable_column_view>(mutable_column_view const&,
+                                                        size_type,
+                                                        size_type,
+                                                        rmm::cuda_stream_view);
+
 std::vector<column_view> slice(column_view const& input,
                                host_span<size_type const> indices,
                                rmm::cuda_stream_view stream)

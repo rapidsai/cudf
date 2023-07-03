@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import os
 import socket
@@ -7,9 +7,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pyarrow.fs as pa_fs
-import pyarrow.orc
 import pytest
 from fsspec.core import get_fs_token_paths
 
@@ -61,9 +59,12 @@ def s3_base(endpoint_ip, endpoint_port):
     with ensure_safe_environment_variables():
         # Fake aws credentials exported to prevent botocore looking for
         # system aws credentials, https://github.com/spulec/moto/issues/1793
-        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
-        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
-        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
+        os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
+        os.environ["S3FS_LOGGING_LEVEL"] = "DEBUG"
+        os.environ["AWS_SECURITY_TOKEN"] = "foobar_security_token"
+        os.environ["AWS_SESSION_TOKEN"] = "foobar_session_token"
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
@@ -442,7 +443,7 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -465,7 +466,7 @@ def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -491,7 +492,7 @@ def test_write_orc(s3_base, s3so, pdf):
         assert s3fs.exists(f"s3://{bucket}/{fname}")
 
         with s3fs.open(f"s3://{bucket}/{fname}") as f:
-            got = pa.orc.ORCFile(f).read().to_pandas()
+            got = pd.read_orc(f)
 
     assert_eq(pdf, got)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ namespace {
  * Memory required is 13 bytes per code point values:
  * - 4 bytes each for `start_word_indices` and `end_word_indices`
  * - 4 bytes for each `token_ids`
- * - 1 byte for each each `tokens_per_word`
+ * - 1 byte for each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
  * @param[in] code_points A pointer to the code points in the strings after normalization.
@@ -397,7 +397,6 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
 }  // namespace
 
 wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                                         uint32_t max_rows_final_tensor,
                                          uint32_t max_sequence_length,
                                          uint32_t stride,
                                          bool do_truncate,
@@ -439,8 +438,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   uint32_t* device_strings_offsets = cps_and_offsets.second->data();
   uint32_t const num_strings       = cps_and_offsets.second->size() - 1;
 
-  const size_t four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
-  const size_t rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
+  size_t const four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
+  size_t const rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
   rmm::device_uvector<uint8_t> device_tokens_per_word(rounded_num_cps, stream);
   rmm::device_uvector<uint32_t> device_token_ids(num_code_points, stream);
   rmm::device_uvector<uint32_t> device_word_indices(2 * num_code_points, stream);
@@ -498,9 +497,12 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
 
-  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
-  detail::
-    kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  if (num_words > 0) {
+    cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
+    detail::kernel_wordpiece_tokenizer<<<grid.num_blocks,
+                                         grid.num_threads_per_block,
+                                         0,
+                                         stream.value()>>>(
       device_code_points,
       vocab_table.table->view().data<uint64_t>(),
       vocab_table.bin_coefficients->view().data<uint64_t>(),
@@ -515,16 +517,24 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       num_words,
       device_token_ids.data(),
       device_tokens_per_word.data());
-  CUDF_CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
+  }
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
-  thrust::copy_if(rmm::exec_policy(stream),
-                  device_token_ids.begin(),
-                  device_token_ids.end(),
-                  contiguous_token_ids,
-                  copy_if_fn{});
+  auto const copy_size           =  // thrust::copy_if limited to copying int-max values
+    std::min(device_token_ids.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()));
+  auto ids_itr       = device_token_ids.begin();
+  auto const ids_end = device_token_ids.end();
+  while (ids_itr != ids_end) {
+    auto const copy_end  = (static_cast<std::size_t>(std::distance(ids_itr, ids_end)) <= copy_size)
+                             ? ids_end
+                             : ids_itr + copy_size;
+    contiguous_token_ids = thrust::copy_if(
+      rmm::exec_policy(stream), ids_itr, copy_end, contiguous_token_ids, copy_if_fn{});
+    ids_itr = copy_end;
+  }
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;

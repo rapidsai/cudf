@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core._compat import PANDAS_GE_110
 from cudf.core.missing import NA
 
 
@@ -699,28 +698,17 @@ def assert_frame_equal(
         obj=f"{obj}.index",
     )
 
-    if PANDAS_GE_110:
-        pd.testing.assert_index_equal(
-            left._data.to_pandas_index(),
-            right._data.to_pandas_index(),
-            exact=check_column_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            rtol=rtol,
-            atol=atol,
-            obj=f"{obj}.columns",
-        )
-    else:
-        pd.testing.assert_index_equal(
-            left._data.to_pandas_index(),
-            right._data.to_pandas_index(),
-            exact=check_column_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            obj=f"{obj}.columns",
-        )
+    pd.testing.assert_index_equal(
+        left._data.to_pandas_index(),
+        right._data.to_pandas_index(),
+        exact=check_column_type,
+        check_names=check_names,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        rtol=rtol,
+        atol=atol,
+        obj=f"{obj}.columns",
+    )
 
     for col in left._column_names:
         assert_column_equal(

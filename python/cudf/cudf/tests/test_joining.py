@@ -1,17 +1,19 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+
+from itertools import combinations, product, repeat
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
@@ -467,7 +469,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     gdf_right = cudf.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
         with pytest.raises(
-            pd.core.reshape.merge.MergeError,
+            pd.errors.MergeError,
             match="No common columns to perform merge on",
         ):
             pdf_left.merge(pdf_right)
@@ -477,7 +479,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
             gdf_left.merge(gdf_right)
     elif not [value for value in pdf_left if value in pdf_right]:
         with pytest.raises(
-            pd.core.reshape.merge.MergeError,
+            pd.errors.MergeError,
             match="No common columns to perform merge on",
         ):
             pdf_left.merge(pdf_right)
@@ -542,11 +544,6 @@ def test_empty_joins(how, left_empty, right_empty):
     assert len(expected) == len(result)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_120,
-    reason="left_on/right_on produces undefined results with 0"
-    "index and is disabled",
-)
 def test_merge_left_index_zero():
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
     right = pd.DataFrame(
@@ -765,9 +762,9 @@ def test_merge_sort_on_indexes(kwargs):
         definitely_sorted.index.name = None
         assert_eq(gd_merge, definitely_sorted)
     elif left_index:
-        assert gd_merge["b"].is_monotonic
+        assert gd_merge["b"].is_monotonic_increasing
     elif right_index:
-        assert gd_merge["a"].is_monotonic
+        assert gd_merge["a"].is_monotonic_increasing
 
 
 @pytest.mark.parametrize(
@@ -1121,11 +1118,21 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
     lhs = cudf.DataFrame({"a": [1, 2, 3, 4, 5]}, dtype=dtype_l)
     rhs = cudf.DataFrame({"a": [1, 2, 3, 4, dtype_l_max + 1]}, dtype=dtype_r)
 
-    with pytest.warns(
+    p_lhs = lhs.to_pandas()
+    p_rhs = rhs.to_pandas()
+
+    with expect_warning_if(
+        (dtype_l.kind == "f" and dtype_r.kind in {"i", "u"})
+        or (dtype_l.kind in {"i", "u"} and dtype_r.kind == "f"),
         UserWarning,
-        match=(f"Can't safely cast column" f" from {dtype_r} to {dtype_l}"),
     ):
-        merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
+        expect = p_lhs.merge(p_rhs, on="a", how="left")
+    got = lhs.merge(rhs, on="a", how="left")
+
+    # The dtypes here won't match exactly because pandas does some unsafe
+    # conversions (with a warning that we are catching above) that we don't
+    # want to match.
+    assert_join_results_equal(expect, got, how="left", check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -2106,6 +2113,28 @@ def test_string_join_values_nulls():
     assert_join_results_equal(expect, got, how="left")
 
 
+@pytest.mark.parametrize(
+    "left_on,right_on",
+    [
+        *product(["a", "b", "c"], ["a", "b"]),
+        *zip(combinations(["a", "b", "c"], 2), repeat(["a", "b"])),
+    ],
+)
+def test_merge_mixed_index_columns(left_on, right_on):
+    left = pd.DataFrame({"a": [1, 2, 1, 2], "b": [2, 3, 3, 4]}).set_index("a")
+    right = pd.DataFrame({"a": [1, 2, 1, 3], "b": [2, 30, 3, 4]}).set_index(
+        "a"
+    )
+
+    left["c"] = 10
+
+    expect = left.merge(right, left_on=left_on, right_on=right_on, how="outer")
+    cleft = cudf.from_pandas(left)
+    cright = cudf.from_pandas(right)
+    got = cleft.merge(cright, left_on=left_on, right_on=right_on, how="outer")
+    assert_join_results_equal(expect, got, how="outer")
+
+
 def test_merge_multiindex_columns():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]})
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
@@ -2124,11 +2153,13 @@ def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
     rhs = pd.DataFrame(index=["a", "c", "d"])
-    expect = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        expect = lhs.join(rhs, how="inner")
 
     lhs = cudf.from_pandas(lhs)
     rhs = cudf.from_pandas(rhs)
-    got = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
 
@@ -2188,3 +2219,13 @@ def test_dataframe_join_on():
     df = cudf.DataFrame({"a": [1, 2, 3]})
     with pytest.raises(NotImplementedError):
         df.join(df, on="a")
+
+
+@pytest.mark.parametrize("how", ["inner", "outer"])
+def test_index_join_names(how):
+    idx1 = cudf.Index([10, 1, 2, 4, 2, 1], name="a")
+    idx2 = cudf.Index([-10, 2, 3, 1, 2], name="b")
+
+    expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
+    actual = idx1.join(idx2, how=how)
+    assert_join_results_equal(actual, expected, how=how)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -40,10 +41,10 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-rmm::device_buffer mask_scan(column_view const& input_view,
-                             scan_type inclusive,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
+                                                   scan_type inclusive,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
@@ -62,7 +63,7 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   set_null_mask(static_cast<bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
   set_null_mask(
     static_cast<bitmask_type*>(mask.data()), first_null_position, input_view.size(), false, stream);
-  return mask;
+  return {std::move(mask), input_view.size() - first_null_position};
 }
 
 namespace {
@@ -107,6 +108,7 @@ struct min_max_scan_operator {
 template <typename Op, typename T>
 struct scan_functor {
   static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        bitmask_type const*,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
@@ -125,27 +127,46 @@ struct scan_functor {
   }
 };
 
+struct null_iterator {
+  bitmask_type const* mask;
+  __device__ bool operator()(size_type idx) const { return !bit_is_set(mask, idx); }
+};
+
 template <typename Op>
 struct scan_functor<Op, cudf::string_view> {
   static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        bitmask_type const* mask,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
     auto d_input = column_device_view::create(input_view, stream);
 
     // build indices of the scan operation results
-    rmm::device_uvector<size_type> result(input_view.size(), stream);
+    rmm::device_uvector<size_type> result_map(input_view.size(), stream);
     thrust::inclusive_scan(
       rmm::exec_policy(stream),
       thrust::counting_iterator<size_type>(0),
       thrust::counting_iterator<size_type>(input_view.size()),
-      result.begin(),
+      result_map.begin(),
       min_max_scan_operator<cudf::string_view, Op>{*d_input, input_view.has_nulls()});
+
+    if (input_view.has_nulls()) {
+      // fill the null rows with out-of-bounds values so gather records them as null;
+      // this prevents un-sanitized null entries in the output
+      auto null_itr = detail::make_counting_transform_iterator(0, null_iterator{mask});
+      auto oob_val  = thrust::constant_iterator<size_type>(input_view.size());
+      thrust::scatter_if(rmm::exec_policy(stream),
+                         oob_val,
+                         oob_val + input_view.size(),
+                         thrust::counting_iterator<size_type>(0),
+                         null_itr,
+                         result_map.data());
+    }
 
     // call gather using the indices to build the output column
     auto result_table = cudf::detail::gather(cudf::table_view({input_view}),
-                                             result,
-                                             out_of_bounds_policy::DONT_CHECK,
+                                             result_map,
+                                             out_of_bounds_policy::NULLIFY,
                                              negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr);
@@ -156,6 +177,7 @@ struct scan_functor<Op, cudf::string_view> {
 template <typename Op>
 struct scan_functor<Op, cudf::struct_view> {
   static std::unique_ptr<column> invoke(column_view const& input,
+                                        bitmask_type const*,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
@@ -173,8 +195,8 @@ struct scan_functor<Op, cudf::struct_view> {
     // handle input in case it is a sliced view.
     auto const input_children = [&] {
       auto const it = cudf::detail::make_counting_transform_iterator(
-        0, [structs_view = structs_column_view{input}, stream](auto const child_idx) {
-          return structs_view.get_sliced_child(child_idx);
+        0, [structs_view = structs_column_view{input}, &stream](auto const child_idx) {
+          return structs_view.get_sliced_child(child_idx, stream);
         });
       return std::vector<column_view>(it, it + input.num_children());
     }();
@@ -189,12 +211,8 @@ struct scan_functor<Op, cudf::struct_view> {
                               ->release();
 
     // Don't need to set a null mask because that will be handled at the caller.
-    return make_structs_column(input.size(),
-                               std::move(scanned_children),
-                               UNKNOWN_NULL_COUNT,
-                               rmm::device_buffer{0, stream, mr},
-                               stream,
-                               mr);
+    return make_structs_column(
+      input.size(), std::move(scanned_children), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
   }
 };
 
@@ -230,11 +248,11 @@ struct scan_dispatcher {
    */
   template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     null_policy,
+                                     bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return scan_functor<Op, T>::invoke(input, stream, mr);
+    return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
   }
 
   template <typename T, typename... Args>
@@ -246,28 +264,44 @@ struct scan_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<column> scan_inclusive(
-  column_view const& input,
-  scan_aggregation const& agg,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scan_inclusive(column_view const& input,
+                                       scan_aggregation const& agg,
+                                       null_policy null_handling,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
-  auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
+  auto [mask, null_count] = [&] {
+    if (null_handling == null_policy::EXCLUDE) {
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream, mr)), input.null_count());
+    } else if (input.nullable()) {
+      return mask_scan(input, scan_type::INCLUSIVE, stream, mr);
+    }
+    return std::make_pair(rmm::device_buffer{}, size_type{0});
+  }();
 
-  if (null_handling == null_policy::EXCLUDE) {
-    output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
-  } else if (input.nullable()) {
-    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
-  }
+  auto output = scan_agg_dispatch<scan_dispatcher>(
+    input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
+  output->set_null_mask(mask, null_count);
 
   // If the input is a structs column, we also need to push down nulls from the parent output column
   // into the children columns.
   if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
-    for (size_type idx = 0; idx < output->num_children(); ++idx) {
-      structs::detail::superimpose_parent_nulls(
-        output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
-    }
+    auto const num_rows   = output->size();
+    auto const null_count = output->null_count();
+    auto content          = output->release();
+
+    // Build new children columns.
+    auto const null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    std::for_each(content.children.begin(),
+                  content.children.end(),
+                  [null_mask, null_count, stream, mr](auto& child) {
+                    child = structs::detail::superimpose_nulls(
+                      null_mask, null_count, std::move(child), stream, mr);
+                  });
+
+    // Replace the children columns.
+    output = cudf::make_structs_column(
+      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 
   return output;

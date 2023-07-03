@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@
 // This will make the code looks cleaner
 constexpr auto NULL_VAL = 0;
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IsIntegerBasicCheck)
 {
@@ -83,7 +82,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckNoNull)
 
 TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
 {
-  std::vector<const char*> const h_strings{
+  std::vector<char const*> const h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
   auto const strings = cudf::test::strings_column_wrapper(
     h_strings.begin(),
@@ -186,7 +185,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
 
 TEST_F(StringsConvertTest, ToInteger)
 {
-  std::vector<const char*> h_strings{"eee",
+  std::vector<char const*> h_strings{"eee",
                                      "1234",
                                      nullptr,
                                      "",
@@ -242,7 +241,7 @@ TEST_F(StringsConvertTest, FromInteger)
   int32_t minint = std::numeric_limits<int32_t>::min();
   int32_t maxint = std::numeric_limits<int32_t>::max();
   std::vector<int32_t> h_integers{100, 987654321, 0, 0, -12761, 0, 5, -4, maxint, minint};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100", "987654321", nullptr, "0", "-12761", "0", "5", "-4", "2147483647", "-2147483648"};
 
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
@@ -286,8 +285,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
 }
 
 template <typename T>
-class StringsIntegerConvertTest : public StringsConvertTest {
-};
+class StringsIntegerConvertTest : public StringsConvertTest {};
 
 TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
@@ -297,14 +295,15 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto d_integers = cudf::detail::make_device_uvector_sync(h_integers, cudf::get_default_stream());
-  auto integers   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+  auto d_integers = cudf::detail::make_device_uvector_sync(
+    h_integers, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
   CUDF_CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
                            d_integers.data(),
                            d_integers.size() * sizeof(TypeParam),
-                           cudaMemcpyDeviceToDevice));
+                           cudaMemcpyDefault));
   integers_view.set_null_count(0);
 
   // convert to strings
@@ -328,8 +327,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 
 //
 template <typename T>
-class StringsFloatConvertTest : public StringsConvertTest {
-};
+class StringsFloatConvertTest : public StringsConvertTest {};
 
 using FloatTypes = cudf::test::Types<float, double>;
 TYPED_TEST_SUITE(StringsFloatConvertTest, FloatTypes);
@@ -346,7 +344,7 @@ TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 
 TEST_F(StringsConvertTest, HexToInteger)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -391,7 +389,7 @@ TEST_F(StringsConvertTest, HexToInteger)
 
 TEST_F(StringsConvertTest, IsHex)
 {
-  std::vector<const char*> h_strings{"",
+  std::vector<char const*> h_strings{"",
                                      "1234",
                                      nullptr,
                                      "98BEEF",

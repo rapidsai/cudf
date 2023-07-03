@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,8 @@ std::unique_ptr<column> get_values_for_impl(maps_column_view const &maps_view,
   CUDF_EXPECTS(lookup_keys.type().id() == keys_.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
   auto key_indices =
-      lists::detail::index_of(keys_, lookup_keys, lists::duplicate_find_option::FIND_LAST, stream);
+      lists::detail::index_of(keys_, lookup_keys, lists::duplicate_find_option::FIND_LAST, stream,
+                              rmm::mr::get_current_device_resource());
   auto constexpr absent_offset = size_type{-1};
   auto constexpr nullity_offset = std::numeric_limits<size_type>::min();
   thrust::replace(rmm::exec_policy(stream), key_indices->mutable_view().template begin<size_type>(),
@@ -86,7 +87,8 @@ std::unique_ptr<column> contains_impl(maps_column_view const &maps_view, KeyT co
   auto const keys = maps_view.keys();
   CUDF_EXPECTS(lookup_keys.type().id() == keys.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
-  auto const contains = lists::detail::contains(keys, lookup_keys, stream);
+  auto const contains =
+      lists::detail::contains(keys, lookup_keys, stream, rmm::mr::get_current_device_resource());
   // Replace nulls with BOOL8{false};
   auto const scalar_false = numeric_scalar<bool>{false, true, stream};
   return detail::replace_nulls(contains->view(), scalar_false, stream, mr);

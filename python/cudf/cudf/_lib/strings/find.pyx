@@ -1,7 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -18,6 +20,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def contains(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -41,6 +44,7 @@ def contains(Column source_strings, object py_target):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def contains_multiple(Column source_strings, Column target_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -59,6 +63,7 @@ def contains_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def endswith(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -83,6 +88,7 @@ def endswith(Column source_strings, object py_target):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def endswith_multiple(Column source_strings, Column target_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -102,6 +108,7 @@ def endswith_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def startswith(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -126,6 +133,7 @@ def startswith(Column source_strings, object py_target):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def startswith_multiple(Column source_strings, Column target_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -145,6 +153,7 @@ def startswith_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def find(Column source_strings,
          object py_target,
          size_type start,
@@ -176,6 +185,7 @@ def find(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def rfind(Column source_strings,
           object py_target,
           size_type start,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 """
 isort: skip_file
@@ -23,6 +23,7 @@ from cudf.core.column.column import (
     serialize_columns,
 )
 from cudf.core.column.datetime import DatetimeColumn  # noqa: F401
+from cudf.core.column.datetime import DatetimeTZColumn  # noqa: F401
 from cudf.core.column.lists import ListColumn  # noqa: F401
 from cudf.core.column.numerical import NumericalColumn  # noqa: F401
 from cudf.core.column.string import StringColumn  # noqa: F401

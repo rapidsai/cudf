@@ -1,17 +1,22 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib.transform import one_hot_encode
+from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
+from cudf.api.extensions import no_default
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.utils.dtypes import min_unsigned_type
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -234,6 +239,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("All objects passed were None")
 
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
+        raise ValueError(
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
+        )
+
     # Return for single object
     if len(objs) == 1:
         obj = objs[0]
@@ -249,7 +260,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # in the data that are not in `columns`, so we have to rename
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
-            elif axis == 0:
+            else:
                 if isinstance(obj, cudf.Series):
                     result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
@@ -273,9 +284,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 if isinstance(obj, cudf.Series) and obj.name is None:
                     # If the Series has no name, pandas renames it to 0.
                     data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(data)
+                result = cudf.DataFrame._from_data(
+                    data, index=obj.index.copy(deep=True)
+                )
 
-        return result.sort_index(axis=axis) if sort else result
+        if isinstance(result, cudf.Series) and axis == 0:
+            # sort has no effect for series concatted along axis 0
+            return result
+        else:
+            return result.sort_index(axis=(1 - axis)) if sort else result
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
@@ -294,12 +311,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
-
-    axis = _AXIS_MAP.get(axis, None)
-    if axis is None:
-        raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
-        )
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
@@ -525,7 +536,8 @@ def melt(
             )
     else:
         # then all remaining columns in frame
-        value_vars = list(set(frame._column_names) - set(id_vars))
+        unique_id = set(id_vars)
+        value_vars = [c for c in frame._column_names if c not in unique_id]
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
@@ -565,11 +577,9 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [
-        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-        for i in range(len(value_vars))
-    ]
-    temp = cudf.Series._concat(objs=var_cols, index=None)
+    nval = len(value_vars)
+    dtype = min_unsigned_type(nval)
+    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
@@ -577,9 +587,7 @@ def melt(
     mdata[var_name] = cudf.Series(
         cudf.core.column.build_categorical_column(
             categories=value_vars,
-            codes=cudf.core.column.as_column(
-                temp._column.base_data, dtype=temp._column.dtype
-            ),
+            codes=temp._column,
             mask=temp._column.base_mask,
             size=temp._column.size,
             offset=temp._column.offset,
@@ -604,7 +612,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype="uint8",
+    dtype=no_default,
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -694,6 +702,15 @@ def get_dummies(
 
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
+
+    if dtype is no_default:
+        warnings.warn(
+            "Default `dtype` value will be changed to 'bool' in a future "
+            "release, please update `dtype='bool'` to adapt for "
+            "future behavior.",
+            FutureWarning,
+        )
+        dtype = "uint8"
 
     if isinstance(df, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
@@ -1122,7 +1139,7 @@ def _get_unique(column, dummy_na):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
-        unique = column.unique()
+        unique = column.unique().sort_values()
     if not dummy_na:
         if np.issubdtype(unique.dtype, np.floating):
             unique = unique.nans_to_nulls()
@@ -1148,10 +1165,11 @@ def _one_hot_encode_column(
         else:
             column = column._get_decategorized_column()
 
-    if column.size * categories.size >= np.iinfo("int32").max:
+    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            "np.iinfo('int32').max. Consider reducing size of category"
+            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            "size of category"
         )
     data = one_hot_encode(column, categories)
 

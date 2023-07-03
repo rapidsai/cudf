@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -74,6 +74,7 @@ cdef extern from "cudf/io/types.hpp" \
         column_in_metadata& set_decimal_precision(uint8_t precision)
         column_in_metadata& child(size_type i)
         column_in_metadata& set_output_as_binary(bool binary)
+        string get_name()
 
     cdef cppclass table_input_metadata:
         table_input_metadata() except +

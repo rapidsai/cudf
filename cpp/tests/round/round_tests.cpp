@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,20 +23,16 @@
 
 #include <limits>
 
-struct RoundTests : public cudf::test::BaseFixture {
-};
+struct RoundTests : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsFixedPointTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsFixedPointTypes : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {
-};
+struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {};
 
 using IntegerTypes = cudf::test::Types<int16_t, int32_t, int64_t>;
 

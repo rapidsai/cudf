@@ -1,13 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy
+from typing_extensions import Self
 
 import rmm
 
@@ -15,13 +16,32 @@ import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
-T = TypeVar("T", bound="Buffer")
+
+def host_memory_allocation(nbytes: int) -> memoryview:
+    """Allocate host memory using NumPy
+
+    This is an alternative to `bytearray` to avoid memory initialization cost.
+    A `bytearray` is zero-initialized using `calloc`, which we don't need.
+    Additionally, `numpy.empty` both skips the zero-initialization and uses
+    hugepages when available <https://github.com/numpy/numpy/pull/14216>.
+
+    Parameters
+    ----------
+    nbytes : int
+        Size of the new host allocation in bytes.
+
+    Return
+    ------
+    memoryview
+        The new host allocation.
+    """
+    return numpy.empty((nbytes,), dtype="u1").data
 
 
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: object = None,
+    owner: Optional[object] = None,
     readonly=False,
     typestr="|u1",
     version=0,
@@ -87,7 +107,7 @@ class Buffer(Serializable):
         )
 
     @classmethod
-    def _from_device_memory(cls: Type[T], data: Any) -> T:
+    def _from_device_memory(cls, data: Any) -> Self:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -118,7 +138,7 @@ class Buffer(Serializable):
         return ret
 
     @classmethod
-    def _from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls, data: Any) -> Self:
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -155,7 +175,9 @@ class Buffer(Serializable):
         """
         return self._from_device_memory(
             cuda_array_interface_wrapper(
-                ptr=self.ptr + offset, size=size, owner=self.owner
+                ptr=self.get_ptr(mode="read") + offset,
+                size=size,
+                owner=self.owner,
             )
         )
 
@@ -171,6 +193,28 @@ class Buffer(Serializable):
             raise ValueError("slice must be C-contiguous")
         return self._getitem(offset=start, size=stop - start)
 
+    def copy(self, deep: bool = True):
+        """
+        Return a copy of Buffer.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, returns a deep copy of the underlying Buffer data.
+            If False, returns a shallow copy of the Buffer pointing to
+            the same underlying data.
+
+        Returns
+        -------
+        Buffer
+        """
+        if deep:
+            return self._from_device_memory(
+                rmm.DeviceBuffer(ptr=self.get_ptr(mode="read"), size=self.size)
+            )
+        else:
+            return self[:]
+
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
@@ -182,11 +226,6 @@ class Buffer(Serializable):
         return self._size
 
     @property
-    def ptr(self) -> int:
-        """Device pointer to the start of the buffer."""
-        return self._ptr
-
-    @property
     def owner(self) -> Any:
         """Object owning the memory of the buffer."""
         return self._owner
@@ -194,18 +233,61 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
+        return self._get_cuda_array_interface(readonly=False)
+
+    def _get_cuda_array_interface(self, readonly=False):
+        """Helper function to create a CUDA Array Interface.
+
+        Parameters
+        ----------
+        readonly : bool, default False
+            If True, returns a CUDA Array Interface with
+            readonly flag set to True.
+            If False, returns a CUDA Array Interface with
+            readonly flag set to False.
+
+        Returns
+        -------
+        dict
+        """
         return {
-            "data": (self.ptr, False),
+            "data": (
+                self.get_ptr(mode="read" if readonly else "write"),
+                readonly,
+            ),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
 
+    def get_ptr(self, *, mode) -> int:
+        """Device pointer to the start of the buffer.
+
+        Parameters
+        ----------
+        mode : str
+            Supported values are {"read", "write"}
+            If "write", the data pointed to may be modified
+            by the caller. If "read", the data pointed to
+            must not be modified by the caller.
+            Failure to fulfill this contract will cause
+            incorrect behavior.
+
+
+        See Also
+        --------
+        SpillableBuffer.get_ptr
+        CopyOnWriteBuffer.get_ptr
+        """
+        return self._ptr
+
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
-        host_buf = bytearray(self.size)
-        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, host_buf)
+        host_buf = host_memory_allocation(self.size)
+        rmm._lib.device_buffer.copy_ptr_to_host(
+            self.get_ptr(mode="read"), host_buf
+        )
         return memoryview(host_buf).toreadonly()
 
     def serialize(self) -> Tuple[dict, list]:
@@ -227,7 +309,7 @@ class Buffer(Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls: Type[T], header: dict, frames: list) -> T:
+    def deserialize(cls, header: dict, frames: list) -> Self:
         """Create an Buffer from a serialized representation.
 
         Parameters

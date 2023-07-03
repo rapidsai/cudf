@@ -6,12 +6,13 @@
 10min
 pandas-comparison
 data-types
-io
+io/index
 missing-data
 groupby
 guide-to-udfs
 cupy-interop
-dask-cudf
 options
+performance-comparisons/index
 PandasCompat
+copy-on-write
 ```

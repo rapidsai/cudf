@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -11,11 +11,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_134
+from cudf.core._compat import PANDAS_GE_134
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -80,7 +81,6 @@ t a
     assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 
-@pytest.mark.skipif(not PANDAS_GE_110, reason="requires pandas>=1.1.0")
 def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
@@ -135,7 +135,6 @@ def test_categorical_compare_unordered():
         rfunc=operator.lt,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
 
@@ -181,7 +180,6 @@ def test_categorical_binary_add():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
 
@@ -259,7 +257,6 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["a"], pdf["b"]],),
         rfunc_args_and_kwargs=([df["a"], df["b"]],),
-        compare_error_message=False,
     )
 
     # lhs is numerical
@@ -268,7 +265,6 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["b"], pdf["a"]],),
         rfunc_args_and_kwargs=([df["b"], df["a"]],),
-        compare_error_message=False,
     )
 
 
@@ -375,8 +371,12 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
     assert cd_sr.cat.ordered is False
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
+    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
+    # inside as_ordered.
+    with pytest.warns(FutureWarning):
+        pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
+    with expect_warning_if(inplace, FutureWarning):
+        cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
@@ -395,8 +395,12 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
     assert cd_sr.cat.ordered is True
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
+    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
+    # inside as_unordered.
+    with pytest.warns(FutureWarning):
+        pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
+    with expect_warning_if(inplace, FutureWarning):
+        cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
@@ -438,10 +442,13 @@ def test_categorical_reorder_categories(
         "reorder_categories"
     ):
         pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
-    cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -474,10 +481,14 @@ def test_categorical_add_categories(pd_str_cat, inplace):
         "add_categories"
     ):
         pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
-    cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
+
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
 
     assert "d" in pd_sr_1.cat.categories.to_list()
     assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
@@ -511,10 +522,14 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
         "remove_categories"
     ):
         pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
-    cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
+
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
 
     assert "a" not in pd_sr_1.cat.categories.to_list()
     assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
@@ -524,13 +539,12 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     # test using ordered operators
     with _hide_deprecated_pandas_categorical_inplace_warnings(
         "remove_categories"
-    ):
+    ) as _, pytest.warns(FutureWarning) as _:
         assert_exceptions_equal(
             lfunc=cd_sr.to_pandas().cat.remove_categories,
             rfunc=cd_sr.cat.remove_categories,
             lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
             rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
-            expected_error_message="removals must all be in old categories",
         )
 
 
@@ -774,7 +788,6 @@ def test_add_categories_error(data, add):
         gds.cat.add_categories,
         ([add],),
         ([add],),
-        compare_error_message=False,
     )
 
 

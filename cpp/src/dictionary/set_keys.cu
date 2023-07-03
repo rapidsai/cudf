@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -181,7 +181,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
-  auto new_keys  = cudf::detail::concatenate(keys, stream);
+  auto new_keys  = cudf::detail::concatenate(keys, stream, rmm::mr::get_current_device_resource());
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
   std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {

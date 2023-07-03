@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,6 @@
 
 void bench_groupby_struct_keys(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;

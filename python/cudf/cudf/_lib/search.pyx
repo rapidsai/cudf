@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -13,6 +15,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport table_view_from_columns
 
 
+@acquire_spill_lock()
 def search_sorted(
     list source, list values, side, ascending=True, na_position="last"
 ):
@@ -73,6 +76,7 @@ def search_sorted(
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def contains(Column haystack, Column needles):
     """Check whether column contains multiple values
 

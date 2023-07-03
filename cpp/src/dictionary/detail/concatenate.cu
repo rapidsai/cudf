@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sorting.hpp>
@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -114,7 +115,8 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    return cudf::detail::make_device_uvector_sync(offsets, stream);
+    return cudf::detail::make_device_uvector_sync(
+      offsets, stream, rmm::mr::get_current_device_resource());
   }
 
  private:
@@ -214,12 +216,13 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   std::transform(columns.begin(), columns.end(), keys_views.begin(), [keys_type](auto cv) {
     auto dict_view = dictionary_column_view(cv);
     // empty column may not have keys so we create an empty column_view place-holder
-    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr};
+    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr, nullptr, 0};
     auto keys = dict_view.keys();
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, stream, rmm::mr::get_current_device_resource());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -242,7 +245,9 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
-    if (dict_view.is_empty()) return column_view{data_type{type_id::UINT32}, 0, nullptr};
+    if (dict_view.is_empty()) {
+      return column_view{data_type{type_id::UINT32}, 0, nullptr, nullptr, 0};
+    }
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
   auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
@@ -261,7 +266,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,
-    indices_itr + indices_size + 1,
+    indices_itr + indices_size,
     map_to_keys.begin(),
     [] __device__(auto const& lhs, auto const& rhs) { return lhs.second < rhs.second; });
 

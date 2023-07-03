@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.function.IntFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -68,6 +67,7 @@ import static ai.rapids.cudf.Table.removeNullMasksIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
@@ -126,6 +127,16 @@ public class TableTest extends CudfTestBase {
     }
     for (int i = 0 ; i < expectedTable.length ; i++) {
       assertTrue(expectedTable[i].isEmpty());
+    }
+  }
+
+  @Test
+  void testDistinctCount() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, null, null, 5)
+            .build()) {
+      assertEquals(3, table1.distinctCount());
+      assertEquals(4, table1.distinctCount(NullEquality.UNEQUAL));
     }
   }
 
@@ -244,7 +255,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testTableCreationIncreasesRefCount() {
+  void testTableCreationIncreasesRefCountWithDoubleFree() {
     //tests the Table increases the refcount on column vectors
     assertThrows(IllegalStateException.class, () -> {
       try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
@@ -335,18 +346,34 @@ public class TableTest extends CudfTestBase {
     JSONOptions opts = JSONOptions.builder()
         .withDayFirst(true)
         .build();
-    byte[] data = ("[false,A,1,2,05/03/2001]\n" +
-        "[true,B,2,3,31/10/2010]'\n" +
-        "[false,C,3,4,20/10/1994]\n" +
-        "[true,D,4,5,18/10/1990]").getBytes(StandardCharsets.UTF_8);
+    byte[] data = ("[false,A,1,2]\n" +
+        "[true,B,2,3]\n" +
+        "[false,C,3,4]\n" +
+        "[true,D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
         .column(false, true, false, true)
         .column("A", "B", "C", "D")
         .column(1L, 2L, 3L, 4L)
         .column(2L, 3L, 4L, 5L)
-        .timestampMillisecondsColumn(983750400000L, 1288483200000L, 782611200000L, 656208000000L)
         .build();
          Table table = Table.readJSON(Schema.INFERRED, opts, data)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONSubColumns() {
+    // JSON file has 2 columns, here only read 1 column
+    Schema schema = Schema.builder()
+        .column(DType.INT32, "age")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(null, 30, 19)
+        .build();
+         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -363,7 +390,7 @@ public class TableTest extends CudfTestBase {
     JSONOptions opts = JSONOptions.builder()
         .build();
     byte[] data = ("[A,1,2]\n" +
-        "[B,2,3]'\n" +
+        "[B,2,3]\n" +
         "[C,3,4]\n" +
         "[D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
@@ -389,7 +416,7 @@ public class TableTest extends CudfTestBase {
         .build();
     int bytesToIgnore = 8;
     byte[] data = ("[A,1,2]\n" +
-        "[B,2,3]'\n" +
+        "[B,2,3]\n" +
         "[C,3,4]\n" +
         "[D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
@@ -574,6 +601,218 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader,
+                                      String trueValue, String falseValue) throws IOException {
+    File outputFile = File.createTempFile("testWriteCSVToFile", ".csv");
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+              .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
+              .column(false, true, false, true, false, true, false, true, false, true)
+              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", "grey")
+              .build()) {
+      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("i")
+                                         .includeColumn("f")
+                                         .includeColumn("b")
+                                         .includeColumn("str")
+                                         .hasHeader(includeHeader)
+                                         .withDelim(fieldDelim)
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
+        assertTablesAreEqual(inputTable, readTable);
+      }
+    } finally {
+      outputFile.delete();
+    }
+  }
+
+  @Test
+  void testWriteCSVToFile() throws IOException {
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testWriteCSVToFileImpl(',', INCLUDE_HEADER, "true", "false");
+    testWriteCSVToFileImpl(',', NO_HEADER, "TRUE", "FALSE");
+    testWriteCSVToFileImpl('\u0001', INCLUDE_HEADER, "T", "F");
+    testWriteCSVToFileImpl('\u0001', NO_HEADER, "True", "False");
+  }
+
+  private void testWriteUnquotedCSVToFileImpl(char fieldDelim) throws IOException {
+    File outputFile = File.createTempFile("testWriteUnquotedCSVToFile", ".csv");
+    Schema schema = Schema.builder()
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withQuoteStyle(QuoteStyle.NONE)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
+                      "and\nthe\nsky\nis\ngrey")
+              .build()) {
+      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim(fieldDelim)
+                                         .withQuoteStyle(QuoteStyle.NONE)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
+           Table expected = new Table.TestBuilder()
+             .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
+             .build()) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    } finally {
+      outputFile.delete();
+    }
+  }
+
+  @Test
+  void testWriteUnquotedCSVToFile() throws IOException {
+    testWriteUnquotedCSVToFileImpl(',');
+    testWriteUnquotedCSVToFileImpl('\u0001');
+  }
+
+  private void testChunkedCSVWriterUnquotedImpl(char fieldDelim) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withQuoteStyle(QuoteStyle.NONE)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
+                      "and\nthe\nsky\nis\ngrey")
+              .build();
+          MyBufferConsumer consumer = new MyBufferConsumer()) {
+
+      try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
+        writer.write(inputTable);
+        writer.write(inputTable);
+        writer.write(inputTable);
+      }
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim(fieldDelim)
+                                         .withNullValue("\\N")
+                                         .withQuoteStyle(QuoteStyle.NONE)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
+           Table section = new Table.TestBuilder()
+             .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
+             .build();
+           Table expected  = Table.concatenate(section, section, section)) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    }
+  }
+
+  @Test
+  void testChunkedCSVWriterUnquoted() throws IOException {
+    testChunkedCSVWriterUnquotedImpl(',');
+    testChunkedCSVWriterUnquotedImpl('\u0001');
+  }
+
+  private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader,
+                                        String trueValue, String falseValue) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, null)
+              .column(0.0, 1.0, 2.0, 3.0, 4.0, null, 6.0, 7.0, 8.0, 9.0)
+              .column(false, true, null, true, false, true, null, true, false, true)
+              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", null)
+              .build();
+          MyBufferConsumer consumer = new MyBufferConsumer()) {
+
+      try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
+        writer.write(inputTable);
+        writer.write(inputTable);
+        writer.write(inputTable);
+      }
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("i")
+                                         .includeColumn("f")
+                                         .includeColumn("b")
+                                         .includeColumn("str")
+                                         .hasHeader(includeHeader)
+                                         .withDelim(fieldDelim)
+                                         .withNullValue("\\N")
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
+           Table expected  = Table.concatenate(inputTable, inputTable, inputTable)) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    }
+  }
+
+  @Test
+  void testChunkedCSVWriter() throws IOException {
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testChunkedCSVWriterImpl(',', NO_HEADER, "true", "false");
+    testChunkedCSVWriterImpl(',', INCLUDE_HEADER, "TRUE", "FALSE");
+    testChunkedCSVWriterImpl('\u0001', NO_HEADER, "T", "F");
+    testChunkedCSVWriterImpl('\u0001', INCLUDE_HEADER, "True", "False");
+  }
+
   @Test
   void testReadParquet() {
     ParquetOptions opts = ParquetOptions.builder()
@@ -722,6 +961,23 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testChunkedReadParquet() {
+    try (ParquetChunkedReader reader = new ParquetChunkedReader(240000,
+        TEST_PARQUET_FILE_CHUNKED_READ)) {
+      int numChunks = 0;
+      long totalRows = 0;
+      while(reader.hasNext()) {
+        ++numChunks;
+        try(Table chunk = reader.readChunk()) {
+          totalRows += chunk.getRowCount();
+        }
+      }
+      assertEquals(2, numChunks);
+      assertEquals(40000, totalRows);
     }
   }
 
@@ -2855,6 +3111,58 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testChunkedPackBasic() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .column(50, 52, 54, 56, 58, 60, 62, 64, 66, null)
+        .decimal32Column(-3, 10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .decimal64Column(-8, 50L, 52L, 54L, 56L, 58L, 60L, 62L, 64L, 66L, null)
+        .build();
+        DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(10L*1024*1024);
+        ChunkedPack cp = t1.makeChunkedPack(10L*1024*1024);
+        PackedColumnMetadata meta = cp.buildMetadata()) {
+
+      // unpack to bounce buffer
+      assertEquals(true, cp.hasNext());
+      assertEquals(cp.getTotalContiguousSize(), cp.next(bounceBuffer));
+      assertEquals(false, cp.hasNext());
+
+      try (Table unpacked = Table.fromPackedTable(meta.getMetadataDirectBuffer(), bounceBuffer)) {
+        assertTablesAreEqual(t1, unpacked);
+      }
+    }
+  }
+
+  @Test
+  void testChunkedPackTwoPasses() {
+    // this test packes ~2MB worth of long into a 1MB bounce buffer
+    // this is 3 iterations because of the validity buffer
+    Long[] longs = new Long[256*1024];
+    try (Table t1 = new Table.TestBuilder().column(longs).build();
+         DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(1L*1024*1024);
+         ChunkedPack cp = t1.makeChunkedPack(1L*1024*1024);
+         PackedColumnMetadata meta = cp.buildMetadata();
+         DeviceMemoryBuffer target = DeviceMemoryBuffer.allocate(cp.getTotalContiguousSize())) {
+      long offset = 0;
+
+      // unpack to bounce buffer
+      assertEquals(true, cp.hasNext());
+      while (cp.hasNext()) {
+        long copied = cp.next(bounceBuffer);
+        target.copyFromDeviceBufferAsync(
+          offset, target, 0, copied, Cuda.DEFAULT_STREAM);
+        offset += copied;
+      }
+
+      assertEquals(offset, cp.getTotalContiguousSize());
+
+      try (Table unpacked = Table.fromPackedTable(meta.getMetadataDirectBuffer(), target)) {
+        assertTablesAreEqual(t1, unpacked);
+      }
+    }
+  }
+
+  @Test
   void testContiguousSplitWithStrings() {
     ContiguousTable[] splits = null;
     try (Table t1 = new Table.TestBuilder()
@@ -2879,6 +3187,30 @@ public class TableTest extends CudfTestBase {
         for (int i = 0; i < splits.length; i++) {
           splits[i].close();
         }
+      }
+    }
+  }
+
+  @Test
+  void testContiguousSplitWithStringsChunked() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .column(50, 52, 54, 56, 58, 60, 62, 64, 66, null)
+        .column("A", "B", "C", "D", "E", "F", "G", "H", "I", "J")
+        .decimal32Column(-3, 10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .decimal64Column(-8, 50L, 52L, 54L, 56L, 58L, 60L, 62L, 64L, 66L, null)
+        .build();
+        DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(2L*1024*1024);
+        ChunkedPack cp = t1.makeChunkedPack(2L*1024*1024);
+        PackedColumnMetadata meta = cp.buildMetadata()) {
+
+      // unpack to bounce buffer
+      assertEquals(true, cp.hasNext());
+      assertEquals(cp.getTotalContiguousSize(), cp.next(bounceBuffer));
+      assertEquals(false, cp.hasNext());
+
+      try (Table unpacked = Table.fromPackedTable(meta.getMetadataDirectBuffer(), bounceBuffer)) {
+        assertTablesAreEqual(t1, unpacked);
       }
     }
   }
@@ -3304,7 +3636,7 @@ public class TableTest extends CudfTestBase {
           try (Table found = JCudfSerialization.readAndConcat(
               headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
               buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, true, false);
           }
         } finally {
           for (HostMemoryBuffer buff: buffers) {
@@ -3400,7 +3732,7 @@ public class TableTest extends CudfTestBase {
         try (Table result = JCudfSerialization.readAndConcat(
             new JCudfSerialization.SerializedTableHeader[] {header, header},
             new HostMemoryBuffer[] {buff, buff})) {
-          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false, false);
+          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, true, false);
         }
       }
     }
@@ -3441,7 +3773,7 @@ public class TableTest extends CudfTestBase {
               buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), true, false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
@@ -5397,6 +5729,58 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingWithStringOrderByColumn() {
+    final String X = null;
+    final int orderIndex = 3; // Index of order-by column.
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(0, 0, 0, 0, 0, 0,  1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(7, 5, 1, 9, 7, 9,  8, 2, 8, 0, 6, 6, 8) // Agg Column
+            .column("0", "1", "2", "3", "4", "5", X, X, "1", "2", "4", "5", "7") // String orderBy Key
+            .build()) {
+      try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(3, true));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(2);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        try (WindowOptions unboundedPrecedingAndFollowing = WindowOptions.builder()
+                     .minPeriods(1)
+                     .unboundedPreceding()
+                     .unboundedFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build();
+             WindowOptions unboundedPrecedingAndCurrentRow = WindowOptions.builder()
+                     .minPeriods(1)
+                     .unboundedPreceding()
+                     .currentRowFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build();
+             WindowOptions currentRowAndUnboundedFollowing = WindowOptions.builder()
+                     .minPeriods(1)
+                     .currentRowPreceding()
+                     .unboundedFollowing()
+                     .orderByColumnIndex(orderIndex)
+                     .build()) {
+
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverRanges(
+                          RollingAggregation.count().onColumn(2).overWindow(unboundedPrecedingAndFollowing),
+                          RollingAggregation.count().onColumn(2).overWindow(unboundedPrecedingAndCurrentRow),
+                          RollingAggregation.count().onColumn(2).overWindow(currentRowAndUnboundedFollowing));
+               ColumnVector expect_0 = ColumnVector.fromBoxedInts(6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7);
+               ColumnVector expect_1 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 2, 2, 3, 4, 5, 6, 7);
+               ColumnVector expect_2 = ColumnVector.fromBoxedInts(6, 5, 4, 3, 2, 1, 7, 7, 5, 4, 3, 2, 1)) {
+
+            assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expect_1, windowAggResults.getColumn(1));
+            assertColumnsAreEqual(expect_2, windowAggResults.getColumn(2));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testRangeWindowingCountUnboundedASCWithNullsFirst() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1) // GBY Key
@@ -5774,7 +6158,7 @@ public class TableTest extends CudfTestBase {
 
   /**
    * Helper to get scalar for preceding == Decimal(value),
-   * with data width depending upon the the order-by
+   * with data width depending upon the order-by
    * column index:
    *   orderby_col_idx = 2 -> Decimal32
    *   orderby_col_idx = 3 -> Decimal64
@@ -5872,6 +6256,106 @@ public class TableTest extends CudfTestBase {
                                                                                               .onColumn(5)
                                                                                               .overWindow(window));
                 ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Helper to get scalar for preceding == Decimal(value),
+   * with data width depending upon the order-by column index:
+   *   orderby_col_idx = 2 -> FLOAT32
+   *   orderby_col_idx = 3 -> FLOAT64
+   */
+  private static Scalar getFloatingPointScalarRangeBounds(float value, int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromFloat(value);
+      case 3: return Scalar.fromDouble(Double.valueOf(value));
+      default:
+        throw new IllegalStateException("Unexpected order by column index: "
+                + orderby_col_idx);
+    }
+  }
+
+  @Test
+  void testRangeWindowsWithFloatOrderBy() {
+    try (Table unsorted = new Table.TestBuilder()
+            .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+            .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+            .column(400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f,
+                    400f, 300f, 200f, 100f) // Float OBY Key
+            .column(400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0,
+                    400.0, 300.0, 200.0, 100.0) // Double OBY Key
+            .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
+            .build()) {
+
+      // Columns 2-3 are order-by columns of type FLOAT32 and FLOAT64 respectively, with similarly ordered values.
+      // In the following loop, each float type is tested as the order-by column,
+      // producing the same results with similar range bounds.
+      for (int float_oby_col_idx = 2; float_oby_col_idx <= 3; ++float_oby_col_idx) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0),
+                OrderByArg.asc(1),
+                OrderByArg.asc(float_oby_col_idx));
+             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(4);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Test Window functionality with range window (200 PRECEDING and 100 FOLLOWING)
+          try (Scalar preceding200 = getFloatingPointScalarRangeBounds(200, float_oby_col_idx);
+               Scalar following100 = getFloatingPointScalarRangeBounds(100, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .window(preceding200, following100)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 4, 3, 2, 3, 4, 3, 2, 3, 4, 3)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and CURRENT ROW)
+          try (Scalar current_row = getFloatingPointScalarRangeBounds(0, float_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                       .minPeriods(1)
+                       .unboundedPreceding()
+                       .following(current_row)
+                       .orderByColumnIndex(float_oby_col_idx)
+                       .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING)
+          try (WindowOptions window = WindowOptions.builder()
+                  .minPeriods(1)
+                  .unboundedPreceding()
+                  .unboundedFollowing()
+                  .orderByColumnIndex(float_oby_col_idx)
+                  .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                    .aggregateWindowsOverRanges(RollingAggregation.count()
+                            .onColumn(4)
+                            .overWindow(window));
+                 ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
               assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
             }
           }
@@ -7594,16 +8078,34 @@ public class TableTest extends CudfTestBase {
     columns.add(Columns.STRUCT.name);
     WriteUtils.buildWriterOptions(optBuilder, columns);
     ParquetWriterOptions options = optBuilder.build();
+    ParquetWriterOptions optionsNoCompress = optBuilder.withCompressionType(CompressionType.NONE).build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertNotEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertNotEquals(Double.NaN, statistics.compressionRatio);
       }
       try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+      try (TableWriter writer = Table.writeParquetChunked(optionsNoCompress, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertEquals(Double.NaN, statistics.compressionRatio);
       }
     }
   }
@@ -7963,14 +8465,32 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(builder, selectedColumns);
       ORCWriterOptions opts = builder.build();
+      ORCWriterOptions optsNoCompress = builder.withCompressionType(CompressionType.NONE).build();
       try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertNotEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertNotEquals(Double.NaN, statistics.compressionRatio);
       }
       try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+      try (TableWriter writer = Table.writeORCChunked(optsNoCompress, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+
+        TableWriter.WriteStatistics statistics = writer.getWriteStatistics();
+        assertEquals(0, statistics.numCompressedBytes);
+        assertEquals(0, statistics.numFailedBytes);
+        assertEquals(0, statistics.numSkippedBytes);
+        assertEquals(Double.NaN, statistics.compressionRatio);
       }
     }
   }

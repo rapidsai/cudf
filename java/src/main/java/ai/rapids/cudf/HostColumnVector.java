@@ -1010,14 +1010,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * incrementing the row counts. Please call this method before appending any value or null.
      */
     private void growFixedWidthBuffersAndRows() {
-      assert rows + 1 <= Integer.MAX_VALUE : "Row count cannot go over Integer.MAX_VALUE";
-      rows++;
+      growFixedWidthBuffersAndRows(1);
+    }
+
+    /**
+     * A method automatically grows data buffer for fixed-width columns for a given size as needed
+     * along with incrementing the row counts. Please call this method before appending
+     * multiple values or nulls.
+     */
+    private void growFixedWidthBuffersAndRows(int numRows) {
+      assert rows + numRows <= Integer.MAX_VALUE : "Row count cannot go over Integer.MAX_VALUE";
+      rows += numRows;
 
       if (data == null) {
-        data = HostMemoryBuffer.allocate(estimatedRows << bitShiftBySize);
-        rowCapacity = estimatedRows;
+        long neededSize = Math.max(rows, estimatedRows);
+        data = HostMemoryBuffer.allocate(neededSize << bitShiftBySize);
+        rowCapacity = neededSize;
       } else if (rows > rowCapacity) {
-        long newCap = Math.min(rowCapacity * 2, Integer.MAX_VALUE - 1);
+        long neededSize = Math.max(rows, rowCapacity * 2);
+        long newCap = Math.min(neededSize, Integer.MAX_VALUE - 1);
         data = copyBuffer(HostMemoryBuffer.allocate(newCap << bitShiftBySize), data);
         rowCapacity = newCap;
       }
@@ -1345,6 +1356,41 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     /**
+     * Append multiple non-null byte values.
+     */
+    public ColumnBuilder append(byte[] value, int srcOffset, int length) {
+      assert type.isBackedByByte();
+      assert srcOffset >= 0;
+      assert length >= 0;
+      assert length + srcOffset <= value.length;
+
+      if (length > 0) {
+        growFixedWidthBuffersAndRows(length);
+        assert currentIndex < rows;
+        data.setBytes(currentIndex, value, srcOffset, length);
+      }
+      currentIndex += length;
+      return this;
+    }
+
+    /**
+     * Appends byte to a LIST of INT8/UINT8
+     */
+    public ColumnBuilder appendByteList(byte[] value) {
+      return appendByteList(value, 0, value.length);
+    }
+
+    /**
+     * Appends bytes to a LIST of INT8/UINT8
+     */
+    public ColumnBuilder appendByteList(byte[] value, int srcOffset, int length) {
+      assert value != null : "appendNull must be used to append null bytes";
+      assert type.equals(DType.LIST) : " type " + type + " is not LIST";
+      getChild(0).append(value, srcOffset, length);
+      return endList();
+    }
+
+    /**
      * Accepts a byte array containing the two's-complement representation of the unscaled value, which
      * is in big-endian byte-order. Then, transforms it into the representation of cuDF Decimal128 for
      * appending.
@@ -1404,7 +1450,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       return "ColumnBuilder{" +
           "type=" + type +
-          ", children=" + sj.toString() +
+          ", children=" + sj +
           ", data=" + data +
           ", valid=" + valid +
           ", currentIndex=" + currentIndex +
@@ -1613,7 +1659,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert value != null : "appendNull must be used to append null strings";
       assert offset >= 0;
       assert length >= 0;
-      assert value.length + offset <= length;
+      assert length + offset <= value.length;
       assert type.equals(DType.STRING);
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer

@@ -1,11 +1,11 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150, PANDAS_LE_122
+from cudf.core._compat import PANDAS_GE_150
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -20,10 +20,6 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
     assert_eq(df, gdf)
 
 
-@pytest.mark.xfail(
-    condition=PANDAS_GE_120 and PANDAS_LE_122,
-    reason="https://github.com/pandas-dev/pandas/issues/40204",
-)
 def test_dataframe_setitem_scaler_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
     df[[True, False, True]] = pd.DataFrame({"a": [-1, -2]})
@@ -108,6 +104,16 @@ def test_series_set_item(psr, arg):
     assert_eq(psr, gsr)
 
 
+def test_series_setitem_singleton_range():
+    sr = cudf.Series([1, 2, 3], dtype=np.int64)
+    psr = sr.to_pandas()
+    value = np.asarray([7], dtype=np.int64)
+    sr.iloc[:1] = value
+    psr.iloc[:1] = value
+    assert_eq(sr, cudf.Series([7, 2, 3], dtype=np.int64))
+    assert_eq(sr, psr, check_dtype=True)
+
+
 @pytest.mark.parametrize(
     "df",
     [
@@ -147,7 +153,6 @@ def test_setitem_dataframe_series_inplace(df):
     ],
 )
 def test_series_set_equal_length_object_by_mask(replace_data):
-
     psr = pd.Series([1, 2, 3, 4, 5], dtype="Int64")
     gsr = cudf.from_pandas(psr)
 
@@ -205,7 +210,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_1], {}),
         ([mask, replace_data_1], {}),
-        compare_error_message=False,
     )
 
     psr = pd.Series(data)
@@ -215,7 +219,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_2], {}),
         ([mask, replace_data_2], {}),
-        compare_error_message=False,
     )
 
 
@@ -229,9 +232,6 @@ def test_categorical_setitem_invalid():
             rfunc=gs.__setitem__,
             lfunc_args_and_kwargs=([0, 5], {}),
             rfunc_args_and_kwargs=([0, 5], {}),
-            compare_error_message=False,
-            expected_error_message="Cannot setitem on a Categorical with a "
-            "new category, set the categories first",
         )
     else:
         # Following workaround is needed because:
@@ -342,3 +342,124 @@ def test_series_setitem_upcasting_string_value():
     assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
     with pytest.raises(ValueError):
         sr[0] = "non-integer"
+
+
+def test_scatter_by_slice_with_start_and_step():
+    source = pd.Series([1, 2, 3, 4, 5])
+    csource = cudf.from_pandas(source)
+    target = pd.Series([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    ctarget = cudf.from_pandas(target)
+    target[1::2] = source
+    ctarget[1::2] = csource
+    assert_eq(target, ctarget)
+
+
+@pytest.mark.parametrize("n", [1, 3])
+def test_setitem_str_trailing_null(n):
+    trailing_nulls = "\x00" * n
+    s = cudf.Series(["a", "b", "c" + trailing_nulls])
+    assert s[2] == "c" + trailing_nulls
+    s[0] = "a" + trailing_nulls
+    assert s[0] == "a" + trailing_nulls
+    s[1] = trailing_nulls
+    assert s[1] == trailing_nulls
+    s[0] = ""
+    assert s[0] == ""
+    s[0] = "\x00"
+    assert s[0] == "\x00"
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/7448")
+def test_iloc_setitem_7448():
+    index = pd.MultiIndex.from_product([(1, 2), (3, 4)])
+    expect = cudf.Series([1, 2, 3, 4], index=index)
+    actual = cudf.from_pandas(expect)
+    expect[(1, 3)] = 101
+    actual[(1, 3)] = 101
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "7",
+        pytest.param(
+            ["7", "8"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11298"
+            ),
+        ),
+    ],
+)
+def test_loc_setitem_string_11298(value):
+    df = pd.DataFrame({"a": ["a", "b", "c"]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[:1, "a"] = value
+
+    cdf.loc[:1, "a"] = value
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11944")
+def test_loc_setitem_list_11944():
+    df = pd.DataFrame(
+        data={"a": ["yes", "no"], "b": [["l1", "l2"], ["c", "d"]]}
+    )
+    cdf = cudf.from_pandas(df)
+    df.loc[df.a == "yes", "b"] = [["hello"]]
+    cdf.loc[df.a == "yes", "b"] = [["hello"]]
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12504")
+def test_loc_setitem_extend_empty_12504():
+    df = pd.DataFrame(columns=["a"])
+    cdf = cudf.from_pandas(df)
+
+    df.loc[0] = [1]
+
+    cdf.loc[0] = [1]
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12505")
+def test_loc_setitem_extend_existing_12505():
+    df = pd.DataFrame({"a": [0]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[1] = 1
+
+    cdf.loc[1] = 1
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12801")
+def test_loc_setitem_add_column_partial_12801():
+    df = pd.DataFrame({"a": [0, 1, 2]})
+    cdf = cudf.from_pandas(df)
+
+    df.loc[df.a < 2, "b"] = 1
+
+    cdf.loc[cdf.a < 2, "b"] = 1
+
+    assert_eq(df, cdf)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13031")
+@pytest.mark.parametrize("other_index", [["1", "3", "2"], [1, 2, 3]])
+def test_loc_setitem_series_index_alignment_13031(other_index):
+    s = pd.Series([1, 2, 3], index=["1", "2", "3"])
+    other = pd.Series([5, 6, 7], index=other_index)
+
+    cs = cudf.from_pandas(s)
+    cother = cudf.from_pandas(other)
+
+    s.loc[["1", "3"]] = other
+
+    cs.loc[["1", "3"]] = cother
+
+    assert_eq(s, cs)

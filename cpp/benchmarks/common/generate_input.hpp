@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,8 +184,7 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_vi
 
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
-struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
-};
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {};
 
 /**
  * @brief Returns a vector of types, corresponding to the input type or a type group.
@@ -373,13 +372,13 @@ class data_profile {
 
   void set_bool_probability_true(double p)
   {
-    CUDF_EXPECTS(p >= 0. and p <= 1., "probablity must be in range [0...1]");
+    CUDF_EXPECTS(p >= 0. and p <= 1., "probability must be in range [0...1]");
     bool_probability_true = p;
   }
   void set_null_probability(std::optional<double> p)
   {
     CUDF_EXPECTS(p.value_or(0.) >= 0. and p.value_or(0.) <= 1.,
-                 "probablity must be in range [0...1]");
+                 "probability must be in range [0...1]");
     null_probability = p;
   }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
@@ -430,7 +429,7 @@ class data_profile {
  * initialization. The `profile` object in the example above is initialized from
  * `data_profile_builder` using an implicit conversion operator.
  *
- * The builder API also includes a few additional convinience setters:
+ * The builder API also includes a few additional convenience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
  * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
  */
@@ -667,6 +666,21 @@ std::unique_ptr<cudf::table> create_sequence_table(
  */
 std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                         cudf::size_type num_cols);
+
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ *
+ * @param dtype_ids Pair of requested column types
+ * @param num_cols Total number of columns in the output vector
+ * @param first_num Total number of columns of type `dtype_ids.first`
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num);
 /**
  * @brief Create a random null mask object
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "parquet_gpu.hpp"
+
+#include "parquet_gpu.cuh"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -44,6 +45,8 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
+
+namespace {
 // Spark doesn't support RLE encoding for BOOLEANs
 #ifdef ENABLE_BOOL_RLE
 constexpr bool enable_bool_rle = true;
@@ -94,7 +97,7 @@ struct page_enc_state_s {
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-uint32_t __device__ physical_type_len(Type physical_type, type_id id)
+constexpr uint32_t physical_type_len(Type physical_type, type_id id)
 {
   if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
     return sizeof(__int128_t);
@@ -108,132 +111,190 @@ uint32_t __device__ physical_type_len(Type physical_type, type_id id)
   }
 }
 
-// blockDim {512,1,1}
-template <int block_size>
-__global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments(device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> part_frag_offset,
-                       uint32_t fragment_size)
+constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
 {
-  __shared__ __align__(16) frag_init_state_s state_g;
+  if (value_bit_width == 0) return 0;
 
+  // Run length = 4, max(rle/bitpack header) = 5. bitpacking worst case is one byte every 8 values
+  // (because bitpacked runs are a multiple of 8). Don't need to round up the last term since that
+  // overhead is accounted for in the '5'.
+  // TODO: this formula does not take into account the data for RLE runs. The worst realistic case
+  // is repeated runs of 8 bitpacked, 2 RLE values. In this case, the formula would be
+  //   0.8 * (num_values * bw / 8 + num_values / 8) + 0.2 * (num_values / 2 * (1 + (bw+7)/8))
+  // for bw < 8 the above value will be larger than below, but in testing it seems like for low
+  // bitwidths it's hard to get the pathological 8:2 split.
+  // If the encoder starts printing the data corruption warning, then this will need to be
+  // revisited.
+  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 8);
+}
+
+// subtract b from a, but return 0 if this would underflow
+constexpr size_t underflow_safe_subtract(size_t a, size_t b)
+{
+  if (b > a) { return 0; }
+  return a - b;
+}
+
+void __device__ init_frag_state(frag_init_state_s* const s,
+                                uint32_t fragment_size,
+                                int part_end_row)
+{
+  // frag.num_rows = fragment_size except for the last fragment in partition which can be
+  // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
+  // nested.
+  s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
+  s->frag.num_dict_vals      = 0;
+  s->frag.fragment_data_size = 0;
+  s->frag.dict_data_size     = 0;
+
+  s->frag.start_value_idx  = row_to_value_idx(s->frag.start_row, s->col);
+  auto const end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
+  s->frag.num_leaf_values  = end_value_idx - s->frag.start_value_idx;
+
+  if (s->col.level_offsets != nullptr) {
+    // For nested schemas, the number of values in a fragment is not directly related to the
+    // number of encoded data elements or the number of rows.  It is simply the number of
+    // repetition/definition values which together encode validity and nesting information.
+    auto const first_level_val_idx = s->col.level_offsets[s->frag.start_row];
+    auto const last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
+    s->frag.num_values             = last_level_val_idx - first_level_val_idx;
+  } else {
+    s->frag.num_values = s->frag.num_rows;
+  }
+}
+
+template <int block_size>
+void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
+{
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
+  auto const physical_type   = s->col.physical_type;
+  auto const leaf_type       = s->col.leaf_column->type().id();
+  auto const dtype_len       = physical_type_len(physical_type, leaf_type);
+  auto const nvals           = s->frag.num_leaf_values;
+  auto const start_value_idx = s->frag.start_value_idx;
+
+  for (uint32_t i = 0; i < nvals; i += block_size) {
+    auto const val_idx  = start_value_idx + i + t;
+    auto const is_valid = i + t < nvals && val_idx < s->col.leaf_column->size() &&
+                          s->col.leaf_column->is_valid(val_idx);
+    uint32_t len;
+    if (is_valid) {
+      len = dtype_len;
+      if (physical_type == BYTE_ARRAY) {
+        switch (leaf_type) {
+          case type_id::STRING: {
+            auto str = s->col.leaf_column->element<string_view>(val_idx);
+            len += str.size_bytes();
+          } break;
+          case type_id::LIST: {
+            auto list_element =
+              get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx);
+            len += list_element.size_bytes();
+          } break;
+          default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
+        }
+      }
+    } else {
+      len = 0;
+    }
+
+    len = block_reduce(reduce_storage).Sum(len);
+    if (t == 0) { s->frag.fragment_data_size += len; }
+    __syncthreads();
+    // page fragment size must fit in a 32-bit signed integer
+    if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
+      CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
+    }
+  }
+}
+
+}  // anonymous namespace
+
+// blockDim {512,1,1}
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  gpuInitRowGroupFragments(device_2dspan<PageFragment> frag,
+                           device_span<parquet_column_device_view const> col_desc,
+                           device_span<partition_info const> partitions,
+                           device_span<int const> part_frag_offset,
+                           uint32_t fragment_size)
+{
+  __shared__ __align__(16) frag_init_state_s state_g;
+
   frag_init_state_s* const s              = &state_g;
   uint32_t const t                        = threadIdx.x;
-  auto const physical_type                = col_desc[blockIdx.x].physical_type;
   uint32_t const num_fragments_per_column = frag.size().second;
 
   if (t == 0) { s->col = col_desc[blockIdx.x]; }
   __syncthreads();
-
-  auto const leaf_type = s->col.leaf_column->type().id();
-  auto const dtype_len = physical_type_len(physical_type, leaf_type);
 
   for (uint32_t frag_y = blockIdx.y; frag_y < num_fragments_per_column; frag_y += gridDim.y) {
     if (t == 0) {
       // Find which partition this fragment came from
       auto it =
         thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
-      int p             = it - part_frag_offset.begin() - 1;
-      int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
+      int const p            = it - part_frag_offset.begin() - 1;
+      int const part_end_row = partitions[p].start_row + partitions[p].num_rows;
       s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
-
-      // frag.num_rows = fragment_size except for the last fragment in partition which can be
-      // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
-      // nested.
-      s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
-      s->frag.num_dict_vals      = 0;
-      s->frag.fragment_data_size = 0;
-      s->frag.dict_data_size     = 0;
-
-      s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
-      size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
-      s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
-
-      if (s->col.level_offsets != nullptr) {
-        // For nested schemas, the number of values in a fragment is not directly related to the
-        // number of encoded data elements or the number of rows.  It is simply the number of
-        // repetition/definition values which together encode validity and nesting information.
-        size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
-        size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
-        s->frag.num_values            = last_level_val_idx - first_level_val_idx;
-      } else {
-        s->frag.num_values = s->frag.num_rows;
-      }
+      s->frag.chunk     = frag[blockIdx.x][frag_y].chunk;
+      init_frag_state(s, fragment_size, part_end_row);
     }
     __syncthreads();
 
-    size_type nvals           = s->frag.num_leaf_values;
-    size_type start_value_idx = s->frag.start_value_idx;
-
-    for (uint32_t i = 0; i < nvals; i += block_size) {
-      uint32_t val_idx  = start_value_idx + i + t;
-      uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
-                            ? s->col.leaf_column->is_valid(val_idx)
-                            : 0;
-      uint32_t len;
-      if (is_valid) {
-        len = dtype_len;
-        if (physical_type == BYTE_ARRAY) {
-          switch (leaf_type) {
-            case type_id::STRING: {
-              auto str = s->col.leaf_column->element<string_view>(val_idx);
-              len += str.size_bytes();
-            } break;
-            case type_id::LIST: {
-              auto list_element =
-                get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx);
-              len += list_element.size_bytes();
-            } break;
-            default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
-          }
-        }
-      } else {
-        len = 0;
-      }
-
-      len = block_reduce(reduce_storage).Sum(len);
-      if (t == 0) { s->frag.fragment_data_size += len; }
-      __syncthreads();
-    }
+    calculate_frag_size<block_size>(s, t);
     __syncthreads();
     if (t == 0) { frag[blockIdx.x][frag_y] = s->frag; }
   }
 }
 
-// blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
-  gpuInitFragmentStats(device_2dspan<statistics_group> groups,
-                       device_2dspan<PageFragment const> fragments,
-                       device_span<parquet_column_device_view const> col_desc)
+// blockDim {512,1,1}
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  gpuCalculatePageFragments(device_span<PageFragment> frag,
+                            device_span<size_type const> column_frag_sizes)
 {
-  uint32_t const lane_id                  = threadIdx.x & WARP_MASK;
-  uint32_t const column_id                = blockIdx.x;
-  uint32_t const num_fragments_per_column = fragments.size().second;
+  __shared__ __align__(16) frag_init_state_s state_g;
 
-  uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x / cudf::detail::warp_size);
-  while (frag_id < num_fragments_per_column) {
-    if (lane_id == 0) {
-      statistics_group g;
-      g.col                      = &col_desc[column_id];
-      g.start_row                = fragments[column_id][frag_id].start_value_idx;
-      g.num_rows                 = fragments[column_id][frag_id].num_leaf_values;
-      groups[column_id][frag_id] = g;
-    }
-    frag_id += gridDim.y * 4;
+  EncColumnChunk* const ck_g = frag[blockIdx.x].chunk;
+  frag_init_state_s* const s = &state_g;
+  uint32_t const t           = threadIdx.x;
+  auto const fragment_size   = column_frag_sizes[ck_g->col_desc_id];
+
+  if (t == 0) { s->col = *ck_g->col_desc; }
+  __syncthreads();
+
+  if (t == 0) {
+    int const part_end_row = ck_g->start_row + ck_g->num_rows;
+    s->frag.start_row      = ck_g->start_row + (blockIdx.x - ck_g->first_fragment) * fragment_size;
+    s->frag.chunk          = ck_g;
+    init_frag_state(s, fragment_size, part_end_row);
   }
+  __syncthreads();
+
+  calculate_frag_size<block_size>(s, t);
+  if (t == 0) { frag[blockIdx.x] = s->frag; }
 }
 
-constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
+// blockDim {128,1,1}
+__global__ void __launch_bounds__(128)
+  gpuInitFragmentStats(device_span<statistics_group> groups,
+                       device_span<PageFragment const> fragments)
 {
-  if (value_bit_width == 0) return 0;
-
-  // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
-  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 256);
+  uint32_t const lane_id = threadIdx.x & WARP_MASK;
+  uint32_t const frag_id = blockIdx.x * 4 + (threadIdx.x / cudf::detail::warp_size);
+  if (frag_id < fragments.size()) {
+    if (lane_id == 0) {
+      statistics_group g;
+      auto* const ck_g = fragments[frag_id].chunk;
+      g.col            = ck_g->col_desc;
+      g.start_row      = fragments[frag_id].start_value_idx;
+      g.num_rows       = fragments[frag_id].num_leaf_values;
+      g.non_leaf_nulls = fragments[frag_id].num_values - g.num_rows;
+      groups[frag_id]  = g;
+    }
+  }
 }
 
 // blockDim {128,1,1}
@@ -270,7 +331,7 @@ __global__ void __launch_bounds__(128)
     uint32_t rows_in_page        = 0;
     uint32_t values_in_page      = 0;
     uint32_t leaf_values_in_page = 0;
-    uint32_t page_size           = 0;
+    size_t page_size             = 0;
     uint32_t num_pages           = 0;
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
@@ -350,6 +411,12 @@ __global__ void __launch_bounds__(128)
         (ck_g.use_dictionary)
           ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
+
+      // page fragment size must fit in a 32-bit signed integer
+      if (fragment_data_size > std::numeric_limits<int32_t>::max()) {
+        CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
+      }
+
       // TODO (dm): this convoluted logic to limit page size needs refactoring
       size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
                                   : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
@@ -358,9 +425,16 @@ __global__ void __launch_bounds__(128)
       // override this_max_page_size if the requested size is smaller
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
+      // subtract size of rep and def level vectors
+      auto num_vals = values_in_page + frag_g.num_values;
+      this_max_page_size =
+        underflow_safe_subtract(this_max_page_size,
+                                max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+                                  max_RLE_page_size(col_g.num_rep_level_bits(), num_vals));
+
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
-          rows_in_page >= max_page_size_rows) {
+          rows_in_page + frag_g.num_rows > max_page_size_rows) {
         if (ck_g.use_dictionary) {
           // Additional byte to store entry bit width
           page_size = 1 + max_RLE_page_size(ck_g.dict_rle_bits, values_in_page);
@@ -392,8 +466,12 @@ __global__ void __launch_bounds__(128)
           page_g.num_values         = values_in_page;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
-          page_g.max_data_size      = page_size + def_level_size + rep_level_size;
-
+          auto const max_data_size  = page_size + def_level_size + rep_level_size;
+          // page size must fit in 32-bit signed integer
+          if (max_data_size > std::numeric_limits<int32_t>::max()) {
+            CUDF_UNREACHABLE("page size exceeds maximum for i32");
+          }
+          page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset +=
@@ -1233,6 +1311,9 @@ __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
     auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    if (actual_data_size > s->page.max_data_size) {
+      CUDF_UNREACHABLE("detected possible page data corruption");
+    }
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
@@ -1246,56 +1327,56 @@ __global__ void __launch_bounds__(128, 8)
   }
 }
 
-// blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColumnChunk> chunks)
-{
-  // After changing the way structs are loaded from coop to normal, this kernel has no business
-  // being launched with 128 thread block. It can easily be a single warp.
-  __shared__ __align__(8) EncColumnChunk ck_g;
-  __shared__ __align__(4) unsigned int error_count;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[2];
-  __shared__ volatile bool has_compression;
+constexpr int decide_compression_warps_in_block = 4;
+constexpr int decide_compression_block_size =
+  decide_compression_warps_in_block * cudf::detail::warp_size;
 
-  uint32_t t                      = threadIdx.x;
+// blockDim(decide_compression_block_size, 1, 1)
+__global__ void __launch_bounds__(decide_compression_block_size)
+  gpuDecideCompression(device_span<EncColumnChunk> chunks)
+{
+  __shared__ __align__(8) EncColumnChunk ck_g[decide_compression_warps_in_block];
+  __shared__ __align__(4) unsigned int compression_error[decide_compression_warps_in_block];
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[decide_compression_warps_in_block][2];
+
+  auto const lane_id  = threadIdx.x % cudf::detail::warp_size;
+  auto const warp_id  = threadIdx.x / cudf::detail::warp_size;
+  auto const chunk_id = blockIdx.x * decide_compression_warps_in_block + warp_id;
+
+  if (chunk_id >= chunks.size()) { return; }
+
+  if (lane_id == 0) {
+    ck_g[warp_id]              = chunks[chunk_id];
+    compression_error[warp_id] = 0;
+  }
+  __syncwarp();
+
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
-  uint32_t num_pages;
-
-  if (t == 0) {
-    ck_g = chunks[blockIdx.x];
-    atomicAnd(&error_count, 0);
-    has_compression = false;
-  }
-  __syncthreads();
-  if (t < 32) {
-    num_pages = ck_g.num_pages;
-    for (uint32_t page = t; page < num_pages; page += 32) {
-      auto& curr_page         = ck_g.pages[page];
-      uint32_t page_data_size = curr_page.max_data_size;
-      uncompressed_data_size += page_data_size;
-      if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
-        has_compression = true;
-        compressed_data_size += comp_res->bytes_written;
-        if (comp_res->status != compression_status::SUCCESS) { atomicAdd(&error_count, 1); }
+  auto const num_pages            = ck_g[warp_id].num_pages;
+  for (auto page_id = lane_id; page_id < num_pages; page_id += cudf::detail::warp_size) {
+    auto const& curr_page     = ck_g[warp_id].pages[page_id];
+    auto const page_data_size = curr_page.max_data_size;
+    uncompressed_data_size += page_data_size;
+    if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
+      compressed_data_size += comp_res->bytes_written;
+      if (comp_res->status != compression_status::SUCCESS) {
+        atomicOr(&compression_error[warp_id], 1);
       }
     }
-    uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
-    compressed_data_size   = warp_reduce(temp_storage[1]).Sum(compressed_data_size);
   }
-  __syncthreads();
-  if (t == 0) {
-    bool is_compressed;
-    if (has_compression) {
-      uint32_t compression_error = atomicAdd(&error_count, 0);
-      is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
-    } else {
-      is_compressed = false;
-    }
-    chunks[blockIdx.x].is_compressed = is_compressed;
-    chunks[blockIdx.x].bfr_size      = uncompressed_data_size;
-    chunks[blockIdx.x].compressed_size =
-      (is_compressed) ? compressed_data_size : uncompressed_data_size;
+  uncompressed_data_size = warp_reduce(temp_storage[warp_id][0]).Sum(uncompressed_data_size);
+  compressed_data_size   = warp_reduce(temp_storage[warp_id][1]).Sum(compressed_data_size);
+  __syncwarp();
+
+  if (lane_id == 0) {
+    auto const write_compressed = compressed_data_size != 0 and compression_error[warp_id] == 0 and
+                                  compressed_data_size < uncompressed_data_size;
+    chunks[chunk_id].is_compressed = write_compressed;
+    chunks[chunk_id].bfr_size      = uncompressed_data_size;
+    chunks[chunk_id].compressed_size =
+      write_compressed ? compressed_data_size : uncompressed_data_size;
   }
 }
 
@@ -1390,7 +1471,7 @@ class header_encoder {
     current_header_ptr = cpw_put_uint8(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
   }
 
-  inline __device__ void put_binary(const void* value, uint32_t length)
+  inline __device__ void put_binary(void const* value, uint32_t length)
   {
     current_header_ptr = cpw_put_uint32(current_header_ptr, length);
     memcpy(current_header_ptr, value, length);
@@ -1419,7 +1500,7 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void field_binary(int field, const void* value, uint32_t length)
+  inline __device__ void field_binary(int field, void const* value, uint32_t length)
   {
     current_header_ptr =
       cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
@@ -1431,7 +1512,7 @@ class header_encoder {
 
   inline __device__ void end(uint8_t** header_end, bool termination_flag = true)
   {
-    if (termination_flag == false) { *current_header_ptr++ = 0; }
+    if (not termination_flag) { *current_header_ptr++ = 0; }
     *header_end = current_header_ptr;
   }
 
@@ -1490,9 +1571,9 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
   // elem is one of (no 5 or 6 byte chars allowed):
   //  0b0vvvvvvv a 1 byte character
   //  0b10vvvvvv a continuation byte
-  //  0b110vvvvv start of a 2 byte characther
-  //  0b1110vvvv start of a 3 byte characther
-  //  0b11110vvv start of a 4 byte characther
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
 
   // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
   uint8_t mask  = 0xF8;
@@ -1526,10 +1607,10 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
+__device__ std::pair<void const*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
                                                           bool is_min,
                                                           void* scratch,
-                                                          size_type truncate_length)
+                                                          int32_t truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is data at [len]. work backwards until we find
@@ -1566,10 +1647,10 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+__device__ std::pair<void const*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
                                                             bool is_min,
                                                             void* scratch,
-                                                            size_type truncate_length)
+                                                            int32_t truncate_length)
 {
   if (is_min) { return {arr.data(), truncate_length}; }
   memcpy(scratch, arr.data(), truncate_length);
@@ -1593,10 +1674,10 @@ __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t 
 /**
  * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
  */
-__device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+__device__ std::pair<void const*, uint32_t> truncate_string(string_view const& str,
                                                             bool is_min,
                                                             void* scratch,
-                                                            size_type truncate_length)
+                                                            int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
     return {str.data(), str.size_bytes()};
@@ -1617,8 +1698,8 @@ __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& s
 /**
  * @brief Attempt to truncate a binary array to at most truncate_length bytes.
  */
-__device__ std::pair<const void*, uint32_t> truncate_byte_array(
-  const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
+__device__ std::pair<void const*, uint32_t> truncate_byte_array(
+  statistics::byte_array_view const& arr, bool is_min, void* scratch, int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
     return {arr.data(), arr.size_bytes()};
@@ -1638,11 +1719,11 @@ __device__ std::pair<const void*, uint32_t> truncate_byte_array(
  * valid min or max binary value.  String and byte array types will be truncated if they exceed
  * truncate_length.
  */
-__device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+__device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* stats_val,
                                                          statistics_dtype dtype,
                                                          void* scratch,
                                                          bool is_min,
-                                                         size_type truncate_length)
+                                                         int32_t truncate_length)
 {
   switch (dtype) {
     case dtype_bool: return {stats_val, sizeof(bool)};
@@ -1672,7 +1753,7 @@ __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* s
 }  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
-                                     const statistics_chunk* s,
+                                     statistics_chunk const* s,
                                      statistics_dtype dtype,
                                      void* scratch)
 {
@@ -1696,7 +1777,7 @@ __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk* chunk_stats)
+                       statistics_chunk const* chunk_stats)
 {
   // When this whole kernel becomes single thread, the following variables need not be __shared__
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1786,7 +1867,7 @@ __global__ void __launch_bounds__(1024)
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
-  const EncPage* first_page;
+  EncPage const* first_page;
   uint32_t num_pages, uncompressed_size;
 
   if (t == 0) ck_g = chunks[blockIdx.x];
@@ -1799,7 +1880,7 @@ __global__ void __launch_bounds__(1024)
   dst_base          = dst;
   uncompressed_size = ck_g.bfr_size;
   for (uint32_t page = 0; page < num_pages; page++) {
-    const uint8_t* src;
+    uint8_t const* src;
     uint32_t hdr_len, data_len;
 
     if (t == 0) { page_g = first_page[page]; }
@@ -1864,8 +1945,8 @@ constexpr __device__ int32_t compare(T& v1, T& v2)
  */
 __device__ int32_t compare_values(Type ptype,
                                   ConvertedType ctype,
-                                  const statistics_val& v1,
-                                  const statistics_val& v2)
+                                  statistics_val const& v1,
+                                  statistics_val const& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1893,7 +1974,7 @@ __device__ int32_t compare_values(Type ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-__device__ bool is_ascending(const statistics_chunk* s,
+__device__ bool is_ascending(statistics_chunk const* s,
                              Type ptype,
                              ConvertedType ctype,
                              uint32_t num_pages)
@@ -1910,7 +1991,7 @@ __device__ bool is_ascending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-__device__ bool is_descending(const statistics_chunk* s,
+__device__ bool is_descending(statistics_chunk const* s,
                               Type ptype,
                               ConvertedType ctype,
                               uint32_t num_pages)
@@ -1927,7 +2008,7 @@ __device__ bool is_descending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-__device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+__device__ int32_t calculate_boundary_order(statistics_chunk const* s,
                                             Type ptype,
                                             ConvertedType ctype,
                                             uint32_t num_pages)
@@ -1955,7 +2036,7 @@ constexpr __device__ void* align8(void* ptr)
 __global__ void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length)
+                         int32_t column_index_truncate_length)
 {
   __align__(8) unsigned char s_scratch[MIN_STATS_SCRATCH_SIZE];
   uint8_t* col_idx_end;
@@ -2024,33 +2105,35 @@ __global__ void __launch_bounds__(1)
   ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
 }
 
-void InitPageFragments(device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> part_frag_offset,
-                       uint32_t fragment_size,
-                       rmm::cuda_stream_view stream)
+void InitRowGroupFragments(device_2dspan<PageFragment> frag,
+                           device_span<parquet_column_device_view const> col_desc,
+                           device_span<partition_info const> partitions,
+                           device_span<int const> part_frag_offset,
+                           uint32_t fragment_size,
+                           rmm::cuda_stream_view stream)
 {
   auto const num_columns              = frag.size().first;
   auto const num_fragments_per_column = frag.size().second;
   auto const grid_y = std::min(static_cast<uint32_t>(num_fragments_per_column), MAX_GRID_Y_SIZE);
   dim3 const dim_grid(num_columns, grid_y);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
+  gpuInitRowGroupFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
 
-void InitFragmentStatistics(device_2dspan<statistics_group> groups,
-                            device_2dspan<PageFragment const> fragments,
-                            device_span<parquet_column_device_view const> col_desc,
+void CalculatePageFragments(device_span<PageFragment> frag,
+                            device_span<size_type const> column_frag_sizes,
                             rmm::cuda_stream_view stream)
 {
-  int const num_columns              = col_desc.size();
-  int const num_fragments_per_column = fragments.size().second;
-  auto const y_dim =
-    util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
-  auto const grid_y = std::min(static_cast<uint32_t>(y_dim), MAX_GRID_Y_SIZE);
-  dim3 const dim_grid(num_columns, grid_y);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
+  gpuCalculatePageFragments<512><<<frag.size(), 512, 0, stream.value()>>>(frag, column_frag_sizes);
+}
+
+void InitFragmentStatistics(device_span<statistics_group> groups,
+                            device_span<PageFragment const> fragments,
+                            rmm::cuda_stream_view stream)
+{
+  int const num_fragments = fragments.size();
+  int const dim = util::div_rounding_up_safe(num_fragments, 128 / cudf::detail::warp_size);
+  gpuInitFragmentStats<<<dim, 128, 0, stream.value()>>>(groups, fragments);
 }
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
@@ -2096,13 +2179,15 @@ void EncodePages(device_span<gpu::EncPage> pages,
 
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
+  auto const num_blocks =
+    util::div_rounding_up_safe<int>(chunks.size(), decide_compression_warps_in_block);
+  gpuDecideCompression<<<num_blocks, decide_compression_block_size, 0, stream.value()>>>(chunks);
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
-                       const statistics_chunk* chunk_stats,
+                       statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream)
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
@@ -2120,7 +2205,7 @@ void GatherPages(device_span<EncColumnChunk> chunks,
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length,
+                         int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream)
 {
   gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(

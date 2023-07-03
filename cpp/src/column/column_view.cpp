@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,16 +61,6 @@ column_view_base::column_view_base(data_type type,
   if ((null_count > 0) and (type.id() != type_id::EMPTY)) {
     CUDF_EXPECTS(nullptr != null_mask, "Invalid null mask for non-zero null count.");
   }
-}
-
-// If null count is known, returns it. Else, compute and return it
-size_type column_view_base::null_count() const
-{
-  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::detail::null_count(
-      null_mask(), offset(), offset() + size(), cudf::get_default_stream());
-  }
-  return _null_count;
 }
 
 size_type column_view_base::null_count(size_type begin, size_type end) const

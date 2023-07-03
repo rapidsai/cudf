@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@
 using TestingTypes = cudf::test::NumericTypes;
 
 template <typename T>
-struct NumericValueIteratorTest : public IteratorTest<T> {
-};
+struct NumericValueIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericValueIteratorTest, TestingTypes);
 TYPED_TEST(NumericValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }

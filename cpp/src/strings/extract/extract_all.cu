@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -57,32 +59,36 @@ struct extract_fn {
   {
     if (d_strings.is_null(idx)) { return; }
 
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+
     auto const groups    = d_prog.group_counts();
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const nchars = d_str.length();
+    auto itr = d_str.begin();
 
-    size_type begin = 0;
-    size_type end   = nchars;
-    // match the regex
-    while ((begin < end) && d_prog.find(prog_idx, d_str, begin, end) > 0) {
+    while (itr.position() < nchars) {
+      // first, match the regex
+      auto const match = d_prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+      itr += (match->first - itr.position());  // position to beginning of the match
+      auto last_pos = itr;
       // extract each group into the output
       for (auto group_idx = 0; group_idx < groups; ++group_idx) {
         // result is an optional containing the bounds of the extracted string at group_idx
-        auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, group_idx);
-
-        d_output[group_idx + output_idx] = [&] {
-          if (!extracted) { return string_index_pair{nullptr, 0}; }
-          auto const start_offset = d_str.byte_offset(extracted->first);
-          auto const end_offset   = d_str.byte_offset(extracted->second);
-          return string_index_pair{d_str.data() + start_offset, end_offset - start_offset};
-        }();
+        auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, group_idx);
+        if (extracted) {
+          auto const d_result = string_from_match(*extracted, d_str, last_pos);
+          d_output[group_idx + output_idx] =
+            string_index_pair{d_result.data(), d_result.size_bytes()};
+        } else {
+          d_output[group_idx + output_idx] = string_index_pair{nullptr, 0};
+        }
+        last_pos += (extracted->second - last_pos.position());
       }
-      // continue to next match
-      begin = end;
-      end   = nchars;
+      // point to the end of this match to start the next match
+      itr += (match->second - itr.position());
       output_idx += groups;
     }
   }
@@ -96,16 +102,16 @@ struct extract_fn {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_all_record(strings_column_view const& input,
-                                           std::string_view pattern,
-                                           regex_flags const flags,
+                                           regex_program const& prog,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
-  // Compile regex into device object.
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "extract_all requires group indicators in the regex pattern.");
@@ -121,13 +127,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
-                             make_empty_column(type_id::STRING),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
   }
 
   // Convert counts into offsets.
@@ -165,12 +165,11 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
-                                           std::string_view pattern,
-                                           regex_flags const flags,
+                                           regex_program const& prog,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, pattern, flags, cudf::get_default_stream(), mr);
+  return detail::extract_all_record(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

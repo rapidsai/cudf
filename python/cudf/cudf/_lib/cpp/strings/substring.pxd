@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
@@ -8,7 +8,7 @@ from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 from cudf._lib.cpp.types cimport size_type
 
 
-cdef extern from "cudf/strings/substring.hpp" namespace "cudf::strings" nogil:
+cdef extern from "cudf/strings/slice.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] slice_strings(
         column_view source_strings,
         numeric_scalar[size_type] start,

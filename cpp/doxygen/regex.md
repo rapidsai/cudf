@@ -79,11 +79,11 @@ The details are based on features documented at https://www.regular-expressions.
 | Feature  | Syntax | Description | Example |
 | ---------- | ------------- | ------------- | ------------- |
 | String anchor | `^` (caret) | Matches at the start of the string | `^.` matches `a` in `abcdef` |
-| String anchor | `$` (dollar) | Matches at the end of the string | `.$` matches `f` in `abcdef` |
-| Line anchor | `^` (caret) | Matches after each line break in addition to matching at the start of the string, thus matching at the start of each line in the string. The behavior of this anchor can be controlled by cudf::strings::regex_flags for some regex APIs. | `^.` matches `a` and `d` in `abc\ndef` |
-| Line anchor | `$` (dollar) | Matches before each line break in addition to matching at the end of the string, thus matching at the end of each line in the string. The behavior of this anchor can be controlled by cudf::strings::regex_flags for some regex APIs. | `.$` matches `c` and `f` in `abc\ndef`　|
+| Line anchor | `^` (caret) | When [cudf::strings::regex_flags::MULTILINE](@ref cudf::strings::regex_flags) is specified: Matches after each line break in addition to matching at the start of the string, thus matching at the start of each line in the string. | `^.` matches `a` and `d` in `abc\ndef` |
+| String anchor | `$` (dollar) | Matches at the end of the string as well as before the final line break in the string | `.$` matches `f` in `abcdef` and in `abcdef\n` |
+| Line anchor | `$` (dollar) | When [cudf::strings::regex_flags::MULTILINE](@ref cudf::strings::regex_flags) is specified: Matches before each line break in addition to matching at the end of the string, thus matching at the end of each line in the string. | `.$` matches `c` and `f` in `abc\ndef` and in `abc\ndef\n`　|
 | String anchor | `\A` | Matches at the start of the string | `\A\w` matches only `a` in `abc` |
-| String anchor | `\Z` | Matches at the end of the string | `\w\Z` matches `f` in `abc\ndef` but fails to match `abc\ndef\n` or `abc\ndef\n\n` |
+| String anchor | `\Z` | Matches at the end of the string | `\w\Z` matches `f` in `abc\ndef` but fails to match `abc\ndef\n` |
 
 ### Word Boundaries
 

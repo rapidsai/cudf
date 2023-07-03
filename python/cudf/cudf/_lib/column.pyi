@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Tuple, TypeVar
 
+from typing_extensions import Self
+
 from cudf._typing import Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
-
-T = TypeVar("T")
 
 class Column:
     _data: Optional[Buffer]
@@ -29,8 +29,8 @@ class Column:
         size: int,
         dtype: Dtype,
         mask: Optional[Buffer] = None,
-        offset: int = None,
-        null_count: int = None,
+        offset: Optional[int] = None,
+        null_count: Optional[int] = None,
         children: Tuple[ColumnBase, ...] = (),
     ) -> None: ...
     @property
@@ -42,8 +42,6 @@ class Column:
     @property
     def base_data(self) -> Optional[Buffer]: ...
     @property
-    def base_data_ptr(self) -> int: ...
-    @property
     def data(self) -> Optional[Buffer]: ...
     @property
     def data_ptr(self) -> int: ...
@@ -54,13 +52,11 @@ class Column:
     @property
     def base_mask(self) -> Optional[Buffer]: ...
     @property
-    def base_mask_ptr(self) -> int: ...
-    @property
     def mask(self) -> Optional[Buffer]: ...
     @property
     def mask_ptr(self) -> int: ...
     def set_base_mask(self, value: Optional[Buffer]) -> None: ...
-    def set_mask(self: T, value: Optional[Buffer]) -> T: ...
+    def set_mask(self, value: Optional[Buffer]) -> Self: ...
     @property
     def null_count(self) -> int: ...
     @property
@@ -72,7 +68,8 @@ class Column:
     def set_base_children(self, value: Tuple[ColumnBase, ...]) -> None: ...
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace=False
-    ) -> Optional[ColumnBase]: ...
+    ) -> Optional[Self]: ...
+
     # TODO: The val parameter should be Scalar, not ScalarLike
     @staticmethod
     def from_scalar(val: ScalarLike, size: int) -> ColumnBase: ...

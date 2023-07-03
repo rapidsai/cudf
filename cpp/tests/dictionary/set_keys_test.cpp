@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@
 
 #include <vector>
 
-struct DictionarySetKeysTest : public cudf::test::BaseFixture {
-};
+struct DictionarySetKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySetKeysTest, StringsKeys)
 {
@@ -37,7 +36,7 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
   cudf::test::strings_column_wrapper new_keys{"aaa", "ccc", "eee", "fff"};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),

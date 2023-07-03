@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <stdexcept>
 
 // reference:  https://jsonpath.herokuapp.com/
 
@@ -76,8 +78,7 @@ std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
   return cudf::strings::replace(strings, targets, replacements);
 }
 
-struct JsonPathTests : public cudf::test::BaseFixture {
-};
+struct JsonPathTests : public cudf::test::BaseFixture {};
 
 TEST_F(JsonPathTests, GetJsonObjectRootOp)
 {
@@ -482,7 +483,7 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyQuery)
 
 TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 {
-  // empty input -> null
+  // empty string input -> null
   {
     cudf::test::strings_column_wrapper input{""};
     std::string json_path("$");
@@ -505,6 +506,14 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
+}
+
+TEST_F(JsonPathTests, GetJsonObjectEmptyInput)
+{
+  cudf::test::strings_column_wrapper input{};
+  std::string json_path("$");
+  auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, input);
 }
 
 // badly formed JSONpath strings
@@ -558,7 +567,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 
   {
@@ -567,7 +576,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 
   {
@@ -576,7 +585,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     };
-    EXPECT_THROW(query(), cudf::logic_error);
+    EXPECT_THROW(query(), std::invalid_argument);
   }
 }
 

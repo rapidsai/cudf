@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,8 +61,7 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits,
                                     rmm::cuda_stream_view stream)
 {
-  std::vector<table_view> result{};
-  if (input.num_columns() == 0) { return result; }
+  if (input.num_columns() == 0) { return {}; }
   return split(input, input.column(0).size(), splits, stream);
 }
 

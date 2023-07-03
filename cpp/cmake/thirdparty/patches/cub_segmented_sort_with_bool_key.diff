@@ -1,0 +1,14 @@
+diff --git a/dependencies/cub/cub/agent/agent_sub_warp_merge_sort.cuh b/dependencies/cub/cub/agent/agent_sub_warp_merge_sort.cuh
+index ad65f2a3..ad45a21e 100644
+--- a/dependencies/cub/cub/agent/agent_sub_warp_merge_sort.cuh
++++ b/dependencies/cub/cub/agent/agent_sub_warp_merge_sort.cuh
+@@ -221,7 +221,8 @@ public:
+       using UnsignedBitsT = typename Traits<KeyT>::UnsignedBits;
+       UnsignedBitsT default_key_bits = IS_DESCENDING ? Traits<KeyT>::LOWEST_KEY
+                                                      : Traits<KeyT>::MAX_KEY;
+-      KeyT oob_default = reinterpret_cast<KeyT &>(default_key_bits);
++      KeyT oob_default = std::is_same_v<KeyT, bool> ? !IS_DESCENDING
++                                                   : reinterpret_cast<KeyT &>(default_key_bits);
+
+       WarpLoadKeysT(storage.load_keys)
+         .Load(keys_input, keys, segment_size, oob_default);

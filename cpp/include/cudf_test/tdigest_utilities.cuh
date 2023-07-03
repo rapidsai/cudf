@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,11 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
@@ -31,8 +34,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <rmm/exec_policy.hpp>
 
 // for use with groupby and reduction aggregation tests.
 
@@ -168,7 +169,8 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
   // verify min/max
   thrust::host_vector<device_span<T const>> h_spans;
   h_spans.push_back({input_values.begin<T>(), static_cast<size_t>(input_values.size())});
-  auto spans = cudf::detail::make_device_uvector_async(h_spans, cudf::get_default_stream());
+  auto spans = cudf::detail::make_device_uvector_async(
+    h_spans, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto expected_min = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
@@ -177,7 +179,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
                     spans.end(),
                     expected_min->mutable_view().template begin<double>(),
                     column_min<T>{});
-  column_view result_min(data_type{type_id::FLOAT64}, tdv.size(), tdv.min_begin());
+  column_view result_min(data_type{type_id::FLOAT64}, tdv.size(), tdv.min_begin(), nullptr, 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_min, *expected_min);
 
   auto expected_max = cudf::make_fixed_width_column(
@@ -187,7 +189,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
                     spans.end(),
                     expected_max->mutable_view().template begin<double>(),
                     column_max<T>{});
-  column_view result_max(data_type{type_id::FLOAT64}, tdv.size(), tdv.max_begin());
+  column_view result_max(data_type{type_id::FLOAT64}, tdv.size(), tdv.max_begin(), nullptr, 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_max, *expected_max);
 }
 
@@ -222,9 +224,9 @@ void tdigest_simple_aggregation(Func op)
   double const min = 1;
   double const max = 126;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -247,9 +249,9 @@ void tdigest_simple_with_nulls_aggregation(Func op)
   double const min = 1;
   double const max = 122;
   auto expected    = make_expected_tdigest_column({{*mean,
-                                                 weight,
-                                                 static_cast<double>(static_cast<T>(min)),
-                                                 static_cast<double>(static_cast<T>(max))}});
+                                                    weight,
+                                                    static_cast<double>(static_cast<T>(min)),
+                                                    static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -267,7 +269,8 @@ void tdigest_simple_all_nulls_aggregation(Func op)
     static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -558,9 +561,12 @@ template <typename MergeFunc>
 void tdigest_merge_empty(MergeFunc merge_op)
 {
   // 3 empty tdigests all in the same group
-  auto a = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
-  auto b = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
-  auto c = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
+  auto b = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
+  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream(),
+                                                            rmm::mr::get_current_device_resource());
   std::vector<column_view> cols;
   cols.push_back(*a);
   cols.push_back(*b);
@@ -570,7 +576,8 @@ void tdigest_merge_empty(MergeFunc merge_op)
   auto const delta = 1000;
   auto result      = merge_op(*values, delta);
 
-  auto expected = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(
+    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
 }

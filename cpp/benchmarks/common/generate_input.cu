@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -429,14 +430,19 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                    null_mask.begin());
   }
 
-  auto [result_bitmask, null_count] = cudf::detail::valid_if(
-    null_mask.begin(), null_mask.end(), thrust::identity<bool>{}, cudf::get_default_stream());
+  auto [result_bitmask, null_count] =
+    cudf::detail::valid_if(null_mask.begin(),
+                           null_mask.end(),
+                           thrust::identity<bool>{},
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
 
   return std::make_unique<cudf::column>(
     dtype,
     num_rows,
     data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    profile.get_null_probability().has_value() ? null_count : 0);
 }
 
 struct valid_or_zero {
@@ -501,20 +507,25 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
   thrust::exclusive_scan(
     thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
-  // offfsets are ready.
+  // offsets are ready.
   auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
                      thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
                      num_rows,
                      string_generator{chars.data(), engine});
-  auto [result_bitmask, null_count] = cudf::detail::valid_if(
-    null_mask.begin(), null_mask.end() - 1, thrust::identity<bool>{}, cudf::get_default_stream());
+  auto [result_bitmask, null_count] =
+    cudf::detail::valid_if(null_mask.begin(),
+                           null_mask.end() - 1,
+                           thrust::identity<bool>{},
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows,
     std::move(offsets),
     std::move(chars),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    null_count);
 }
 
 /**
@@ -542,7 +553,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                         sample_indices,
                                         cudf::out_of_bounds_policy::DONT_CHECK,
                                         cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                        cudf::get_default_stream());
+                                        cudf::get_default_stream(),
+                                        rmm::mr::get_current_device_resource());
   return std::move(str_table->release()[0]);
 }
 
@@ -626,8 +638,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       auto [null_mask, null_count] = [&]() {
         if (profile.get_null_probability().has_value()) {
           auto valids = valid_dist(engine, num_rows);
-          return cudf::detail::valid_if(
-            valids.begin(), valids.end(), thrust::identity<bool>{}, cudf::get_default_stream());
+          return cudf::detail::valid_if(valids.begin(),
+                                        valids.end(),
+                                        thrust::identity<bool>{},
+                                        cudf::get_default_stream(),
+                                        rmm::mr::get_current_device_resource());
         }
         return std::pair<rmm::device_buffer, cudf::size_type>{};
       }();
@@ -707,16 +722,22 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    auto offsets_column = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
+    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                         num_rows + 1,
+                                                         offsets.release(),
+                                                         rmm::device_buffer{},
+                                                         0);
 
-    auto [null_mask, null_count] = cudf::detail::valid_if(
-      valids.begin(), valids.end(), thrust::identity<bool>{}, cudf::get_default_stream());
-    list_column = cudf::make_lists_column(
+    auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
+                                                          valids.end(),
+                                                          thrust::identity<bool>{},
+                                                          cudf::get_default_stream(),
+                                                          rmm::mr::get_current_device_resource());
+    list_column                  = cudf::make_lists_column(
       num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
-      profile.get_null_probability().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
   }
   return list_column;  // return the top-level column
@@ -761,6 +782,25 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)
     out_dtypes.push_back(dtype_ids[col % dtype_ids.size()]);
+  return out_dtypes;
+}
+
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  for (cudf::size_type col = 0; col < first_num; ++col)
+    out_dtypes.push_back(dtype_ids.first);
+  for (cudf::size_type col = first_num; col < num_cols; ++col)
+    out_dtypes.push_back(dtype_ids.second);
   return out_dtypes;
 }
 
@@ -838,7 +878,8 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
                                   bool_generator{seed, 1.0 - *null_probability},
-                                  cudf::get_default_stream());
+                                  cudf::get_default_stream(),
+                                  rmm::mr::get_current_device_resource());
   }
 }
 

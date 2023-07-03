@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,18 @@
 
 #pragma once
 
-#include "timezone.cuh"
-
 #include "orc.hpp"
 
-#include <cudf/io/orc_types.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 #include <io/comp/gpuinflate.hpp>
 #include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
+
+#include <cudf/detail/timezone.cuh>
+#include <cudf/io/orc_types.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -40,7 +41,7 @@ using cudf::detail::host_2dspan;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(const uint8_t* compressed_data_, size_t compressed_size_)
+  explicit constexpr CompressedStreamInfo(uint8_t const* compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
       compressed_data_size(compressed_size_),
@@ -54,7 +55,7 @@ struct CompressedStreamInfo {
       max_uncompressed_block_size(0)
   {
   }
-  const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
+  uint8_t const* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;              // [in] compressed data size for this stream
   device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
@@ -91,7 +92,7 @@ struct DictionaryEntry {
  * @brief Struct to describe per stripe's column information
  */
 struct ColumnDesc {
-  const uint8_t* streams[CI_NUM_STREAMS];  // ptr to data stream index
+  uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
   uint32_t strm_len[CI_NUM_STREAMS];       // stream length
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
@@ -141,7 +142,7 @@ struct EncChunk {
   uint8_t dtype_len;                 // data type length
   int32_t scale;                     // scale for decimals or timestamps
 
-  uint32_t* dict_index;  // dictionary index from row index
+  uint32_t* dict_index;              // dictionary index from row index
   uint32_t* decimal_offsets;
   orc_column_device_view const* column;
 };
@@ -159,6 +160,7 @@ struct encoder_chunk_streams {
  * @brief Struct to describe a column stream within a stripe
  */
 struct StripeStream {
+  uint8_t* data_ptr;        // encoded and gathered output
   size_t bfr_offset;        // Offset of this stream in compressed buffer
   uint32_t stream_size;     // Size of stream in bytes
   uint32_t first_chunk_id;  // First chunk of the stripe
@@ -179,9 +181,9 @@ struct DictionaryChunk {
   uint32_t num_rows;     // num rows in this chunk
   uint32_t num_strings;  // number of strings in this chunk
   uint32_t
-    string_char_count;  // total size of string data (NOTE: assumes less than 4G bytes per chunk)
-  uint32_t num_dict_strings;  // number of strings in dictionary
-  uint32_t dict_char_count;   // size of dictionary string data for this chunk
+    string_char_count;   // total size of string data (NOTE: assumes less than 4G bytes per chunk)
+  uint32_t num_dict_strings;                  // number of strings in dictionary
+  uint32_t dict_char_count;                   // size of dictionary string data for this chunk
 
   orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
@@ -211,14 +213,12 @@ constexpr uint32_t encode_block_size = 512;
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
  * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
  * compressed size)
- * @param[in] allow_block_size_estimate If true, estimate uncompressed size for small blocks
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
                                uint32_t compression_block_size,
                                uint32_t log2maxcr,
-                               bool allow_block_size_estimate,
                                rmm::cuda_stream_view stream);
 
 /**
@@ -287,6 +287,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level Current nesting level being processed
+ * @param[out] error_count Number of errors during decode
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void DecodeOrcColumnData(ColumnDesc* chunks,
@@ -295,10 +296,11 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint32_t num_columns,
                          uint32_t num_stripes,
                          size_t first_row,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level,
+                         size_type* error_count,
                          rmm::cuda_stream_view stream);
 
 /**
@@ -349,21 +351,26 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
  * @param[in] comp_block_align Required alignment for compressed blocks
+ * @param[in] collect_statistics Whether to collect compression statistics
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_res Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Compression statistics (if requested)
  */
-void CompressOrcDataStreams(uint8_t* compressed_data,
-                            uint32_t num_compressed_blocks,
-                            CompressionKind compression,
-                            uint32_t comp_blk_size,
-                            uint32_t max_comp_blk_size,
-                            uint32_t comp_block_align,
-                            device_2dspan<StripeStream> strm_desc,
-                            device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_res,
-                            rmm::cuda_stream_view stream);
+std::optional<writer_compression_statistics> CompressOrcDataStreams(
+  device_span<uint8_t> compressed_data,
+  uint32_t num_compressed_blocks,
+  CompressionKind compression,
+  uint32_t comp_blk_size,
+  uint32_t max_comp_blk_size,
+  uint32_t comp_block_align,
+  bool collect_statistics,
+  device_2dspan<StripeStream> strm_desc,
+  device_2dspan<encoder_chunk_streams> enc_streams,
+  device_span<compression_result> comp_res,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks
@@ -408,7 +415,7 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_groups(statistics_group* groups,
-                                const stats_column_desc* cols,
+                                stats_column_desc const* cols,
                                 device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream);
 
@@ -421,7 +428,7 @@ void orc_init_statistics_groups(statistics_group* groups,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_init_statistics_buffersize(statistics_merge_group* groups,
-                                    const statistics_chunk* chunks,
+                                    statistics_chunk const* chunks,
                                     uint32_t statistics_count,
                                     rmm::cuda_stream_view stream);
 
@@ -436,7 +443,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
-                           const statistics_chunk* chunks,
+                           statistics_chunk const* chunks,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream);
 

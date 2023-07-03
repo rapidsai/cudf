@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
  * @param mr Device memory resource
- * @return std::unique_ptr<column> Output column
+ * @return Output column
  */
 std::unique_ptr<column> compute_column(
   table_view const& table,

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -129,7 +129,9 @@ def assert_packed_frame_unique_pointers(df):
 
     for col in df:
         if df._data[col].data:
-            assert df._data[col].data.ptr != unpacked._data[col].data.ptr
+            assert df._data[col].data.get_ptr(mode="read") != unpacked._data[
+                col
+            ].data.get_ptr(mode="read")
 
 
 def test_packed_dataframe_unique_pointers_numeric():
@@ -189,15 +191,14 @@ def check_packed_pickled_equality(df):
     assert isinstance(sortvaldf.index, GenericIndex)
     assert_packed_frame_picklable(sortvaldf)
     # out-of-band
-    if pickle.HIGHEST_PROTOCOL >= 5:
-        buffers = []
-        serialbytes = pickle.dumps(
-            pack(df), protocol=5, buffer_callback=buffers.append
-        )
-        for b in buffers:
-            assert isinstance(b, pickle.PickleBuffer)
-        loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
-        assert_eq(loaded, df)
+    buffers = []
+    serialbytes = pickle.dumps(
+        pack(df), protocol=5, buffer_callback=buffers.append
+    )
+    for b in buffers:
+        assert isinstance(b, pickle.PickleBuffer)
+    loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
+    assert_eq(loaded, df)
 
 
 def assert_packed_frame_picklable(df):

@@ -14,7 +14,7 @@ CMake:
 cuDF (Java):
   - 'java/**'
 
-gpuCI:
+ci:
   - 'ci/**'
 
 conda:

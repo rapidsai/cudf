@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@
 #include <cudf_test/type_lists.hpp>
 
 template <typename T>
-class EncodeNumericTests : public cudf::test::BaseFixture {
-};
+class EncodeNumericTests : public cudf::test::BaseFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -83,8 +82,7 @@ TYPED_TEST(EncodeNumericTests, UnorderedWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }
 
-struct EncodeStringTest : public cudf::test::BaseFixture {
-};
+struct EncodeStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(EncodeStringTest, SimpleNoNulls)
 {
@@ -134,8 +132,8 @@ TYPED_TEST(EncodeNumericTests, TableEncodeWithNulls)
 
   auto const result = cudf::encode(input);
 
-  cudf::test::expect_tables_equivalent(result.first->view(), expect_keys);
-  cudf::test::expect_columns_equal(result.second->view(), expect);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result.first->view(), expect_keys);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

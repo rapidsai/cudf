@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,13 +126,13 @@ __launch_bounds__(block_size) __global__
 
     cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
-    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
+    cudf::size_type const local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
     block_sum += tmp_block_sum;
 
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
       if (threadIdx.x < cudf::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;
-      __syncthreads();  // wait for init
+      __syncthreads();                   // wait for init
     }
 
     if (mask_true) {
@@ -141,7 +141,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
+        cudf::size_type const aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -161,10 +161,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::detail::warp_size;
+      int const last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      int const last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      int const wid        = threadIdx.x / cudf::detail::warp_size;
+      int const lane       = threadIdx.x % cudf::detail::warp_size;
 
       cudf::size_type tmp_warp_valid_counts{0};
 
@@ -229,14 +229,13 @@ struct DeviceType<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
-    Filter filter,
-    cudf::size_type per_thread,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const* block_offsets,
+                                           Filter filter,
+                                           cudf::size_type per_thread,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     auto output_column = cudf::detail::allocate_like(
       input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
@@ -277,14 +276,13 @@ struct scatter_gather_functor {
 
   template <typename T,
             std::enable_if_t<!cudf::is_fixed_width<T>() and !cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const*,
-    Filter filter,
-    cudf::size_type,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const*,
+                                           Filter filter,
+                                           cudf::size_type,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
@@ -320,11 +318,10 @@ struct scatter_gather_functor {
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
 template <typename Filter>
-std::unique_ptr<table> copy_if(
-  table_view const& input,
-  Filter filter,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> copy_if(table_view const& input,
+                               Filter filter,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 

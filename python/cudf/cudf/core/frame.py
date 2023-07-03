@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from typing import (
     MutableMapping,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -24,11 +23,13 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
 from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -43,8 +44,6 @@ from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
-
-T = TypeVar("T", bound="Frame")
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -89,6 +88,10 @@ class Frame(BinaryOperand, Scannable):
         return dict(
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
+
+    @property
+    def _has_nulls(self):
+        return any(col.has_nulls() for col in self._data.values())
 
     def serialize(self):
         header = {
@@ -145,8 +148,8 @@ class Frame(BinaryOperand, Scannable):
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     def _mimic_inplace(
-        self: T, result: T, inplace: bool = False
-    ) -> Optional[Frame]:
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -321,15 +324,19 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
-        result = {}
+        result_data = {}
         for col_name, col in self._data.items():
             dt = dtype.get(col_name, col.dtype)
             if not is_dtype_equal(dt, col.dtype):
-                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
             else:
-                result[col_name] = col.copy() if copy else col
+                result_data[col_name] = col.copy() if copy else col
 
-        return result
+        return ColumnAccessor._create_unsafe(
+            data=result_data,
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+        )
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -480,9 +487,20 @@ class Frame(BinaryOperand, Scannable):
             )
 
         if dtype is None:
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
-            )
+            dtypes = [col.dtype for col in self._data.values()]
+            for dtype in dtypes:
+                if isinstance(
+                    dtype,
+                    (
+                        cudf.ListDtype,
+                        cudf.core.dtypes.DecimalDtype,
+                        cudf.StructDtype,
+                    ),
+                ):
+                    raise NotImplementedError(
+                        f"{dtype} cannot be exposed as a cupy array"
+                    )
+            dtype = find_common_type(dtypes)
 
         matrix = make_empty_matrix(
             shape=(len(self), ncol), dtype=dtype, order="F"
@@ -1053,7 +1071,6 @@ class Frame(BinaryOperand, Scannable):
         # Handle dict arrays
         cudf_category_frame = {}
         if len(dict_indices):
-
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
             indices_columns = libcudf.interop.from_arrow(dict_indices_table)
@@ -1109,7 +1126,12 @@ class Frame(BinaryOperand, Scannable):
                 result[name] = result[name].as_string_column(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
-                (pa.StructType, pa.ListType, pa.Decimal128Type),
+                (
+                    pa.StructType,
+                    pa.ListType,
+                    pa.Decimal128Type,
+                    pa.TimestampType,
+                ),
             ):
                 # In case of struct column, libcudf is not aware of names of
                 # struct fields, hence renaming the struct fields is
@@ -1121,6 +1143,9 @@ class Frame(BinaryOperand, Scannable):
 
                 # In case of list column, there is a possibility of nested
                 # list columns to have struct or decimal columns inside them.
+
+                # Datetimes ("timestamps") may need timezone metadata
+                # attached to them, as libcudf is timezone-unaware
 
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
@@ -1167,11 +1192,11 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     def _copy_type_metadata(
-        self: T,
-        other: T,
+        self,
+        other: Self,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> T:
+    ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -1210,7 +1235,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1289,7 +1314,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1444,7 +1469,7 @@ class Frame(BinaryOperand, Scannable):
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view)
+        result = cupy.asarray(outcol.data_array_view(mode="read"))
         if scalar_flag:
             return result[0].item()
         else:
@@ -1538,8 +1563,10 @@ class Frame(BinaryOperand, Scannable):
         ).values
 
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
-        # Get an int64 column consisting of the indices required to sort self
-        # according to the columns specified in by.
+        """
+        Get the indices required to sort self according to the columns
+        specified in by.
+        """
 
         to_sort = [
             *(
@@ -1697,9 +1724,10 @@ class Frame(BinaryOperand, Scannable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        lmask = as_column(left_column.nullmask)
-                        rmask = as_column(right_column.nullmask)
-                        output_mask = (lmask | rmask).data
+                        with acquire_spill_lock():
+                            lmask = as_column(left_column.nullmask)
+                            rmask = as_column(right_column.nullmask)
+                            output_mask = (lmask | rmask).data
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1734,6 +1762,7 @@ class Frame(BinaryOperand, Scannable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
+    @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
     ):
@@ -2311,17 +2340,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     # Alias for kurtosis.
-    @copy_docstring(kurtosis)
-    def kurt(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
-        return self.kurtosis(
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
-        )
+    kurt = kurtosis
 
     @_cudf_nvtx_annotate
     def skew(
@@ -2481,6 +2500,11 @@ class Frame(BinaryOperand, Scannable):
         b    249
         dtype: int64
         """
+        warnings.warn(
+            f"Support for {self.__class__}.sum_of_squares is deprecated and "
+            "will be removed",
+            FutureWarning,
+        )
         return self._reduce("sum_of_squares", dtype=dtype)
 
     @_cudf_nvtx_annotate

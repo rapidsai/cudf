@@ -98,7 +98,7 @@ class Consumer(CudfKafkaClient):
         topic : str,
             Name of the Kafka topic that the messages
             should be read from
-        parition : int,
+        partition : int,
             Partition number on the specified topic that
             should be read from
         lines : {{ True, False }}, default True,
@@ -128,7 +128,7 @@ class Consumer(CudfKafkaClient):
 
         if topic is None:
             raise ValueError(
-                "ERROR: You must specifiy the topic "
+                "ERROR: You must specify the topic "
                 "that you want to consume from"
             )
 

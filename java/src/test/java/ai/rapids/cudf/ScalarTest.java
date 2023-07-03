@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ public class ScalarTest extends CudfTestBase {
   }
 
   @Test
-  public void testIncRef() {
+  public void testIncRefAndDoubleFree() {
     Scalar s = Scalar.fromNull(DType.INT32);
     try (Scalar ignored1 = s) {
       try (Scalar ignored2 = s.incRefCount()) {

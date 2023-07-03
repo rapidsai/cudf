@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -386,13 +386,12 @@ struct column_scatterer_impl<struct_view> {
  * @return Result of scattering values from source to target
  */
 template <typename MapIterator>
-std::unique_ptr<table> scatter(
-  table_view const& source,
-  MapIterator scatter_map_begin,
-  MapIterator scatter_map_end,
-  table_view const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> scatter(table_view const& source,
+                               MapIterator scatter_map_begin,
+                               MapIterator scatter_map_end,
+                               table_view const& target,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 

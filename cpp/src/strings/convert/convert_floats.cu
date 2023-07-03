@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/convert/string_to_float.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -32,7 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -53,7 +51,7 @@ namespace {
  */
 template <typename FloatType>
 struct string_to_float_fn {
-  const column_device_view strings_column;  // strings to convert
+  column_device_view const strings_column;  // strings to convert
 
   __device__ FloatType operator()(size_type idx)
   {
@@ -149,9 +147,9 @@ struct ftos_converter {
   static constexpr double lower_limit = 0.0001;      // printf uses scientific notation below this
   // Tables for doing normalization: converting to exponent form
   // IEEE double float has maximum exponent of 305 so these should cover everything
-  const double upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
-  const double lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
-  const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
+  double const upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
+  double const lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
+  double const blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
 
   // utility for quickly converting known integer range to character array
   __device__ char* int2str(int value, char* output)
@@ -286,7 +284,7 @@ struct ftos_converter {
       while (pb != buffer)  // reverses the digits
         *ptr++ = *--pb;     // e.g. 54321 -> 12345
     } else
-      *ptr++ = '0';  // always include at least .0
+      *ptr++ = '0';         // always include at least .0
     // exponent
     if (exp10) {
       *ptr++ = 'e';
@@ -312,7 +310,7 @@ struct ftos_converter {
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
-    if (signbit(value)) {  // handles -0.0 too
+    if (signbit(value)) {             // handles -0.0 too
       value = -value;
       bneg  = true;
     }
@@ -339,7 +337,7 @@ struct ftos_converter {
       ++count;  // always include .0
     // exponent
     if (exp10) {
-      count += 2;  // 'e±'
+      count += 2;                  // 'e±'
       if (exp10 < 0) exp10 = -exp10;
       count += (int)(exp10 < 10);  // padding
       while (exp10 > 0) {
@@ -352,30 +350,35 @@ struct ftos_converter {
 };
 
 template <typename FloatType>
-struct float_to_string_size_fn {
-  column_device_view d_column;
+struct from_floats_fn {
+  column_device_view d_floats;
+  size_type* d_offsets;
+  char* d_chars;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ size_type compute_output_size(FloatType value)
   {
-    if (d_column.is_null(idx)) return 0;
-    FloatType value = d_column.element<FloatType>(idx);
     ftos_converter fts;
     return static_cast<size_type>(fts.compute_ftos_size(static_cast<double>(value)));
   }
-};
 
-template <typename FloatType>
-struct float_to_string_fn {
-  const column_device_view d_column;
-  const int32_t* d_offsets;
-  char* d_chars;
+  __device__ void float_to_string(size_type idx)
+  {
+    FloatType value = d_floats.element<FloatType>(idx);
+    ftos_converter fts;
+    fts.float_to_string(static_cast<double>(value), d_chars + d_offsets[idx]);
+  }
 
   __device__ void operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    FloatType value = d_column.element<FloatType>(idx);
-    ftos_converter fts;
-    fts.float_to_string(static_cast<double>(value), d_chars + d_offsets[idx]);
+    if (d_floats.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+    if (d_chars != nullptr) {
+      float_to_string(idx);
+    } else {
+      d_offsets[idx] = compute_output_size(d_floats.element<FloatType>(idx));
+    }
   }
 };
 
@@ -396,27 +399,13 @@ struct dispatch_from_floats_fn {
 
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
-    // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0), float_to_string_size_fn<FloatType>{d_column});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets    = offsets_view.template data<int32_t>();
 
-    // build chars column
-    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
-    auto chars_view   = chars_column->mutable_view();
-    auto d_chars      = chars_view.template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       float_to_string_fn<FloatType>{d_column, d_offsets, d_chars});
-    //
+    auto [offsets, chars] =
+      make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
+
     return make_strings_column(strings_count,
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                floats.null_count(),
                                std::move(null_mask));
   }

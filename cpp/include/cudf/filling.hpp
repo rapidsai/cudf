@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,10 +131,8 @@ std::unique_ptr<table> repeat(
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * @throws cudf::logic_error if the data type of @p count is not size_type.
- * @throws cudf::logic_error if @p count is invalid or @p count is negative.
- * @throws cudf::logic_error if @p input_table.num_rows() * @p count overflows
- * size_type.
+ * @throws cudf::logic_error if @p count is negative.
+ * @throws std::overflow_error if @p input_table.num_rows() * @p count overflows size_type.
  *
  * @param input_table Input table
  * @param count Number of repetitions

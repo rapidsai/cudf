@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +34,11 @@
 
 using namespace cudf::test::iterators;
 
-struct JSONTypeCastTest : public cudf::test::BaseFixture {
-};
+struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
 struct to_thrust_pair_fn {
-  __device__ thrust::pair<const char*, cudf::size_type> operator()(
+  __device__ thrust::pair<char const*, cudf::size_type> operator()(
     thrust::pair<cudf::string_view, bool> const& p)
   {
     return {p.first.data(), p.first.size_bytes()};
@@ -65,11 +64,11 @@ TEST_F(JSONTypeCastTest, String)
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   auto in_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
-  std::vector<const char*> input_values{"this", "is", "null", "of", "", "strings", R"("null")"};
+  std::vector<char const*> input_values{"this", "is", "null", "of", "", "strings", R"("null")"};
   cudf::test::strings_column_wrapper input(input_values.begin(), input_values.end(), in_valids);
 
   auto d_column = cudf::column_device_view::create(input);
-  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
+  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
@@ -78,14 +77,20 @@ TEST_F(JSONTypeCastTest, String)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto str_col = cudf::io::json::experimental::detail::parse_data(
-    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
+  auto str_col = cudf::io::json::experimental::detail::parse_data(svs.data(),
+                                                                  svs.size(),
+                                                                  type,
+                                                                  std::move(null_mask),
+                                                                  0,
+                                                                  default_json_options().view(),
+                                                                  stream,
+                                                                  mr);
 
   auto out_valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2 and i != 4; });
-  std::vector<const char*> expected_values{"this", "is", "", "of", "", "strings", "null"};
+  std::vector<char const*> expected_values{"this", "is", "", "of", "", "strings", "null"};
   cudf::test::strings_column_wrapper expected(
     expected_values.begin(), expected_values.end(), out_valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), expected);
@@ -99,7 +104,7 @@ TEST_F(JSONTypeCastTest, Int)
 
   cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
   auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
+  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
@@ -108,10 +113,16 @@ TEST_F(JSONTypeCastTest, Int)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto col = cudf::io::json::experimental::detail::parse_data(
-    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
+  auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
+                                                              svs.size(),
+                                                              type,
+                                                              std::move(null_mask),
+                                                              0,
+                                                              default_json_options().view(),
+                                                              stream,
+                                                              mr);
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
@@ -136,7 +147,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     R"("\"\\\/\b\f\n\r\t")",
   });
   auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
+  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
@@ -145,10 +156,16 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 
   auto null_mask_it = no_nulls();
   auto null_mask =
-    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size()));
 
-  auto col = cudf::io::json::experimental::detail::parse_data(
-    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
+  auto col = cudf::io::json::experimental::detail::parse_data(svs.data(),
+                                                              svs.size(),
+                                                              type,
+                                                              std::move(null_mask),
+                                                              0,
+                                                              default_json_options().view(),
+                                                              stream,
+                                                              mr);
 
   auto expected = cudf::test::strings_column_wrapper{
     {"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩", "", "\"\\/\b\f\n\r\t"},

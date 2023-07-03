@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,11 +42,12 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+#include <limits>
 #include <stack>
 
 // Debug print flag
 #ifndef NJP_DEBUG_PRINT
-//#define NJP_DEBUG_PRINT
+// #define NJP_DEBUG_PRINT
 #endif
 
 namespace {
@@ -69,6 +70,20 @@ struct tree_node {
 
   std::size_t num_children = 0;
 };
+
+/**
+ * @brief Verifies that the JSON input can be handled without corrupted data due to offset
+ * overflows.
+ *
+ * @param input_size The JSON inputs size in bytes
+ */
+void check_input_size(std::size_t input_size)
+{
+  // Transduce() writes symbol offsets that may be as large input_size-1
+  CUDF_EXPECTS(input_size == 0 ||
+                 (input_size - 1) <= std::numeric_limits<cudf::io::json::SymbolOffsetT>::max(),
+               "Given JSON input is too large");
+}
 }  // namespace
 
 namespace cudf::io::json {
@@ -428,7 +443,7 @@ auto get_transition_table(bool newline_delimited_json)
   //  {       [       }       ]       "       \       ,       :     space   newline other
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOV)] = {
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON};
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -453,7 +468,7 @@ auto get_transition_table(bool newline_delimited_json)
   pda_tt[static_cast<StateT>(pda_state_t::PD_BFN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_FLN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -509,7 +524,7 @@ auto get_translation_table()
                                                         {StructBegin},  // OPENING_BRACE
                                                         {ListBegin},    // OPENING_BRACKET
                                                         {ErrorBegin},   // CLOSING_BRACE
-                                                        {ErrorBegin},   // CLOSING_BRACKET
+                                                        {ListEnd},      // CLOSING_BRACKET
                                                         {StringBegin},  // QUOTE
                                                         {ErrorBegin},   // ESCAPE
                                                         {ErrorBegin},   // COMMA
@@ -530,18 +545,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {ValueBegin}}};  // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
-    {               /*ROOT*/
-     {ErrorBegin},  // OPENING_BRACE
-     {ErrorBegin},  // OPENING_BRACKET
-     {ErrorBegin},  // CLOSING_BRACE
-     {ErrorBegin},  // CLOSING_BRACKET
-     {ErrorBegin},  // QUOTE
-     {ErrorBegin},  // ESCAPE
-     {ErrorBegin},  // COMMA
-     {ErrorBegin},  // COLON
-     {ErrorBegin},  // WHITE_SPACE
-     {ErrorBegin},  // LINE_BREAK
-     {ErrorBegin},  // OTHER
+    {                                                                    /*ROOT*/
+     {ErrorBegin},                                                       // OPENING_BRACE
+     {ErrorBegin},                                                       // OPENING_BRACKET
+     {ErrorBegin},                                                       // CLOSING_BRACE
+     {ErrorBegin},                                                       // CLOSING_BRACKET
+     {ErrorBegin},                                                       // QUOTE
+     {ErrorBegin},                                                       // ESCAPE
+     {ErrorBegin},                                                       // COMMA
+     {ErrorBegin},                                                       // COLON
+     {ErrorBegin},                                                       // WHITE_SPACE
+     {ErrorBegin},                                                       // LINE_BREAK
+     {ErrorBegin},                                                       // OTHER
      /*LIST*/
      {StructBegin},  // OPENING_BRACE
      {ListBegin},    // OPENING_BRACKET
@@ -567,18 +582,18 @@ auto get_translation_table()
      {},                                   // LINE_BREAK
      {ErrorBegin}}};                       // OTHER
   pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    {               /*ROOT*/
-     {ErrorBegin},  // OPENING_BRACE
-     {ErrorBegin},  // OPENING_BRACKET
-     {ErrorBegin},  // CLOSING_BRACE
-     {ErrorBegin},  // CLOSING_BRACKET
-     {ErrorBegin},  // QUOTE
-     {ErrorBegin},  // ESCAPE
-     {ErrorBegin},  // COMMA
-     {ErrorBegin},  // COLON
-     {ValueEnd},    // WHITE_SPACE
-     {ValueEnd},    // LINE_BREAK
-     {},            // OTHER
+    {                                      /*ROOT*/
+     {ErrorBegin},                         // OPENING_BRACE
+     {ErrorBegin},                         // OPENING_BRACKET
+     {ErrorBegin},                         // CLOSING_BRACE
+     {ErrorBegin},                         // CLOSING_BRACKET
+     {ErrorBegin},                         // QUOTE
+     {ErrorBegin},                         // ESCAPE
+     {ErrorBegin},                         // COMMA
+     {ErrorBegin},                         // COLON
+     {ValueEnd},                           // WHITE_SPACE
+     {ValueEnd},                           // LINE_BREAK
+     {},                                   // OTHER
      /*LIST*/
      {ErrorBegin},         // OPENING_BRACE
      {ErrorBegin},         // OPENING_BRACKET
@@ -592,17 +607,17 @@ auto get_translation_table()
      {ValueEnd},           // LINE_BREAK
      {},                   // OTHER
      /*STRUCT*/
-     {ErrorBegin},                            // OPENING_BRACE
-     {ErrorBegin},                            // OPENING_BRACKET
-     {ValueEnd, StructMemberEnd, StructEnd},  // CLOSING_BRACE
-     {ErrorBegin},                            // CLOSING_BRACKET
-     {ErrorBegin},                            // QUOTE
-     {ErrorBegin},                            // ESCAPE
-     {ValueEnd, StructMemberEnd},             // COMMA
-     {ErrorBegin},                            // COLON
-     {ValueEnd},                              // WHITE_SPACE
-     {ValueEnd},                              // LINE_BREAK
-     {}}};                                    // OTHER
+     {ErrorBegin},                                                    // OPENING_BRACE
+     {ErrorBegin},                                                    // OPENING_BRACKET
+     {ValueEnd, StructMemberEnd, StructEnd},                          // CLOSING_BRACE
+     {ErrorBegin},                                                    // CLOSING_BRACKET
+     {ErrorBegin},                                                    // QUOTE
+     {ErrorBegin},                                                    // ESCAPE
+     {ValueEnd, StructMemberEnd},                                     // COMMA
+     {ErrorBegin},                                                    // COLON
+     {ValueEnd},                                                      // WHITE_SPACE
+     {ValueEnd},                                                      // LINE_BREAK
+     {}}};                                                            // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{              /*ROOT*/
                                                         {},           // OPENING_BRACE
@@ -641,18 +656,18 @@ auto get_translation_table()
                                                         {},           // LINE_BREAK
                                                         {}}};         // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{     /*ROOT*/
-                                                        {},  // OPENING_BRACE
-                                                        {},  // OPENING_BRACKET
-                                                        {},  // CLOSING_BRACE
-                                                        {},  // CLOSING_BRACKET
-                                                        {},  // QUOTE
-                                                        {},  // ESCAPE
-                                                        {},  // COMMA
-                                                        {},  // COLON
-                                                        {},  // WHITE_SPACE
-                                                        {},  // LINE_BREAK
-                                                        {},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{              /*ROOT*/
+                                                        {},           // OPENING_BRACE
+                                                        {},           // OPENING_BRACKET
+                                                        {},           // CLOSING_BRACE
+                                                        {},           // CLOSING_BRACKET
+                                                        {},           // QUOTE
+                                                        {},           // ESCAPE
+                                                        {},           // COMMA
+                                                        {},           // COLON
+                                                        {},           // WHITE_SPACE
+                                                        {},           // LINE_BREAK
+                                                        {},           // OTHER
                                                         /*LIST*/
                                                         {},  // OPENING_BRACE
                                                         {},  // OPENING_BRACKET
@@ -742,17 +757,17 @@ auto get_translation_table()
      {ErrorBegin},  // LINE_BREAK
      {ErrorBegin},  // OTHER
      /*STRUCT*/
-     {ErrorBegin},                         // OPENING_BRACE
-     {ErrorBegin},                         // OPENING_BRACKET
-     {ErrorBegin},                         // CLOSING_BRACE
-     {ErrorBegin},                         // CLOSING_BRACKET
-     {StructMemberBegin, FieldNameBegin},  // QUOTE
-     {ErrorBegin},                         // ESCAPE
-     {ErrorBegin},                         // COMMA
-     {ErrorBegin},                         // COLON
-     {},                                   // WHITE_SPACE
-     {},                                   // LINE_BREAK
-     {ErrorBegin}}};                       // OTHER
+     {ErrorBegin},                                                     // OPENING_BRACE
+     {ErrorBegin},                                                     // OPENING_BRACKET
+     {StructEnd},                                                      // CLOSING_BRACE
+     {ErrorBegin},                                                     // CLOSING_BRACKET
+     {StructMemberBegin, FieldNameBegin},                              // QUOTE
+     {ErrorBegin},                                                     // ESCAPE
+     {ErrorBegin},                                                     // COMMA
+     {ErrorBegin},                                                     // COLON
+     {},                                                               // WHITE_SPACE
+     {},                                                               // LINE_BREAK
+     {ErrorBegin}}};                                                   // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{               /*ROOT*/
                                                         {ErrorBegin},  // OPENING_BRACE
@@ -791,18 +806,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {}}};            // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{               /*ROOT*/
-                                                        {ErrorBegin},  // OPENING_BRACE
-                                                        {ErrorBegin},  // OPENING_BRACKET
-                                                        {ErrorBegin},  // CLOSING_BRACE
-                                                        {ErrorBegin},  // CLOSING_BRACKET
-                                                        {ErrorBegin},  // QUOTE
-                                                        {ErrorBegin},  // ESCAPE
-                                                        {ErrorBegin},  // COMMA
-                                                        {ErrorBegin},  // COLON
-                                                        {ErrorBegin},  // WHITE_SPACE
-                                                        {ErrorBegin},  // LINE_BREAK
-                                                        {ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{                 /*ROOT*/
+                                                        {ErrorBegin},    // OPENING_BRACE
+                                                        {ErrorBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},    // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {ErrorBegin},    // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {ErrorBegin},    // COMMA
+                                                        {ErrorBegin},    // COLON
+                                                        {ErrorBegin},    // WHITE_SPACE
+                                                        {ErrorBegin},    // LINE_BREAK
+                                                        {ErrorBegin},    // OTHER
                                                         /*LIST*/
                                                         {ErrorBegin},  // OPENING_BRACE
                                                         {ErrorBegin},  // OPENING_BRACKET
@@ -816,17 +831,17 @@ auto get_translation_table()
                                                         {ErrorBegin},  // LINE_BREAK
                                                         {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {},    // OPENING_BRACE
-                                                        {},    // OPENING_BRACKET
-                                                        {},    // CLOSING_BRACE
-                                                        {},    // CLOSING_BRACKET
-                                                        {},    // QUOTE
-                                                        {},    // ESCAPE
-                                                        {},    // COMMA
-                                                        {},    // COLON
-                                                        {},    // WHITE_SPACE
-                                                        {},    // LINE_BREAK
-                                                        {}}};  // OTHER
+                                                        {},            // OPENING_BRACE
+                                                        {},            // OPENING_BRACKET
+                                                        {},            // CLOSING_BRACE
+                                                        {},            // CLOSING_BRACKET
+                                                        {},            // QUOTE
+                                                        {},            // ESCAPE
+                                                        {},            // COMMA
+                                                        {},            // COLON
+                                                        {},            // WHITE_SPACE
+                                                        {},            // LINE_BREAK
+                                                        {}}};          // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{               /*ROOT*/
                                                         {ErrorBegin},  // OPENING_BRACE
@@ -865,18 +880,18 @@ auto get_translation_table()
                                                         {},              // LINE_BREAK
                                                         {ErrorBegin}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{     /*ROOT*/
-                                                        {},  // OPENING_BRACE
-                                                        {},  // OPENING_BRACKET
-                                                        {},  // CLOSING_BRACE
-                                                        {},  // CLOSING_BRACKET
-                                                        {},  // QUOTE
-                                                        {},  // ESCAPE
-                                                        {},  // COMMA
-                                                        {},  // COLON
-                                                        {},  // WHITE_SPACE
-                                                        {},  // LINE_BREAK
-                                                        {},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{                 /*ROOT*/
+                                                        {},              // OPENING_BRACE
+                                                        {},              // OPENING_BRACKET
+                                                        {},              // CLOSING_BRACE
+                                                        {},              // CLOSING_BRACKET
+                                                        {},              // QUOTE
+                                                        {},              // ESCAPE
+                                                        {},              // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {},              // OTHER
                                                         /*LIST*/
                                                         {},  // OPENING_BRACE
                                                         {},  // OPENING_BRACKET
@@ -1017,6 +1032,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
+  check_input_size(json_in.size());
+
   // Range of encapsulating function that comprises:
   // -> DFA simulation for filtering out brackets and braces inside of quotes
   // -> Logical stack to infer the stack context
@@ -1076,6 +1093,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  check_input_size(json_in.size());
+
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
@@ -1083,13 +1102,13 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream]() {
-    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     // Memory holding the top-of-stack stack context for the input
     rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
     // Identify what is the stack context for each input character (JSON-root, struct, or list)
     get_stack_context(json_in, stack_op_indices.data(), stream);
 
+    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
     thrust::transform(rmm::exec_policy(stream),
                       zip_in,
@@ -1117,9 +1136,18 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                        stream};
 
   // Perform a PDA-transducer pass
-  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
-  rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
+  // Compute the maximum amount of tokens that can possibly be emitted for a given input size
+  // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
+  // may be arbitrarily deeply nested: {"":_}, where '_' is a placeholder for any JSON value,
+  // possibly another such struct. That is, 6 tokens for 5 chars (plus chars and tokens of '_')
+  std::size_t constexpr min_chars_per_struct  = 5;
+  std::size_t constexpr max_tokens_per_struct = 6;
+  auto const max_token_out_count =
+    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
+  rmm::device_scalar<std::size_t> num_written_tokens{stream};
+  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
+
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data(),
@@ -1131,6 +1159,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const num_total_tokens = num_written_tokens.value(stream);
   tokens.resize(num_total_tokens, stream);
   tokens_indices.resize(num_total_tokens, stream);
+
+  CUDF_EXPECTS(num_total_tokens <= max_token_out_count,
+               "Generated token count exceeds the expected token count");
 
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }
@@ -1157,13 +1188,13 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                      rmm::mr::device_memory_resource* mr)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
   // Parse the JSON and get the token stream
-  const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
+  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
   thrust::host_vector<PdaTokenT> tokens =
@@ -1585,9 +1616,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
-        cudf::detail::make_device_uvector_async(json_col.string_offsets, stream);
+        cudf::detail::make_device_uvector_async(
+          json_col.string_offsets, stream, rmm::mr::get_current_device_resource());
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
-        cudf::detail::make_device_uvector_async(json_col.string_lengths, stream);
+        cudf::detail::make_device_uvector_async(
+          json_col.string_lengths, stream, rmm::mr::get_current_device_resource());
 
       // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =
@@ -1603,7 +1636,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(
         offset_length_it, [data = d_input.data()] __device__(auto ip) {
-          return thrust::pair<const char*, std::size_t>{
+          return thrust::pair<char const*, std::size_t>{
             data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
         });
 
@@ -1623,11 +1656,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
           parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
       }
 
+      auto [result_bitmask, null_count] = make_validity(json_col);
+
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  make_validity(json_col).first,
+                                                  std::move(result_bitmask),
+                                                  null_count,
                                                   parsing_options(options).view(),
                                                   stream,
                                                   mr);
@@ -1642,11 +1678,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), {{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
-        return {std::move(col), {}};
+        return {std::move(col), std::vector<column_name_info>{}};
       }
       break;
     }
@@ -1682,13 +1718,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
         cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
-      auto offsets_column =
-        std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
+      auto offsets_column = std::make_unique<column>(
+        data_type{type_id::INT32}, num_rows, d_offsets.release(), rmm::device_buffer{}, 0);
       // Create children column
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
-                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+                      std::vector<column_name_info>>{std::make_unique<column>(),
+                                                     std::vector<column_name_info>{}}
           : json_column_to_cudf_column(json_col.child_columns.begin()->second,
                                        d_input,
                                        options,
@@ -1713,7 +1750,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
+table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
                                            cudf::io::json_reader_options const& options,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -1721,10 +1758,9 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
-  auto const new_line_delimited_json = options.is_enabled_lines();
+  auto const h_input = cudf::detail::make_std_vector_async(d_input, stream);
 
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
+  auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Get internal JSON column
   json_column root_column{};
@@ -1753,7 +1789,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
 
   make_json_column(
-    root_column, data_path, input, d_input, options, include_quote_chars, stream, mr);
+    root_column, data_path, h_input, d_input, options, include_quote_chars, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =
@@ -1761,8 +1797,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
 
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
-                               {{}, std::vector<column_name_info>{}}};
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
@@ -1788,7 +1823,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
 
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
-        [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
+        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
           auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
                        ? std::optional<schema_element>{{user_dtypes[column_index]}}
                        : std::optional<schema_element>{};
@@ -1837,8 +1872,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
     column_index++;
   }
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
-                             {{}, out_column_names}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail

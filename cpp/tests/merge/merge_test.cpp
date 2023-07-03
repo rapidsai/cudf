@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@
 #include <vector>
 
 template <typename T>
-class MergeTest_ : public cudf::test::BaseFixture {
-};
+class MergeTest_ : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(MergeTest_, cudf::test::FixedWidthTypes);
 
@@ -693,18 +692,17 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
-class MergeTest : public cudf::test::BaseFixture {
-};
+class MergeTest : public cudf::test::BaseFixture {};
 
 TEST_F(MergeTest, KeysWithNulls)
 {
   cudf::size_type nrows = 13200;  // Ensures that thrust::merge uses more than one tile/block
   auto data_iter        = thrust::make_counting_iterator<int32_t>(0);
-  auto valids1          = cudf::detail::make_counting_transform_iterator(
-    0, [](auto row) { return (row % 10 == 0) ? false : true; });
+  auto valids1 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return row % 10 != 0; });
   cudf::test::fixed_width_column_wrapper<int32_t> data1(data_iter, data_iter + nrows, valids1);
-  auto valids2 = cudf::detail::make_counting_transform_iterator(
-    0, [](auto row) { return (row % 15 == 0) ? false : true; });
+  auto valids2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return row % 15 != 0; });
   cudf::test::fixed_width_column_wrapper<int32_t> data2(data_iter, data_iter + nrows, valids2);
   auto all_data = cudf::concatenate(std::vector<cudf::column_view>{{data1, data2}});
 
@@ -877,8 +875,7 @@ TEST_F(MergeTest, StructsNestedWithNulls)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;

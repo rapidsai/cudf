@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ import datetime
 import locale
 import re
 from locale import nl_langinfo
-from typing import Any, Mapping, Sequence, cast
+from typing import Any, Mapping, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
@@ -20,17 +21,19 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
-from cudf.core._compat import PANDAS_GE_120
+from cudf.api.types import (
+    is_datetime64_dtype,
+    is_datetime64tz_dtype,
+    is_scalar,
+    is_timedelta64_dtype,
+)
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _fillna_natwise
 
-if PANDAS_GE_120:
-    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
-else:
-    _guess_datetime_format = pd.core.tools.datetimes._guess_datetime_format
+_guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
 
 # nanoseconds per time_unit
 _dtype_to_format_conversion = {
@@ -122,10 +125,10 @@ class DatetimeColumn(column.ColumnBase):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Buffer = None,
-        size: int = None,  # TODO: make non-optional
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,  # TODO: make non-optional
         offset: int = 0,
-        null_count: int = None,
+        null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -199,7 +202,10 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("day_of_year")
 
     def to_pandas(
-        self, index: pd.Index = None, nullable: bool = False, **kwargs
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
@@ -261,6 +267,11 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif isinstance(other, str):
+            try:
+                return cudf.Scalar(other, dtype=self.dtype)
+            except ValueError:
+                pass
 
         return NotImplemented
 
@@ -355,7 +366,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def std(
         self,
-        skipna: bool = None,
+        skipna: Optional[bool] = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
@@ -367,7 +378,7 @@ class DatetimeColumn(column.ColumnBase):
             * _unit_to_nanoseconds_conversion[self.time_unit],
         )
 
-    def median(self, skipna: bool = None) -> pd.Timestamp:
+    def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -443,7 +454,10 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
+        self,
+        fill_value: Any = None,
+        method: Optional[str] = None,
+        dtype: Optional[Dtype] = None,
     ) -> DatetimeColumn:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -456,27 +470,13 @@ class DatetimeColumn(column.ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches
-        """
-        value = pd.to_datetime(value)
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_first_value(value, closest=closest)
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches
-        """
-        value = pd.to_datetime(value)
-        value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_last_value(value, closest=closest)
+            pd.to_datetime(value), dtype=self.dtype
+        ).as_numerical
+        return self.as_numerical.indices_of(value)
 
     @property
     def is_unique(self) -> bool:
@@ -487,7 +487,6 @@ class DatetimeColumn(column.ColumnBase):
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         if np.issubdtype(to_dtype, np.datetime64):
-
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
@@ -515,6 +514,90 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
+
+    def _with_type_metadata(self, dtype):
+        if is_datetime64tz_dtype(dtype):
+            return DatetimeTZColumn(
+                data=self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+        return self
+
+
+class DatetimeTZColumn(DatetimeColumn):
+    def __init__(
+        self,
+        data: Buffer,
+        dtype: pd.DatetimeTZDtype,
+        mask: Optional[Buffer] = None,
+        size: Optional[int] = None,
+        offset: int = 0,
+        null_count: Optional[int] = None,
+    ):
+        super().__init__(
+            data=data,
+            dtype=_get_base_dtype(dtype),
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
+        self._dtype = dtype
+
+    def to_pandas(
+        self,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        **kwargs,
+    ) -> "cudf.Series":
+        return self._local_time.to_pandas().dt.tz_localize(
+            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+        )
+
+    def to_arrow(self):
+        return pa.compute.assume_timezone(
+            self._local_time.to_arrow(), str(self.dtype.tz)
+        )
+
+    @property
+    def _utc_time(self):
+        """Return UTC time as naive timestamps."""
+        return DatetimeColumn(
+            data=self.base_data,
+            dtype=_get_base_dtype(self.dtype),
+            mask=self.base_mask,
+            size=self.size,
+            offset=self.offset,
+            null_count=self.null_count,
+        )
+
+    @property
+    def _local_time(self):
+        """Return the local time as naive timestamps."""
+        from cudf.core._internals.timezones import utc_to_local
+
+        return utc_to_local(self, str(self.dtype.tz))
+
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        return self._local_time.as_string_column(dtype, format, **kwargs)
+
+    def __repr__(self):
+        # Arrow prints the UTC timestamps, but we want to print the
+        # local timestamps:
+        arr = self._local_time.to_arrow().cast(
+            pa.timestamp(self.dtype.unit, str(self.dtype.tz))
+        )
+        return (
+            f"{object.__repr__(self)}\n"
+            f"{arr.to_string()}\n"
+            f"dtype: {self.dtype}"
+        )
 
 
 def infer_format(element: str, **kwargs) -> str:

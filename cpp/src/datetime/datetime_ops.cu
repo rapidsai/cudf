@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -181,7 +181,7 @@ struct extract_last_day_of_month {
   __device__ inline timestamp_D operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
-    const year_month_day ymd(floor<days>(ts));
+    year_month_day const ymd(floor<days>(ts));
     auto const ymdl = year_month_day_last{ymd.year() / ymd.month() / last};
     return timestamp_D{sys_days{ymdl}};
   }
@@ -217,7 +217,7 @@ struct extract_day_num_of_year {
   }
 };
 
-// Extract the the quarter to which the timestamp belongs to
+// Extract the quarter to which the timestamp belongs to
 struct extract_quarter_op {
   template <typename Timestamp>
   __device__ inline int16_t operator()(Timestamp const ts) const
@@ -334,9 +334,8 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                         column.null_count(),
                                         stream,
                                         mr);
-  auto launch =
-    launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
-      column, static_cast<mutable_column_view>(*output)};
+  auto launch = launch_functor<TransformFunctor, cudf::id_to_type<OutputColCudfT>>{
+    column, static_cast<mutable_column_view>(*output)};
 
   type_dispatcher(column.type(), launch, stream);
 
@@ -430,7 +429,8 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                   months_begin_iter,
                                   stream,
                                   mr);
-    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
+    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr),
+                          timestamp_column.null_count());
     return output;
   } else {
     return make_timestamp_column(

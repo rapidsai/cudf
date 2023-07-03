@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -104,3 +104,13 @@ def test_sort_values_custom_function(by, nparts):
         )
     expect = df.sort_values(by=by)
     dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"], ["b", "a"]])
+def test_sort_values_empty_string(by):
+    df = cudf.DataFrame({"a": [3, 2, 1, 4], "b": [""] * 4})
+    ddf = dd.from_pandas(df, npartitions=2)
+    got = ddf.sort_values(by)
+    if "a" in by:
+        expect = df.sort_values(by)
+        assert dd.assert_eq(got, expect, check_index=False)

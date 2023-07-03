@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -312,23 +312,23 @@ namespace detail {
 void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
-  cudaEventCreate(&event);
-  cudaEventRecord(event, stream);
+  CUDF_CUDA_TRY(cudaEventCreate(&event));
+  CUDF_CUDA_TRY(cudaEventRecord(event, stream));
   for (uint32_t i = 0; i < streams.size(); i++) {
-    cudaStreamWaitEvent(streams[i], event, 0);
+    CUDF_CUDA_TRY(cudaStreamWaitEvent(streams[i], event, 0));
   }
-  cudaEventDestroy(event);
+  CUDF_CUDA_TRY(cudaEventDestroy(event));
 }
 
 void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
 {
   cudaEvent_t event;
-  cudaEventCreate(&event);
+  CUDF_CUDA_TRY(cudaEventCreate(&event));
   for (uint32_t i = 0; i < streams.size(); i++) {
-    cudaEventRecord(event, streams[i]);
-    cudaStreamWaitEvent(stream, event, 0);
+    CUDF_CUDA_TRY(cudaEventRecord(event, streams[i]));
+    CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
   }
-  cudaEventDestroy(event);
+  CUDF_CUDA_TRY(cudaEventDestroy(event));
 }
 
 std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
@@ -379,9 +379,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
-  auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
-  auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
-  auto tile_offsets     = scan_tile_state<output_offset>(num_tile_states, stream);
+  auto num_tile_states = std::max(32, TILES_PER_CHUNK * concurrency + 32);
+  auto tile_multistates =
+    scan_tile_state<multistate>(num_tile_states, stream, rmm::mr::get_current_device_resource());
+  auto tile_offsets =
+    scan_tile_state<output_offset>(num_tile_states, stream, rmm::mr::get_current_device_resource());
 
   multibyte_split_init_kernel<<<TILES_PER_CHUNK,
                                 THREADS_PER_TILE,
@@ -417,7 +419,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   fork_stream(streams, stream);
 
   cudaEvent_t last_launch_event;
-  cudaEventCreate(&last_launch_event);
+  CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));
 
   auto& read_stream     = streams[0];
   auto& scan_stream     = streams[1];
@@ -451,7 +453,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       tile_multistates,
       tile_offsets);
 
-    cudaStreamWaitEvent(scan_stream.value(), last_launch_event);
+    CUDF_CUDA_TRY(cudaStreamWaitEvent(scan_stream.value(), last_launch_event));
 
     if (delimiter.size() == 1) {
       // the single-byte case allows for a much more efficient kernel, so we special-case it
@@ -525,7 +527,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       char_storage.advance_output(output_size, scan_stream);
     }
 
-    cudaEventRecord(last_launch_event, scan_stream.value());
+    CUDF_CUDA_TRY(cudaEventRecord(last_launch_event, scan_stream.value()));
 
     std::swap(read_stream, scan_stream);
     base_tile_idx += tiles_in_launch;
@@ -533,7 +535,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     chunk = std::move(next_chunk);
   }
 
-  cudaEventDestroy(last_launch_event);
+  CUDF_CUDA_TRY(cudaEventDestroy(last_launch_event));
 
   join_stream(streams, stream);
 
@@ -585,7 +587,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       });
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
   } else {
-    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars));
+    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars), {}, 0);
   }
 }
 

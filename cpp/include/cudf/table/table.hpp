@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,11 +39,11 @@ namespace cudf {
  */
 class table {
  public:
-  table()        = default;
-  ~table()       = default;
-  table(table&&) = default;  ///< Move constructor
+  table()                        = default;
+  ~table()                       = default;
+  table(table&&)                 = default;  ///< Move constructor
   table& operator=(table const&) = delete;
-  table& operator=(table&&) = delete;
+  table& operator=(table&&)      = delete;
 
   /**
    * @brief Construct a new table by copying the contents of another table.

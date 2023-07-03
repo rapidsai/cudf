@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,6 +25,23 @@ public class WindowOptions implements AutoCloseable {
 
   enum FrameType {ROWS, RANGE}
 
+  /**
+   * Extent of (range) window bounds.
+   * Analogous to cudf::range_window_bounds::extent_type.
+   */
+  enum RangeExtentType {
+    CURRENT_ROW(0), // Bounds defined as the first/last row that matches the current row.
+    BOUNDED(1),     // Bounds defined as the first/last row that falls within
+                    // a specified range from the current row.
+    UNBOUNDED(2);   // Bounds stretching to the first/last row in the entire group.
+
+    public final int nominalValue;
+
+    RangeExtentType(int n) {
+      this.nominalValue = n;
+    }
+  }
+
   private final int minPeriods;
   private final Scalar precedingScalar;
   private final Scalar followingScalar;
@@ -33,8 +50,8 @@ public class WindowOptions implements AutoCloseable {
   private final int orderByColumnIndex;
   private final boolean orderByOrderAscending;
   private final FrameType frameType;
-  private final boolean isUnboundedPreceding;
-  private final boolean isUnboundedFollowing;
+  private final RangeExtentType precedingBoundsExtent;
+  private final RangeExtentType followingBoundsExtent;
 
   private WindowOptions(Builder builder) {
     this.minPeriods = builder.minPeriods;
@@ -57,9 +74,8 @@ public class WindowOptions implements AutoCloseable {
     this.orderByColumnIndex = builder.orderByColumnIndex;
     this.orderByOrderAscending = builder.orderByOrderAscending;
     this.frameType = orderByColumnIndex == -1? FrameType.ROWS : FrameType.RANGE;
-    this.isUnboundedPreceding = builder.isUnboundedPreceding;
-    this.isUnboundedFollowing = builder.isUnboundedFollowing;
-
+    this.precedingBoundsExtent = builder.precedingBoundsExtent;
+    this.followingBoundsExtent = builder.followingBoundsExtent;
   }
 
   @Override
@@ -72,8 +88,8 @@ public class WindowOptions implements AutoCloseable {
               this.orderByColumnIndex == o.orderByColumnIndex &&
               this.orderByOrderAscending == o.orderByOrderAscending &&
               this.frameType == o.frameType &&
-              this.isUnboundedPreceding == o.isUnboundedPreceding &&
-              this.isUnboundedFollowing == o.isUnboundedFollowing;
+              this.precedingBoundsExtent == o.precedingBoundsExtent &&
+              this.followingBoundsExtent == o.followingBoundsExtent;
       if (precedingCol != null) {
         ret = ret && precedingCol.equals(o.precedingCol);
       }
@@ -110,8 +126,8 @@ public class WindowOptions implements AutoCloseable {
     if (followingScalar != null) {
       ret = 31 * ret + followingScalar.hashCode();
     }
-    ret = 31 * ret + Boolean.hashCode(isUnboundedPreceding);
-    ret = 31 * ret + Boolean.hashCode(isUnboundedFollowing);
+    ret = 31 * ret + precedingBoundsExtent.hashCode();
+    ret = 31 * ret + followingBoundsExtent.hashCode();
     return ret;
   }
 
@@ -139,9 +155,16 @@ public class WindowOptions implements AutoCloseable {
 
   boolean isOrderByOrderAscending() { return this.orderByOrderAscending; }
 
-  boolean isUnboundedPreceding() { return this.isUnboundedPreceding; }
+  boolean isUnboundedPreceding() { return this.precedingBoundsExtent == RangeExtentType.UNBOUNDED; }
 
-  boolean isUnboundedFollowing() { return this.isUnboundedFollowing; }
+  boolean isUnboundedFollowing() { return this.followingBoundsExtent == RangeExtentType.UNBOUNDED; }
+
+  boolean isCurrentRowPreceding() { return this.precedingBoundsExtent == RangeExtentType.CURRENT_ROW; }
+
+  boolean isCurrentRowFollowing() { return this.followingBoundsExtent == RangeExtentType.CURRENT_ROW; }
+
+  RangeExtentType getPrecedingBoundsExtent() { return this.precedingBoundsExtent; }
+  RangeExtentType getFollowingBoundsExtent() { return this.followingBoundsExtent; }
 
   FrameType getFrameType() { return frameType; }
 
@@ -154,8 +177,8 @@ public class WindowOptions implements AutoCloseable {
     private ColumnVector followingCol = null;
     private int orderByColumnIndex = -1;
     private boolean orderByOrderAscending = true;
-    private boolean isUnboundedPreceding = false;
-    private boolean isUnboundedFollowing = false;
+    private RangeExtentType precedingBoundsExtent = RangeExtentType.BOUNDED;
+    private RangeExtentType followingBoundsExtent = RangeExtentType.BOUNDED;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -171,7 +194,7 @@ public class WindowOptions implements AutoCloseable {
 
     /**
      * Set the size of the window, one entry per row. This does not take ownership of the
-     * columns passed in so you have to be sure that the life time of the column outlives
+     * columns passed in so you have to be sure that the lifetime of the column outlives
      * this operation.
      * @param precedingCol the number of rows preceding the current row and
      *                     precedingCol will be live outside of WindowOptions.
@@ -185,10 +208,10 @@ public class WindowOptions implements AutoCloseable {
       if (followingCol == null || followingCol.hasNulls()) {
         throw new IllegalArgumentException("following cannot be null or have nulls");
       }
-      if (isUnboundedPreceding || precedingScalar != null) {
+      if (precedingBoundsExtent != RangeExtentType.BOUNDED || precedingScalar != null) {
         throw new IllegalStateException("preceding has already been set a different way");
       }
-      if (isUnboundedFollowing || followingScalar != null) {
+      if (followingBoundsExtent != RangeExtentType.BOUNDED || followingScalar != null) {
         throw new IllegalStateException("following has already been set a different way");
       }
       this.precedingCol = precedingCol;
@@ -246,11 +269,27 @@ public class WindowOptions implements AutoCloseable {
       return orderByDescending();
     }
 
+    public Builder currentRowPreceding() {
+      if (precedingCol != null || precedingScalar != null) {
+        throw new IllegalStateException("preceding has already been set a different way");
+      }
+      this.precedingBoundsExtent = RangeExtentType.CURRENT_ROW;
+      return this;
+    }
+
+    public Builder currentRowFollowing() {
+      if (followingCol != null || followingScalar != null) {
+        throw new IllegalStateException("following has already been set a different way");
+      }
+      this.followingBoundsExtent = RangeExtentType.CURRENT_ROW;
+      return this;
+    }
+
     public Builder unboundedPreceding() {
       if (precedingCol != null || precedingScalar != null) {
         throw new IllegalStateException("preceding has already been set a different way");
       }
-      this.isUnboundedPreceding = true;
+      this.precedingBoundsExtent = RangeExtentType.UNBOUNDED;
       return this;
     }
 
@@ -258,7 +297,7 @@ public class WindowOptions implements AutoCloseable {
       if (followingCol != null || followingScalar != null) {
         throw new IllegalStateException("following has already been set a different way");
       }
-      this.isUnboundedFollowing = true;
+      this.followingBoundsExtent = RangeExtentType.UNBOUNDED;
       return this;
     }
 
@@ -270,7 +309,7 @@ public class WindowOptions implements AutoCloseable {
       if (preceding == null || !preceding.isValid()) {
         throw new IllegalArgumentException("preceding cannot be null");
       }
-      if (isUnboundedPreceding || precedingCol != null) {
+      if (precedingBoundsExtent != RangeExtentType.BOUNDED || precedingCol != null) {
         throw new IllegalStateException("preceding has already been set a different way");
       }
       this.precedingScalar = preceding;
@@ -285,7 +324,7 @@ public class WindowOptions implements AutoCloseable {
       if (following == null || !following.isValid()) {
         throw new IllegalArgumentException("following cannot be null");
       }
-      if (isUnboundedFollowing || followingCol != null) {
+      if (followingBoundsExtent != RangeExtentType.BOUNDED || followingCol != null) {
         throw new IllegalStateException("following has already been set a different way");
       }
       this.followingScalar = following;

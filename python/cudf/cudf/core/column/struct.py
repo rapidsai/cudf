@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
@@ -28,10 +29,10 @@ class StructColumn(ColumnBase):
 
     @property
     def base_size(self):
-        if not self.base_children:
-            return 0
-        else:
+        if self.base_children:
             return len(self.base_children[0])
+        else:
+            return self.size + self.offset
 
     def to_arrow(self):
         children = [
@@ -57,7 +58,9 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+    def to_pandas(
+        self, index: Optional[pd.Index] = None, **kwargs
+    ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
 
@@ -95,7 +98,9 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result

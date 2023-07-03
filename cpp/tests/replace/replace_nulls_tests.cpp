@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -17,16 +17,6 @@
  * limitations under the License.
  */
 
-#include <cudf/replace.hpp>
-
-#include <tests/groupby/groupby_test_util.hpp>
-
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -34,13 +24,20 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
 
-struct ReplaceErrorTest : public cudf::test::BaseFixture {
-};
+struct ReplaceErrorTest : public cudf::test::BaseFixture {};
 
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceErrorTest, SizeMismatch)
@@ -75,8 +72,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
   EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
 }
 
-struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsStringsTest, SimpleReplace)
 {
@@ -188,8 +184,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsPolicyStringTest, PrecedingFill)
 {
@@ -244,8 +239,7 @@ TEST_F(ReplaceNullsPolicyStringTest, FollowingFillTrailingNulls)
 }
 
 template <typename T>
-struct ReplaceNullsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsTest : public cudf::test::BaseFixture {};
 
 using test_types = cudf::test::NumericTypes;
 
@@ -376,8 +370,7 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 }
 
 template <typename T>
-struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsPolicyTest, test_types);
 
@@ -489,8 +482,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
 }
 
 template <typename T>
-struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -576,8 +568,7 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
 }
 
 template <typename T>
-struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -633,8 +624,7 @@ TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFillTrailingNulls)
     std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
 }
 
-struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ReplaceDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceDictionaryTest, ReplaceNulls)
 {
@@ -700,8 +690,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
 }
 
-struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFill)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,11 @@
 
 #include <vector>
 
-struct StringsConcatenateTest : public cudf::test::BaseFixture {
-};
+struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
@@ -85,7 +84,7 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
 
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",

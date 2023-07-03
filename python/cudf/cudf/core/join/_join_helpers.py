@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Tuple, cast
 
@@ -98,14 +97,8 @@ def _match_join_keys(
     ):
         common_type = max(ltype, rtype)
 
-    if how == "left":
-        if rcol.fillna(0).can_cast_safely(ltype):
-            return lcol, rcol.astype(ltype)
-        else:
-            warnings.warn(
-                f"Can't safely cast column from {rtype} to {ltype}, "
-                f"upcasting to {common_type}."
-            )
+    if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
+        return lcol, rcol.astype(ltype)
 
     return lcol.astype(common_type), rcol.astype(common_type)
 

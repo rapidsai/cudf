@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,11 +43,8 @@ inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode
 
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
-static __device__ __constant__ int64_t kORCTimeToUTC =
-  1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
-
 struct orc_bytestream_s {
-  const uint8_t* base;
+  uint8_t const* base;
   uint32_t pos;
   uint32_t len;
   uint32_t fill_pos;
@@ -101,7 +98,7 @@ struct orc_datadec_state_s {
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
-  int64_t utc_epoch;        // kORCTimeToUTC - gmtOffset
+  duration_s tz_epoch;      // orc_ut_epoch - ut_offset
   RowGroup index;
 };
 
@@ -146,7 +143,7 @@ struct orcdec_state_s {
  * @param[in] len Stream length in bytes
  */
 static __device__ void bytestream_init(volatile orc_bytestream_s* bs,
-                                       const uint8_t* base,
+                                       uint8_t const* base,
                                        uint32_t len)
 {
   uint32_t pos   = (len > 0) ? static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base)) : 0;
@@ -370,14 +367,14 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
-        return 10;  // up to 70 bits
+        return 10;               // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
         zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
-          return 19;  // Up to 19x7 bits (133)
+          return 19;                // Up to 19x7 bits (133)
         }
       }
     }
@@ -1111,15 +1108,15 @@ __global__ void __launch_bounds__(block_size)
   } temp_storage;
 
   orcdec_state_s* const s = &state_g;
-  const bool is_nulldec   = (blockIdx.y >= num_stripes);
-  const uint32_t column   = blockIdx.x;
-  const uint32_t stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
-  const uint32_t chunk_id = stripe * num_columns + column;
+  bool const is_nulldec   = (blockIdx.y >= num_stripes);
+  uint32_t const column   = blockIdx.x;
+  uint32_t const stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
+  uint32_t const chunk_id = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  const size_t max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
+  size_t const max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1316,7 +1313,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
       auto r         = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid = (t < nrows && r < rmax)
-                         ? (((const uint8_t*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
+                         ? (((uint8_t const*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
                          : 0;
       volatile auto* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
       uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
@@ -1374,11 +1371,12 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          device_2dspan<RowGroup> row_groups,
                          size_t first_row,
                          uint32_t rowidx_stride,
-                         size_t level)
+                         size_t level,
+                         size_type* error_count)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1405,11 +1403,17 @@ __global__ void __launch_bounds__(block_size)
   }
   __syncthreads();
   // Struct doesn't have any data in itself, so skip
-  const bool is_valid       = s->chunk.type_kind != STRUCT;
-  const size_t max_num_rows = s->chunk.column_num_rows;
+  bool const is_valid       = s->chunk.type_kind != STRUCT;
+  size_t const max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
+      if (s->top.data.index.strm_offset[0] > s->chunk.strm_len[CI_DATA]) {
+        atomicAdd(error_count, 1);
+      }
+      if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
+        atomicAdd(error_count, 1);
+      }
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
       uint32_t rowgroup_rowofs =
@@ -1439,7 +1443,8 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
+    static constexpr duration_s d_orc_utc_epoch = duration_s{orc_utc_epoch};
+    s->top.data.tz_epoch = d_orc_utc_epoch - get_ut_offset(tz_table, timestamp_s{d_orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1762,37 +1767,33 @@ __global__ void __launch_bounds__(block_size)
               break;
             }
             case TIMESTAMP: {
-              int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              int64_t nanos   = secondary_val;
-              nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-              if (!tz_table.ttimes.empty()) {
-                seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
-              }
+              auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
+              // Convert to UTC
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
+
+              duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
+                                              kTimestampNanoScale[secondary_val & 7]};
+
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
               // Comparing with 999999 instead of zero to match the apache writer.
-              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
-
-              duration_ns d_ns{nanos};
-              duration_s d_s{seconds};
+              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
                 switch (s->chunk.timestamp_type_id) {
                   case type_id::TIMESTAMP_SECONDS:
-                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                    return (seconds + duration_cast<duration_s>(nanos)).count();
                   case type_id::TIMESTAMP_MILLISECONDS:
-                    return duration_cast<duration_ms>(d_s).count() +
-                           duration_cast<duration_ms>(d_ns).count();
+                    return (seconds + duration_cast<duration_ms>(nanos)).count();
                   case type_id::TIMESTAMP_MICROSECONDS:
-                    return duration_cast<duration_us>(d_s).count() +
-                           duration_cast<duration_us>(d_ns).count();
+                    return (seconds + duration_cast<duration_us>(nanos)).count();
                   case type_id::TIMESTAMP_NANOSECONDS:
                   default:
-                    return duration_cast<duration_ns>(d_s).count() +
-                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
-                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                    // nanoseconds as output in case of `type_id::EMPTY` and
+                    // `type_id::TIMESTAMP_NANOSECONDS`
+                    return (seconds + nanos).count();
                 }
               }();
 
@@ -1880,10 +1881,11 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
                                   size_t first_row,
-                                  timezone_table_view tz_table,
+                                  table_device_view tz_table,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
+                                  size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
@@ -1891,7 +1893,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level);
+    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 
 }  // namespace gpu

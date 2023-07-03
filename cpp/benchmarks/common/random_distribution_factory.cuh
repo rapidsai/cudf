@@ -33,7 +33,7 @@
 #include <type_traits>
 
 /**
- * @brief Real Type that has atleast number of bits of integral type in its mantissa.
+ * @brief Real Type that has at least number of bits of integral type in its mantissa.
  *  number of bits of integrals < 23 bits of mantissa in float
  * to allow full range of integer bits to be generated.
  * @tparam T integral type

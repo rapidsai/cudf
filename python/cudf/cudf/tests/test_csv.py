@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -16,6 +16,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -74,8 +75,7 @@ def make_numpy_mixed_dataframe():
     )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    # Category is not yet supported from libcudf
-    # df["Category"] = np.array(["M", "F", "F", "F"])
+    df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df
@@ -151,7 +151,7 @@ def make_all_numeric_extremes_dataframe():
         if np.issubdtype(np_type, np.integer):
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
-            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+            df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
         else:
             ftype = np.finfo(np_type)
             extremes = [
@@ -223,7 +223,6 @@ nelem = [5, 25, 100]
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nelem", nelem)
 def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
-
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file1.csv")
 
     df = make_numeric_dataframe(nelem, dtype)
@@ -262,41 +261,28 @@ def test_csv_reader_datetime(parse_dates):
 def test_csv_reader_mixed_data_delimiter_sep(
     tmpdir, pandas_arg, cudf_arg, pd_mixed_dataframe
 ):
-
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file3.csv")
 
     pd_mixed_dataframe.to_csv(fname, sep="|", index=False, header=False)
 
     gdf1 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
 
     pdf = pd.read_csv(
         fname,
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        names=["1", "2", "3", "4", "5", "6"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
         parse_dates=[1],
         dayfirst=True,
         **pandas_arg,
@@ -338,6 +324,7 @@ def test_csv_reader_dtype_dict(use_names):
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize("use_names", [True, False])
 def test_csv_reader_dtype_extremes(use_names):
     # Save with the column header if not explicitly specifying a list of names
@@ -354,7 +341,6 @@ def test_csv_reader_dtype_extremes(use_names):
 
 
 def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
-
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
 
     pd_mixed_dataframe.to_csv(
@@ -543,7 +529,6 @@ def test_csv_reader_float_decimal(tmpdir):
 
 
 def test_csv_reader_NaN_values():
-
     names = dtypes = ["float32"]
     empty_cells = '\n""\n'
     default_na_cells = (
@@ -650,7 +635,6 @@ def test_csv_reader_thousands(tmpdir):
 
 
 def test_csv_reader_buffer_strings():
-
     names = ["text", "int"]
     dtypes = ["str", "int"]
     lines = [",".join(names), "a,0", "b,0", "c,0", "d,0"]
@@ -694,7 +678,6 @@ def test_csv_reader_buffer_strings():
 def test_csv_reader_compression(
     tmpdir, ext, out_comp, in_comp, pd_mixed_dataframe
 ):
-
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_compression" + ext)
 
     df = pd_mixed_dataframe
@@ -834,10 +817,9 @@ def test_csv_reader_bools_NA():
     expected = pd.DataFrame(
         {
             "text": ["true", "false", "foo", "bar", "qux"],
-            "int": [1, 0, 1, 0, 0],
+            "int": [1.0, 0.0, 1.0, 0.0, np.nan],
         }
     )
-    # breaking behaviour is np.nan for qux
     assert_eq(df, expected)
 
 
@@ -972,7 +954,6 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
 @pytest.mark.parametrize("skip_rows", [0, 2, 4])
 @pytest.mark.parametrize("header_row", [0, 2])
 def test_csv_reader_skiprows_header(skip_rows, header_row):
-
     names = ["float_point", "integer"]
     dtypes = ["float64", "int64"]
     lines = [
@@ -1036,7 +1017,6 @@ def test_csv_reader_dtype_inference_whitespace():
 
 
 def test_csv_reader_empty_dataframe():
-
     dtypes = ["float64", "int64"]
     buffer = "float_point, integer"
 
@@ -1076,7 +1056,7 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
 
 def test_csv_reader_arrow_nativefile(path_or_buf):
     # Check that we can read a file opened with the
-    # Arrow FileSystem inferface
+    # Arrow FileSystem interface
     expect = cudf.read_csv(path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
@@ -1221,24 +1201,23 @@ def test_csv_reader_byte_range_strings(segment_bytes):
         ("infer", 5, False),
     ],
 )
-@pytest.mark.parametrize("line_terminator", ["\n", "\r\n"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\r\n"])
 def test_csv_reader_blanks_and_comments(
-    skip_rows, header_row, skip_blanks, line_terminator
+    skip_rows, header_row, skip_blanks, lineterminator
 ):
-
     lines = [
         "# first comment line",
-        line_terminator,
+        lineterminator,
         "# third comment line",
         "1,2,3",
         "4,5,6",
         "7,8,9",
-        line_terminator,
+        lineterminator,
         "# last comment line",
-        line_terminator,
+        lineterminator,
         "1,1,1",
     ]
-    buffer = line_terminator.join(lines)
+    buffer = lineterminator.join(lines)
 
     cu_df = read_csv(
         StringIO(buffer),
@@ -1260,7 +1239,6 @@ def test_csv_reader_blanks_and_comments(
 
 
 def test_csv_reader_prefix():
-
     lines = ["1, 1, 1, 1"]
     buffer = "\n".join(lines)
 
@@ -1367,7 +1345,10 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/rapidsai/cudf/issues/10618",
+)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1453,7 +1434,7 @@ def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
 
     gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
 
-    expected = np.array(values, dtype=np_dtype)
+    expected = np.array(values).astype(np_dtype)
     actual = gdf["hex_int"].to_numpy()
     np.testing.assert_array_equal(expected, actual)
 
@@ -1531,11 +1512,10 @@ def test_csv_reader_scientific_type_detection():
         assert np.isclose(df[col][0], expected[int(col)])
 
 
-@pytest.mark.parametrize("line_terminator", ["\n", "\r\n"])
-def test_csv_blank_first_row(line_terminator):
-
+@pytest.mark.parametrize("lineterminator", ["\n", "\r\n"])
+def test_csv_blank_first_row(lineterminator):
     lines = ["colA,colB", "", "1, 1.1", "2, 2.2"]
-    buffer = line_terminator.join(lines)
+    buffer = lineterminator.join(lines)
 
     cu_df = read_csv(StringIO(buffer))
 
@@ -1598,7 +1578,6 @@ def test_csv_reader_partial_dtype(dtype):
 
 
 def test_csv_writer_file_handle(tmpdir):
-
     df = pd.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
     gdf = cudf.from_pandas(df)
 
@@ -1612,7 +1591,6 @@ def test_csv_writer_file_handle(tmpdir):
 
 
 def test_csv_writer_file_append(tmpdir):
-
     gdf1 = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
     gdf2 = cudf.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]})
 
@@ -1628,7 +1606,6 @@ def test_csv_writer_file_append(tmpdir):
 
 
 def test_csv_writer_buffer(tmpdir):
-
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
 
     buffer = BytesIO()
@@ -1641,13 +1618,12 @@ def test_csv_writer_buffer(tmpdir):
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nelem", nelem)
 def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
-
     pdf_df_fname = tmpdir.join("pdf_df_1.csv")
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1664,7 +1640,7 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1675,24 +1651,22 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("line_terminator", ["\r", "\n", "\t", np.str_("\n")])
+@pytest.mark.parametrize("lineterminator", ["\r", "\n", "\t", np.str_("\n")])
 @pytest.mark.parametrize("sep", [",", "/", np.str_(",")])
-def test_csv_writer_terminator_sep(line_terminator, sep, cudf_mixed_dataframe):
+def test_csv_writer_terminator_sep(lineterminator, sep, cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
 
     buffer = BytesIO()
-    df.to_csv(buffer, line_terminator=line_terminator, sep=sep, index=False)
+    df.to_csv(buffer, lineterminator=lineterminator, sep=sep, index=False)
 
-    got = read_csv(buffer, lineterminator=line_terminator, sep=sep)
+    got = read_csv(buffer, lineterminator=lineterminator, sep=sep)
     assert_eq(df, got)
 
 
 @pytest.mark.parametrize(
-    "line_terminator", ["\r\n", "ABC", "\t\t", np.str_("\r\n")]
+    "lineterminator", ["\r\n", "ABC", "\t\t", np.str_("\r\n")]
 )
-def test_csv_writer_multichar_terminator(
-    line_terminator, cudf_mixed_dataframe
-):
+def test_csv_writer_multichar_terminator(lineterminator, cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
 
     default_terminator_csv = StringIO()
@@ -1700,10 +1674,10 @@ def test_csv_writer_multichar_terminator(
 
     # Need to check manually since readers don't support
     # multicharacter line terminators
-    expected = default_terminator_csv.getvalue().replace("\n", line_terminator)
+    expected = default_terminator_csv.getvalue().replace("\n", lineterminator)
 
     buffer = StringIO()
-    df.to_csv(buffer, line_terminator=line_terminator)
+    df.to_csv(buffer, lineterminator=lineterminator)
     got = buffer.getvalue()
 
     assert_eq(expected, got)
@@ -1837,7 +1811,6 @@ def test_to_csv_StringIO(df):
 
 
 def test_csv_writer_empty_dataframe(tmpdir):
-
     df_fname = tmpdir.join("gdf_df_5.csv")
     gdf = cudf.DataFrame({"float_point": [], "integer": []})
     gdf["float_point"] = gdf["float_point"].astype("float")
@@ -2043,19 +2016,27 @@ def test_csv_writer_category(df):
     assert expected == actual
 
 
-def test_csv_reader_category_error():
-    # TODO: Remove this test once following
-    # issue is fixed: https://github.com/rapidsai/cudf/issues/3960
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "category",
+        {"a": "category", "b": "str"},
+        {"b": "category"},
+        {"a": "category"},
+        {"a": pd.CategoricalDtype([1, 2])},
+        {"b": pd.CategoricalDtype([1, 2, 3])},
+        {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
+        pd.CategoricalDtype(["a", "b"]),
+    ],
+)
+def test_csv_reader_category(dtype):
+    df = cudf.DataFrame({"a": [1, 2, 3, None], "b": ["a", "b", None, "c"]})
     csv_buf = df.to_csv()
 
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape(
-            "CategoricalDtype as dtype is not yet " "supported in CSV reader"
-        ),
-    ):
-        cudf.read_csv(StringIO(csv_buf), dtype="category")
+    actual = cudf.read_csv(StringIO(csv_buf), dtype=dtype)
+    expected = pd.read_csv(StringIO(csv_buf), dtype=dtype)
+
+    assert_eq(expected, actual, check_dtype=True)
 
 
 def test_csv_writer_datetime_sep():
@@ -2098,7 +2079,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": "abc"}),
         rfunc_args_and_kwargs=([], {"sep": "abc"}),
-        expected_error_message='"sep" must be a 1-character string',
     )
 
     assert_exceptions_equal(
@@ -2106,7 +2086,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": 1}),
         rfunc_args_and_kwargs=([], {"sep": 1}),
-        expected_error_message='"sep" must be string, not int',
     )
 
 
@@ -2171,6 +2150,7 @@ def test_default_integer_bitwidth_partial(
     )
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 def test_default_integer_bitwidth_extremes(
     cudf_extreme_numeric_dataframe, default_integer_bitwidth
 ):
@@ -2205,3 +2185,40 @@ def test_default_float_bitwidth_partial(default_float_bitwidth):
     )
     assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
     assert read["float2"].dtype == np.dtype("f8")
+
+
+@pytest.mark.parametrize(
+    "usecols,names",
+    [
+        # selection using indices; only names of selected columns are specified
+        ([1, 2], ["b", "c"]),
+        # selection using indices; names of all columns are specified
+        ([1, 2], ["a", "b", "c"]),
+        # selection using indices; duplicates
+        ([2, 2], ["a", "b", "c"]),
+        # selection using indices; out of order
+        ([2, 1], ["a", "b", "c"]),
+        # selection using names
+        (["b"], ["a", "b", "c"]),
+        # selection using names; multiple columns
+        (["b", "c"], ["a", "b", "c"]),
+        # selection using names; duplicates
+        (["c", "c"], ["a", "b", "c"]),
+        # selection using names; out of order
+        (["c", "b"], ["a", "b", "c"]),
+    ],
+)
+def test_column_selection_plus_column_names(usecols, names):
+    lines = [
+        "num,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi",
+    ]
+
+    buffer = "\n".join(lines) + "\n"
+
+    assert_eq(
+        pd.read_csv(StringIO(buffer), usecols=usecols, names=names),
+        cudf.read_csv(StringIO(buffer), usecols=usecols, names=names),
+    )

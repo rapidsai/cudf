@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/replace.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -80,7 +80,7 @@ struct replace_row_parallel_fn {
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
-    const char* in_ptr = d_str.data();
+    char const* in_ptr = d_str.data();
 
     char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto max_n    = (max_repl < 0) ? d_str.length() : max_repl;
@@ -704,92 +704,6 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
-namespace {
-/**
- * @brief Function logic for the replace_multi API.
- *
- * This will perform the multi-replace operation on each string.
- */
-struct replace_multi_fn {
-  column_device_view const d_strings;
-  column_device_view const d_targets;
-  column_device_view const d_repls;
-  int32_t* d_offsets{};
-  char* d_chars{};
-
-  __device__ void operator()(size_type idx)
-  {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
-    auto const d_str   = d_strings.element<string_view>(idx);
-    char const* in_ptr = d_str.data();
-
-    size_type bytes = d_str.size_bytes();
-    size_type spos  = 0;
-    size_type lpos  = 0;
-    char* out_ptr   = d_chars ? d_chars + d_offsets[idx] : nullptr;
-
-    // check each character against each target
-    while (spos < d_str.size_bytes()) {
-      for (int tgt_idx = 0; tgt_idx < d_targets.size(); ++tgt_idx) {
-        auto const d_tgt = d_targets.element<string_view>(tgt_idx);
-        if ((d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&    // check fit
-            (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))  // and match
-        {
-          auto const d_repl = (d_repls.size() == 1) ? d_repls.element<string_view>(0)
-                                                    : d_repls.element<string_view>(tgt_idx);
-          bytes += d_repl.size_bytes() - d_tgt.size_bytes();
-          if (out_ptr) {
-            out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
-            out_ptr = copy_string(out_ptr, d_repl);
-            lpos    = spos + d_tgt.size_bytes();
-          }
-          spos += d_tgt.size_bytes() - 1;
-          break;
-        }
-      }
-      ++spos;
-    }
-    if (out_ptr)  // copy remainder
-      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    else
-      d_offsets[idx] = bytes;
-  }
-};
-
-}  // namespace
-
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
-{
-  if (strings.is_empty()) return make_empty_column(type_id::STRING);
-  CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
-               "Parameters targets must not be empty and must not have nulls");
-  CUDF_EXPECTS(((repls.size() > 0) && (repls.null_count() == 0)),
-               "Parameters repls must not be empty and must not have nulls");
-  if (repls.size() > 1)
-    CUDF_EXPECTS(repls.size() == targets.size(), "Sizes for targets and repls must match");
-
-  auto d_strings = column_device_view::create(strings.parent(), stream);
-  auto d_targets = column_device_view::create(targets.parent(), stream);
-  auto d_repls   = column_device_view::create(repls.parent(), stream);
-
-  // this utility calls the given functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    replace_multi_fn{*d_strings, *d_targets, *d_repls}, strings.size(), stream, mr);
-
-  return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
-                             strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
-}
-
 std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       string_scalar const& repl,
                                       rmm::cuda_stream_view stream,
@@ -810,13 +724,11 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
       return d_strings.is_null(idx) ? d_repl.size_bytes()
                                     : d_strings.element<string_view>(idx).size_bytes();
     });
-  auto offsets_column = make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -854,15 +766,6 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace_slice(strings, repl, start, stop, cudf::get_default_stream(), mr);
-}
-
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

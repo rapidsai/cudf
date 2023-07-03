@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -92,9 +93,9 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
     for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
       // Collect children columns from the input structs columns at index `child_idx`.
-      auto const child_iter =
-        thrust::make_transform_iterator(structs_columns.begin(), [child_idx](auto const& col) {
-          return structs_column_view(col).get_sliced_child(child_idx);
+      auto const child_iter = thrust::make_transform_iterator(
+        structs_columns.begin(), [&stream = stream, child_idx](auto const& col) {
+          return structs_column_view(col).get_sliced_child(child_idx, stream);
         });
       auto children = std::vector<column_view>(child_iter, child_iter + num_columns);
 
@@ -184,13 +185,11 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     };
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-    auto offsets_column = strings::detail::make_offsets_child_column(
+    auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + num_strings, stream, mr);
     auto d_results_offsets = offsets_column->view().template data<int32_t>();
 
     // Create the chars column
-    auto const bytes =
-      cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
     auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().template data<char>();

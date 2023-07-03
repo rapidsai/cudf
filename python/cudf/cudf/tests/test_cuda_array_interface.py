@@ -10,6 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
@@ -169,6 +170,13 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
 
 
+@pytest.mark.xfail(
+    get_global_manager() is not None,
+    reason=(
+        "spilling doesn't support PyTorch, see "
+        "`cudf.core.buffer.spillable_buffer.DelayedPointerTuple`"
+    ),
+)
 def test_cuda_array_interface_pytorch():
     torch = pytest.importorskip("torch", minversion="1.6.0")
     if not torch.cuda.is_available():

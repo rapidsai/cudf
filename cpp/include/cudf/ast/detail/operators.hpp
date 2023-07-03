@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,6 +124,9 @@ CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, 
     case ast_operator::IDENTITY:
       f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::IS_NULL:
+      f.template operator()<ast_operator::IS_NULL>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::SIN:
       f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
       break;
@@ -224,8 +227,7 @@ CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, 
  * @tparam op AST operator.
  */
 template <ast_operator op, bool has_nulls>
-struct operator_functor {
-};
+struct operator_functor {};
 
 template <>
 struct operator_functor<ast_operator::ADD, false> {
@@ -402,8 +404,7 @@ struct operator_functor<ast_operator::EQUAL, false> {
 // Alias NULL_EQUAL = EQUAL in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_EQUAL, false>
-  : public operator_functor<ast_operator::EQUAL, false> {
-};
+  : public operator_functor<ast_operator::EQUAL, false> {};
 
 template <>
 struct operator_functor<ast_operator::NOT_EQUAL, false> {
@@ -507,8 +508,7 @@ struct operator_functor<ast_operator::LOGICAL_AND, false> {
 // Alias NULL_LOGICAL_AND = LOGICAL_AND in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_LOGICAL_AND, false>
-  : public operator_functor<ast_operator::LOGICAL_AND, false> {
-};
+  : public operator_functor<ast_operator::LOGICAL_AND, false> {};
 
 template <>
 struct operator_functor<ast_operator::LOGICAL_OR, false> {
@@ -524,8 +524,7 @@ struct operator_functor<ast_operator::LOGICAL_OR, false> {
 // Alias NULL_LOGICAL_OR = LOGICAL_OR in the non-nullable case.
 template <>
 struct operator_functor<ast_operator::NULL_LOGICAL_OR, false>
-  : public operator_functor<ast_operator::LOGICAL_OR, false> {
-};
+  : public operator_functor<ast_operator::LOGICAL_OR, false> {};
 
 template <>
 struct operator_functor<ast_operator::IDENTITY, false> {
@@ -535,6 +534,17 @@ struct operator_functor<ast_operator::IDENTITY, false> {
   __device__ inline auto operator()(InputT input) -> decltype(input)
   {
     return input;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::IS_NULL, false> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  __device__ inline auto operator()(InputT input) -> bool
+  {
+    return false;
   }
 };
 
@@ -798,14 +808,11 @@ struct cast {
 };
 
 template <>
-struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {
-};
+struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {};
 template <>
-struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {
-};
+struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {};
 template <>
-struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {
-};
+struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {};
 
 /*
  * The default specialization of nullable operators is to fall back to the non-nullable
@@ -835,6 +842,19 @@ struct operator_functor<op, true> {
   {
     using Out = possibly_null_value_t<decltype(NonNullOperator{}(*input)), true>;
     return input.has_value() ? Out{NonNullOperator{}(*input)} : Out{};
+  }
+};
+
+// IS_NULL(null) is true, IS_NULL(valid) is false
+template <>
+struct operator_functor<ast_operator::IS_NULL, true> {
+  using NonNullOperator       = operator_functor<ast_operator::IS_NULL, false>;
+  static constexpr auto arity = NonNullOperator::arity;
+
+  template <typename LHS>
+  __device__ inline auto operator()(LHS const lhs) -> decltype(!lhs.has_value())
+  {
+    return !lhs.has_value();
   }
 };
 

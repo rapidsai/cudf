@@ -48,15 +48,24 @@ Computations / descriptive stats
    GroupBy.cummax
    GroupBy.cummin
    GroupBy.cumsum
+   GroupBy.diff
    GroupBy.ffill
+   GroupBy.first
+   GroupBy.get_group
+   GroupBy.groups
+   GroupBy.idxmax
+   GroupBy.idxmin
+   GroupBy.last
    GroupBy.max
    GroupBy.mean
    GroupBy.median
    GroupBy.min
    GroupBy.ngroup
    GroupBy.nth
+   GroupBy.nunique
    GroupBy.pad
    GroupBy.prod
+   GroupBy.shift
    GroupBy.size
    GroupBy.std
    GroupBy.sum

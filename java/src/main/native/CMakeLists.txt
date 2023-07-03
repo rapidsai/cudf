@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -11,7 +11,7 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 include(../../../../fetch_rapids.cmake)
 include(rapids-cmake)
@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 22.12.00
+  VERSION 23.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -42,6 +42,7 @@ option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream"
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
+option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
@@ -76,11 +77,6 @@ set(CUDF_CUDA_DEFINITIONS "")
 
 rapids_find_package(CUDAToolkit REQUIRED)
 include(ConfigureCUDA) # set other CUDA compilation flags
-
-# Disable NVTX if necessary
-if(NOT USE_NVTX)
-  target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
-endif()
 
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
@@ -130,6 +126,8 @@ add_library(
   cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
+  src/ChunkedPackJni.cpp
+  src/ChunkedReaderJni.cpp
   src/CudfJni.cpp
   src/CudaJni.cpp
   src/ColumnVectorJni.cpp
@@ -142,6 +140,7 @@ add_library(
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
   src/NvtxUniqueRangeJni.cpp
+  src/PackedColumnMetadataJni.cpp
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
@@ -150,6 +149,15 @@ add_library(
   src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
+
+# Disable NVTX if necessary
+if(NOT USE_NVTX)
+  target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
+endif()
+
+if(CUDF_JNI_ENABLE_PROFILING)
+  target_compile_definitions(cudfjni PRIVATE CUDF_JNI_ENABLE_PROFILING)
+endif()
 
 if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
   # When linking against libcudf.a, the JNI library will include the old libcudf.so. For

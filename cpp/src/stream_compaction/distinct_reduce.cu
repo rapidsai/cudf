@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,7 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
   cudf::nullate::DYNAMIC has_nulls,
+  bool has_nested_columns,
   duplicate_keep_option keep,
   null_equality nulls_equal,
   nan_equality nans_equal,
@@ -115,13 +116,23 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const reduce_by_row = [&](auto const value_comp) {
-    auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
-    thrust::for_each(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(num_rows),
-      reduce_by_row_fn{
-        map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+    if (has_nested_columns) {
+      auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_rows),
+        reduce_by_row_fn{
+          map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+    } else {
+      auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_rows),
+        reduce_by_row_fn{
+          map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+    }
   };
 
   if (nans_equal == nan_equality::ALL_EQUAL) {

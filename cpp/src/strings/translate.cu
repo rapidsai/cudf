@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
@@ -106,7 +106,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
   });
   // copy translate table to device memory
   rmm::device_uvector<translate_table> table =
-    cudf::detail::make_device_uvector_async(htable, stream);
+    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 

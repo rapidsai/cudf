@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,27 +44,19 @@ struct file_ender_s {
 };
 
 // thrift generated code simplified.
-struct StringType {
-};
-struct MapType {
-};
-struct ListType {
-};
-struct EnumType {
-};
+struct StringType {};
+struct MapType {};
+struct ListType {};
+struct EnumType {};
 struct DecimalType {
   int32_t scale     = 0;
   int32_t precision = 0;
 };
-struct DateType {
-};
+struct DateType {};
 
-struct MilliSeconds {
-};
-struct MicroSeconds {
-};
-struct NanoSeconds {
-};
+struct MilliSeconds {};
+struct MicroSeconds {};
+struct NanoSeconds {};
 using TimeUnit_isset = struct TimeUnit_isset {
   bool MILLIS{false};
   bool MICROS{false};
@@ -90,12 +82,9 @@ struct IntType {
   int8_t bitWidth = 0;
   bool isSigned   = false;
 };
-struct NullType {
-};
-struct JsonType {
-};
-struct BsonType {
-};
+struct NullType {};
+struct JsonType {};
+struct BsonType {};
 
 // thrift generated code simplified.
 using LogicalType_isset = struct LogicalType_isset {
@@ -191,10 +180,13 @@ struct SchemaElement {
   // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
   // One-level LIST encoding: Only allows required lists with required cells:
   //   repeated value_type name
-  [[nodiscard]] bool is_one_level_list() const
+  [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
-    return repetition_type == REPEATED and num_children == 0;
+    return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
   }
+
+  // returns true if the element is a list
+  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
@@ -234,8 +226,8 @@ struct ColumnChunkMetaData {
   int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset =
-    0;  // Byte offset from the beginning of file to first (only) dictionary page
-  std::vector<uint8_t> statistics_blob;  // Encoded chunk-level statistics as binary blob
+    0;                    // Byte offset from the beginning of file to first (only) dictionary page
+  Statistics statistics;  // Encoded chunk-level statistics
 };
 
 /**
@@ -358,8 +350,8 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;  // Optional count of null values per page
+    BoundaryOrder::UNORDERED;                    // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;              // Optional count of null values per page
 };
 
 // bit space we are reserving in column_buffer::user_data

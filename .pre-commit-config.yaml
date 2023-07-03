@@ -15,7 +15,7 @@ repos:
                     ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
                   )
       - repo: https://github.com/PyCQA/isort
-        rev: 5.10.1
+        rev: 5.12.0
         hooks:
               - id: isort
                 # Use the config file specific to each subproject so that each
@@ -34,7 +34,7 @@ repos:
         rev: 5.0.4
         hooks:
               - id: flake8
-                args: ["--config=setup.cfg"]
+                args: ["--config=.flake8"]
                 files: python/.*$
                 types: [file]
                 types_or: [python, cython]
@@ -44,11 +44,11 @@ repos:
         hooks:
               - id: cython-lint
       - repo: https://github.com/pre-commit/mirrors-mypy
-        rev: 'v0.971'
+        rev: 'v1.3.0'
         hooks:
               - id: mypy
                 additional_dependencies: [types-cachetools]
-                args: ["--config-file=setup.cfg",
+                args: ["--config-file=pyproject.toml",
                        "python/cudf/cudf",
                        "python/custreamz/custreamz",
                        "python/cudf_kafka/cudf_kafka",
@@ -58,9 +58,21 @@ repos:
         rev: 6.1.1
         hooks:
               - id: pydocstyle
-                args: ["--config=setup.cfg"]
+                # https://github.com/PyCQA/pydocstyle/issues/603
+                additional_dependencies: [toml]
+                args: ["--config=pyproject.toml"]
+      - repo: https://github.com/nbQA-dev/nbQA
+        rev: 1.6.3
+        hooks:
+              - id: nbqa-isort
+                # Use the cudf_kafka isort orderings in notebooks so that dask
+                # and RAPIDS packages have their own sections.
+                args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
+              - id: nbqa-black
+                # Explicitly specify the pyproject.toml at the repo root, not per-project.
+                args: ["--config=pyproject.toml"]
       - repo: https://github.com/pre-commit/mirrors-clang-format
-        rev: v11.1.0
+        rev: v16.0.1
         hooks:
               - id: clang-format
                 types_or: [c, c++, cuda]
@@ -73,7 +85,7 @@ repos:
                   (?x)^(
                     ^cpp/include/cudf_test/cxxopts.hpp|
                     ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
-                    ^python/cudf/cudf/tests/test_text.py
+                    ^python/cudf/cudf/tests/text/test_text_methods.py
                   )
       - repo: local
         hooks:
@@ -83,6 +95,12 @@ repos:
                 entry: '(category=|\s)DeprecationWarning[,)]'
                 language: pygrep
                 types_or: [python, cython]
+              - id: no-programmatic-xfail
+                name: no-programmatic-xfail
+                description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'
+                entry: 'pytest\.xfail'
+                language: pygrep
+                types: [python]
               - id: cmake-format
                 name: cmake-format
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -131,6 +149,22 @@ repos:
                 language: system
                 pass_filenames: false
                 verbose: false
+      - repo: https://github.com/codespell-project/codespell
+        rev: v2.2.2
+        hooks:
+              - id: codespell
+                additional_dependencies: [tomli]
+                args: ["--toml", "pyproject.toml"]
+                exclude: |
+                  (?x)^(
+                    .*test.*|
+                    ^CHANGELOG.md$
+                  )
+      - repo: https://github.com/rapidsai/dependency-file-generator
+        rev: v1.5.1
+        hooks:
+            - id: rapids-dependency-file-generator
+              args: ["--clean"]
 
 default_language_version:
       python: python3

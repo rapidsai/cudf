@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
-struct IndexalatorTest : public IteratorTest<T> {
-};
+struct IndexalatorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(IndexalatorTest, TestingTypes);
 

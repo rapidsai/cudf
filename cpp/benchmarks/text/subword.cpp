@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
-
-#define MAX_ROWS_TENSOR 300
 
 static std::string create_hash_vocab_file()
 {
@@ -74,13 +72,11 @@ static void BM_subword_tokenizer(benchmark::State& state)
                                            max_sequence_length,
                                            stride,
                                            do_lower,
-                                           do_truncate,
-                                           MAX_ROWS_TENSOR);
+                                           do_truncate);
   }
 }
 
-class Subword : public cudf::benchmark {
-};
+class Subword : public cudf::benchmark {};
 
 #define SUBWORD_BM_BENCHMARK_DEFINE(name)                                                        \
   BENCHMARK_DEFINE_F(Subword, name)(::benchmark::State & state) { BM_subword_tokenizer(state); } \

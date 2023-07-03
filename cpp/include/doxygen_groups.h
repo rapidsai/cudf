@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@
  *     @}
  *     @defgroup copy_split Splitting
  *     @{
+ *        @file cudf/contiguous_split.hpp
  *        @file cudf/copying.hpp
  *     @}
  *     @defgroup copy_shift Shifting
@@ -123,12 +124,14 @@
  *   @defgroup strings_contains Searching
  *   @defgroup strings_convert Converting
  *   @defgroup strings_copy Copying
- *   @defgroup strings_substring Substring
+ *   @defgroup strings_slice Slicing
  *   @defgroup strings_find Finding
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
+ *   @defgroup strings_extract Extracting
  *   @defgroup strings_json JSON
+ *   @defgroup strings_regex Regex
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -145,6 +148,7 @@
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_combine Combining
+ *   @defgroup lists_modify Modifying
  *   @defgroup lists_extract Extracting
  *   @defgroup lists_filling Filling
  *   @defgroup lists_contains Searching
@@ -162,6 +166,7 @@
  *   @defgroup nvtext_edit_distance Edit Distance
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
+ *   @defgroup nvtext_minhash MinHashing
  * @}
  * @defgroup utility_apis Utilities
  * @{

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -23,7 +23,7 @@
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -39,6 +39,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -135,20 +136,18 @@ namespace jit {
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      const std::string& ptx,
+                      std::string const& ptx,
                       rmm::cuda_stream_view stream)
 {
-  std::string const output_type_name = cudf::jit::get_type_name(out.type());
+  std::string const output_type_name = cudf::type_to_name(out.type());
 
-  std::string ptx_hash =
-    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
   std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
                               .instantiate(output_type_name,  // list of template arguments
-                                           cudf::jit::get_type_name(lhs.type()),
-                                           cudf::jit::get_type_name(rhs.type()),
+                                           cudf::type_to_name(lhs.type()),
+                                           cudf::type_to_name(rhs.type()),
                                            std::string("cudf::binops::jit::UserDefinedOp"));
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
@@ -202,7 +201,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
     return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
-    CUDF_FAIL("Unsupported operator for these types");
+    CUDF_FAIL("Unsupported operator for these types", cudf::data_type_error);
 
   if (cudf::is_fixed_point(lhs.type()) or cudf::is_fixed_point(rhs.type())) {
     cudf::binops::compiled::fixed_point_binary_operation_validation(
@@ -218,6 +217,8 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
 
   auto out_view = out->mutable_view();
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  // TODO: consider having the binary_operation count nulls instead
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace compiled
@@ -374,6 +375,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+  out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
 }  // namespace detail

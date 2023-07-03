@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,7 +156,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  auto dv_quantiles = cudf::detail::make_device_uvector_async(quantiles, stream);
+  auto dv_quantiles = cudf::detail::make_device_uvector_async(
+    quantiles, stream, rmm::mr::get_current_device_resource());
 
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

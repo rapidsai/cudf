@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,10 +86,9 @@ struct shift_functor {
       cudf::strings_column_view(input), offset, fill_value, stream, mr);
 
     if (input.nullable() || not fill_value.is_valid(stream)) {
-      auto const d_input = column_device_view::create(input, stream);
-      auto mask_pair     = create_null_mask(*d_input, offset, fill_value, stream, mr);
-      output->set_null_mask(std::move(std::get<0>(mask_pair)));
-      output->set_null_count(std::get<1>(mask_pair));
+      auto const d_input           = column_device_view::create(input, stream);
+      auto [null_mask, null_count] = create_null_mask(*d_input, offset, fill_value, stream, mr);
+      output->set_null_mask(std::move(null_mask), null_count);
     }
 
     return output;
@@ -114,9 +113,9 @@ struct shift_functor {
     auto const scalar_is_valid = scalar.is_valid(stream);
 
     if (input.nullable() || not scalar_is_valid) {
-      auto mask_pair = create_null_mask(*device_input, offset, fill_value, stream, mr);
-      output->set_null_mask(std::move(std::get<0>(mask_pair)));
-      output->set_null_count(std::get<1>(mask_pair));
+      auto [null_mask, null_count] =
+        create_null_mask(*device_input, offset, fill_value, stream, mr);
+      output->set_null_mask(std::move(null_mask), null_count);
     }
 
     auto const size  = input.size();

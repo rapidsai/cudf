@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@
 #include <algorithm>
 #include <vector>
 
-class Concatenate : public cudf::benchmark {
-};
+class Concatenate : public cudf::benchmark {};
 
 template <typename T, bool Nullable>
 static void BM_concatenate(benchmark::State& state)
@@ -110,8 +109,7 @@ static void BM_concatenate_tables(benchmark::State& state)
 CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, false)
 CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, true)
 
-class ConcatenateStrings : public cudf::benchmark {
-};
+class ConcatenateStrings : public cudf::benchmark {};
 
 template <bool Nullable>
 static void BM_concatenate_strings(benchmark::State& state)

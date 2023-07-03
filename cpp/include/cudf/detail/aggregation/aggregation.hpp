@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,9 @@ class all_aggregation final : public reduce_aggregation, public segmented_reduce
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation,
+                                         public reduce_aggregation,
+                                         public segmented_reduce_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -313,7 +315,8 @@ class sum_of_squares_aggregation final : public groupby_aggregation, public redu
  */
 class mean_aggregation final : public rolling_aggregation,
                                public groupby_aggregation,
-                               public reduce_aggregation {
+                               public reduce_aggregation,
+                               public segmented_reduce_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -353,7 +356,8 @@ class m2_aggregation : public groupby_aggregation {
  */
 class std_var_aggregation : public rolling_aggregation,
                             public groupby_aggregation,
-                            public reduce_aggregation {
+                            public reduce_aggregation,
+                            public segmented_reduce_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -531,7 +535,9 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class nunique_aggregation final : public groupby_aggregation,
+                                  public reduce_aggregation,
+                                  public segmented_reduce_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -1154,9 +1160,7 @@ struct target_type_impl<Source, aggregation::ALL> {
   using type = bool;
 };
 
-// Always use `double` for MEAN
-// Except for chrono types where result is chrono. (Use FloorDiv)
-// TODO: MEAN should be only be enabled for duration types - not for timestamps
+// Always use `double` for MEAN except for durations and fixed point types.
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
@@ -1167,10 +1171,10 @@ struct target_type_impl<
 };
 
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<(is_chrono<Source>() or is_fixed_point<Source>()) && (k == aggregation::MEAN)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<(is_duration<Source>() or is_fixed_point<Source>()) &&
+                                         (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
@@ -1206,10 +1210,11 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying chrono types, use same type accumulator
-// TODO: Sum/Product should only be enabled for duration types - not for timestamps
+// Summing duration types, use same type accumulator
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source, k, std::enable_if_t<is_chrono<Source>() && is_sum_product_agg(k)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
   using type = Source;
 };
 
@@ -1391,7 +1396,9 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind k,
                                                               F&& f,
@@ -1473,7 +1480,9 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 
 template <typename Element>
 struct dispatch_aggregation {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <aggregation::Kind k, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(F&& f, Ts&&... args) const
   {
@@ -1482,7 +1491,9 @@ struct dispatch_aggregation {
 };
 
 struct dispatch_source {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <typename Element, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
   {
@@ -1506,7 +1517,9 @@ struct dispatch_source {
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(data_type type,
                                                                                aggregation::Kind k,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,14 +34,12 @@ namespace detail {
 constexpr auto COMPACTION_EMPTY_KEY_SENTINEL   = std::numeric_limits<size_type>::max();
 constexpr auto COMPACTION_EMPTY_VALUE_SENTINEL = std::numeric_limits<size_type>::min();
 
-using hash_type = cuco::detail::MurmurHash3_32<size_type>;
+using hash_type = cuco::murmurhash3_32<size_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
 using hash_map_type =
   cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-
-using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
 }  // namespace detail
 }  // namespace cudf

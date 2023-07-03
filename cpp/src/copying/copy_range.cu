@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,7 @@ struct out_of_place_copy_range_dispatch {
     if (source_end != source_begin) {  // otherwise no-op
       auto ret_view = p_ret->mutable_view();
       in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
+      p_ret->set_null_count(ret_view.null_count());
     }
 
     return p_ret;
@@ -221,14 +222,14 @@ void copy_range_in_place(column_view const& source,
                          size_type target_begin,
                          rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
+  CUDF_EXPECTS(cudf::is_fixed_width(target.type()),
                "In-place copy_range does not support variable-sized types.");
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
-  CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
+  CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op

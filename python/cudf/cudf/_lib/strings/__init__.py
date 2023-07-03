@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
     generate_ngrams,
 )
+from cudf._lib.nvtext.minhash import minhash
 from cudf._lib.nvtext.ngrams_tokenize import ngrams_tokenize
 from cudf._lib.nvtext.normalize import normalize_characters, normalize_spaces
 from cudf._lib.nvtext.replace import filter_tokens, replace_tokens

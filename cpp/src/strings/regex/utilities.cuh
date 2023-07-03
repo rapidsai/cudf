@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,16 @@
 #include <strings/regex/regex.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {
@@ -131,13 +133,15 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
       size_and_exec_fn, d_prog, strings_count);
   }
 
-  // Convert sizes to offsets
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  auto const char_bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  CUDF_EXPECTS(char_bytes <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // Now build the chars column
-  auto const char_bytes = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
-  std::unique_ptr<column> chars = create_chars_child_column(char_bytes, stream, mr);
+  std::unique_ptr<column> chars =
+    create_chars_child_column(static_cast<size_type>(char_bytes), stream, mr);
   if (char_bytes > 0) {
     size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(

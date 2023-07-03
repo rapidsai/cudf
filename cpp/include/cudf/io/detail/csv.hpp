@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ void write_csv(data_sink* sink,
                host_span<std::string const> column_names,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+               rmm::mr::device_memory_resource* mr);
 
 }  // namespace csv
 }  // namespace detail

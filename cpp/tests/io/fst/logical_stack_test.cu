@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,8 +144,7 @@ struct JSONToStackOp {
 }  // namespace
 
 // Base test fixture for tests
-struct LogicalStackTest : public cudf::test::BaseFixture {
-};
+struct LogicalStackTest : public cudf::test::BaseFixture {};
 
 TEST_F(LogicalStackTest, GroundTruth)
 {
@@ -201,20 +200,20 @@ TEST_F(LogicalStackTest, GroundTruth)
 
   rmm::device_uvector<SymbolT> d_stack_ops{stack_symbols.size(), stream_view};
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes{stack_op_indexes.size(), stream_view};
-  hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
+  cudf::detail::hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
   cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
 
-  cudaMemcpyAsync(d_stack_ops.data(),
-                  stack_symbols.data(),
-                  stack_symbols.size() * sizeof(SymbolT),
-                  cudaMemcpyHostToDevice,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_ops.data(),
+                                stack_symbols.data(),
+                                stack_symbols.size() * sizeof(SymbolT),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
-  cudaMemcpyAsync(d_stack_op_indexes.data(),
-                  stack_op_indexes.data(),
-                  stack_op_indexes.size() * sizeof(SymbolOffsetT),
-                  cudaMemcpyHostToDevice,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_op_indexes.data(),
+                                stack_op_indexes.data(),
+                                stack_op_indexes.size() * sizeof(SymbolOffsetT),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   // Run algorithm
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(d_stack_ops.data(),
@@ -227,7 +226,7 @@ TEST_F(LogicalStackTest, GroundTruth)
                                                     stream.value());
 
   // Async copy results from device to host
-  top_of_stack_gpu.device_to_host(stream_view);
+  top_of_stack_gpu.device_to_host_async(stream_view);
 
   // Get CPU-side results for verification
   std::string top_of_stack_cpu{};

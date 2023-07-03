@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,10 +95,10 @@ class groupby {
  public:
   groupby() = delete;
   ~groupby();
-  groupby(groupby const&) = delete;
-  groupby(groupby&&)      = delete;
+  groupby(groupby const&)            = delete;
+  groupby(groupby&&)                 = delete;
   groupby& operator=(groupby const&) = delete;
-  groupby& operator=(groupby&&) = delete;
+  groupby& operator=(groupby&&)      = delete;
 
   /**
    * @brief Construct a groupby object with the specified `keys`
@@ -121,7 +121,7 @@ class groupby {
    * ascending. Ignored if `keys_are_sorted == false`.
    * @param null_precedence If `keys_are_sorted == YES`, indicates the ordering
    * of null values in each column. Else, ignored. If empty, assumes all columns
-   * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
+   * use `null_order::AFTER`. Ignored if `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys,
                    null_policy null_handling                      = null_policy::EXCLUDE,
@@ -294,7 +294,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
     table_view const& values,
     host_span<size_type const> offsets,
-    std::vector<std::reference_wrapper<const scalar>> const& fill_values,
+    std::vector<std::reference_wrapper<scalar const>> const& fill_values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -377,8 +377,8 @@ class groupby {
                                                          ///< indicates null order
                                                          ///< of each column
   std::unique_ptr<detail::sort::sort_groupby_helper>
-    _helper;  ///< Helper object
-              ///< used by sort based implementation
+    _helper;                                             ///< Helper object
+                                                         ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object
