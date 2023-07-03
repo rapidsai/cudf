@@ -50,11 +50,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   ColumnView(long address) {
     this.viewHandle = address;
-    this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    this.rows = ColumnView.getNativeRowCount(viewHandle);
-    this.nullCount = ColumnView.getNativeNullCount(viewHandle);
-    this.offHeap = null;
     try {
+      this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      this.rows = ColumnView.getNativeRowCount(viewHandle);
+      this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+      this.offHeap = null;
       AssertEmptyNulls.assertNullsAreEmpty(this);
     } catch (Throwable t) {
       // offHeap state is null, so there is nothing to clean in offHeap
@@ -75,11 +75,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
-    viewHandle = state.getViewHandle();
-    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    rows = ColumnView.getNativeRowCount(viewHandle);
-    nullCount = ColumnView.getNativeNullCount(viewHandle);
     try {
+      viewHandle = state.getViewHandle();
+      type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      rows = ColumnView.getNativeRowCount(viewHandle);
+      nullCount = ColumnView.getNativeNullCount(viewHandle);
       AssertEmptyNulls.assertNullsAreEmpty(this);
     } catch (Throwable t) {
       // cleanup offHeap
@@ -669,8 +669,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
-        columnVectors[i] = new ColumnVector(nativeHandles[i]);
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
         nativeHandles[i] = 0;
+        columnVectors[i] = new ColumnVector(nativeHandle);
       }
     } catch (Throwable t) {
       try {
@@ -819,8 +822,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
     try {
       for (int i = 0; i < nativeHandles.length; i++) {
-        columnViews[i] = new ColumnView(nativeHandles[i]);
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
         nativeHandles[i] = 0;
+        columnViews[i] = new ColumnView(nativeHandle);
       }
     } catch (Throwable t) {
       try {
