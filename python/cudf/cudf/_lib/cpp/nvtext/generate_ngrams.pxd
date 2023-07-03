@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
@@ -17,6 +17,11 @@ cdef extern from "nvtext/generate_ngrams.hpp" namespace "nvtext" nogil:
     ) except +
 
     cdef unique_ptr[column] generate_character_ngrams(
+        const column_view &strings,
+        size_type ngrams
+    ) except +
+
+    cdef unique_ptr[column] hash_character_ngrams(
         const column_view &strings,
         size_type ngrams
     ) except +
