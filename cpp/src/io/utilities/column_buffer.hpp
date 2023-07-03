@@ -139,14 +139,7 @@ class column_buffer_base {
   /**
    * @brief Sets the stream to be used for deallocation of internal buffers
    */
-  void set_stream(rmm::cuda_stream_view stream) noexcept
-  {
-    _data.set_stream(stream);
-    _null_mask.set_stream(stream);
-    for (auto& child : children) {
-      child.set_stream(stream);
-    }
-  }
+  void set_stream(rmm::cuda_stream_view stream) noexcept;
 
  protected:
   rmm::device_buffer _data{};
