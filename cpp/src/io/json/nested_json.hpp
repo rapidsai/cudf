@@ -192,8 +192,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
  * @return
  */
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
-  device_span<PdaTokenT> tokens,
-  device_span<SymbolOffsetT> token_indices,
+  device_span<PdaTokenT const> tokens,
+  device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream);
 
 /**

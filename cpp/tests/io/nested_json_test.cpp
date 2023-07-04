@@ -747,14 +747,19 @@ TEST_F(JsonTest, PostProcessTokenStream)
   thrust::copy(input.cbegin(), input.cend(), token_tuples);
 
   // Initialize device-side test data
-  thrust::device_vector<token_index_t> d_offsets       = offsets;
-  thrust::device_vector<cuio_json::PdaTokenT> d_tokens = tokens;
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    cudf::host_span<token_index_t const>{thrust::raw_pointer_cast(offsets.data()), offsets.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
+  auto const d_tokens = cudf::detail::make_device_uvector_async(
+    cudf::host_span<cuio_json::PdaTokenT const>{thrust::raw_pointer_cast(tokens.data()),
+                                                tokens.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
 
   // Run system-under-test
   auto [d_filtered_tokens, d_filtered_indices] = cuio_json::detail::process_token_stream(
-    {thrust::raw_pointer_cast(d_tokens.data()), d_tokens.size()},
-    {thrust::raw_pointer_cast(d_offsets.data()), d_offsets.size()},
-    stream);
+    {d_tokens.data(), d_tokens.size()}, {d_offsets.data(), d_offsets.size()}, stream);
 
   thrust::host_vector<cuio_json::PdaTokenT> const filtered_tokens =
     cudf::detail::make_host_vector_async(d_filtered_tokens, stream);
