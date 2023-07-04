@@ -19,14 +19,9 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/reduction/detail/reduction_operators.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
-
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
 
 namespace cudf {
 namespace reduction {
@@ -35,18 +30,14 @@ namespace detail {
 /**
  * @brief Binary operator ArgMin/ArgMax with index values into the input table.
  */
+template <typename DeviceComparator>
 struct row_arg_minmax_fn {
   size_type const num_rows;
-  row_lexicographic_comparator<nullate::DYNAMIC> const comp;
+  DeviceComparator const comp;
   bool const is_arg_min;
 
-  row_arg_minmax_fn(table_device_view const& table,
-                    bool has_nulls,
-                    null_order const* null_precedence,
-                    bool const is_arg_min)
-    : num_rows(table.num_rows()),
-      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
-      is_arg_min(is_arg_min)
+  row_arg_minmax_fn(size_type num_rows_, DeviceComparator comp_, bool const is_arg_min_)
+    : num_rows{num_rows_}, comp{std::move(comp_)}, is_arg_min{is_arg_min_}
   {
   }
 
@@ -87,58 +78,73 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  */
 class comparison_binop_generator {
  private:
-  std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
-  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> const
-    d_flattened_input_ptr;
+  cudf::table_view const input_tview;
   bool const is_min_op;
+  rmm::cuda_stream_view stream;
+  std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
   bool const has_nulls;
-
   std::vector<null_order> null_orders;
-  rmm::device_uvector<null_order> null_orders_dvec;
 
-  comparison_binop_generator(column_view const& input, rmm::cuda_stream_view stream, bool is_min_op)
-    : flattened_input{cudf::structs::detail::flatten_nested_columns(
-        table_view{{input}},
+  cudf::experimental::row::lexicographic::self_comparator row_comparator;
+
+  comparison_binop_generator(column_view const& input_,
+                             bool is_min_op_,
+                             rmm::cuda_stream_view stream_)
+    : input_tview{cudf::table_view{{input_}}},
+      is_min_op{is_min_op_},
+      stream{stream_},
+      flattened_input{cudf::structs::detail::flatten_nested_columns(
+        input_tview,
         {},
         std::vector<null_order>{DEFAULT_NULL_ORDER},
         cudf::structs::detail::column_nullability::MATCH_INCOMING,
         stream,
         rmm::mr::get_current_device_resource())},
-      d_flattened_input_ptr{
-        table_device_view::create(flattened_input->flattened_columns(), stream)},
-      is_min_op(is_min_op),
-      has_nulls{has_nested_nulls(table_view{{input}})},
-      null_orders_dvec(0, stream)
+      has_nulls{cudf::has_nested_nulls(input_tview)},
+      null_orders{[input_, is_min_op_, flattened_orders = flattened_input->null_orders()]() {
+        std::vector<null_order> order{DEFAULT_NULL_ORDER};
+        if (is_min_op_) {
+          order = flattened_orders;
+          // If the input column has nulls (at the top level), null structs are excluded from the
+          // operations, and that is equivalent to considering top-level nulls as larger than all
+          // other non-null STRUCT elements (if finding for ARGMIN), or smaller than all other
+          // non-null STRUCT elements (if finding for ARGMAX). Thus, we need to set a separate null
+          // order for the top level structs column (which is stored at the first position in the
+          // null_orders array) to achieve this purpose.
+          if (input_.has_nulls()) { order.front() = cudf::null_order::AFTER; }
+        }
+        return order;
+      }()},
+      row_comparator{[input_tview = input_tview,
+                      is_min_op_,
+                      flattened_tview = flattened_input->flattened_columns(),
+                      null_orders     = null_orders,
+                      stream_]() {
+        if (is_min_op_) {
+          return cudf::experimental::row::lexicographic::self_comparator{
+            flattened_tview, {}, null_orders, stream_};
+        } else {
+          return cudf::experimental::row::lexicographic::self_comparator{
+            input_tview, {}, null_orders, stream_};
+        }
+      }()}
   {
-    if (is_min_op) {
-      null_orders = flattened_input->null_orders();
-      // If the input column has nulls (at the top level), null structs are excluded from the
-      // operations, and that is equivalent to considering top-level nulls as larger than all other
-      // non-null STRUCT elements (if finding for ARGMIN), or smaller than all other non-null STRUCT
-      // elements (if finding for ARGMAX). Thus, we need to set a separate null order for the top
-      // level structs column (which is stored at the first position in the null_orders array) to
-      // achieve this purpose.
-      if (input.has_nulls()) { null_orders.front() = cudf::null_order::AFTER; }
-      null_orders_dvec = cudf::detail::make_device_uvector_async(
-        null_orders, stream, rmm::mr::get_current_device_resource());
-    }
-    // else: Don't need to generate nulls order to copy to device memory if we have all null orders
-    // are BEFORE (that happens when we have is_min_op == false).
   }
 
  public:
   auto binop() const
   {
-    return row_arg_minmax_fn(*d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
+    auto const device_comp = row_comparator.less<true>(cudf::nullate::DYNAMIC{has_nulls});
+    return row_arg_minmax_fn(input_tview.num_rows(), device_comp, is_min_op);
   }
 
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
     return comparison_binop_generator(input,
-                                      stream,
                                       std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
-                                        std::is_same_v<BinOp, cudf::DeviceMin>);
+                                        std::is_same_v<BinOp, cudf::DeviceMin>,
+                                      stream);
   }
 
   template <cudf::aggregation::Kind K>
@@ -146,7 +152,7 @@ class comparison_binop_generator {
 
   {
     return comparison_binop_generator(
-      input, stream, K == cudf::aggregation::MIN || K == cudf::aggregation::ARGMIN);
+      input, K == cudf::aggregation::MIN || K == cudf::aggregation::ARGMIN, stream);
   }
 };
 
