@@ -321,6 +321,8 @@ class column {
 
   /**
    * @brief Sets the stream to be used for deallocation of internal buffers
+   *
+   * @param stream CUDA stream used for device memory free.
    */
   void set_stream(rmm::cuda_stream_view stream) noexcept;
 
