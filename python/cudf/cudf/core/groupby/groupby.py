@@ -1030,6 +1030,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     as_column(group_offsets),
                     [],
                     [],
+                    stable=True,
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
