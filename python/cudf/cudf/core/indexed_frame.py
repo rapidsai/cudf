@@ -190,7 +190,7 @@ def _indices_from_labels(obj, labels):
     rhs = cudf.DataFrame(
         {"_": cudf.core.column.arange(len(obj))}, index=obj.index
     )
-    return lhs.join(rhs).sort_values("__")["_"]
+    return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
 def _get_label_range_or_mask(index, start, stop, step):
