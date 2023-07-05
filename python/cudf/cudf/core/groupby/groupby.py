@@ -2335,6 +2335,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
+            as_index=self._as_index,
         )
 
 
