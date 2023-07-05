@@ -885,11 +885,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               break;
           }
         } else if (dtype == FIXED_LEN_BYTE_ARRAY) {
-          gpuOutputString(s,
-                          sb,
-                          val_src_pos,
-                          nesting_info_base[leaf_level_index].data_out +
-                            static_cast<size_t>(dst_pos) * sizeof(string_index_pair));
+          gpuOutputString(s, sb, val_src_pos, dst);
         } else if (dtype == INT96) {
           gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
