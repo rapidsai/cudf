@@ -121,7 +121,7 @@ struct nan_aware_less {
 };
 
 /**
- * @brief Comparator for numeric order-by columns, handling floating point NaN values. *
+ * @brief Comparator for numeric order-by columns, handling floating point NaN values.
  *
  * This is required for binary search through sorted vectors that contain NaN values.
  * With descending sort, NaN values are stored at the beginning of the sequence, even
