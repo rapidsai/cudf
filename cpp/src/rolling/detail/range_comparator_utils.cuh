@@ -116,7 +116,7 @@ struct nan_aware_less {
   __host__ __device__ bool operator()(T const& lhs, T const& rhs) const
   {
     if (std::isnan(lhs)) { return false; }
-    return std::isnan(rhs) ? true : thrust::less<T>{}(lhs, rhs);
+    return std::isnan(rhs) or thrust::less<T>{}(lhs, rhs);
   }
 };
 
