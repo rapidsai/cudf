@@ -122,7 +122,7 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
  * @param s The local page info
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
- * @param is_bounds_pg True if this page is clipped
+ * @param /////////////is_bounds_pg True if this page is clipped
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
@@ -488,6 +488,36 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
 }
 
 /**
+ * @brief Compute string size information for fixed len byte array strings.
+ *
+ * @param input_size Size of each fixed length byte array
+ * @param data_size Length of data
+ * @param start_value Do not count values that occur before this index
+ * @param end_value Do not count values that occur after this index
+ */
+__device__ size_t totalFixedLenByteArraySize(int input_size,
+                                             int data_size,
+                                             int start_value,
+                                             int end_value)
+{
+  int const t      = threadIdx.x;
+  int pos          = 0;
+  size_t total_len = 0;
+
+  // This step is purely serial
+  if (!t) {
+    int k = 0;
+    while (pos < end_value && k < data_size) {
+      k += input_size;
+      if (pos >= start_value) { total_len += input_size; }  // TODO not sure this is necessary
+      pos++;
+    }
+  }
+
+  return total_len;
+}
+
+/**
  * @brief Compute string size information for plain encoded strings.
  *
  * @param data Pointer to the start of the page data stream
@@ -625,8 +655,12 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
       break;
     case Encoding::PLAIN:
       dict_size = static_cast<int32_t>(end - data);
-      str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
-                               : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
+      if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+        str_bytes = totalFixedLenByteArraySize(s->dtype_len_in, dict_size, start_value, end_value);
+      } else {
+        str_bytes = is_bounds_pg ? totalPlainEntriesSize(data, dict_size, start_value, end_value)
+                                 : dict_size - sizeof(int) * (pp->num_input_values - pp->num_nulls);
+      }
       break;
   }
 

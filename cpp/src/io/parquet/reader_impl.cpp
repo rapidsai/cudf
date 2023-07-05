@@ -56,8 +56,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
-  std::cout << "### sum_max_depths: " << sum_max_depths << "\n";
-
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
@@ -68,7 +66,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   std::vector<size_t> col_sizes(_input_columns.size(), 0L);
   if (has_strings) {
-    printf("has_strings has_strings has_strings has_strings\n");
     gpu::ComputePageStringSizes(
       pages, chunks, skip_rows, num_rows, _file_itm_data.level_type_size, _stream);
 

@@ -432,7 +432,6 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
         } else {
           len = 0;
         }
-        printf("pos: %d target_pos: %d len: %d\n", pos, target_pos, len);
       }
       if constexpr (!sizes_only) {
         sb->dict_idx[rolling_index(pos)] = k;
@@ -445,8 +444,6 @@ __device__ size_type gpuInitStringDescriptors(page_state_s volatile* s,
     s->dict_val = k;
     __threadfence_block();
   }
-
-  if (t == 0) { printf("### total len: %d\n", total_len); }
 
   return total_len;
 }

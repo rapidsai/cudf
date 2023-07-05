@@ -328,14 +328,14 @@ TEST_F(ParquetReaderTest, FixedLenBinary)
   cudf::test::print(res.tbl->view().column(0));
 
   cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{"./FIXED_BIN_TEST.parquet"})
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{"./FIXED_BIN_300_TEST.parquet"})
       .set_column_schema({cudf::io::reader_column_schema().set_convert_binary_to_strings(false),
                           cudf::io::reader_column_schema().set_convert_binary_to_strings(false)});
   auto result = cudf::io::read_parquet(read_opts);
 
   // we should only get back 4 rows
   EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::LIST);
-  EXPECT_EQ(result.tbl->view().column(0).size(), 2);
+  EXPECT_EQ(result.tbl->view().column(0).size(), 300);
 
   cudf::test::print(result.tbl->view().column(0));
 }
