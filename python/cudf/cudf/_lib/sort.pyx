@@ -22,7 +22,11 @@ from cudf._lib.cpp.sorting cimport (
     rank,
     segmented_sort_by_key as cpp_segmented_sort_by_key,
     sort as cpp_sort,
+    sort_by_key as cpp_sort_by_key,
     sorted_order,
+    stable_segmented_sort_by_key as cpp_stable_segmented_sort_by_key,
+    stable_sort_by_key as cpp_stable_sort_by_key,
+    stable_sorted_order,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -141,18 +145,33 @@ cdef pair[vector[order], vector[null_order]] ordering(
 
 
 @acquire_spill_lock()
-def order_by(list columns_from_table, object ascending, str na_position):
+def order_by(
+    list columns_from_table,
+    object ascending,
+    str na_position,
+    *,
+    bool stable
+):
     """
     Get index to sort the table in ascending/descending order.
 
     Parameters
     ----------
-    columns_from_table : columns from the table which will be sorted
-    ascending : sequence of boolean values which correspond to each column
-                in source_table signifying order of each column
-                True - Ascending and False - Descending
-    na_position : whether null value should show up at the "first" or "last"
-                position of **all** sorted column.
+    columns_from_table : list[Column]
+        Columns from the table which will be sorted
+    ascending : sequence[bool]
+         Sequence of boolean values which correspond to each column
+         in the table to be sorted signifying the order of each column
+         True - Ascending and False - Descending
+    na_position : str
+        Whether null values should show up at the "first" or "last"
+        position of **all** sorted column.
+    stable : bool
+        Should the sort be stable? (no default)
+
+    Returns
+    -------
+    Column of indices that sorts the table
     """
     cdef table_view source_table_view = table_view_from_columns(
         columns_from_table
@@ -161,10 +180,16 @@ def order_by(list columns_from_table, object ascending, str na_position):
         ascending, repeat(na_position)
     )
     cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(sorted_order(source_table_view,
-                                     order.first,
-                                     order.second))
+    if stable:
+        with nogil:
+            c_result = move(stable_sorted_order(source_table_view,
+                                                order.first,
+                                                order.second))
+    else:
+        with nogil:
+            c_result = move(sorted_order(source_table_view,
+                                         order.first,
+                                         order.second))
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -209,12 +234,69 @@ def sort(
 
 
 @acquire_spill_lock()
+def sort_by_key(
+    list values,
+    list keys,
+    object ascending,
+    object na_position,
+    *,
+    bool stable,
+):
+    """
+    Sort a table by given keys
+
+    Parameters
+    ----------
+    values : list[Column]
+        Columns of the table which will be sorted
+    keys : list[Column]
+        Columns making up the sort key
+    ascending : list[bool]
+        Sequence of boolean values which correspond to each column
+        in the table to be sorted signifying the order of each column
+        True - Ascending and False - Descending
+    na_position : list[str]
+        Sequence of "first" or "last" values (default "first")
+        indicating the position of null values when sorting the keys.
+    stable : bool
+        Should the sort be stable? (no default)
+
+    Returns
+    -------
+    list[Column]
+        list of value columns sorted by keys
+    """
+    cdef table_view value_view = table_view_from_columns(values)
+    cdef table_view key_view = table_view_from_columns(keys)
+    cdef pair[vector[order], vector[null_order]] order = ordering(
+        ascending, na_position
+    )
+    cdef unique_ptr[table] c_result
+    if stable:
+        with nogil:
+            c_result = move(cpp_stable_sort_by_key(value_view,
+                                                   key_view,
+                                                   order.first,
+                                                   order.second))
+    else:
+        with nogil:
+            c_result = move(cpp_sort_by_key(value_view,
+                                            key_view,
+                                            order.first,
+                                            order.second))
+
+    return columns_from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
 def segmented_sort_by_key(
     list values,
     list keys,
     Column segment_offsets,
     list column_order=None,
     list null_precedence=None,
+    *,
+    bool stable,
 ):
     """
     Sort segments of a table by given keys
@@ -234,6 +316,8 @@ def segmented_sort_by_key(
     null_precedence : list[str], optional
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
+    stable : bool
+        Should the sort be stable? (no default)
 
     Returns
     -------
@@ -249,16 +333,28 @@ def segmented_sort_by_key(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
-    with nogil:
-        result = move(
-            cpp_segmented_sort_by_key(
-                values_view,
-                keys_view,
-                offsets_view,
-                order.first,
-                order.second,
+    if stable:
+        with nogil:
+            result = move(
+                cpp_stable_segmented_sort_by_key(
+                    values_view,
+                    keys_view,
+                    offsets_view,
+                    order.first,
+                    order.second,
+                )
             )
-        )
+    else:
+        with nogil:
+            result = move(
+                cpp_segmented_sort_by_key(
+                    values_view,
+                    keys_view,
+                    offsets_view,
+                    order.first,
+                    order.second,
+                )
+            )
     return columns_from_unique_ptr(move(result))
 
 
