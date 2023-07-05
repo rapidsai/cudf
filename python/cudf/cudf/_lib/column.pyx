@@ -11,7 +11,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
-    CopyOnWriteBuffer,
+    ExposureTrackedBuffer,
     SpillableBuffer,
     acquire_spill_lock,
     as_buffer,
@@ -339,8 +339,8 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data.get_ptr(
-                mode="write")
+            data = <void*><uintptr_t>(
+                col.base_data.get_ptr(mode="write")
             )
 
         cdef Column child_column
@@ -534,13 +534,16 @@ cdef class Column:
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype_itemsize)
                 )
-            elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
-                # TODO: In future, see if we can just pass on the
-                # CopyOnWriteBuffer reference to another column
-                # and still create a weak reference.
-                # With the current design that's not possible.
-                # https://github.com/rapidsai/cudf/issues/12734
-                data = data_owner.copy(deep=False)
+            elif (
+                column_owner and
+                isinstance(data_owner, ExposureTrackedBuffer)
+            ):
+                data = as_buffer(
+                    data=data_ptr,
+                    size=base_nbytes,
+                    owner=data_owner,
+                    exposed=False,
+                )
             elif (
                 # This is an optimization of the most common case where
                 # from_column_view creates a "view" that is identical to
@@ -564,9 +567,9 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, CopyOnWriteBuffer):
-                    data_owner.get_ptr(mode="write")
-                    # accessing the pointer marks it exposed.
+                if isinstance(data_owner, ExposureTrackedBuffer):
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
                 elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(
