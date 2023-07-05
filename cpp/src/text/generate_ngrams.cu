@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <nvtext/generate_ngrams.hpp>
+#include <nvtext/detail/generate_ngrams.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
