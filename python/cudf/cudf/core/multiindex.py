@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -762,6 +763,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[i] = cudf.Series(row)
+        # Sort indices in pandas compatible mode
+        # because we want the indices to be fetched
+        # in a deterministic order.
+        # TODO: Remove this after merge/join
+        # obtain deterministic ordering.
+        should_sort = cudf.get_option("mode.pandas_compatible")
+        if should_sort:
+            lookup_order = "_" + "_".join(map(str, lookup.columns))
+            lookup[lookup_order] = column.arange(len(lookup))
+            postprocess = operator.methodcaller(
+                "sort_values", by=[lookup_order, "idx"]
+            )
+        else:
+            postprocess = lambda r: r  # noqa: E731
         frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
         data_table = cudf.concat(
             [
@@ -772,7 +787,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ],
             axis=1,
         )
-        result = lookup.merge(data_table)["idx"]
+        result = postprocess(lookup.merge(data_table))["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
         if len(result) == 0:
@@ -901,13 +916,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             df.index, row_tuple, len(df.index)
         )
         indices = cudf.Series(valid_indices)
-        if cudf.get_option("mode.pandas_compatible"):
-            # Sort indices in pandas compatible mode
-            # because we want the indices to be fetched
-            # in a deterministic order.
-            # TODO: Remove this after merge/join
-            # obtain deterministic ordering.
-            indices = indices.sort_values()
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
