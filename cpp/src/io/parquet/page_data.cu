@@ -773,10 +773,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
-    out_thread0 = ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY ||
-                   (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY)
-                    ? 64
-                    : 32;
+    switch (s->col.data_type & 7) {
+      case BOOLEAN: [[fallthrough]];
+      case BYTE_ARRAY: [[fallthrough]];
+      case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64;
+      default: out_thread0 = 32;
+    }
   }
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
