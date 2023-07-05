@@ -64,16 +64,17 @@ std::unique_ptr<column> hash(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the hash value of each row in the input set of columns
+ * @brief Computes the hash values of each row in the input set of columns
  *
- * This function takes a 64-bit seed value and returns a column of type UINT64.
+ * This function takes a 64-bit seed value and returns hash values using the
+ * MurmurHash3_x64_128 algorithm. The hash produces in two uint64 values per row.
  *
  * @param input The table of columns to hash
  * @param seed Optional seed value to use for the hash function
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A column where each row is the hash of a column from the input
+ * @returns A table of two UINT64 columns
  */
 std::unique_ptr<table> murmur_hash3_64_128(
   table_view const& input,
