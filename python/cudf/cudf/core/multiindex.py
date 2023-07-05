@@ -763,20 +763,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[i] = cudf.Series(row)
-        # Sort indices in pandas compatible mode
-        # because we want the indices to be fetched
-        # in a deterministic order.
-        # TODO: Remove this after merge/join
-        # obtain deterministic ordering.
-        should_sort = cudf.get_option("mode.pandas_compatible")
-        if should_sort:
-            lookup_order = "_" + "_".join(map(str, lookup.columns))
-            lookup[lookup_order] = column.arange(len(lookup))
-            postprocess = operator.methodcaller(
-                "sort_values", by=[lookup_order, "idx"]
-            )
-        else:
-            postprocess = lambda r: r  # noqa: E731
         frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
         data_table = cudf.concat(
             [
@@ -787,6 +773,19 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ],
             axis=1,
         )
+        # Sort indices in pandas compatible mode
+        # because we want the indices to be fetched
+        # in a deterministic order.
+        # TODO: Remove this after merge/join
+        # obtain deterministic ordering.
+        if cudf.get_option("mode.pandas_compatible"):
+            lookup_order = "_" + "_".join(map(str, lookup.columns))
+            lookup[lookup_order] = column.arange(len(lookup))
+            postprocess = operator.methodcaller(
+                "sort_values", by=[lookup_order, "idx"]
+            )
+        else:
+            postprocess = lambda r: r  # noqa: E731
         result = postprocess(lookup.merge(data_table))["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
