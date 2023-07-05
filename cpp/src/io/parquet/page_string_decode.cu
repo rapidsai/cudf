@@ -122,7 +122,7 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
  * @param s The local page info
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
- * @param /////////////is_bounds_pg True if this page is clipped
+ * @param is_bounds_pg True if this page is clipped
  * @param has_repetition True if the schema is nested
  * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
