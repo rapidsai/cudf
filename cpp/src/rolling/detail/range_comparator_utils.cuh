@@ -102,7 +102,7 @@ __host__ __device__ T subtract_safe(T const& value, T const& delta)
  * 1. thrust::less(NaN, 10) returns false
  * 2. thrust::less(10, NaN) also returns false
  *
- * This comparator honours the position of NaN values vis-à-vis non-NaN values.
+ * This comparator honors the position of NaN values vis-à-vis non-NaN values.
  *
  */
 struct nan_aware_less {
@@ -130,7 +130,7 @@ struct nan_aware_less {
  * 1. thrust::greater(NaN, 10) returns false
  * 2. thrust::greater(10, NaN) also returns false
  *
- * This comparator honours the position of NaN values vis-à-vis non-NaN values.
+ * This comparator honors the position of NaN values vis-à-vis non-NaN values.
  *
  */
 struct nan_aware_greater {
