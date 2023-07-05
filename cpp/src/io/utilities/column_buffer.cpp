@@ -165,6 +165,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         // resource that the calling code expected.
         return buffer.make_string_column(stream);
       } else {
+        printf("################## STRING TO LIST\n");
         // convert to binary
         auto const string_col = buffer.make_string_column(stream);
         auto const num_rows   = string_col->size();

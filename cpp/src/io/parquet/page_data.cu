@@ -40,8 +40,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
                                        int src_pos,
                                        void* dstv)
 {
+  printf("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\n");
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  if (s->dtype_len == 4) {
+  if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
@@ -52,6 +53,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
     auto* dst   = static_cast<string_index_pair*>(dstv);
     dst->first  = ptr;
     dst->second = len;
+    printf("val: %d %d len: %d\n", int(*ptr), int(*(ptr + 1)), int(len));
   }
 }
 
@@ -763,6 +765,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
+  if (t == 0) { printf("############################# IM THE KING\n"); }
+
   if (!setupLocalPageInfo(
         s, &pages[page_idx], chunks, min_row, num_rows, non_string_filter{chunks}, true)) {
     return;
@@ -773,8 +777,11 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
-    out_thread0 =
-      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
+    out_thread0 = ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY ||
+                   (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY)
+                    ? 64
+                    : 32;
+    if (t == 0) { printf("############## no dict base\n"); }
   }
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
@@ -808,10 +815,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
 
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
+        printf("gpuDecodeDictionaryIndices\n");
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
       } else if ((s->col.data_type & 7) == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
+      } else if ((s->col.data_type & 7) == BYTE_ARRAY or
+                 (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
@@ -852,6 +861,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (dtype == BYTE_ARRAY) {
+          printf("$$$$$$$$$$$$$$$$-------------------------------$$$\n");
           if (s->col.converted_type == DECIMAL) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
             auto const decimal_precision = s->col.decimal_precision;
@@ -863,6 +873,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
             }
           } else {
+            printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
             gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == BOOLEAN) {
@@ -881,6 +892,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageData(
               }
               break;
           }
+        } else if (dtype == FIXED_LEN_BYTE_ARRAY) {
+          printf("$$$$$$$$$$$$$$$))))))))))))))))))))))))))))))))))\n");
+          gpuOutputString(s,
+                          sb,
+                          val_src_pos,
+                          nesting_info_base[leaf_level_index].data_out +
+                            static_cast<size_t>(dst_pos) * sizeof(string_index_pair));
         } else if (dtype == INT96) {
           gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
