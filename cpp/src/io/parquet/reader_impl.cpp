@@ -440,4 +440,26 @@ bool reader::impl::has_next()
   return _current_read_chunk < _chunk_read_info.size();
 }
 
+static parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
+{
+  SchemaElement const& sch = mt->get_schema(idx);
+  std::vector<parquet_column_schema> children;
+  for (auto const& child_idx : sch.children_idx) {
+    children.push_back(walk_schema(mt, child_idx));
+  }
+  return parquet_column_schema{
+    sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
+}
+
+parquet_metadata read_parquet_metadata(std::vector<std::unique_ptr<datasource>>&& sources)
+{
+  // Open and parse the source dataset metadata
+  auto metadata = std::make_unique<aggregate_reader_metadata>(sources);
+
+  return parquet_metadata{parquet_schema{walk_schema(metadata.get(), 0)},
+                          metadata->get_num_rows(),
+                          metadata->get_num_row_groups(),
+                          metadata->get_key_value_metadata()[0]};
+}
+
 }  // namespace cudf::io::detail::parquet
