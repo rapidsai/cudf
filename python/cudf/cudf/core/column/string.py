@@ -5336,6 +5336,35 @@ class StringMethods(ColumnMethods):
             libstrings.minhash(self._column, seeds_column, n, method)
         )
 
+    def jaccard_index(self, input: cudf.Series, n: int = 5) -> SeriesOrIndex:
+        """
+        Compute the jaccard index with this column against the given
+        input strings column.
+
+        Parameters
+        ----------
+        input : Series
+            The input strings column to compute the jaccard index against.
+            Must have the same number of strings as this column.
+        n : int
+            The number of characters for the sliding window calculation.
+            Default is 5. Minimum is 5.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str1 = cudf.Series(['the brown dog','jumped about'])
+        >>> str2 = cudf.Series(['the black cat','jumped around'])
+        >>> str1.str.jaccard_index(str2, 5)
+        0    0.058824
+        1    0.307692
+        dtype: float32
+        """
+
+        return self._return_or_inplace(
+            libstrings.jaccard_index(self._column, input._column, n),
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, cudf.Scalar):
