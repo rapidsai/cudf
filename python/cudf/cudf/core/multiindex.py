@@ -779,7 +779,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Remove this after merge/join
         # obtain deterministic ordering.
         if cudf.get_option("mode.pandas_compatible"):
-            lookup_order = "_" + "_".join(map(str, lookup.columns))
+            lookup_order = "_" + "_".join(map(str, lookup._data.names))
             lookup[lookup_order] = column.arange(len(lookup))
             postprocess = operator.methodcaller(
                 "sort_values", by=[lookup_order, "idx"]
