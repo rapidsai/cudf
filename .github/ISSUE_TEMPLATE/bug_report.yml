@@ -45,6 +45,7 @@ body:
       options:
         - Docker
         - Conda
+        - pip
         - Source
 
   - type: textarea
@@ -67,16 +68,27 @@ body:
     attributes:
       label: Relevant log output
       description: Please paste relevant error and log output here.
+      value: |
+        <details><summary>Click here to see log outputs</summary><pre>
+
+        Paste log outputs here, it will be hidden by default
+
+        </pre></details>
 
   - type: textarea
     id: env-details
     attributes:
       label: Environment details
       description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here.
-      placeholder: |
+      value: |
        Environment location: Bare metal, Docker, Cloud (specify cloud provider)
        If using Docker, provide the `docker pull` & `docker run` commands used
-       Paste the output from `print_env.sh` (linked above)
+       
+       <details><summary>Click here to see environment details</summary><pre>
+
+        Paste the results of print_env.sh here, it will be hidden by default
+
+       </pre></details>
 
   - type: textarea
     id: misc
