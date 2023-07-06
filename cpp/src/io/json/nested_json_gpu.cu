@@ -1341,7 +1341,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream)
 {
-  // Instantiate FST for post-processing the token stream
+  // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
+  // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
   auto filter_fst =
     fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
@@ -1353,6 +1354,13 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
+
+  // The FST is run on the reverse token stream, discarding all tokens between ErrorBegin and the
+  // next LineEnd (LineEnd, inv_token_0, inv_token_1, ..., inv_token_n, ErrorBegin, LineEnd, ...),
+  // emitting a [StructBegin, StructEnd] pair on the end of such an invalid line. In that example,
+  // inv_token_i for i in [0, n] together with the ErrorBegin are removed and replaced with
+  // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant after
+  // this stage anymore
   filter_fst.Transduce(
     thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
                                   tokens.size()),
