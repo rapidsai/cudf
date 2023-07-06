@@ -15,6 +15,9 @@
  */
 
 #pragma once
+// To avoid https://github.com/NVIDIA/libcudacxx/issues/460
+// in libcudacxx with CTK 12.0/12.1
+#include <cuda_runtime.h>
 
 #include <cudf/types.hpp>
 

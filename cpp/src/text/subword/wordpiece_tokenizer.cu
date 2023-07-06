@@ -61,7 +61,7 @@ namespace {
  * Memory required is 13 bytes per code point values:
  * - 4 bytes each for `start_word_indices` and `end_word_indices`
  * - 4 bytes for each `token_ids`
- * - 1 byte for each each `tokens_per_word`
+ * - 1 byte for each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
  * @param[in] code_points A pointer to the code points in the strings after normalization.

@@ -63,11 +63,12 @@ struct BaseGroupedRollingRangeOrderByTest : cudf::test::BaseFixture {
     cudf::range_window_bounds const& preceding,
     cudf::range_window_bounds const& following,
     cudf::column_view const& order_by_column,
-    cudf::rolling_aggregation const& agg) const
+    cudf::rolling_aggregation const& agg,
+    cudf::order const& order = cudf::order::ASCENDING) const
   {
     return cudf::grouped_range_rolling_window(cudf::table_view{{grouping_keys->view()}},
                                               order_by_column,
-                                              cudf::order::ASCENDING,
+                                              order,
                                               agg_values->view(),
                                               preceding,
                                               following,
@@ -78,13 +79,15 @@ struct BaseGroupedRollingRangeOrderByTest : cudf::test::BaseFixture {
   [[nodiscard]] column_ptr get_grouped_range_rolling_sum_result(
     cudf::range_window_bounds const& preceding,
     cudf::range_window_bounds const& following,
-    cudf::column_view const& order_by_column) const
+    cudf::column_view const& order_by_column,
+    cudf::order const& order = cudf::order::ASCENDING) const
   {
     return get_grouped_range_rolling_result(
       preceding,
       following,
       order_by_column,
-      *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+      *cudf::make_sum_aggregation<cudf::rolling_aggregation>(),
+      order);
   }
 };
 
@@ -96,6 +99,9 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
   using base::get_grouped_range_rolling_sum_result;
   using base::grouping_keys;
   using base::num_rows;
+
+  static auto constexpr inf = std::numeric_limits<T>::infinity();
+  static auto constexpr nan = std::numeric_limits<T>::quiet_NaN();
 
   [[nodiscard]] auto make_range_bounds(T const& value) const
   {
@@ -116,6 +122,16 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
     return fwcw<T>(begin, begin + num_rows).release();
   }
 
+  /// Generate order-by column with values: [-1400, -1300, -1200 ... -300, -200, -100]
+  [[nodiscard]] column_ptr generate_negative_order_by_column() const
+  {
+    auto const begin =
+      thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                      [&](T const& i) -> T { return (i - num_rows) * 100; });
+
+    return fwcw<T>(begin, begin + num_rows).release();
+  }
+
   /**
    * @brief Run grouped_rolling test with no nulls in the order-by column
    */
@@ -124,6 +140,20 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
     auto const preceding = make_range_bounds(T{200});
     auto const following = make_range_bounds(T{100});
     auto const order_by  = generate_order_by_column();
+    auto const results   = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+    auto const expected_results = bigints_column{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9},
+                                                 cudf::test::iterators::no_nulls()};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+  }
+
+  /**
+   * @brief Run grouped_rolling test with no nulls in the order-by column
+   */
+  void run_test_negative_oby() const
+  {
+    auto const preceding = make_range_bounds(T{200});
+    auto const following = make_range_bounds(T{100});
+    auto const order_by  = generate_negative_order_by_column();
     auto const results   = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
     auto const expected_results = bigints_column{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9},
                                                  cudf::test::iterators::no_nulls()};
@@ -214,6 +244,128 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
                                                  cudf::test::iterators::no_nulls()};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
   }
+
+  [[nodiscard]] column_ptr generate_ascending_order_by_NaNs_infinity()
+  {
+    auto const vec =
+      std::vector<T>{-inf, -inf, -50, 0, 7, nan, -inf, 0, inf, nan, 0, inf, nan, nan};
+    return fwcw<T>(vec.begin(), vec.end()).release();
+  }
+
+  void run_test_bounded_ascending_order_by_NaNs_infinity()
+  {
+    auto const order_by  = generate_ascending_order_by_NaNs_infinity();
+    auto const preceding = make_range_bounds(T{200});
+    auto const following = make_range_bounds(T{100});
+
+    auto const results = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+
+    auto const expected_results =
+      bigints_column{{2, 2, 3, 3, 3, 1, 2, 2, 2, 2, 3, 3, 6, 6}, cudf::test::iterators::no_nulls()};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+  }
+
+  void run_test_unbounded_ascending_order_by_NaNs_infinity()
+  {
+    auto const order_by = generate_ascending_order_by_NaNs_infinity();
+
+    {
+      // UNBOUNDED PRECEDING to CURRENT ROW.
+      auto const preceding = make_unbounded_range_bounds();
+      auto const following = make_range_bounds(T{0});
+
+      auto const results = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+
+      auto const expected_results = bigints_column{{2, 2, 3, 4, 5, 6, 2, 4, 6, 8, 3, 6, 12, 12},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+    {
+      // CURRENT ROW to UNBOUNDED FOLLOWING
+      auto const preceding = make_range_bounds(T{0});
+      auto const following = make_unbounded_range_bounds();
+
+      auto const results = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+
+      auto const expected_results = bigints_column{{6, 6, 4, 3, 2, 1, 8, 6, 4, 2, 12, 9, 6, 6},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+    {
+      // UNBOUNDED PRECEDING to UNBOUNDED FOLLOWING
+      auto const preceding = make_unbounded_range_bounds();
+      auto const following = make_unbounded_range_bounds();
+
+      auto const results = get_grouped_range_rolling_sum_result(preceding, following, *order_by);
+
+      auto const expected_results = bigints_column{{6, 6, 6, 6, 6, 6, 8, 8, 8, 8, 12, 12, 12, 12},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+  }
+
+  [[nodiscard]] column_ptr generate_descending_order_by_NaNs_infinity()
+  {
+    auto const vec =
+      std::vector<T>{nan, 7, 0, -50, -inf, -inf, nan, inf, 0, -inf, nan, nan, inf, 0};
+    return fwcw<T>(vec.begin(), vec.end()).release();
+  }
+
+  void run_test_bounded_descending_order_by_NaNs_infinity()
+  {
+    auto const order_by  = generate_descending_order_by_NaNs_infinity();
+    auto const preceding = make_range_bounds(T{200});
+    auto const following = make_range_bounds(T{100});
+
+    auto const results = get_grouped_range_rolling_sum_result(
+      preceding, following, *order_by, cudf::order::DESCENDING);
+
+    auto const expected_results =
+      bigints_column{{1, 3, 3, 3, 2, 2, 2, 2, 2, 2, 6, 6, 3, 3}, cudf::test::iterators::no_nulls()};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+  }
+
+  void run_test_unbounded_descending_order_by_NaNs_infinity()
+  {
+    auto const order_by = generate_descending_order_by_NaNs_infinity();
+
+    {
+      // UNBOUNDED PRECEDING to CURRENT ROW.
+      auto const preceding = make_unbounded_range_bounds();
+      auto const following = make_range_bounds(T{0});
+
+      auto const results = get_grouped_range_rolling_sum_result(
+        preceding, following, *order_by, cudf::order::DESCENDING);
+
+      auto const expected_results = bigints_column{{1, 2, 3, 4, 6, 6, 2, 4, 6, 8, 6, 6, 9, 12},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+    {
+      // CURRENT ROW to UNBOUNDED FOLLOWING
+      auto const preceding = make_range_bounds(T{0});
+      auto const following = make_unbounded_range_bounds();
+
+      auto const results = get_grouped_range_rolling_sum_result(
+        preceding, following, *order_by, cudf::order::DESCENDING);
+
+      auto const expected_results = bigints_column{{6, 5, 4, 3, 2, 2, 8, 6, 4, 2, 12, 12, 6, 3},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+    {
+      // UNBOUNDED PRECEDING to UNBOUNDED FOLLOWING
+      auto const preceding = make_unbounded_range_bounds();
+      auto const following = make_unbounded_range_bounds();
+
+      auto const results = get_grouped_range_rolling_sum_result(
+        preceding, following, *order_by, cudf::order::DESCENDING);
+
+      auto const expected_results = bigints_column{{6, 6, 6, 6, 6, 6, 8, 8, 8, 8, 12, 12, 12, 12},
+                                                   cudf::test::iterators::no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+  }
 };
 
 template <typename FloatingPointType>
@@ -225,7 +377,10 @@ TYPED_TEST_SUITE(GroupedRollingRangeOrderByFloatingPointTest, cudf::test::Floati
 TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, BoundedRanges)
 {
   this->run_test_no_null_oby();
+  this->run_test_negative_oby();
   this->run_test_nulls_in_oby();
+  this->run_test_bounded_ascending_order_by_NaNs_infinity();
+  this->run_test_bounded_descending_order_by_NaNs_infinity();
 }
 
 TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, UnboundedRanges)
@@ -233,6 +388,8 @@ TYPED_TEST(GroupedRollingRangeOrderByFloatingPointTest, UnboundedRanges)
   this->run_test_unbounded_preceding_to_unbounded_following();
   this->run_test_unbounded_preceding_to_current_row();
   this->run_test_current_row_to_unbounded_following();
+  this->run_test_unbounded_ascending_order_by_NaNs_infinity();
+  this->run_test_unbounded_descending_order_by_NaNs_infinity();
 }
 
 template <typename DecimalT>

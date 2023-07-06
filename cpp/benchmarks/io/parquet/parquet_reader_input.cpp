@@ -114,6 +114,38 @@ void BM_parquet_read_io_compression(
   parquet_read_common(write_opts, source_sink, state);
 }
 
+template <cudf::io::io_type IOType>
+void BM_parquet_read_io_small_mixed(nvbench::state& state,
+                                    nvbench::type_list<nvbench::enum_type<IOType>>)
+{
+  auto const d_type =
+    std::pair<cudf::type_id, cudf::type_id>{cudf::type_id::STRING, cudf::type_id::INT32};
+
+  cudf::size_type const cardinality = state.get_int64("cardinality");
+  cudf::size_type const run_length  = state.get_int64("run_length");
+  cudf::size_type const num_strings = state.get_int64("num_string_cols");
+  auto const source_type            = IOType;
+
+  // want 80 pages total, across 4 columns, so 20 pages per column
+  cudf::size_type constexpr n_col          = 4;
+  cudf::size_type constexpr page_size_rows = 10'000;
+  cudf::size_type constexpr num_rows       = page_size_rows * (80 / n_col);
+
+  auto const tbl =
+    create_random_table(mix_dtypes(d_type, n_col, num_strings),
+                        row_count{num_rows},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+  auto const view = tbl->view();
+
+  cuio_source_sink_pair source_sink(source_type);
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+      .max_page_size_rows(10'000)
+      .compression(cudf::io::compression_type::NONE);
+
+  parquet_read_common(write_opts, source_sink, state);
+}
+
 template <data_type DataType, cudf::io::io_type IOType>
 void BM_parquet_read_chunks(
   nvbench::state& state,
@@ -203,3 +235,12 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_chunks,
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("byte_limit", {0, 500'000});
+
+NVBENCH_BENCH_TYPES(BM_parquet_read_io_small_mixed,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<cudf::io::io_type::FILEPATH>))
+  .set_name("parquet_read_io_small_mixed")
+  .set_type_axes_names({"io"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("num_string_cols", {1, 2, 3});

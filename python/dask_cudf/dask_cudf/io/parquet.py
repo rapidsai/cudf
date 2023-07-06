@@ -167,19 +167,23 @@ class CudfEngine(ArrowDatasetEngine):
 
             for i, (name, index2) in enumerate(partition_keys):
 
-                # Build the column from `codes` directly
-                # (since the category is often a larger dtype)
-                codes = as_column(
-                    partitions[i].keys.get_loc(index2),
-                    length=len(df),
-                )
-                df[name] = build_categorical_column(
-                    categories=partitions[i].keys,
-                    codes=codes,
-                    size=codes.size,
-                    offset=codes.offset,
-                    ordered=False,
-                )
+                if len(partitions[i].keys):
+                    # Build a categorical column from `codes` directly
+                    # (since the category is often a larger dtype)
+                    codes = as_column(
+                        partitions[i].keys.get_loc(index2),
+                        length=len(df),
+                    )
+                    df[name] = build_categorical_column(
+                        categories=partitions[i].keys,
+                        codes=codes,
+                        size=codes.size,
+                        offset=codes.offset,
+                        ordered=False,
+                    )
+                elif name not in df.columns:
+                    # Add non-categorical partition column
+                    df[name] = as_column(index2, length=len(df))
 
         return df
 
