@@ -558,10 +558,10 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
-    # Make sure we read in the "filtered" columns needed for
-    # row-wise filtering after IO. This means that one or
-    # more columns will be dropped almost immediately after IO.
-    # However, we do NEED these columns for accurate filtering.
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
     projection = None
     if columns and filters:
         filtered_columns = _filtered_columns(filters)
