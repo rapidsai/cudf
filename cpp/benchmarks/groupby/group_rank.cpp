@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/groupby.hpp>

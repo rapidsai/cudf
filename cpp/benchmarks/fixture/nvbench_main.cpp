@@ -14,9 +14,25 @@
  * limitations under the License.
  */
 
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#include <benchmarks/fixture/nvbench_fixture.hpp>
 #define NVBENCH_ENVIRONMENT cudf::nvbench_base_fixture
 
 #include <nvbench/main.cuh>
+
+#include <vector>
+
+#undef NVBENCH_MAIN_PARSE
+#define NVBENCH_MAIN_PARSE(argc, argv) \
+  nvbench::option_parser parser;       \
+  std::vector<std::string> m_args;     \
+  for (int i = 0; i < argc; ++i) {     \
+    std::string arg = argv[i];         \
+    if (arg == "--rmm_mode") {         \
+      i += 2;                          \
+    } else {                           \
+      m_args.push_back(arg);           \
+    }                                  \
+  }                                    \
+  parser.parse(m_args)
 
 NVBENCH_MAIN
