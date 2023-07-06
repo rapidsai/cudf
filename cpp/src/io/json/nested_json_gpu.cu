@@ -1313,7 +1313,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
   auto const num_stack_ops = d_num_stack_ops.value(stream);
 
   // Stack operations with indices are converted to top of the stack for each character in the input
-  if (reset_on_new_line) {
+  if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
     fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
       stack_ops.data(),
       device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
