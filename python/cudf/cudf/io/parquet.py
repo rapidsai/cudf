@@ -558,6 +558,17 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
+    # Make sure we read in the "filtered" columns needed for
+    # row-wise filtering after IO. This means that one or
+    # more columns will be dropped almost immediately after IO.
+    # However, we do NEED these columns for accurate filtering.
+    projection = None
+    if columns and filters:
+        filtered_columns = _filtered_columns(filters)
+        if filtered_columns - set(columns):
+            projection = columns
+            columns = sorted(filtered_columns | set(columns))
+
     # Convert parquet data to a cudf.DataFrame
     df = _parquet_to_frame(
         filepaths_or_buffers,
@@ -574,7 +585,10 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
-    return _apply_post_filters(df, filters)
+    df = _apply_post_filters(df, filters)
+    if projection:
+        return df[projection]
+    return df
 
 
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
@@ -1432,3 +1446,23 @@ def _hive_dirname(name, val):
     if pd.isna(val):
         val = "__HIVE_DEFAULT_PARTITION__"
     return f"{name}={val}"
+
+
+def _filtered_columns(filters):
+    # Utility to extract the set of columns
+    # used in a parquet `filters` argument
+
+    def _flatten_lists(seq):
+        # Logic based on `dask.core.flatten`
+        if isinstance(seq, str):
+            yield seq
+        else:
+            for item in seq:
+                if isinstance(item, list):
+                    yield from _flatten_lists(item)
+                else:
+                    yield item
+
+    # Assume column name is always first element in the
+    # flattened list of tuples
+    return {v[0] for v in _flatten_lists(filters) if len(v)}
