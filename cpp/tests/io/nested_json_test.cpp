@@ -171,9 +171,8 @@ TEST_F(JsonTest, StackContext)
   cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
-  constexpr bool recover_from_error = false;
-  cuio_json::detail::get_stack_context(
-    d_input, stack_context.device_ptr(), recover_from_error, stream);
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);
@@ -221,9 +220,8 @@ TEST_F(JsonTest, StackContextUtf8)
   cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
-  constexpr bool recover_from_error = false;
-  cuio_json::detail::get_stack_context(
-    d_input, stack_context.device_ptr(), recover_from_error, stream);
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);
@@ -276,9 +274,8 @@ TEST_F(JsonTest, StackContextRecovering)
   cudf::detail::hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   // Run algorithm
-  constexpr bool recover_from_error = true;
-  cuio_json::detail::get_stack_context(
-    d_input, stack_context.device_ptr(), recover_from_error, stream);
+  constexpr auto stack_behavior = cuio_json::stack_behavior_t::ResetOnDelimiter;
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);

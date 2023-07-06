@@ -1262,7 +1262,7 @@ namespace detail {
 
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
-                       bool reset_on_new_line,
+                       stack_behavior_t stack_behavior,
                        rmm::cuda_stream_view stream)
 {
   check_input_size(json_in.size());
@@ -1289,8 +1289,9 @@ void get_stack_context(device_span<SymbolT const> json_in,
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
   // Translation table specialized on the choice of whether to reset on newlines outside of strings
-  const auto translation_table =
-    reset_on_new_line ? to_stack_op::resetting_translation_table : to_stack_op::translation_table;
+  const auto translation_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
+                                   ? to_stack_op::resetting_translation_table
+                                   : to_stack_op::translation_table;
 
   auto json_to_stack_ops_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(to_stack_op::symbol_groups),
@@ -1407,7 +1408,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
     // Identify what is the stack context for each input character (JSON-root, struct, or list)
-    get_stack_context(json_in, stack_op_indices.data(), recover_from_error, stream);
+    auto const stack_behavior = recover_from_error ? stack_behavior_t::ResetOnDelimiter
+                                                   : stack_behavior_t::PushPopWithoutReset;
+    get_stack_context(json_in, stack_op_indices.data(), stack_behavior, stream);
 
     rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
