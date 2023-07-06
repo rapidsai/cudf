@@ -98,7 +98,7 @@ struct stats_caster {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
   static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
     switch (type) {
