@@ -338,8 +338,12 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
     with expect_pandas_performance_warning(key_tuple):
-        expected = pdf.loc[key_tuple].sort_index()
+        expected = pdf.loc[key_tuple]
     got = gdf.loc[key_tuple].sort_index()
+    assert_eq(expected.sort_index(), got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.loc[key_tuple]
     assert_eq(expected, got)
 
 

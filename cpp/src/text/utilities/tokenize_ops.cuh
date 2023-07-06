@@ -89,6 +89,7 @@ struct characters_tokenizer {
   __device__ bool next_token()
   {
     auto const src_ptr = d_str.data();
+    if (current_position >= d_str.size_bytes()) { return false; }
     if (current_position != 0) {  // skip these 2 lines the first time through
       current_position += cudf::strings::detail::bytes_in_char_utf8(src_ptr[current_position]);
       start_position = current_position;
