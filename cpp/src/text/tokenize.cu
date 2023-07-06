@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include <text/utilities/tokenize_ops.cuh>
+
+#include <nvtext/detail/tokenize.hpp>
+#include <nvtext/tokenize.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -24,9 +29,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <nvtext/detail/tokenize.hpp>
-#include <nvtext/tokenize.hpp>
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
