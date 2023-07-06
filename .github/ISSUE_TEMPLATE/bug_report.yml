@@ -83,7 +83,7 @@ body:
       value: |
        Environment location: Bare metal, Docker, Cloud (specify cloud provider)
        If using Docker, provide the `docker pull` & `docker run` commands used
-       
+
        <details><summary>Click here to see environment details</summary><pre>
 
         Paste the results of print_env.sh here, it will be hidden by default
