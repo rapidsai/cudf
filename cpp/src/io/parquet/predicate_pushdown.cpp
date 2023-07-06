@@ -15,7 +15,6 @@
  */
 #include "reader_impl_helpers.hpp"
 
-#include <cudf/ast/detail/expression_parser.hpp>  // possibly_null_value defined here, but used in operators.hpp
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -33,6 +32,7 @@
 
 #include <algorithm>
 #include <list>
+#include <numeric>
 #include <optional>
 
 namespace cudf::io::detail::parquet {

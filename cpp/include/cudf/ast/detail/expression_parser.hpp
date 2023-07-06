@@ -15,12 +15,12 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/optional.h>
 #include <thrust/scan.h>
 
 #include <functional>
@@ -71,24 +71,6 @@ struct alignas(8) device_data_reference {
            std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
   }
 };
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
