@@ -140,8 +140,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.data is not None:
             if mode == "read":
-                obj = _proxy_cai_obj(
-                    self.data._get_cuda_array_interface(readonly=True),
+                obj = cuda_array_interface_wrapper(
+                    ptr=self.data.get_ptr(mode="read"),
+                    size=self.data.size,
                     owner=self.data,
                 )
             elif mode == "write":
@@ -176,8 +177,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.mask is not None:
             if mode == "read":
-                obj = _proxy_cai_obj(
-                    self.mask._get_cuda_array_interface(readonly=True),
+                obj = cuda_array_interface_wrapper(
+                    ptr=self.mask.get_ptr(mode="read"),
+                    size=self.mask.size,
                     owner=self.mask,
                 )
             elif mode == "write":
@@ -1963,9 +1965,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary)
-        if cudf.get_option("copy_on_write"):
-            data._zero_copied = True
+        data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -2636,22 +2636,3 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     return libcudf.concat.concat_columns([o for o in objs if len(o)])
-
-
-def _proxy_cai_obj(cai, owner):
-    """
-    Returns a proxy CAI SimpleNameSpace wrapped
-    with the provided `cai` as `__cuda_array_interface__`
-    and owner as `owner` to keep the object alive.
-    This is an internal utility for `data_array_view`
-    and `mask_array_view` where an object with
-    read-only CAI is required.
-    """
-    return cuda_array_interface_wrapper(
-        ptr=cai["data"][0],
-        size=cai["shape"][0],
-        owner=owner,
-        readonly=cai["data"][1],
-        typestr=cai["typestr"],
-        version=cai["version"],
-    )
