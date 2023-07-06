@@ -18,8 +18,8 @@ function(find_and_configure_cucollections)
     cuco 0.0.1
     GLOBAL_TARGETS cuco::cuco
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/NVIDIA/cuCollections.git
-    GIT_TAG 1ea86e270ffcd9148c978cae33fdf10c3c853448
+    GIT_REPOSITORY https://github.com/PointKernel/cuCollections.git
+    GIT_TAG fix-std-pair-traits
     OPTIONS "BUILD_TESTS OFF" ￼ "BUILD_BENCHMARKS OFF" ￼ "BUILD_EXAMPLES OFF"
   )
 endfunction()
