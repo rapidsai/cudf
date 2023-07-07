@@ -6675,17 +6675,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        If a list of dict/series is passed and the keys are all contained in
-        the DataFrame's index, the order of the columns in the resulting
-        DataFrame will be unchanged.
-        Iteratively appending rows to a cudf DataFrame can be more
-        computationally intensive than a single concatenate. A better
-        solution is to append those rows to a list and then concatenate
-        the list with the original DataFrame all at once.
-        `verify_integrity` parameter is not supported yet
-
         See Also
         --------
         cudf.concat : General function to concatenate DataFrame or
@@ -6745,6 +6734,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  2
         3  3
         4  4
+
+        .. pandas-compat::
+            **DataFrame.append**
+
+            If a list of dict/series is passed and the keys are all contained in
+            the DataFrame's index, the order of the columns in the resulting
+            DataFrame will be unchanged.
+            Iteratively appending rows to a cudf DataFrame can be more
+            computationally intensive than a single concatenate. A better
+            solution is to append those rows to a list and then concatenate
+            the list with the original DataFrame all at once.
+            `verify_integrity` parameter is not supported yet
         """
         if isinstance(other, dict):
             if not ignore_index:
@@ -7066,21 +7067,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             DataFrame if any assignment statements are included in
             ``expr``, or None if ``inplace=True``.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Additional kwargs are not supported.
-            * Bitwise and logical operators are not dtype-dependent.
-              Specifically, `&` must be used for bitwise operators on integers,
-              not `and`, which is specifically for the logical and between
-              booleans.
-            * Only numerical types are currently supported.
-            * Operators generally will not cast automatically. Users are
-              responsible for casting columns to suitable types before
-              evaluating a function.
-            * Multiple assignments to the same name (i.e. a sequence of
-              assignment statements where later statements are conditioned upon
-              the output of earlier statements) is not supported.
 
         Examples
         --------
