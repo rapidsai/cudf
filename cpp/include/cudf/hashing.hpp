@@ -73,7 +73,7 @@ std::unique_ptr<column> hash(
 namespace hashing {
 
 /**
- * @brief Computes the MurmurHash3_32 of each row in the given table
+ * @brief Computes the MurmurHash3 32-bit of each row in the given table
  *
  * This function computes the hash of each column using the `seed` for the first column
  * and the resulting hash as a seed for the next column and so on.
@@ -93,7 +93,7 @@ std::unique_ptr<column> murmur_hash3_32(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the MurmurHash3_32 of each row in the given table
+ * @brief Computes the MurmurHash3 32-bit of each row in the given table
  *
  * This function computes the hash similar to MurmurHash3_32 with special processing
  * to match Spark's implementation results.
