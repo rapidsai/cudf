@@ -51,7 +51,7 @@ using map_type = cuco::static_map<size_type, size_type>;
  * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
  * declaration of this struct somewhere else.
  */
-struct slot_type : public map_type::pair_atomic_type {};
+struct slot_type : public map_type::slot_type {};
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -217,7 +217,7 @@ void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionari
  * @brief Populates the hash maps with unique values from the stripe.
  *
  * @param dictionaries Dictionary descriptors
- * @param orc_columns Pre-order flattened device array of ORC column views
+ * @param columns  Pre-order flattened device array of ORC column views
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
@@ -359,7 +359,7 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
  * @brief Launches kernel for encoding column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array
- * @param[in] orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] columns Pre-order flattened device array of ORC column views
  * @param[in] chunks encoder chunk device array [column][rowgroup]
  * @param[in] num_string_columns Number of string columns
  * @param[in] num_stripes Number of stripes

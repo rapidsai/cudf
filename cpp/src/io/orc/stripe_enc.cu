@@ -997,6 +997,7 @@ __global__ void __launch_bounds__(block_size)
  * @brief Encode column dictionaries
  *
  * @param[in] stripes Stripe dictionaries device array
+ * @param[in] columns Pre-order flattened device array of ORC column views
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  */
