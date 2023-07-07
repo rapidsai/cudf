@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "struct_minmax_util.cuh"
+#include "nested_type_minmax_util.cuh"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/struct_minmax_util.cuh>
+#include <reductions/nested_type_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -136,7 +136,8 @@ static constexpr bool is_group_reduction_supported()
     case aggregation::MAX: return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
     case aggregation::ARGMIN:
     case aggregation::ARGMAX:
-      return is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>;
+      return is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view> or
+             std::is_same_v<T, cudf::list_view>;
     default: return false;
   }
 }
@@ -220,6 +221,60 @@ struct group_reduction_functor<
   {
     // This is be expected to be size_type.
     using ResultType = cudf::detail::target_type_t<cudf::struct_view, K>;
+
+    auto result = make_fixed_width_column(
+      data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
+
+    if (values.is_empty()) { return result; }
+
+    // Perform segmented reduction to find ARGMIN/ARGMAX.
+    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            inp_iter,
+                            thrust::make_discard_iterator(),
+                            out_iter,
+                            thrust::equal_to{},
+                            binop);
+    };
+
+    auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
+    auto const result_begin = result->mutable_view().template begin<ResultType>();
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+    do_reduction(count_iter, result_begin, binop_generator.binop());
+
+    if (values.has_nulls()) {
+      // Generate bitmask for the output by segmented reduction of the input bitmask.
+      auto const d_values_ptr = column_device_view::create(values, stream);
+      auto validity           = rmm::device_uvector<bool>(num_groups, stream);
+      do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
+                   validity.begin(),
+                   thrust::logical_or{});
+
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
+      result->set_null_mask(std::move(null_mask), null_count);
+    }
+
+    return result;
+  }
+};
+
+template <aggregation::Kind K>
+struct group_reduction_functor<
+  K,
+  cudf::list_view,
+  std::enable_if_t<is_group_reduction_supported<K, cudf::list_view>()>> {
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+  {
+    // This is be expected to be size_type.
+    using ResultType = cudf::detail::target_type_t<cudf::list_view, K>;
 
     auto result = make_fixed_width_column(
       data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
