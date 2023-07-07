@@ -27,36 +27,33 @@ namespace cudf::io::parquet::gpu {
 
 namespace {
 
-// functor for setupLocalPageInfo
-struct delta_binary_filter {
-  __device__ inline bool operator()(PageInfo const& page)
-  {
-    return page.encoding == Encoding::DELTA_BINARY_PACKED;
-  }
-};
-
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
 // only used for int32 and int64 physical types (and appears to only be used
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
-template <int lvl_buf_size, typename level_t>
+template <typename level_t>
 __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) delta_binary_decoder db_state;
-  __shared__ __align__(16) page_state_buffers_s state_buffers;
   __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
 
-  page_state_s* const s          = &state_g;
-  page_state_buffers_s* const sb = &state_buffers;
-  int const page_idx             = blockIdx.x;
-  int const t                    = threadIdx.x;
-  int const lane_id              = t & 0x1f;
-  auto* const db                 = &db_state;
+  page_state_s* const s = &state_g;
+  auto* const sb        = &state_buffers;
+  int const page_idx    = blockIdx.x;
+  int const t           = threadIdx.x;
+  int const lane_id     = t & 0x1f;
+  auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, delta_binary_filter{}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{KERNEL_MASK_DELTA_BINARY},
+                          true)) {
     return;
   }
 
@@ -65,8 +62,8 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[non_zero_buffer_size];  // circular buffer of repetition level values
-  __shared__ level_t def[non_zero_buffer_size];  // circular buffer of definition level values
+  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
+  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -101,7 +98,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
+      gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, t);
     } else if (t < 64) {
       // warp 1
       db->decode_batch();
@@ -114,7 +111,7 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
       // process the mini-block in batches of 32
       for (uint32_t sp = src_pos + lane_id; sp < src_pos + batch_size; sp += 32) {
         // the position in the output column/buffer
-        int32_t dst_pos = sb->nz_idx[rolling_index(sp)];
+        int32_t dst_pos = sb->nz_idx[rolling_index<delta_rolling_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
@@ -123,9 +120,11 @@ __global__ void __launch_bounds__(96) gpuDecodeDeltaBinary(
         if (dst_pos >= 0 && sp < target_pos) {
           void* const dst = nesting_info_base[leaf_level_index].data_out + dst_pos * s->dtype_len;
           if (s->dtype_len == 8) {
-            *static_cast<int64_t*>(dst) = db->value[rolling_index(sp + skipped_leaf_values)];
+            *static_cast<int64_t*>(dst) =
+              db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
           } else if (s->dtype_len == 4) {
-            *static_cast<int32_t*>(dst) = db->value[rolling_index(sp + skipped_leaf_values)];
+            *static_cast<int32_t*>(dst) =
+              db->value[rolling_index<delta_rolling_buf_size>(sp + skipped_leaf_values)];
           }
         }
       }
@@ -154,10 +153,10 @@ void __host__ DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaBinary<non_zero_buffer_size, uint8_t>
+    gpuDecodeDeltaBinary<uint8_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   } else {
-    gpuDecodeDeltaBinary<non_zero_buffer_size, uint16_t>
+    gpuDecodeDeltaBinary<uint16_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   }
 }

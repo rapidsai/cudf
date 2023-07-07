@@ -1306,6 +1306,38 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_delta_binary(add_nulls, tmpdir):
+    nrows = 100000
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.DataFrame(
+        {
+            "col_int32": pd.Series(
+                np.random.randint(0, 0x7FFFFFFF, nrows), dtype="Int32"
+            ),
+            "col_int64": pd.Series(
+                np.random.randint(0, 0x7FFFFFFFFFFFFFFF, nrows), dtype="Int64"
+            ),
+        },
+    )
+    if add_nulls:
+        for i in range(0, int(nrows / 4)):
+            test_pdf.iloc[np.random.randint(0, nrows), 0] = pd.NA
+            test_pdf.iloc[np.random.randint(0, nrows), 1] = pd.NA
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    test_pdf.to_parquet(
+        pdf_fname,
+        version="2.6",
+        column_encoding="DELTA_BINARY_PACKED",
+        data_page_version="2.0",
+        engine="pyarrow",
+        use_dictionary=False,
+    )
+    cdf = cudf.read_parquet(pdf_fname)
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+
 @pytest.mark.parametrize(
     "data",
     [
