@@ -112,27 +112,26 @@ __global__ void __launch_bounds__(block_size)
   auto const col_idx    = blockIdx.x;
   auto const stripe_idx = blockIdx.y;
   auto const t          = threadIdx.x;
-  auto const& dict      = dictionaries[col_idx][stripe_idx];
+  auto& dict            = dictionaries[col_idx][stripe_idx];
   auto const col        = columns[dict.column_idx];
-
-  auto const start_row = dict.start_row;
-  auto const end_row   = dict.start_row + dict.num_rows;
-
-  if (t == 0) { auto const& offsets = col.child(strings_column_view::offsets_column_index); }
 
   // Make a view of the hash map
   auto hash_map_mutable = map_type::device_mutable_view(dict.map_slots.data(),
                                                         dict.map_slots.size(),
                                                         cuco::empty_key{KEY_SENTINEL},
                                                         cuco::empty_value{VALUE_SENTINEL});
-  auto cur_row          = start_row + t;
+  auto const start_row  = dict.start_row;
+  auto const end_row    = dict.start_row + dict.num_rows;
+  size_type entry_count{0};
+  size_type char_count{0};
+  auto cur_row = start_row + t;
   // all threads should loop over the same number of rows
   while (cur_row - t < end_row) {
     auto const is_valid = cur_row < end_row and cur_row < col.size() and col.is_valid(cur_row);
 
     // insert element at cur_row to hash map and count successful insertions
-    size_type is_unique      = 0;
-    size_type uniq_elem_size = 0;
+    size_type is_unique{0};
+    size_type uniq_elem_size{0};
 
     if (is_valid) {
       auto const hash_fn     = hash_functor{col};
@@ -143,23 +142,24 @@ __global__ void __launch_bounds__(block_size)
 
     using block_reduce = cub::BlockReduce<size_type, block_size>;
     __shared__ typename block_reduce::TempStorage reduce_storage;
-    __shared__ size_type total_num_dict_entries;
 
-    auto const num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    auto const batch_entry_count = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
-    auto const char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
+    auto const batch_char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
     __syncthreads();
 
     if (t == 0) {
-      auto dict_g            = &dictionaries[col_idx][stripe_idx];
-      total_num_dict_entries = atomicAdd(&dict_g->entry_count, num_unique);
-      total_num_dict_entries += num_unique;
-
-      atomicAdd(&dict_g->char_count, char_count);
+      entry_count += batch_entry_count;
+      char_count += batch_char_count;
     }
-    __syncthreads();
 
     cur_row += block_size;
+  }
+
+  if (t == 0) {
+    // Use atomics here if the kernel is changed to use multiple blocks per stripe
+    dict.entry_count = entry_count;
+    dict.char_count  = char_count;
   }
 }
 
