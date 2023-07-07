@@ -51,7 +51,7 @@ struct IdentityOp {
  *
  * @tparam SymbolT The symbol type being passed in to lookup the corresponding symbol group id
  * @tparam PreMapOpT A function object that is invoked with `(lut, symbol)` and must return the
- * symbol group index of `symbol`.  lut` is an instance of the lookup table and `symbol` is the
+ * symbol group index of `symbol`.  `lut` is an instance of the lookup table and `symbol` is the
  * symbol for which to get the symbol group index. If no particular mapping is needed, an instance
  * of `IdentityOp` can be used.
  */
@@ -179,6 +179,23 @@ class SingleSymbolSmemLUT {
   }
 };
 
+/**
+ * @brief Creates a symbol group lookup table of type `SingleSymbolSmemLUT` that uses a two-staged
+ * lookup approach. @p pre_map_op is a function object invoked with `(lut, symbol)` that must return
+ * the symbol group id for the given `symbol`. `lut` is an instance of the lookup table
+ * and `symbol` is a symbol from the input tape. Usually, @p pre_map_op first maps a symbol from
+ * the input tape to an integral that is convertible to `symbol_t`. In a second stage, @p pre_map_op
+ * uses `lut`'s `lookup(mapped_symbol)` that maps that integral to the symbol group id.
+ *
+ * @tparam symbol_t Must be an integral type
+ * @tparam NUM_SYMBOL_GROUPS The number of symbol groups, excluding the catchall symbol group (aka
+ * "other" symbol group)
+ * @tparam pre_map_op_t A unary function object type that returns the symbol group id
+ * @param symbol_strings An array of vectors, where all the symbols in the i-th vector are mapped to
+ * the i-th symbol group
+ * @param pre_map_op A unary function object type that returns the symbol group id for a symbol
+ * @return A symbol group lookup table
+ */
 template <typename symbol_t, std::size_t NUM_SYMBOL_GROUPS, typename pre_map_op_t>
 auto make_symbol_group_lut(
   std::array<std::vector<symbol_t>, NUM_SYMBOL_GROUPS> const& symbol_strings,
@@ -188,6 +205,23 @@ auto make_symbol_group_lut(
   return lookup_table_t::InitDeviceSymbolGroupIdLut(symbol_strings, pre_map_op);
 }
 
+/**
+ * @brief Creates a symbol group lookup table of type `SingleSymbolSmemLUT` that uses a two-staged
+ * lookup approach. @p pre_map_op is a function object invoked with `(lut, symbol)` that must return
+ * the symbol group id for the given `symbol`. `lut` is an instance of the lookup table
+ * and `symbol` is a symbol from the input tape. Usually, @p pre_map_op first maps a symbol from
+ * the input tape to an integral that is convertible to `symbol_t`. In a second stage, @p pre_map_op
+ * uses `lut`'s `lookup(mapped_symbol)` that maps that integral to the symbol group id.
+ *
+ * @tparam symbol_t The type returned by @p pre_map_op must be assignable to `char`
+ * @tparam NUM_SYMBOL_GROUPS The number of symbol groups, excluding the catchall symbol group (aka
+ * "other" symbol group)
+ * @tparam pre_map_op_t A unary function object type that returns the symbol group id for a symbol
+ * @param symbol_strings An array of strings, where all the characters in the i-th string are mapped
+ * to the i-th symbol group
+ * @param pre_map_op A unary function object type that returns the symbol group id for a symbol
+ * @return A symbol group lookup table
+ */
 template <std::size_t NUM_SYMBOL_GROUPS, typename pre_map_op_t>
 auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& symbol_strings,
                            pre_map_op_t pre_map_op)
@@ -197,6 +231,18 @@ auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& sym
   return lookup_table_t::InitDeviceSymbolGroupIdLut(symbol_strings, pre_map_op);
 }
 
+/**
+ * @brief Creates a symbol group lookup table that maps a symbol to a symbol group id, requiring the
+ * symbol type from the input tape to be assignable to `symbol_t` and `symbol_t` to be of integral
+ * type.
+ *
+ * @tparam symbol_t The input tape's symbol type must be assignable to this type
+ * @tparam NUM_SYMBOL_GROUPS The number of symbol groups, excluding the catchall symbol group (aka
+ * "other" symbol group)
+ * @param symbol_strings An array of vectors, where all the symbols in the i-th vector are mapped to
+ * the i-th symbol group
+ * @return A symbol group lookup table
+ */
 template <typename symbol_t, std::size_t NUM_SYMBOL_GROUPS>
 auto make_symbol_group_lut(
   std::array<std::vector<symbol_t>, NUM_SYMBOL_GROUPS> const& symbol_strings)
@@ -204,6 +250,18 @@ auto make_symbol_group_lut(
   return make_symbol_group_lut(symbol_strings, IdentityOp{});
 }
 
+/**
+ * @brief Creates a symbol group lookup table that maps a symbol to a symbol group id, requiring the
+ * symbol type from the input tape to be assignable to `symbol_t` and `symbol_t` to be of integral
+ * type.
+ *
+ * @tparam symbol_t The input tape's symbol type must be assignable to this type
+ * @tparam NUM_SYMBOL_GROUPS The number of symbol groups, excluding the catchall symbol group (aka
+ * "other" symbol group)
+ * @param symbol_strings An array of strings, where all the characters in the i-th string are mapped
+ * to the i-th symbol group
+ * @return A symbol group lookup table
+ */
 template <std::size_t NUM_SYMBOL_GROUPS>
 auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& symbol_strings)
 {
@@ -323,6 +381,22 @@ class TransitionTable {
   }
 };
 
+/**
+ * @brief Creates a transition table of type `TransitionTable` that uses a two-staged lookup
+ * approach. @p pre_map_op is a function object that is invoked with `(lut, state_id, match_id)` and
+ * must return the new target state for the given `(state_id, match_id)`-combination.  lut` is an
+ * instance of the lookup table specified by @p transition_table.
+ *
+ * @tparam StateIdT An integral type used to represent state indexes
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @tparam PreMapOpT A unary function object type that returns the new target state for a given
+ * `(state_id, match_id)`-combination
+ * @param transition_table The transition table
+ * @param pre_map_op A unary function object that returns the new target state for a given
+ * `(state_id, match_id)`-combination
+ * @return A transition table of type `TransitionTable`
+ */
 template <typename StateIdT,
           std::size_t MAX_NUM_SYMBOLS,
           std::size_t MAX_NUM_STATES,
@@ -335,6 +409,16 @@ auto make_transition_table(
   return transition_table_t::InitDeviceTransitionTable(transition_table, pre_map_op);
 }
 
+/**
+ * @brief Creates a transition table of type `TransitionTable` that maps `(state_id, match_id)`
+ * pairs to the new target state for the given `(state_id, match_id)`-combination.
+ *
+ * @tparam StateIdT An integral type used to represent state indexes
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @param transition_table The transition table
+ * @return A transition table of type `TransitionTable`
+ */
 template <typename StateIdT, std::size_t MAX_NUM_SYMBOLS, std::size_t MAX_NUM_STATES>
 auto make_transition_table(
   std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table)
@@ -444,6 +528,11 @@ class dfa_device_view {
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
  * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
  * be used.
+ * @tparam PreMapOpT A function object that must implement two signatures: (1) with `(lut, state_id,
+ * match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset, read_symbol)`.
+ * Invocations of the first signature, (1), must return the number of symbols that are emitted for
+ * the given transition. The second signature, (2), must return the i-th symbol to be emitted for
+ * that transition, where `i` corresponds to `relative_offse`.
  */
 template <typename OutSymbolT,
           typename OutSymbolOffsetT,
@@ -603,6 +692,26 @@ class TransducerLookupTable {
   }
 };
 
+/**
+ * @brief Creates a translation table that maps (old_state, symbol_group_id) transitions to a
+ * sequence of symbols that the finite-state transducer is supposed to output for each transition.
+ *
+ * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
+ * be used
+ * @tparam OutSymbolT The symbol type being output
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @tparam PreMapOpT A function object type that must implement two signatures: (1) with `(lut,
+ * state_id, match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset,
+ * read_symbol)`
+ * @param translation_table The translation table
+ * @param pre_map_op A function object that must implement two signatures: (1) with `(lut, state_id,
+ * match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset, read_symbol)`.
+ * Invocations of the first signature, (1), must return the number of symbols that are emitted for
+ * the given transition. The second signature, (2), must return the i-th symbol to be emitted for
+ * that transition, where `i` corresponds to `relative_offse`
+ * @return A translation table of type `TransducerLookupTable`.
+ */
 template <std::size_t MAX_TABLE_SIZE,
           typename OutSymbolT,
           std::size_t MAX_NUM_SYMBOLS,
@@ -622,6 +731,18 @@ auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_N
   return translation_table_t::InitDeviceTranslationTable(translation_table, pre_map_op);
 }
 
+/**
+ * @brief Creates a translation table that maps (old_state, symbol_group_id) transitions to a
+ * sequence of symbols that the finite-state transducer is supposed to output for each transition.
+ *
+ * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
+ * be used
+ * @tparam OutSymbolT The symbol type being output
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @param translation_table The translation table
+ * @return A translation table of type `TransducerLookupTable`.
+ */
 template <std::size_t MAX_TABLE_SIZE,
           typename OutSymbolT,
           std::size_t MAX_NUM_SYMBOLS,
@@ -690,6 +811,18 @@ class TranslationOp {
   }
 };
 
+/**
+ * @brief Creates a simple translation table that uses a simple function object to retrieve the
+ *
+ * @tparam FunctorT A function object type that must implement two signatures: (1) with `(state_id,
+ * match_id, read_symbol)` and (2) with `(state_id, match_id, relative_offset, read_symbol)`
+ * @param map_op A function object that must implement two signatures: (1) with `(state_id,
+ * match_id, read_symbol)` and (2) with `(state_id, match_id, relative_offset, read_symbol)`.
+ * Invocations of the first signature, (1), must return the number of symbols that are emitted for
+ * the given transition. The second signature, (2), must return the i-th symbol to be emitted for
+ * that transition, where `i` corresponds to `relative_offse`
+ * @return A translation table of type `TranslationO`
+ */
 template <typename FunctorT>
 auto make_translation_functor(FunctorT map_op)
 {
@@ -810,6 +943,18 @@ class Dfa {
   cudf::detail::hostdevice_vector<host_device_data> init_data{};
 };
 
+/**
+ * @brief Creates a determninistic finite automaton (DFA) as specified by the triple of (symbol
+ * group, transition, translation)-lookup tables to be used with the finite-state transducer
+ * algorithm.
+ *
+ * @param sgid_lut_init Object used to initialize the symbol group lookup table
+ * @param transition_table_init Object used to initialize the transition table
+ * @param translation_table_init Object used to initialize the translation table
+ * @param stream The stream used to allocate and initialize device-side memory that is used to
+ * initialize the lookup tables
+ * @return A DFA of type `Dfa`.
+ */
 template <typename SymbolGroupIdInitT,
           typename TransitionTableInitT,
           typename TranslationTableInitT>
