@@ -88,7 +88,7 @@ __global__ void __launch_bounds__(block_size)
 
 struct equality_functor {
   column_device_view const& col;
-  __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
+  __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const
   {
     // We don't call this for nulls so this is fine
     auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
