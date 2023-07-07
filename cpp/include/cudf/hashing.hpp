@@ -63,6 +63,7 @@ std::unique_ptr<column> hash(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+namespace hashing {
 /**
  * @brief Computes the hash values of each row in the input set of columns
  *
@@ -81,6 +82,7 @@ std::unique_ptr<table> murmur_hash3_64_128(
   uint64_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+}  // namespace hashing
 
 /** @} */  // end of group
 }  // namespace cudf

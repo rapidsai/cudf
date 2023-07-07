@@ -44,8 +44,8 @@ TYPED_TEST(HashMurmur64TestTyped, TestNumeric)
     {-1, -1, 0, 2, 22, 1, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 1, -22},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
 
-  auto const output1 = cudf::murmur_hash3_64_128(cudf::table_view({col1}));
-  auto const output2 = cudf::murmur_hash3_64_128(cudf::table_view({col2}));
+  auto const output1 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}));
+  auto const output2 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col2}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 }
@@ -70,7 +70,7 @@ TEST_F(HashMurmur64Test, MultiType)
      "0123456789",
      "{}|:<>?,./;[]=-"});
 
-  auto output = cudf::murmur_hash3_64_128(cudf::table_view({col1}));
+  auto output = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}));
   // these were generated using the CPU compiled
   // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
   auto expected = cudf::test::fixed_width_column_wrapper<uint64_t>({3481043174314896794ul,
@@ -107,7 +107,7 @@ TEST_F(HashMurmur64Test, MultiType)
                                                               static_cast<ts::duration>(100),
                                                               ts::duration::max()});
 
-  output = cudf::murmur_hash3_64_128(cudf::table_view({col1, col2}));
+  output = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1, col2}));
 
   expected = cudf::test::fixed_width_column_wrapper<uint64_t>({9466414547226101804ul,
                                                                8228850782181844430ul,
