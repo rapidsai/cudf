@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -560,6 +561,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             self._compute_levels_and_codes()
         return self._codes
 
+    def get_slice_bound(self, label, side, kind=None):
+        raise NotImplementedError()
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nlevels(self):
@@ -769,7 +773,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ],
             axis=1,
         )
-        result = lookup.merge(data_table)["idx"]
+        # Sort indices in pandas compatible mode
+        # because we want the indices to be fetched
+        # in a deterministic order.
+        # TODO: Remove this after merge/join
+        # obtain deterministic ordering.
+        if cudf.get_option("mode.pandas_compatible"):
+            lookup_order = "_" + "_".join(map(str, lookup._data.names))
+            lookup[lookup_order] = column.arange(len(lookup))
+            postprocess = operator.methodcaller(
+                "sort_values", by=[lookup_order, "idx"]
+            )
+        else:
+            postprocess = lambda r: r  # noqa: E731
+        result = postprocess(lookup.merge(data_table))["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
         if len(result) == 0:
@@ -1510,7 +1527,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def is_unique(self):
         return len(self) == len(self.unique())
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """
@@ -1519,7 +1536,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """

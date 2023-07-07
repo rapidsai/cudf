@@ -5717,23 +5717,6 @@ class StringColumn(column.ColumnBase):
         else:
             return super().fillna(method=method)
 
-    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
-        found_indices = libcudf.search.contains(
-            column.as_column([value], dtype=self.dtype), self
-        )
-        found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
-        first = column.as_column(found_indices).find_first_value(np.int32(1))
-        last = column.as_column(found_indices).find_last_value(np.int32(1))
-        return first, last
-
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        return self._find_first_and_last(value)[0]
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        return self._find_first_and_last(value)[1]
-
     def normalize_binop_value(
         self, other
     ) -> Union[column.ColumnBase, cudf.Scalar]:

@@ -219,20 +219,22 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(),
-        gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x", as_index=as_index)["y"].sum(),
+        gdf.groupby("x", as_index=as_index)["y"].sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(),
-        gdf.groupby("x").y.sum(),
+        pdf.groupby("x", as_index=as_index).y.sum(),
+        gdf.groupby("x", as_index=as_index).y.sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(),
-        gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        gdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),

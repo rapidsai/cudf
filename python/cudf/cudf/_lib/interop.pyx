@@ -19,6 +19,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf.api.types import is_list_dtype, is_struct_dtype
+from cudf.core.buffer import acquire_spill_lock
 
 
 def from_dlpack(dlpack_capsule):
@@ -106,6 +107,7 @@ cdef vector[column_metadata] gather_metadata(object cols_dtypes) except *:
         )
     return cpp_metadata
 
+
 cdef _set_col_children_metadata(dtype,
                                 column_metadata& col_meta):
 
@@ -133,6 +135,7 @@ cdef _set_col_children_metadata(dtype,
         col_meta.children_meta.push_back(column_metadata())
 
 
+@acquire_spill_lock()
 def to_arrow(list source_columns, object column_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
@@ -158,6 +161,7 @@ def to_arrow(list source_columns, object column_dtypes):
     return pyarrow_wrap_table(cpp_arrow_table)
 
 
+@acquire_spill_lock()
 def from_arrow(object input_table):
     """Convert from PyArrow Table to a list of columns.
 
