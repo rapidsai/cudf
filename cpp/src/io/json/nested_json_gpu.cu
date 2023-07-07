@@ -1146,9 +1146,13 @@ struct JSONToStackOp {
   template <typename StackSymbolT>
   constexpr CUDF_HOST_DEVICE fst::stack_op_type operator()(StackSymbolT const& stack_symbol) const
   {
-    return (stack_symbol == '{' || stack_symbol == '[')   ? fst::stack_op_type::PUSH
-           : (stack_symbol == '}' || stack_symbol == ']') ? fst::stack_op_type::POP
-                                                          : fst::stack_op_type::READ;
+    switch (stack_symbol) {
+      case '{':
+      case '[': return fst::stack_op_type::PUSH;
+      case '}':
+      case ']': return fst::stack_op_type::POP;
+      default: return fst::stack_op_type::READ;
+    }
   }
 };
 
@@ -1160,10 +1164,14 @@ struct JSONWithRecoveryToStackOp {
   template <typename StackSymbolT>
   constexpr CUDF_HOST_DEVICE fst::stack_op_type operator()(StackSymbolT const& stack_symbol) const
   {
-    return (stack_symbol == '{' || stack_symbol == '[')   ? fst::stack_op_type::PUSH
-           : (stack_symbol == '}' || stack_symbol == ']') ? fst::stack_op_type::POP
-           : (stack_symbol == '\n')                       ? fst::stack_op_type::RESET
-                                                          : fst::stack_op_type::READ;
+    switch (stack_symbol) {
+      case '{':
+      case '[': return fst::stack_op_type::PUSH;
+      case '}':
+      case ']': return fst::stack_op_type::POP;
+      case '\n': return fst::stack_op_type::RESET;
+      default: return fst::stack_op_type::READ;
+    }
   }
 };
 
