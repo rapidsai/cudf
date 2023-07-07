@@ -640,7 +640,7 @@ auto uncomp_block_alignment(CompressionKind compression_kind)
     return 1u;
   }
 
-  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(compression_kind));
+  return nvcomp::compress_input_alignment(to_nvcomp_compression_type(compression_kind));
 }
 
 auto comp_block_alignment(CompressionKind compression_kind)
@@ -650,7 +650,7 @@ auto comp_block_alignment(CompressionKind compression_kind)
     return 1u;
   }
 
-  return 1u << nvcomp::compress_output_alignment_bits(to_nvcomp_compression_type(compression_kind));
+  return nvcomp::compress_output_alignment(to_nvcomp_compression_type(compression_kind));
 }
 
 /**

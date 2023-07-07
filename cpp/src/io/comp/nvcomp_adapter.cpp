@@ -615,23 +615,23 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
 
   return reason;
 }
-
-size_t compress_input_alignment_bits(compression_type compression)
+#if NVCOMP_MAJOR_VERSION < 3
+uint32_t compress_input_alignment(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE: return 0;
-    case compression_type::SNAPPY: return 0;
-    case compression_type::ZSTD: return 2;
+    case compression_type::DEFLATE: return 1;
+    case compression_type::SNAPPY: return 1;
+    case compression_type::ZSTD: return 4;
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
-size_t compress_output_alignment_bits(compression_type compression)
+uint32_t compress_output_alignment(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE: return 3;
-    case compression_type::SNAPPY: return 0;
-    case compression_type::ZSTD: return 0;
+    case compression_type::DEFLATE: return 8;
+    case compression_type::SNAPPY: return 1;
+    case compression_type::ZSTD: return 1;
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -651,5 +651,36 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     default: return std::nullopt;
   }
 }
+#else
+uint32_t compress_input_alignment(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return nvcompDeflateRequiredAlignment;
+    case compression_type::SNAPPY: return nvcompSnappyRequiredAlignment;
+    case compression_type::ZSTD: return nvcompZstdRequiredAlignment;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+uint32_t compress_output_alignment(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return nvcompDeflateRequiredAlignment;
+    case compression_type::SNAPPY: return nvcompSnappyRequiredAlignment;
+    case compression_type::ZSTD: return nvcompZstdRequiredAlignment;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return nvcompDeflateCompressionMaxAllowedChunkSize;
+    case compression_type::SNAPPY: return nvcompSnappyCompressionMaxAllowedChunkSize;
+    case compression_type::ZSTD: return nvcompZstdCompressionMaxAllowedChunkSize;
+    default: return std::nullopt;
+  }
+}
+#endif
 
 }  // namespace cudf::io::nvcomp
