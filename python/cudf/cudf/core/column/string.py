@@ -3508,14 +3508,6 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index
 
-        Notes
-        -----
-        -   `flags` parameter currently only supports re.DOTALL
-            and re.MULTILINE.
-        -   Some characters need to be escaped when passing
-            in pat. e.g. ``'$'`` has a special meaning in regex
-            and must be escaped when finding this literal character.
-
         Examples
         --------
         >>> import cudf
@@ -3547,6 +3539,15 @@ class StringMethods(ColumnMethods):
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
+
+        .. pandas-compat::
+            **StringMethods.count**
+
+            -   `flags` parameter currently only supports re.DOTALL
+                and re.MULTILINE.
+            -   Some characters need to be escaped when passing
+                in pat. e.g. ``'$'`` has a special meaning in regex
+                and must be escaped when finding this literal character.
         """  # noqa W605
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
