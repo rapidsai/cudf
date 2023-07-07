@@ -26,6 +26,9 @@
 #include <string>
 
 namespace cudf {
+namespace detail {
+static std::string rmm_mode_parm{"--rmm_mode"};  ///< RMM mode command-line parameter name
+}  // namespace detail
 
 /**
  * Base fixture for cudf benchmarks using nvbench.
@@ -63,7 +66,7 @@ struct nvbench_base_fixture {
   {
     for (int i = 1; i < argc - 1; ++i) {
       std::string arg = argv[i];
-      if (arg == "--rmm_mode") {
+      if (arg == detail::rmm_mode_parm) {
         i++;
         rmm_mode = argv[i];
       }

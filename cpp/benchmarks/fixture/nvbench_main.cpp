@@ -21,18 +21,21 @@
 
 #include <vector>
 
+// strip off the rmm_mode parameter before passing the
+// remaining arguments to nvbench::option_parser
 #undef NVBENCH_MAIN_PARSE
-#define NVBENCH_MAIN_PARSE(argc, argv) \
-  nvbench::option_parser parser;       \
-  std::vector<std::string> m_args;     \
-  for (int i = 0; i < argc; ++i) {     \
-    std::string arg = argv[i];         \
-    if (arg == "--rmm_mode") {         \
-      i += 2;                          \
-    } else {                           \
-      m_args.push_back(arg);           \
-    }                                  \
-  }                                    \
+#define NVBENCH_MAIN_PARSE(argc, argv)        \
+  nvbench::option_parser parser;              \
+  std::vector<std::string> m_args;            \
+  for (int i = 0; i < argc; ++i) {            \
+    std::string arg = argv[i];                \
+    if (arg == cudf::detail::rmm_mode_parm) { \
+      i += 2;                                 \
+    } else {                                  \
+      m_args.push_back(arg);                  \
+    }                                         \
+  }                                           \
   parser.parse(m_args)
 
+// this declares/defines the main() function using the definitions above
 NVBENCH_MAIN
