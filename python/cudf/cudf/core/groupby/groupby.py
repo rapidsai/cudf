@@ -2151,28 +2151,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         Returns
         -------
         DataFrame or Series
-
-        .. pandas-compat::
-            **GroupBy.fillna**
-
-            This function may return result in different format to the method
-            Pandas supports. For example:
-
-            .. code-block::
-
-                >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
-                >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('k').fillna({'v': 4}) # pandas
-                       v
-                k
-                1 0  2.0
-                  1  4.0
-                2 2  4.0
-                >>> gdf.groupby('k').fillna({'v': 4}) # cudf
-                     v
-                0  2.0
-                1  4.0
-                2  4.0
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")

@@ -298,7 +298,7 @@ class Frame(BinaryOperand, Scannable):
         True
 
         .. pandas-compat::
-            **DataFrame.empty, Series.empty, Frame.empty**
+            **DataFrame.empty, Series.empty**
 
             If DataFrame/Series contains only `null` values, it is still not
             considered empty. See the example above.
@@ -643,7 +643,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.where, Series.where, Frame.where**
+            **DataFrame.where, Series.where**
 
             Note that ``where`` treats missing values as falsy,
             in parallel with pandas treatment of nullable data:
@@ -1946,7 +1946,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.min, Series.min, Frame.min**
+            **DataFrame.min, Series.min**
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1998,7 +1998,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.max, Series.max, Frame.max**
+            **DataFrame.max, Series.max**
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -2055,7 +2055,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.sum, Series.sum, Frame.sum**
+            **DataFrame.sum, Series.sum**
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -2114,7 +2114,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.product, Series.product, Frame.product**
+            **DataFrame.product, Series.product**
 
             Parameters currently not supported are level`, `numeric_only`.
         """
@@ -2221,7 +2221,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.std, Series.std, Frame.std**
+            **DataFrame.std, Series.std**
 
             Parameters currently not supported are `level` and
             `numeric_only`
@@ -2278,7 +2278,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.var, Series.var, Frame.var**
+            **DataFrame.var, Series.var**
 
             Parameters currently not supported are `level` and
             `numeric_only`
@@ -2333,7 +2333,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.kurtosis, Frame.kurtosis**
+            **DataFrame.kurtosis**
 
             Parameters currently not supported are `level` and `numeric_only`
         """
@@ -2439,7 +2439,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.all, Series.all, Frame.all**
+            **DataFrame.all, Series.all**
 
             Parameters currently not supported are `axis`, `bool_only`, `level`.
         """
@@ -2479,7 +2479,7 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
 
         .. pandas-compat::
-            **DataFrame.any, Series.any, Frame.any**
+            **DataFrame.any, Series.any**
 
             Parameters currently not supported are `axis`, `bool_only`, `level`.
         """
@@ -2552,7 +2552,7 @@ class Frame(BinaryOperand, Scannable):
         17.0
 
         .. pandas-compat::
-            **DataFrame.median, Series.median, Frame.median**
+            **DataFrame.median, Series.median**
 
             Parameters currently not supported are `level` and `numeric_only`.
         """
