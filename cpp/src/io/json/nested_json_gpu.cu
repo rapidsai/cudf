@@ -1412,10 +1412,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // (!new_line_delimited_json)                         => JSON
   // (new_line_delimited_json and recover_from_error)   => JSON_LINES_RECOVER
   // (new_line_delimited_json and !recover_from_error)  => JSON_LINES
-  auto format = new_line_delimited_json ? (options.is_enabled_recover_from_error()
-                                             ? tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER
-                                             : tokenizer_pda::json_format_cfg_t::JSON_LINES)
-                                        : tokenizer_pda::json_format_cfg_t::JSON;
+  auto format = new_line_delimited_json
+                  ? (options.recovery_mode() == json_recovery_mode_t::RECOVER_AND_NULL
+                       ? tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER
+                       : tokenizer_pda::json_format_cfg_t::JSON_LINES)
+                  : tokenizer_pda::json_format_cfg_t::JSON;
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   auto const recover_from_error = (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER);

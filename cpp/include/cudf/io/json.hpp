@@ -55,6 +55,14 @@ struct schema_element {
 };
 
 /**
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum class json_recovery_mode_t {
+  FAIL,             ///< Does not recover from an error when encountering an invalid format
+  RECOVER_AND_NULL  ///< Recovers from an error, replacing invalid records with null
+};
+
+/**
  * @brief Input arguments to the `read_json` interface.
  *
  * Available parameters are closely patterned after PANDAS' `read_json` API.
@@ -106,7 +114,7 @@ class json_reader_options {
   bool _keep_quotes = false;
 
   // Whether to recover after an invalid JSON line
-  bool _recover_from_error = false;
+  json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
   /**
    * @brief Constructor from source info.
@@ -239,11 +247,11 @@ class json_reader_options {
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
-   * @brief Whether the reader should recover after an invalid JSON line.
+   * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
-   * @returns true if the reader should recover, false otherwise
+   * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
    */
-  bool is_enabled_recover_from_error() const { return _recover_from_error; }
+  json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
 
   /**
    * @brief Set data types for columns to be read.
@@ -317,11 +325,11 @@ class json_reader_options {
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
 
   /**
-   * @brief Set whether the reader should recover after an invalid JSON line.
+   * @brief Specifies the JSON reader's behavior on invalid JSON lines.
    *
-   * @param val Boolean value to indicate whether the reader should recover from invalid JSON lines.
+   * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    */
-  void enable_recover_from_error(bool val) { _recover_from_error = val; }
+  void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
 };
 
 /**
@@ -467,14 +475,14 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether the reader should recover after an invalid JSON line.
+   * @brief Specifies the JSON reader's behavior on invalid JSON lines.
    *
-   * @param val Boolean value to indicate whether the reader should recover from invalid JSON lines.
+   * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    * @return this for chaining
    */
-  json_reader_options_builder& recover_from_error(bool val)
+  json_reader_options_builder& recovery_mode(json_recovery_mode_t val)
   {
-    options._recover_from_error = val;
+    options._recovery_mode = val;
     return *this;
   }
 

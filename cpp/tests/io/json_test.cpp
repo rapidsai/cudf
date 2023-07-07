@@ -1797,7 +1797,7 @@ TEST_F(JsonReaderTest, JSONLinesRecovering)
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
       .lines(true)
-      .recover_from_error(true);
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_AND_NULL);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
