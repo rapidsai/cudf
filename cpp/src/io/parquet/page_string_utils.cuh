@@ -87,7 +87,7 @@ inline __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, u
 }
 
 /**
- * @brief Perform exclusive scan for offsets array. Called for each page.
+ * @brief Perform exclusive scan on an array of any length using a single block of threads.
  */
 template <int block_size>
 __device__ void block_excl_sum(size_type* arr, size_type length, size_type initial_value)
