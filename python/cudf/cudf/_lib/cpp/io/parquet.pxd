@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.libcpp.optional cimport optional
 from cudf._lib.cpp.types cimport data_type, size_type
 
 
@@ -65,7 +66,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
         cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_input_metadata get_metadata() except +
+        const optional[cudf_io_types.table_input_metadata]& get_metadata(
+        ) except +
         string get_column_chunks_file_paths() except +
         size_t get_row_group_size_bytes() except +
         size_type get_row_group_size_rows() except +
@@ -153,7 +155,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.sink_info get_sink() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
-        cudf_io_types.table_input_metadata& get_metadata(
+        const optional[cudf_io_types.table_input_metadata]& get_metadata(
         ) except +
         size_t get_row_group_size_bytes() except +
         size_type get_row_group_size_rows() except +

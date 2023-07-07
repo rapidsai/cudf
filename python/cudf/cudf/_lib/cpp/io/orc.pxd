@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.table.table_view as cudf_table_view
+from cudf._lib.cpp.libcpp.optional cimport optional
 from cudf._lib.cpp.types cimport data_type, size_type
 
 
@@ -69,7 +70,8 @@ cdef extern from "cudf/io/orc.hpp" \
         size_type get_stripe_size_rows() except +
         size_type get_row_index_stride() except +
         cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_input_metadata& get_metadata() except +
+        const optional[cudf_io_types.table_input_metadata]& get_metadata(
+        ) except +
 
         # setter
         void set_compression(cudf_io_types.compression_type comp) except +
@@ -119,7 +121,7 @@ cdef extern from "cudf/io/orc.hpp" \
         size_type stripe_size_rows() except +
         size_type row_index_stride() except +
         cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_input_metadata& get_metadata(
+        const optional[cudf_io_types.table_input_metadata]& get_metadata(
         ) except +
 
         # setter
