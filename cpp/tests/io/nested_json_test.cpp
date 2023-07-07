@@ -35,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
-#include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <string>
@@ -737,7 +736,7 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   // Initialize device-side test data
   auto const d_offsets = cudf::detail::make_device_uvector_async(
-    cudf::host_span<token_index_t const>{thrust::raw_pointer_cast(offsets.data()), offsets.size()},
+    cudf::host_span<token_index_t const>{offsets.data(), offsets.size()},
     stream,
     rmm::mr::get_current_device_resource());
   auto const d_tokens =
