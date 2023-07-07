@@ -1030,6 +1030,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     as_column(group_offsets),
                     [],
                     [],
+                    stable=True,
                 )
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
@@ -2335,6 +2336,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
+            as_index=self._as_index,
         )
 
 
