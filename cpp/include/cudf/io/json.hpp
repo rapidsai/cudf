@@ -55,7 +55,7 @@ struct schema_element {
 };
 
 /**
- * @brief Control use of dictionary encoding for parquet writer
+ * @brief Control the error recovery behavior of the json parser
  */
 enum class json_recovery_mode_t {
   FAIL,             ///< Does not recover from an error when encountering an invalid format

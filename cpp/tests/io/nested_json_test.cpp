@@ -36,8 +36,6 @@
 
 #include <thrust/copy.h>
 #include <thrust/detail/raw_pointer_cast.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <string>
@@ -323,10 +321,8 @@ TEST_F(JsonTest, TokenStream)
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
     d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> const tokens_gpu =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -459,10 +455,8 @@ TEST_F(JsonTest, TokenStream2)
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
     d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> const tokens_gpu =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -631,10 +625,8 @@ TEST_F(JsonTest, RecoveringTokenStream)
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
     d_input, default_options, stream, rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
-  thrust::host_vector<cuio_json::PdaTokenT> const tokens_gpu =
-    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<cuio_json::SymbolOffsetT> const token_indices_gpu =
-    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
@@ -738,8 +730,8 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   // Decompose tuples
   auto const stream = cudf::get_default_stream();
-  thrust::host_vector<token_index_t> offsets(input.size());
-  thrust::host_vector<cuio_json::PdaTokenT> tokens(input.size());
+  std::vector<token_index_t> offsets(input.size());
+  std::vector<cuio_json::PdaTokenT> tokens(input.size());
   auto token_tuples = thrust::make_zip_iterator(offsets.begin(), tokens.begin());
   thrust::copy(input.cbegin(), input.cend(), token_tuples);
 
@@ -748,20 +740,15 @@ TEST_F(JsonTest, PostProcessTokenStream)
     cudf::host_span<token_index_t const>{thrust::raw_pointer_cast(offsets.data()), offsets.size()},
     stream,
     rmm::mr::get_current_device_resource());
-  auto const d_tokens = cudf::detail::make_device_uvector_async(
-    cudf::host_span<cuio_json::PdaTokenT const>{thrust::raw_pointer_cast(tokens.data()),
-                                                tokens.size()},
-    stream,
-    rmm::mr::get_current_device_resource());
+  auto const d_tokens =
+    cudf::detail::make_device_uvector_async(tokens, stream, rmm::mr::get_current_device_resource());
 
   // Run system-under-test
-  auto [d_filtered_tokens, d_filtered_indices] = cuio_json::detail::process_token_stream(
-    {d_tokens.data(), d_tokens.size()}, {d_offsets.data(), d_offsets.size()}, stream);
+  auto [d_filtered_tokens, d_filtered_indices] =
+    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream);
 
-  thrust::host_vector<cuio_json::PdaTokenT> const filtered_tokens =
-    cudf::detail::make_host_vector_async(d_filtered_tokens, stream);
-  thrust::host_vector<token_index_t> const filtered_indices =
-    cudf::detail::make_host_vector_async(d_filtered_indices, stream);
+  auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
+  auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
 
   // Verify the number of tokens matches
   ASSERT_EQ(filtered_tokens.size(), expected_output.size());
