@@ -805,7 +805,7 @@ class IndexedFrame(Frame):
         4    4    9  e
 
         .. pandas-compat::
-            **DataFrame.replace, Series.replace, IndexedFrame.replace**
+            **DataFrame.replace, Series.replace**
 
             Parameters that are currently not supported are: `limit`, `regex`,
             `method`
@@ -1292,7 +1292,7 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:27  1  2
 
         .. pandas-compat::
-            **DataFrame.truncate, Series.truncate, IndexedFrame.truncate**
+            **DataFrame.truncate, Series.truncate**
 
             The ``copy`` parameter is only present for API compatibility, but
             ``copy=False`` is not supported. This method always generates a
@@ -1595,7 +1595,7 @@ class IndexedFrame(Frame):
         2  3  1
 
         .. pandas-compat::
-            **DataFrame.sort_index, Series.sort_index, IndexedFrame.sort_index**
+            **DataFrame.sort_index, Series.sort_index**
 
             * Not supporting: kind, sort_remaining=False
         """
@@ -2429,7 +2429,7 @@ class IndexedFrame(Frame):
         1  1  2
 
         .. pandas-compat::
-            **DataFrame.sort_values, Series.sort_values, IndexedFrame.sort_values**
+            **DataFrame.sort_values, Series.sort_values**
 
             * Support axis='index' only.
             * Not supporting: inplace, kind
@@ -2925,7 +2925,7 @@ class IndexedFrame(Frame):
 
 
         .. pandas-compat::
-            **DataFrame.resample, Series.resample, IndexedFrame.resample**
+            **DataFrame.resample, Series.resample**
 
             Note that the dtype of the index (or the 'on' column if using
             'on=') in the result will be of a frequency closest to the
@@ -3441,7 +3441,7 @@ class IndexedFrame(Frame):
         1  2  4
 
         .. pandas-compat::
-            **DataFrame.sample, Series.sample, IndexedFrame.sample**
+            **DataFrame.sample, Series.sample**
 
             When sampling from ``axis=0/'index'``, ``random_state`` can be either
             a numpy random state (``numpy.random.RandomState``) or a cupy random

@@ -6839,7 +6839,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Note: that a copy of the columns is made.
+        Note: a copy of the columns is made.
         """
         if not all(isinstance(name, str) for name in self._data.names):
             warnings.warn(

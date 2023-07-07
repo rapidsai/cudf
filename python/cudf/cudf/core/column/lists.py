@@ -632,7 +632,7 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **list.ListMethods.sort_values**
+            **ListMethods.sort_values**
 
             The ``inplace`` and ``kind`` arguments are currently not supported.
         """
