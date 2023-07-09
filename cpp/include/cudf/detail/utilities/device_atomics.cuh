@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
  * cudf::duration_us, cudf::duration_ns and bool
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
  * `atomicCAS`.
- * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
  * Also provides `cudf::genericAtomicOperation` which performs atomic operation
  * with the given binary operator.
  */
@@ -161,7 +160,6 @@ struct genericAtomicOperationImpl<T, Op, 8> {
 // specialized functions for operators
 // `atomicAdd` supports int32, float, double (signed int64 is not supported.)
 // `atomicMin`, `atomicMax` support int32_t, int64_t
-// `atomicAnd`, `atomicOr`, `atomicXor` support int32_t, int64_t
 template <>
 struct genericAtomicOperationImpl<float, DeviceSum, 4> {
   using T = float;
@@ -249,63 +247,6 @@ struct genericAtomicOperationImpl<int64_t, DeviceMax, 8> {
     using T_int = long long int;
     static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicMax(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
-    return ret;
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceAnd, 4> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceAnd op)
-  {
-    return atomicAnd(addr, update_value);
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceAnd, 8> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceAnd op)
-  {
-    using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int));
-    T ret = atomicAnd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
-    return ret;
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceOr, 4> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceOr op)
-  {
-    return atomicOr(addr, update_value);
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceOr, 8> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceOr op)
-  {
-    using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int));
-    T ret = atomicOr(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
-    return ret;
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceXor, 4> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceXor op)
-  {
-    return atomicXor(addr, update_value);
-  }
-};
-
-template <typename T>
-struct genericAtomicOperationImpl<T, DeviceXor, 8> {
-  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceXor op)
-  {
-    using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int));
-    T ret = atomicXor(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
 };
@@ -597,67 +538,4 @@ template <typename T>
 __forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
 {
   return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
-}
-
-/**
- * @brief Overloads for `atomicAnd`
- * reads the `old` located at the `address` in global or shared memory,
- * computes (old & val), and stores the result back to memory at the same
- * address. These three operations are performed in one atomic transaction.
- *
- * The supported types for `atomicAnd` are:
- *   singed/unsigned integer 8/16/32/64 bits
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
- *
- * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be computed
- *
- * @returns The old value at `address`
- */
-template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
-__forceinline__ __device__ T atomicAnd(T* address, T val)
-{
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @brief Overloads for `atomicOr`
- * reads the `old` located at the `address` in global or shared memory,
- * computes (old | val), and stores the result back to memory at the same
- * address. These three operations are performed in one atomic transaction.
- *
- * The supported types for `atomicOr` are:
- *   singed/unsigned integer 8/16/32/64 bits
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
- *
- * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be computed
- *
- * @returns The old value at `address`
- */
-template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
-__forceinline__ __device__ T atomicOr(T* address, T val)
-{
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @brief Overloads for `atomicXor`
- * reads the `old` located at the `address` in global or shared memory,
- * computes (old ^ val), and stores the result back to memory at the same
- * address. These three operations are performed in one atomic transaction.
- *
- * The supported types for `atomicXor` are:
- *   singed/unsigned integer 8/16/32/64 bits
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
- *
- * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be computed
- *
- * @returns The old value at `address`
- */
-template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
-__forceinline__ __device__ T atomicXor(T* address, T val)
-{
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
 }
