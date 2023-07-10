@@ -472,7 +472,7 @@ class parquet_writer_options {
   // Partitions described as {start_row, num_rows} pairs
   std::vector<partition_info> _partitions;
   // Optional associated metadata
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
@@ -577,7 +577,7 @@ class parquet_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -695,7 +695,7 @@ class parquet_writer_options {
    *
    * @param metadata Associated metadata
    */
-  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_input_metadata metadata) { _metadata = std::move(metadata); }
 
   /**
    * @brief Sets metadata.
@@ -841,9 +841,9 @@ class parquet_writer_options_builder {
    * @param metadata Associated metadata
    * @return this for chaining
    */
-  parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
+  parquet_writer_options_builder& metadata(table_input_metadata metadata)
   {
-    options._metadata = metadata;
+    options._metadata = std::move(metadata);
     return *this;
   }
 
@@ -1087,7 +1087,7 @@ class chunked_parquet_writer_options {
   // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
@@ -1155,7 +1155,7 @@ class chunked_parquet_writer_options {
    *
    * @return Metadata information
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -1256,7 +1256,7 @@ class chunked_parquet_writer_options {
    *
    * @param metadata Associated metadata
    */
-  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_input_metadata metadata) { _metadata = std::move(metadata); }
 
   /**
    * @brief Sets Key-Value footer metadata.
@@ -1391,9 +1391,9 @@ class chunked_parquet_writer_options_builder {
    * @param metadata Associated metadata
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
+  chunked_parquet_writer_options_builder& metadata(table_input_metadata metadata)
   {
-    options._metadata = metadata;
+    options._metadata = std::move(metadata);
     return *this;
   }
 
