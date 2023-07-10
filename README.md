@@ -52,7 +52,7 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Installation
 
-See the [RAPIDS install page](https://rapids.ai/start.html) for
+See the [RAPIDS install page](https://docs.rapids.ai/install) for
 the most up-to-date information and commands for installing cuDF
 and other RAPIDS packages.
 
