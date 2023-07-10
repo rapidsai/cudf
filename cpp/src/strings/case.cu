@@ -20,7 +20,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -32,6 +31,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/atomic>
 
 namespace cudf {
 namespace strings {
@@ -167,7 +168,10 @@ struct count_bytes_fn {
       size += converter.process_character(u8);
     }
     // this is every so slightly faster than using the cub::warp_reduce
-    if (size > 0) atomicAdd(d_offsets + str_idx, size);
+    if (size > 0) {
+      cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_offsets + str_idx)};
+      ref.fetch_add(size, cuda::std::memory_order_relaxed);
+    }
   }
 };
 
