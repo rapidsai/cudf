@@ -21,7 +21,6 @@
 #include <hash/managed.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -34,6 +33,8 @@
 #include <iterator>
 #include <limits>
 #include <type_traits>
+
+#include <cuda/atomic>
 
 namespace {
 template <std::size_t N>
@@ -91,8 +92,8 @@ union pair_packer;
 template <typename pair_type>
 union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
   using packed_type = packed_t<pair_type>;
-  packed_type const packed;
-  pair_type const pair;
+  packed_type packed;
+  pair_type pair;
 
   __device__ pair_packer(pair_type _pair) : pair{_pair} {}
 
@@ -268,16 +269,21 @@ class concurrent_unordered_map {
   __device__ std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
     value_type* const __restrict__ insert_location, value_type const& insert_pair)
   {
-    pair_packer<pair_type> const unused{thrust::make_pair(m_unused_key, m_unused_element)};
-    pair_packer<pair_type> const new_pair{insert_pair};
-    pair_packer<pair_type> const old{
-      atomicCAS(reinterpret_cast<typename pair_packer<pair_type>::packed_type*>(insert_location),
-                unused.packed,
-                new_pair.packed)};
+    pair_packer<pair_type> expected{thrust::make_pair(m_unused_key, m_unused_element)};
+    pair_packer<pair_type> desired{insert_pair};
 
-    if (old.packed == unused.packed) { return insert_result::SUCCESS; }
+    using packed_type = typename pair_packer<pair_type>::packed_type;
 
-    if (m_equal(old.pair.first, insert_pair.first)) { return insert_result::DUPLICATE; }
+    auto* insert_ptr = reinterpret_cast<packed_type*>(insert_location);
+    cuda::atomic_ref<packed_type, cuda::thread_scope_device> ref{*insert_ptr};
+    auto const success =
+      ref.compare_exchange_strong(expected.packed, desired.packed, cuda::std::memory_order_relaxed);
+
+    if (success) {
+      return insert_result::SUCCESS;
+    } else if (m_equal(expected.pair.first, insert_pair.first)) {
+      return insert_result::DUPLICATE;
+    }
     return insert_result::CONTINUE;
   }
 
@@ -292,16 +298,20 @@ class concurrent_unordered_map {
   __device__ std::enable_if_t<not is_packable<pair_type>(), insert_result> attempt_insert(
     value_type* const __restrict__ insert_location, value_type const& insert_pair)
   {
-    key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key, insert_pair.first)};
+    auto expected = m_unused_key;
+    cuda::atomic_ref<key_type, cuda::thread_scope_device> ref{insert_location->first};
+    auto const key_success =
+      ref.compare_exchange_strong(expected, insert_pair.first, cuda::std::memory_order_relaxed);
 
     // Hash bucket empty
-    if (m_unused_key == old_key) {
+    if (key_success) {
       insert_location->second = insert_pair.second;
       return insert_result::SUCCESS;
     }
-
     // Key already exists
-    if (m_equal(old_key, insert_pair.first)) { return insert_result::DUPLICATE; }
+    else if (m_equal(expected, insert_pair.first)) {
+      return insert_result::DUPLICATE;
+    }
 
     return insert_result::CONTINUE;
   }
