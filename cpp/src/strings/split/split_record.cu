@@ -80,48 +80,22 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
 enum class Dir { FORWARD, BACKWARD };
 
 /**
- * @brief Compute the number of tokens for the `idx'th` string element of `d_strings`.
- */
-struct whitespace_token_counter_fn {
-  column_device_view const d_strings;  // strings to split
-  size_type const max_tokens = std::numeric_limits<size_type>::max();
-
-  __device__ size_type operator()(size_type idx) const
-  {
-    if (d_strings.is_null(idx)) { return 0; }
-
-    auto const d_str        = d_strings.element<string_view>(idx);
-    size_type token_count   = 0;
-    auto spaces             = true;
-    auto reached_max_tokens = false;
-    for (auto ch : d_str) {
-      if (spaces != (ch <= ' ')) {
-        if (!spaces) {
-          if (token_count < max_tokens - 1) {
-            token_count++;
-          } else {
-            reached_max_tokens = true;
-            break;
-          }
-        }
-        spaces = !spaces;
-      }
-    }
-    // pandas.Series.str.split("") returns 0 tokens.
-    if (reached_max_tokens || !spaces) token_count++;
-    return token_count;
-  }
-};
-
-/**
  * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
  */
 template <Dir dir>
 struct whitespace_token_reader_fn {
   column_device_view const d_strings;  // strings to split
   size_type const max_tokens{};
-  int32_t* d_token_offsets{};
+  size_type const* d_token_offsets{};
   string_index_pair* d_tokens{};
+
+  __device__ size_type count_tokens(size_type idx) const
+  {
+    if (d_strings.is_null(idx)) { return 0; }
+    auto const d_str = d_strings.element<string_view>(idx);
+    whitespace_token_counter_fn counter{max_tokens};
+    return counter.count_tokens(d_str);
+  }
 
   __device__ void operator()(size_type idx)
   {
@@ -161,42 +135,33 @@ struct whitespace_token_reader_fn {
 }  // namespace
 
 // The output is one list item per string
-template <typename TokenCounter, typename TokenReader>
-std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& strings,
-                                                   TokenCounter counter,
+template <typename TokenReader>
+std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& input,
                                                    TokenReader reader,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
   // create offsets column by counting the number of tokens per string
-  auto strings_count = strings.size();
-  auto offsets       = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<int32_t>();
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_offsets,
-                    counter);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0, [reader] __device__(auto idx) { return reader.count_tokens(idx); });
+  auto [offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+  auto d_offsets = offsets->view().template data<cudf::size_type>();
 
-  // last entry is the total number of tokens to be generated
-  auto total_tokens = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
   // split each string into an array of index-pair values
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   reader.d_token_offsets = d_offsets;
   reader.d_tokens        = tokens.data();
   thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), strings_count, reader);
+    rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), input.size(), reader);
   // convert the index-pairs into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
   // create a lists column using the offsets and the strings columns
-  return make_lists_column(strings_count,
+  return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(strings_output),
-                           strings.null_count(),
-                           copy_bitmask(strings.parent(), stream, mr),
+                           input.null_count(),
+                           copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -216,11 +181,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
   auto d_strings_column_ptr = column_device_view::create(strings.parent(), stream);
   if (delimiter.size() == 0) {
     return whitespace_split_record_fn(
-      strings,
-      whitespace_token_counter_fn{*d_strings_column_ptr, max_tokens},
-      whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens},
-      stream,
-      mr);
+      strings, whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens}, stream, mr);
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
     if (dir == Dir::FORWARD) {
