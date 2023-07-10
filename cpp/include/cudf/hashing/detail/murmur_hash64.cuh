@@ -32,11 +32,11 @@ namespace detail {
 // compile and run any of them on any platform, but your performance with the
 // non-native version will be less than optimal.
 template <typename Key>
-struct MurmurHash3_64 {
+struct MurmurHash3_64_128 {
   using result_type = thrust::pair<uint64_t, uint64_t>;
 
-  constexpr MurmurHash3_64() = default;
-  constexpr MurmurHash3_64(uint64_t seed) : m_seed(seed) {}
+  constexpr MurmurHash3_64_128() = default;
+  constexpr MurmurHash3_64_128(uint64_t seed) : m_seed(seed) {}
 
   __device__ inline uint32_t getblock32(std::byte const* data, cudf::size_type offset) const
   {
@@ -168,29 +168,29 @@ struct MurmurHash3_64 {
 };
 
 template <>
-MurmurHash3_64<bool>::result_type __device__ inline MurmurHash3_64<bool>::operator()(
+MurmurHash3_64_128<bool>::result_type __device__ inline MurmurHash3_64_128<bool>::operator()(
   bool const& key) const
 {
   return compute<uint8_t>(key);
 }
 
 template <>
-MurmurHash3_64<float>::result_type __device__ inline MurmurHash3_64<float>::operator()(
+MurmurHash3_64_128<float>::result_type __device__ inline MurmurHash3_64_128<float>::operator()(
   float const& key) const
 {
   return compute(cudf::detail::normalize_nans(key));
 }
 
 template <>
-MurmurHash3_64<double>::result_type __device__ inline MurmurHash3_64<double>::operator()(
+MurmurHash3_64_128<double>::result_type __device__ inline MurmurHash3_64_128<double>::operator()(
   double const& key) const
 {
   return compute(cudf::detail::normalize_nans(key));
 }
 
 template <>
-MurmurHash3_64<cudf::string_view>::result_type
-  __device__ inline MurmurHash3_64<cudf::string_view>::operator()(
+MurmurHash3_64_128<cudf::string_view>::result_type
+  __device__ inline MurmurHash3_64_128<cudf::string_view>::operator()(
     cudf::string_view const& key) const
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
@@ -199,24 +199,24 @@ MurmurHash3_64<cudf::string_view>::result_type
 }
 
 template <>
-MurmurHash3_64<numeric::decimal32>::result_type
-  __device__ inline MurmurHash3_64<numeric::decimal32>::operator()(
+MurmurHash3_64_128<numeric::decimal32>::result_type
+  __device__ inline MurmurHash3_64_128<numeric::decimal32>::operator()(
     numeric::decimal32 const& key) const
 {
   return compute(key.value());
 }
 
 template <>
-MurmurHash3_64<numeric::decimal64>::result_type
-  __device__ inline MurmurHash3_64<numeric::decimal64>::operator()(
+MurmurHash3_64_128<numeric::decimal64>::result_type
+  __device__ inline MurmurHash3_64_128<numeric::decimal64>::operator()(
     numeric::decimal64 const& key) const
 {
   return compute(key.value());
 }
 
 template <>
-MurmurHash3_64<numeric::decimal128>::result_type
-  __device__ inline MurmurHash3_64<numeric::decimal128>::operator()(
+MurmurHash3_64_128<numeric::decimal128>::result_type
+  __device__ inline MurmurHash3_64_128<numeric::decimal128>::operator()(
     numeric::decimal128 const& key) const
 {
   return compute(key.value());

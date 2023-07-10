@@ -44,15 +44,18 @@ TYPED_TEST(HashMurmur64TestTyped, TestNumeric)
     {-1, -1, 0, 2, 22, 1, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 1, -22},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
 
-  auto const output1 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}));
-  auto const output2 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col2}));
+  auto output1 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}));
+  auto output2 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col2}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 
+  output1 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}), 7);
+  output2 = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col2}), 7);
   CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 }
 
 class HashMurmur64Test : public cudf::test::BaseFixture {};
 
-TEST_F(HashMurmur64Test, MultiType)
+TEST_F(HashMurmur64Test, StringType)
 {
   auto col1 = cudf::test::strings_column_wrapper(
     {"The",
@@ -90,38 +93,20 @@ TEST_F(HashMurmur64Test, MultiType)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view().column(0), expected);
 
-  using ts = cudf::timestamp_s;
-  auto col2 =
-    cudf::test::fixed_width_column_wrapper<ts, ts::duration>({ts::duration::zero(),
-                                                              static_cast<ts::duration>(100),
-                                                              static_cast<ts::duration>(-100),
-                                                              ts::duration::min(),
-                                                              static_cast<ts::duration>(1000),
-                                                              static_cast<ts::duration>(1111),
-                                                              static_cast<ts::duration>(100000),
-                                                              static_cast<ts::duration>(-1000),
-                                                              static_cast<ts::duration>(2222),
-                                                              static_cast<ts::duration>(3333),
-                                                              static_cast<ts::duration>(44444),
-                                                              static_cast<ts::duration>(-100),
-                                                              static_cast<ts::duration>(100),
-                                                              ts::duration::max()});
-
-  output = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1, col2}));
-
-  expected = cudf::test::fixed_width_column_wrapper<uint64_t>({9466414547226101804ul,
-                                                               8228850782181844430ul,
-                                                               785745530268169861ul,
-                                                               4419198613737028765ul,
-                                                               8688495967673047490ul,
-                                                               16639004178923553997ul,
-                                                               5537069187226926761ul,
-                                                               1827028865561218073ul,
-                                                               11416255570436251115ul,
-                                                               17794658852294150415ul,
-                                                               5518440516384677761ul,
-                                                               18392488402293221125ul,
-                                                               14843016968729228293ul,
-                                                               12478631074270786392ul});
+  output   = cudf::hashing::murmur_hash3_64_128(cudf::table_view({col1}), 7);
+  expected = cudf::test::fixed_width_column_wrapper<uint64_t>({5091211404759866125ul,
+                                                               12948345853121693662ul,
+                                                               14974420008081159223ul,
+                                                               4475830656132398742ul,
+                                                               15724398074328467356ul,
+                                                               6800696444867986986ul,
+                                                               7130403777725115865ul,
+                                                               11087585763075301159ul,
+                                                               12568262854562899547ul,
+                                                               2679775340886828858ul,
+                                                               17582832888865278351ul,
+                                                               5264478748926531221ul,
+                                                               8863578460974333747ul,
+                                                               11176802453047055260ul});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view().column(0), expected);
 }

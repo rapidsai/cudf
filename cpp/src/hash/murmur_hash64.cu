@@ -82,7 +82,7 @@ class murmur_device_row_hasher {
       if (_check_nulls && col.is_null(row_index)) {
         return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
       }
-      auto const hasher = MurmurHash3_64<T>{_seed.first};
+      auto const hasher = MurmurHash3_64_128<T>{_seed.first};
       return hasher(col.element<T>(row_index));
     }
 
