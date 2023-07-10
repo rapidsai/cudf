@@ -61,8 +61,8 @@ TEST_F(MD5HashTest, MultiValue)
 
   auto const string_input1      = cudf::table_view({strings_col});
   auto const string_input2      = cudf::table_view({strings_col, strings_col});
-  auto const md5_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_MD5);
-  auto const md5_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_MD5);
+  auto const md5_string_output1 = cudf::hashing::md5(string_input1);
+  auto const md5_string_output2 = cudf::hashing::md5(string_input2);
   EXPECT_EQ(string_input1.num_rows(), md5_string_output1->size());
   EXPECT_EQ(string_input2.num_rows(), md5_string_output2->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(md5_string_output1->view(), md5_string_results1);
@@ -70,8 +70,8 @@ TEST_F(MD5HashTest, MultiValue)
 
   auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1});
   auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2});
-  auto const md5_output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const md5_output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const md5_output1 = cudf::hashing::md5(input1);
+  auto const md5_output2 = cudf::hashing::md5(input2);
   EXPECT_EQ(input1.num_rows(), md5_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(md5_output1->view(), md5_output2->view());
 }
@@ -110,8 +110,8 @@ TEST_F(MD5HashTest, MultiValueNulls)
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -142,8 +142,8 @@ TEST_F(MD5HashTest, StringListsNulls)
   auto const input1 = cudf::table_view({strings_col});
   auto const input2 = cudf::table_view({strings_list_col});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
@@ -159,8 +159,8 @@ TYPED_TEST(MD5HashTestTyped, Equality)
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
-  auto const output1 = cudf::hash(input, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input);
+  auto const output2 = cudf::hashing::md5(input);
 
   EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -177,8 +177,8 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -200,8 +200,8 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
   auto const input1 = cudf::table_view({col1, col2, col3});
   auto const input2 = cudf::table_view({list_col});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -233,8 +233,8 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
   auto const input1 = cudf::table_view({col1, col2, col3});
   auto const input2 = cudf::table_view({list_col});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
@@ -261,8 +261,8 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
@@ -283,8 +283,8 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
 
-  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
-  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+  auto const output1 = cudf::hashing::md5(input1);
+  auto const output2 = cudf::hashing::md5(input2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), verbosity);
 }
