@@ -17,8 +17,6 @@
 
 #include "dispatch_dfa.cuh"
 
-#include <io/utilities/hostdevice_vector.hpp>
-
 #include <cstdint>
 
 namespace cudf::io::fst {
@@ -70,6 +68,7 @@ cudaError_t DeviceTransduce(void* d_temp_storage,
                             TransducedIndexOutItT transduced_out_idx_it,
                             TransducedCountOutItT d_num_transduced_out_it,
                             uint32_t seed_state = 0,
+                            uint32_t* final_state = nullptr,
                             cudaStream_t stream = 0)
 {
   using DispatchDfaT = detail::DispatchFSM<DfaT,
@@ -88,7 +87,41 @@ cudaError_t DeviceTransduce(void* d_temp_storage,
                                 transduced_out_it,
                                 transduced_out_idx_it,
                                 d_num_transduced_out_it,
+                                final_state,
                                 stream);
+}
+
+/**
+ * @brief Uses a deterministic finite automaton to transduce a sequence of symbols from an input
+ * iterator to a sequence of transduced output symbols.
+ *
+ * @tparam DfaT The DFA specification
+ * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
+ * @tparam OffsetT A type large enough to index into the input symbols
+ * @param[in] d_temp_storage Device-accessible allocation of temporary storage.  When NULL, the
+ * required allocation size is written to \p temp_storage_bytes and no work is done.
+ * @param[in,out] temp_storage_bytes Reference to size in bytes of \p d_temp_storage allocation
+ * @param[in] dfa The DFA specifying the number of distinct symbol groups, transition table, and
+ * translation table
+ * @param[in] d_chars_in Random-access input iterator to the beginning of the sequence of input
+ * symbols
+ * @param[in] num_chars The total number of input symbols to process
+ * @param[out] state_vector The DFA state transition function after parsing the input
+ * @param[in] stream CUDA stream to launch kernels within. Default is the null-stream.
+ */
+template <typename DfaT, typename SymbolItT, typename OffsetT>
+cudaError_t DeviceFSMReduce(void* d_temp_storage,
+                            size_t& temp_storage_bytes,
+                            DfaT dfa,
+                            SymbolItT d_chars_in,
+                            OffsetT num_chars,
+                            std::array<uint32_t, DfaT::MAX_NUM_STATES>& state_vector,
+                            cudaStream_t stream = 0)
+{
+  using DispatchDfaT = detail::DispatchFSMReduce<DfaT, SymbolItT, OffsetT>;
+
+  return DispatchDfaT::Dispatch(
+    d_temp_storage, temp_storage_bytes, dfa, d_chars_in, num_chars, state_vector, stream);
 }
 
 }  // namespace cudf::io::fst

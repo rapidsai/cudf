@@ -72,6 +72,23 @@ __global__ void initialization_pass_kernel(TileState items_state, uint32_t num_t
   items_state.InitializeStatus(num_tiles);
 }
 
+/**
+ * @brief Kernel for retrieving the final state 
+ *
+ * @param [in] items_state The tile state
+ * @param [in] num_tiles The number of tiles
+ * @param [out] final_state The final state
+ * @return
+ */
+template <typename StateVectorT, typename TileStateT>
+__global__ void get_final_state_kernel(TileStateT items_state, uint32_t num_tiles, StateVectorT* final_state)
+{
+  typename TileStateT::StatusWord status{};
+  // since this is run after a successful scan, we will not wait at all
+  items_state.WaitForValid(num_tiles - 1, status, *final_state);
+  // now status should be cub::SCAN_TILE_INCLUSIVE
+}
+
 template <typename DfaT,
           typename SymbolItT,
           typename TransducedOutItT,
@@ -115,6 +132,7 @@ struct DispatchFSM : DeviceFSMPolicy {
   TransducedOutItT transduced_out_it;
   TransducedIndexOutItT transduced_out_idx_it;
   TransducedCountOutItT d_num_transduced_out_it;
+  StateIndexT* final_state;
   cudaStream_t stream;
   int const ptx_version;
 
@@ -130,6 +148,7 @@ struct DispatchFSM : DeviceFSMPolicy {
                                                    TransducedOutItT transduced_out_it,
                                                    TransducedIndexOutItT transduced_out_idx_it,
                                                    TransducedCountOutItT d_num_transduced_out_it,
+                                                   StateIndexT* final_state,
                                                    cudaStream_t stream,
                                                    int ptx_version)
     : d_temp_storage(d_temp_storage),
@@ -141,6 +160,7 @@ struct DispatchFSM : DeviceFSMPolicy {
       transduced_out_it(transduced_out_it),
       transduced_out_idx_it(transduced_out_idx_it),
       d_num_transduced_out_it(d_num_transduced_out_it),
+      final_state(final_state),
       stream(stream),
       ptx_version(ptx_version)
   {
@@ -159,6 +179,7 @@ struct DispatchFSM : DeviceFSMPolicy {
     TransducedOutItT transduced_out_it,
     TransducedIndexOutItT transduced_out_idx_it,
     TransducedCountOutItT d_num_transduced_out_it,
+    uint32_t* final_state,
     cudaStream_t stream)
   {
     using MaxPolicyT = DispatchFSM::MaxPolicy;
@@ -180,6 +201,7 @@ struct DispatchFSM : DeviceFSMPolicy {
                          transduced_out_it,
                          transduced_out_idx_it,
                          d_num_transduced_out_it,
+                         final_state,
                          stream,
                          ptx_version);
 
@@ -371,7 +393,7 @@ struct DispatchFSM : DeviceFSMPolicy {
                                    num_threads,
                                    stream);
 
-    allocation_sizes[MEM_STATE_VECTORS] = num_threads * sizeof(StateVectorT);
+    allocation_sizes[MEM_STATE_VECTORS] = (num_threads + 1) * sizeof(StateVectorT);
     allocation_sizes[MEM_SCAN]          = vector_scan_storage_bytes;
 
     // Bytes needed for tile status descriptors (fusing state-transition vector + DFA simulation)
@@ -399,6 +421,7 @@ struct DispatchFSM : DeviceFSMPolicy {
     // Alias memory for state-transition vectors
     StateVectorT* d_thread_state_transition =
       static_cast<StateVectorT*>(allocations[MEM_STATE_VECTORS]);
+    auto const d_final_state = d_thread_state_transition + num_threads;
 
     //------------------------------------------------------------------------------
     // INITIALIZE SCAN TILE STATES COMPUTING TRANSDUCED OUTPUT OFFSETS
@@ -442,15 +465,263 @@ struct DispatchFSM : DeviceFSMPolicy {
                                      d_thread_state_transition,
                                      state_vector_scan_op,
                                      state_identity_vector,
-                                     num_threads,
+                                     num_threads + 1,
                                      stream);
     }
 
     //------------------------------------------------------------------------------
     // SIMULATE DFA
     //------------------------------------------------------------------------------
-    return SimulateDFA<ActivePolicyT>(
+    error = SimulateDFA<ActivePolicyT>(
       sm_count, stv_tile_state, fst_offset_tile_state, seed_state, d_thread_state_transition);
+    if (error != cudaSuccess || !final_state) return error;
+
+    if constexpr (SINGLE_PASS_STV) {
+    get_final_state_kernel<StateVectorT><<<1, 1, 0, stream>>>(stv_tile_state, num_blocks, seed_state, d_final_state);
+    }
+    StateVectorT final_state_vec;
+    error = cudaMemcpyAsync(&final_state_vec, d_final_state, sizeof(StateVectorT), cudaMemcpyDeviceToHost, stream);
+    *final_state = final_state_vec.Get(seed_state);
+    return error;
+  }
+};
+
+template <typename DfaT, typename SymbolItT, typename OffsetT>
+struct DispatchFSMReduce : DeviceFSMPolicy {
+  //------------------------------------------------------------------------------
+  // DEFAULT TYPES
+  //------------------------------------------------------------------------------
+  using StateIndexT  = uint32_t;
+  using BlockOffsetT = uint32_t;
+
+  //------------------------------------------------------------------------------
+  // DERIVED CONFIGS
+  //------------------------------------------------------------------------------
+  // DFA-specific configs
+  static constexpr int32_t MAX_NUM_STATES  = DfaT::MAX_NUM_STATES;
+  static constexpr int32_t MAX_NUM_SYMBOLS = DfaT::MAX_NUM_SYMBOLS;
+
+  //------------------------------------------------------------------------------
+  // TYPEDEFS
+  //------------------------------------------------------------------------------
+  using StateVectorCompositeOpT = VectorCompositeOp<MAX_NUM_STATES>;
+
+  //------------------------------------------------------------------------------
+  // MEMBER VARS
+  //------------------------------------------------------------------------------
+  void* d_temp_storage;
+  size_t& temp_storage_bytes;
+  DfaT dfa;
+  SymbolItT d_chars_in;
+  OffsetT num_chars;
+  std::array<StateIndexT, MAX_NUM_STATES>& state_vector;
+  cudaStream_t stream;
+  int const ptx_version;
+
+  //------------------------------------------------------------------------------
+  // CONSTRUCTOR
+  //------------------------------------------------------------------------------
+  CUB_RUNTIME_FUNCTION __forceinline__
+  DispatchFSMReduce(void* d_temp_storage,
+                    size_t& temp_storage_bytes,
+                    DfaT dfa,
+                    SymbolItT d_chars_in,
+                    OffsetT num_chars,
+                    std::array<StateIndexT, MAX_NUM_STATES>& state_vector,
+                    cudaStream_t stream,
+                    int ptx_version)
+    : d_temp_storage(d_temp_storage),
+      temp_storage_bytes(temp_storage_bytes),
+      dfa(dfa),
+      d_chars_in(d_chars_in),
+      num_chars(num_chars),
+      state_vector(state_vector),
+      stream(stream),
+      ptx_version(ptx_version)
+  {
+  }
+
+  //------------------------------------------------------------------------------
+  // DISPATCH INTERFACE
+  //------------------------------------------------------------------------------
+  CUB_RUNTIME_FUNCTION __forceinline__ static cudaError_t Dispatch(
+    void* d_temp_storage,
+    size_t& temp_storage_bytes,
+    DfaT dfa,
+    SymbolItT d_chars_in,
+    OffsetT num_chars,
+    std::array<StateIndexT, MAX_NUM_STATES>& state_vector,
+    cudaStream_t stream)
+  {
+    using MaxPolicyT = DispatchFSMReduce::MaxPolicy;
+
+    cudaError_t error;
+
+    // Get PTX version
+    int ptx_version;
+    error = cub::PtxVersion(ptx_version);
+    if (error != cudaSuccess) return error;
+
+    // Create dispatch functor
+    DispatchFSMReduce dispatch(d_temp_storage,
+                               temp_storage_bytes,
+                               dfa,
+                               d_chars_in,
+                               num_chars,
+                               state_vector,
+                               stream,
+                               ptx_version);
+
+    error = MaxPolicyT::Invoke(ptx_version, dispatch);
+    return error;
+  }
+
+  //------------------------------------------------------------------------------
+  // DFA REDUCTION KERNEL INVOCATION
+  //------------------------------------------------------------------------------
+  template <typename ActivePolicyT, typename DFAReduceKernelT, typename StateVectorT>
+  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t InvokeDFAReduceKernel(
+    DFAReduceKernelT dfa_kernel, int32_t sm_count, StateVectorT* d_block_state_transition)
+
+  {
+    cudaError_t error = cudaSuccess;
+    cub::KernelConfig dfa_simulation_config;
+
+    using PolicyT = typename ActivePolicyT::AgentDFAPolicy;
+    if (CubDebug(error = dfa_simulation_config.Init<PolicyT>(dfa_kernel))) return error;
+
+    // Kernel invocation
+    uint32_t grid_size = std::max(
+      1u, CUB_QUOTIENT_CEILING(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
+    uint32_t block_threads = dfa_simulation_config.block_threads;
+
+    dfa_kernel<<<grid_size, block_threads, 0, stream>>>(
+      dfa, d_chars_in, num_chars, d_block_state_transition);
+
+    // Check for errors
+    if (CubDebug(error = cudaPeekAtLastError())) return error;
+
+    return error;
+  }
+
+  //------------------------------------------------------------------------------
+  // REDUCTION FINALIZE KERNEL INVOCATION
+  //------------------------------------------------------------------------------
+  template <typename ActivePolicyT, typename ReduceSingleBlockKernelT, typename StateVectorT>
+  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
+  InvokeReduceSingleBlockKernel(ReduceSingleBlockKernelT reduce_kernel,
+                                int32_t sm_count,
+                                StateVectorT* d_block_state_transition,
+                                BlockOffsetT num_blocks)
+  {
+    cudaError_t error = cudaSuccess;
+    cub::KernelConfig dfa_simulation_config;
+
+    reduce_kernel<<<1, ActivePolicyT::AgentDFAPolicy::BLOCK_THREADS, 0, stream>>>(
+      d_block_state_transition, num_blocks);
+
+    // Check for errors
+    if (CubDebug(error = cudaPeekAtLastError())) return error;
+
+    return error;
+  }
+
+  //------------------------------------------------------------------------------
+  // POLICY INVOKATION
+  //------------------------------------------------------------------------------
+  template <typename ActivePolicyT>
+  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t Invoke()
+  {
+    cudaError_t error = cudaSuccess;
+
+    // Get SM count
+    int device_ordinal = -1;
+    int sm_count       = -1;
+
+    // Get current device
+    error = cudaGetDevice(&device_ordinal);
+    if (error != cudaSuccess) return error;
+
+    error = cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device_ordinal);
+    if (error != cudaSuccess) return error;
+
+    //------------------------------------------------------------------------------
+    // DERIVED TYPEDEFS
+    //------------------------------------------------------------------------------
+    // Type used to represent state-transition vectors
+    using StateVectorT = MultiFragmentInRegArray<MAX_NUM_STATES, MAX_NUM_STATES - 1>;
+
+    StateVectorCompositeOpT state_vector_scan_op;
+
+    //------------------------------------------------------------------------------
+    // DERIVED CONFIGS
+    //------------------------------------------------------------------------------
+    enum {
+      BLOCK_THREADS         = ActivePolicyT::BLOCK_THREADS,
+      SYMBOLS_PER_THREAD    = ActivePolicyT::ITEMS_PER_THREAD,
+      NUM_SYMBOLS_PER_BLOCK = BLOCK_THREADS * SYMBOLS_PER_THREAD
+    };
+
+    BlockOffsetT num_blocks = std::max(1u, CUB_QUOTIENT_CEILING(num_chars, NUM_SYMBOLS_PER_BLOCK));
+
+    //------------------------------------------------------------------------------
+    // TEMPORARY MEMORY REQUIREMENTS
+    //------------------------------------------------------------------------------
+    enum { MEM_STATE_VECTORS = 0, NUM_ALLOCATIONS };
+
+    size_t allocation_sizes[NUM_ALLOCATIONS] = {0};
+    void* allocations[NUM_ALLOCATIONS]       = {0};
+
+    allocation_sizes[MEM_STATE_VECTORS] = (num_blocks + 1) * sizeof(StateVectorT);
+
+    error =
+      cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
+    if (error != cudaSuccess) return error;
+
+    // Return if the caller is simply requesting the size of the storage allocation
+    if (d_temp_storage == NULL) return cudaSuccess;
+
+    // Alias memory for state-transition vectors
+    StateVectorT* d_block_state_transition =
+      static_cast<StateVectorT*>(allocations[MEM_STATE_VECTORS]);
+
+    //------------------------------------------------------------------------------
+    // SIMULATE DFA
+    //------------------------------------------------------------------------------
+    error =
+      InvokeDFAReduceKernel<ActivePolicyT>(ReduceDFAKernel<DfaT,
+                                                           typename ActivePolicyT::AgentDFAPolicy,
+                                                           SymbolItT,
+                                                           OffsetT,
+                                                           StateVectorT>,
+                                           sm_count,
+                                           d_block_state_transition);
+    if (error != cudaSuccess) return error;
+
+    //------------------------------------------------------------------------------
+    // REDUCE BLOCK RESULTS
+    //------------------------------------------------------------------------------
+    error = InvokeReduceSingleBlockKernel<ActivePolicyT>(
+      ReduceSingleBlockKernel<DfaT, typename ActivePolicyT::AgentDFAPolicy, StateVectorT>,
+      sm_count,
+      d_block_state_transition,
+      num_blocks);
+    if (error != cudaSuccess) return error;
+
+    StateVectorT result_vector;
+
+    error = cudaMemcpyAsync(&result_vector,
+                            d_block_state_transition + num_blocks,
+                            sizeof(StateVectorT),
+                            cudaMemcpyDeviceToHost,
+                            stream);
+    if (error != cudaSuccess) return error;
+
+    for (StateIndexT i = 0; i < MAX_NUM_STATES; i++) {
+      state_vector[i] = result_vector.Get(i);
+    }
+
+    return error;
   }
 };
 }  // namespace cudf::io::fst::detail
