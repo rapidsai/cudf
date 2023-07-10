@@ -58,8 +58,8 @@ struct schema_element {
  * @brief Control the error recovery behavior of the json parser
  */
 enum class json_recovery_mode_t {
-  FAIL,             ///< Does not recover from an error when encountering an invalid format
-  RECOVER_AND_NULL  ///< Recovers from an error, replacing invalid records with null
+  FAIL,              ///< Does not recover from an error when encountering an invalid format
+  RECOVER_WITH_NULL  ///< Recovers from an error, replacing invalid records with null
 };
 
 /**

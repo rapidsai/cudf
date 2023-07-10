@@ -612,7 +612,7 @@ TEST_F(JsonTest, RecoveringTokenStream)
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
-  default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_AND_NULL);
+  default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
   default_options.enable_lines(true);
 
   // Prepare input & output buffers
