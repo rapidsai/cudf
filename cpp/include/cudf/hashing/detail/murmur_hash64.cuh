@@ -13,14 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <thrust/pair.h>
 
-namespace cudf {
-namespace hashing {
-namespace detail {
+namespace cudf::hashing::detail {
 
 // MurmurHash3_x64_128 implementation from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
@@ -222,6 +219,4 @@ MurmurHash3_64_128<numeric::decimal128>::result_type
   return compute(key.value());
 }
 
-}  // namespace detail
-}  // namespace hashing
-}  // namespace cudf
+}  // namespace cudf::hashing::detail
