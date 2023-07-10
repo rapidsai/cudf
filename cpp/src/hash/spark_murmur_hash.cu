@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <thrust/tabulate.h>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
 
 namespace {
@@ -166,14 +167,14 @@ template <>
 spark_hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(
   float const& key) const
 {
-  return compute<float>(detail::normalize_nans(key));
+  return compute<float>(cudf::detail::normalize_nans(key));
 }
 
 template <>
 spark_hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(
   double const& key) const
 {
-  return compute<double>(detail::normalize_nans(key));
+  return compute<double>(cudf::detail::normalize_nans(key));
 }
 
 template <>
@@ -283,7 +284,7 @@ class spark_murmur_device_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    return detail::accumulate(
+    return cudf::detail::accumulate(
       _table.begin(),
       _table.end(),
       _seed,
@@ -331,13 +332,13 @@ class spark_murmur_device_row_hasher {
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return _seed; }
           // Non-empty structs are assumed to be decomposed and contain only one child
-          curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
+          curr_col = cudf::detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
-          curr_col = detail::lists_column_device_view(curr_col).get_sliced_child();
+          curr_col = cudf::detail::lists_column_device_view(curr_col).get_sliced_child();
         }
       }
 
-      return detail::accumulate(
+      return cudf::detail::accumulate(
         thrust::counting_iterator(0),
         thrust::counting_iterator(curr_col.size()),
         _seed,
@@ -424,4 +425,5 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
 }
 
 }  // namespace detail
+}  // namespace hashing
 }  // namespace cudf

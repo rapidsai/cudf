@@ -75,7 +75,7 @@ requirements:
   run:
     - protobuf >=4.21.6,<4.22
     - python
-    - typing_extensions
+    - typing_extensions >=4.0.0
     - pandas >=1.3,<1.6.0dev0
     - cupy >=12.0.0
     - numba >=0.57

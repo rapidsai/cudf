@@ -7,7 +7,7 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
 
 import numpy
 from typing_extensions import Self
@@ -265,7 +265,7 @@ class SpillableBuffer(Buffer):
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
 
-    def copy(self, deep: bool = True):
+    def copy(self, deep: bool = True) -> Self:
         spill_lock = SpillLock()
         self.spill_lock(spill_lock=spill_lock)
         return super().copy(deep=deep)
@@ -351,7 +351,7 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, *, mode) -> int:
+    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         """Get a device pointer to the memory of the buffer.
 
         If this is called within an `acquire_spill_lock` context,
@@ -451,7 +451,7 @@ class SpillableBuffer(Buffer):
                 )
                 return ret
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> SpillableBufferSlice:
         return SpillableBufferSlice(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, list]:
@@ -541,14 +541,14 @@ class SpillableBufferSlice(SpillableBuffer):
         self._owner = base
         self.lock = base.lock
 
-    def get_ptr(self, *, mode) -> int:
+    def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         """
         A passthrough method to `SpillableBuffer.get_ptr`
         with factoring in the `offset`.
         """
         return self._base.get_ptr(mode=mode) + self._offset
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> SpillableBufferSlice:
         return SpillableBufferSlice(
             base=self._base, offset=offset + self._offset, size=size
         )
