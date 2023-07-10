@@ -37,18 +37,6 @@ std::unique_ptr<column> hash(table_view const& input,
   }
 }
 
-std::unique_ptr<column> hash64(table_view const& input,
-                               hash64_id hash_function,
-                               uint64_t seed,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  switch (hash_function) {
-    case (hash64_id::XXHASH_64): return xxhash64(input, seed, stream, mr);
-    default: CUDF_FAIL("Unsupported hash function.");
-  }
-}
-
 }  // namespace detail
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
@@ -77,16 +65,6 @@ std::unique_ptr<column> md5(table_view const& input,
   return detail::md5(input, stream, mr);
 }
 
-std::unique_ptr<column> hash64(table_view const& input,
-                               hash64_id hash_function,
-                               uint64_t seed,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return hashing::detail::hash64(input, hash_function, seed, stream, mr);
-}
-
 }  // namespace hashing
 
 std::unique_ptr<column> hash(table_view const& input,
@@ -100,4 +78,3 @@ std::unique_ptr<column> hash(table_view const& input,
 }
 
 }  // namespace cudf
-

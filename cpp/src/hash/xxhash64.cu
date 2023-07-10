@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -321,6 +322,15 @@ std::unique_ptr<column> xxhash64(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> xxhash64(table_view const& input,
+                                 uint64_t seed,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::xxhash64(input, seed, stream, mr);
+}
+
 }  // namespace hashing
 }  // namespace cudf
-

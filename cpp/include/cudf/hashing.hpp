@@ -28,8 +28,7 @@ namespace cudf {
  * @file
  */
 
-using hash_value_type   = uint32_t;  ///< Type of hash 32-bit value
-using hash64_value_type = uint64_t;  ///< Type of hash 64-bit value
+using hash_value_type = uint32_t;  ///< Type of hash 32-bit value
 
 /**
  * @brief Identifies the hash function to be used
@@ -40,13 +39,6 @@ enum class hash_id {
   HASH_MURMUR3,        ///< Murmur3 hash function
   HASH_SPARK_MURMUR3,  ///< Spark Murmur3 hash function
   HASH_MD5             ///< MD5 hash function
-};
-
-/**
- *  @brief Identifies the 64-bit hash function to be used
- */
-enum class hash64_id {
-  XXHASH_64  ///< XXHash_64 hash function
 };
 
 /**
@@ -97,25 +89,6 @@ std::unique_ptr<column> murmur_hash3_32(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes the hash value of each row in the input set of columns
- *
- * This function takes a 64-bit seed value and returns a column of type UINT64.
- *
- * @param input The table of columns to hash
- * @param hash_function The hash function enum to use
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @returns A column where each row is the hash of a row from the input
- */
-std::unique_ptr<column> hash64(
-  table_view const& input,
-  hash64_id hash_function             = hash64_id::XXHASH_64,
-  uint64_t seed                       = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Computes the MurmurHash3 32-bit of each row in the given table
  *
  * This function computes the hash similar to MurmurHash3_32 with special processing
@@ -145,6 +118,24 @@ std::unique_ptr<column> spark_murmur_hash3_32(
  */
 std::unique_ptr<column> md5(
   table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the hash value of each row in the input set of columns
+ *
+ * This function takes a 64-bit seed value and returns a column of type UINT64.
+ *
+ * @param input The table of columns to hash
+ * @param seed Optional seed value to use for the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> xxhash64(
+  table_view const& input,
+  uint64_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
