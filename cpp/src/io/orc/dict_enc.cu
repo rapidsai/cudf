@@ -116,50 +116,46 @@ __global__ void __launch_bounds__(block_size)
   auto const col        = columns[dict.column_idx];
 
   // Make a view of the hash map
-  auto hash_map_mutable = map_type::device_mutable_view(dict.map_slots.data(),
+  auto hash_map_mutable  = map_type::device_mutable_view(dict.map_slots.data(),
                                                         dict.map_slots.size(),
                                                         cuco::empty_key{KEY_SENTINEL},
                                                         cuco::empty_value{VALUE_SENTINEL});
-  auto const start_row  = dict.start_row;
-  auto const end_row    = dict.start_row + dict.num_rows;
+  auto const hash_fn     = hash_functor{col};
+  auto const equality_fn = equality_functor{col};
+
+  auto const start_row = dict.start_row;
+  auto const end_row   = dict.start_row + dict.num_rows;
+
   size_type entry_count{0};
   size_type char_count{0};
-  auto cur_row = start_row + t;
-  // all threads should loop over the same number of rows
-  while (cur_row - t < end_row) {
-    auto const is_valid = cur_row < end_row and cur_row < col.size() and col.is_valid(cur_row);
-
-    // insert element at cur_row to hash map and count successful insertions
-    size_type is_unique{0};
-    size_type uniq_elem_size{0};
+  // all threads should loop the same number of times
+  for (auto cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
+    auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
-      auto const hash_fn     = hash_functor{col};
-      auto const equality_fn = equality_functor{col};
-      is_unique = hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
-      if (is_unique) { uniq_elem_size = col.element<string_view>(cur_row).size_bytes(); }
+      // insert element at cur_row to hash map and count successful insertions
+      auto const is_unique =
+        hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
+
+      if (is_unique) {
+        ++entry_count;
+        char_count += col.element<string_view>(cur_row).size_bytes();
+      }
     }
-
-    using block_reduce = cub::BlockReduce<size_type, block_size>;
-    __shared__ typename block_reduce::TempStorage reduce_storage;
-
-    auto const batch_entry_count = block_reduce(reduce_storage).Sum(is_unique);
+    // ensure that threads access adjacent rows in each iteration
     __syncthreads();
-    auto const batch_char_count = block_reduce(reduce_storage).Sum(uniq_elem_size);
-    __syncthreads();
-
-    if (t == 0) {
-      entry_count += batch_entry_count;
-      char_count += batch_char_count;
-    }
-
-    cur_row += block_size;
   }
 
+  using block_reduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage reduce_storage;
+
+  auto const block_entry_count = block_reduce(reduce_storage).Sum(entry_count);
+  __syncthreads();
+  auto const block_char_count = block_reduce(reduce_storage).Sum(char_count);
+
   if (t == 0) {
-    // Use atomics here if the kernel is changed to use multiple blocks per stripe
-    dict.entry_count = entry_count;
-    dict.char_count  = char_count;
+    dict.entry_count = block_entry_count;
+    dict.char_count  = block_char_count;
   }
 }
 
