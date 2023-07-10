@@ -52,12 +52,33 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Installation
 
+See the [RAPIDS install page](https://rapids.ai/start.html) for
+the most up-to-date information and commands for installing cuDF
+and other RAPIDS packages.
 
 ### CUDA/GPU requirements
 
 * CUDA 11.2+
 * NVIDIA driver 450.80.02+
 * Pascal architecture or better (Compute Capability >=6.0)
+
+### Pip
+
+cuDF can be installed via `pip` from the NVIDIA Python Package Index.
+Be sure to select the appropriate cuDF package depending
+on the major version of CUDA available in your environment:
+
+For CUDA 11.x:
+
+```bash
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu11
+```
+
+For CUDA 12.x:
+
+```bash
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu23
+```
 
 ### Conda
 
@@ -72,8 +93,6 @@ We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) 
 of our latest development branch.
 
 Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
-
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
 
 ## Build/Install from Source
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
