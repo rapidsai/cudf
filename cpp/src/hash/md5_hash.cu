@@ -15,10 +15,11 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -281,5 +282,14 @@ std::unique_ptr<column> md5(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::md5(input, stream, mr);
+}
+
 }  // namespace hashing
 }  // namespace cudf

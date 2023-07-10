@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/murmur_hash32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
@@ -57,5 +59,15 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmur_hash3_32(input, seed, stream, mr);
+}
+
 }  // namespace hashing
 }  // namespace cudf

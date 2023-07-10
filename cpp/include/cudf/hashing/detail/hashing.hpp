@@ -84,17 +84,6 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 }
 
 }  // namespace detail
-
-/**
- * @copydoc cudf::hash
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> hash(table_view const& input,
-                             hash_id hash_function,
-                             uint32_t seed,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
 }  // namespace hashing
 }  // namespace cudf
 

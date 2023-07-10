@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <hash/hash_allocator.cuh>
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/murmur_hash32.cuh>
 
 #include <cuco/static_map.cuh>
 

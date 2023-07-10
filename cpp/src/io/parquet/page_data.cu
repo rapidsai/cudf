@@ -18,7 +18,8 @@
 
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/murmur_hash32.cuh>
 
 namespace cudf {
 namespace io {

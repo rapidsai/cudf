@@ -18,8 +18,9 @@
 
 #include <hash/helper_functions.cuh>
 
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/murmur_hash32.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

@@ -13,22 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/execution_policy.h>
-#include <thrust/tabulate.h>
-
-#include <algorithm>
 
 namespace cudf {
 namespace hashing {
@@ -49,33 +38,6 @@ std::unique_ptr<column> hash(table_view const& input,
 }
 
 }  // namespace detail
-
-std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        uint32_t seed,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::murmur_hash3_32(input, seed, stream, mr);
-}
-
-std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
-                                              uint32_t seed,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::spark_murmur_hash3_32(input, seed, stream, mr);
-}
-
-std::unique_ptr<column> md5(table_view const& input,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::md5(input, stream, mr);
-}
-
 }  // namespace hashing
 
 std::unique_ptr<column> hash(table_view const& input,
