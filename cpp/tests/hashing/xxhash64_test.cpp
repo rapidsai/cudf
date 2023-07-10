@@ -42,8 +42,8 @@ TYPED_TEST(HashXX64TestTyped, TestAllNumeric)
     {-1, -1, 0, 2, 22, 1, 11, 12, 116, 32, 0, 42, 7, 62, 1, -22, 1, -22},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
 
-  auto const output1 = cudf::hash64(cudf::table_view({col1}));
-  auto const output2 = cudf::hash64(cudf::table_view({col2}));
+  auto const output1 = cudf::hashing::hash64(cudf::table_view({col1}));
+  auto const output2 = cudf::hashing::hash64(cudf::table_view({col2}));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
@@ -62,7 +62,7 @@ TEST_F(HashXX64Test, TestInteger)
                                                      std::numeric_limits<int32_t>::min(),
                                                      std::numeric_limits<int32_t>::lowest()}};
 
-  auto const output = cudf::hash64(cudf::table_view({col1}));
+  auto const output = cudf::hashing::hash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
@@ -92,7 +92,7 @@ TEST_F(HashXX64Test, TestDouble)
                                                     std::numeric_limits<double>::min(),
                                                     std::numeric_limits<double>::lowest()}};
 
-  auto const output = cudf::hash64(cudf::table_view({col1}));
+  auto const output = cudf::hashing::hash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
@@ -128,7 +128,7 @@ TEST_F(HashXX64Test, StringType)
      "0123456789",
      "{}|:<>?,./;[]=-"});
 
-  auto output = cudf::hash64(cudf::table_view({col1}));
+  auto output = cudf::hashing::hash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh
@@ -153,7 +153,7 @@ TEST_F(HashXX64Test, TestFixedPoint)
 {
   auto const col1 = cudf::test::fixed_point_column_wrapper<int32_t>(
     {0, 100, -100, -999999999, 999999999}, numeric::scale_type{-3});
-  auto const output = cudf::hash64(cudf::table_view({col1}));
+  auto const output = cudf::hashing::hash64(cudf::table_view({col1}));
 
   // these were generated using the CPU compiled version of the cuco xxhash64 source
   // https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/detail/hash_functions/xxhash.cuh

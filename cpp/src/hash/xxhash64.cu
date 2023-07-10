@@ -25,6 +25,7 @@
 #include <thrust/tabulate.h>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
 
 namespace {
@@ -320,4 +321,6 @@ std::unique_ptr<column> xxhash64(table_view const& input,
 }
 
 }  // namespace detail
+}  // namespace hashing
 }  // namespace cudf
+

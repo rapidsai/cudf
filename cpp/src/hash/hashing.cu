@@ -20,6 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
+namespace hashing {
 namespace detail {
 
 std::unique_ptr<column> hash(table_view const& input,
@@ -31,7 +32,7 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
-    case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
+    case (hash_id::HASH_MD5): return md5(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }
 }
@@ -50,14 +51,30 @@ std::unique_ptr<column> hash64(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<column> hash(table_view const& input,
-                             hash_id hash_function,
-                             uint32_t seed,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, seed, stream, mr);
+  return detail::murmur_hash3_32(input, seed, stream, mr);
+}
+
+std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
+                                              uint32_t seed,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::spark_murmur_hash3_32(input, seed, stream, mr);
+}
+
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::md5(input, stream, mr);
 }
 
 std::unique_ptr<column> hash64(table_view const& input,
@@ -67,7 +84,20 @@ std::unique_ptr<column> hash64(table_view const& input,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash64(input, hash_function, seed, stream, mr);
+  return hashing::detail::hash64(input, hash_function, seed, stream, mr);
+}
+
+}  // namespace hashing
+
+std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
+                             uint32_t seed,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return hashing::detail::hash(input, hash_function, seed, stream, mr);
 }
 
 }  // namespace cudf
+
