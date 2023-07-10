@@ -32,7 +32,14 @@ using hash64_value_type = uint64_t;  ///< Type of hash 64-bit value
  */
 
 /**
- *  @brief Identifies the hash function to be used
+ * @brief Type of hash value
+ *
+ */
+using hash_value_type = uint32_t;
+
+/**
+ * @brief Identifies the hash function to be used
+ *
  */
 enum class hash_id {
   HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
@@ -55,6 +62,8 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /**
  * @brief Computes the hash value of each row in the input set of columns.
+ *
+ * @deprecated Since 23.08
  *
  * @param input The table of columns to hash
  * @param hash_function The hash function enum to use

@@ -19,7 +19,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -36,6 +35,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
+#include <cuda/atomic>
 
 namespace cudf {
 namespace strings {
@@ -154,7 +155,9 @@ __global__ void finder_warp_parallel_fn(column_device_view const d_strings,
 
   // find stores the minimum position while rfind stores the maximum position
   // note that this was slightly faster than using cub::WarpReduce
-  forward ? atomicMin(d_results + str_idx, position) : atomicMax(d_results + str_idx, position);
+  cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_results + str_idx)};
+  forward ? ref.fetch_min(position, cuda::std::memory_order_relaxed)
+          : ref.fetch_max(position, cuda::std::memory_order_relaxed);
   __syncwarp();
 
   if (lane_idx == 0) {
