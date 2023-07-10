@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/atomic>
 
 #include <cmath>
 
@@ -86,7 +87,8 @@ struct var_hash_functor {
     auto x        = static_cast<Target>(source.element<Source>(source_index));
     auto mean     = static_cast<Target>(sum.element<SumType>(target_index)) / group_size;
     Target result = (x - mean) * (x - mean) / (group_size - ddof);
-    atomicAdd(&target.element<Target>(target_index), result);
+    cuda::atomic_ref<Target, cuda::thread_scope_device> ref{target.element<Target>(target_index)};
+    ref.fetch_add(result, cuda::std::memory_order_relaxed);
     // STD sqrt is applied in finalize()
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
