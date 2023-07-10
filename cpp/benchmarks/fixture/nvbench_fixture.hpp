@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/utilities/error.hpp>
+
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
@@ -27,7 +29,7 @@
 
 namespace cudf {
 namespace detail {
-static std::string rmm_mode_parm{"--rmm_mode"};  ///< RMM mode command-line parameter name
+static std::string rmm_mode_param{"--rmm_mode"};  ///< RMM mode command-line parameter name
 }  // namespace detail
 
 /**
@@ -52,21 +54,22 @@ struct nvbench_base_fixture {
     return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
   }
 
-  inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string& mode)
+  inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+    std::string const& mode)
   {
     if (mode == "cuda") return make_cuda();
+    if (mode == "pool") return make_pool();
     if (mode == "async") return make_async();
     if (mode == "arena") return make_arena();
     if (mode == "managed") return make_managed();
-    mode = "pool";
-    return make_pool();
+    CUDF_FAIL("unknown rmm_mode parameter: " + mode);
   }
 
   nvbench_base_fixture(int argc, char const* const* argv)
   {
     for (int i = 1; i < argc - 1; ++i) {
       std::string arg = argv[i];
-      if (arg == detail::rmm_mode_parm) {
+      if (arg == detail::rmm_mode_param) {
         i++;
         rmm_mode = argv[i];
       }
