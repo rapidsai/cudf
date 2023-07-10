@@ -4,8 +4,6 @@
 import cupy as cp
 import numpy as np
 
-from cython.operator cimport dereference
-
 import rmm
 
 import cudf
@@ -551,7 +549,7 @@ cdef class Column:
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
         # TODO: Rewrite utility for dtype conversion to not need a column view.
-        dtype = dtype_from_column_view(dereference(col.view()))
+        dtype = dtype_from_column_view(col.view())
 
         return cudf.core.column.build_column(
             data=as_buffer(col.data.obj) if col.data is not None else None,

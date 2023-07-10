@@ -17,17 +17,16 @@ cdef class Table:
     def __init__(self, object columns):
         self.columns = columns
 
-    cdef table_view* view(self):
+    cdef table_view view(self) nogil:
+        # TODO: Make c_columns a class attribute that is updated along with
+        # self.columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
-        cdef Column col
 
-        if not self._view:
+        with gil:
             for col in self.columns:
-                c_columns.push_back(dereference(col.view()))
+                c_columns.push_back((<Column> col).view())
 
-            self._view.reset(new table_view(c_columns))
-
-        return self._view.get()
+        return table_view(c_columns)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):

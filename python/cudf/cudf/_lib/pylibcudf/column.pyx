@@ -1,14 +1,12 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.types cimport bitmask_type, offset_type, size_type
+from cudf._lib.cpp.types cimport offset_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -30,29 +28,35 @@ cdef class Column:
         self.offset = offset
         self.children = children
 
-    cdef column_view* view(self):
+    cdef column_view view(self) nogil:
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
+
+        if self.data is not None:
+            data = int_to_void_ptr(self.data.ptr)
+        if self.mask is not None:
+            null_mask = int_to_bitmask_ptr(self.mask.ptr)
+
+        # TODO: Check if children can ever change. If not, this could be
+        # computed once in the constructor and always be reused.
         cdef vector[column_view] c_children
-        cdef Column child
-
-        if not self._view:
-            if self.data is not None:
-                data = int_to_void_ptr(self.data.ptr)
-            if self.mask is not None:
-                null_mask = int_to_bitmask_ptr(self.mask.ptr)
-
+        with gil:
             if self.children is not None:
                 for child in self.children:
-                    c_children.push_back(dereference(child.view()))
+                    # Need to cast to Column here so that Cython knows that
+                    # `view` returns a typed object, not a Python object. We
+                    # cannot use a typed variable for `child` because cdef
+                    # declarations cannot be inside nested blocks (`if` or
+                    # `with` blocks) but without that we cannot declare it
+                    # inside the `with gil` block and it is erroneous to
+                    # declare a variable of a cdef class type in a `nogil`
+                    # context (which this whole function is).
+                    c_children.push_back((<Column> child).view())
 
-            self._view.reset(
-                new column_view(
-                    self.data_type.c_obj, self.size, data, null_mask,
-                    self.null_count, self.offset, c_children
-                )
-            )
-        return self._view.get()
+        return column_view(
+            self.data_type.c_obj, self.size, data, null_mask,
+            self.null_count, self.offset, c_children
+        )
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
