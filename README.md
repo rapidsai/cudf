@@ -77,7 +77,7 @@ pip install --extra-index-url=https://pypi.nvidia.com cudf-cu11
 For CUDA 12.x:
 
 ```bash
-pip install --extra-index-url=https://pypi.nvidia.com cudf-cu23
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12
 ```
 
 ### Conda
