@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 import math
 import operator
 import shutil
@@ -562,12 +563,13 @@ def read_parquet(
     # filtering after IO. This means that one or more columns
     # will be dropped almost immediately after IO. However,
     # we do NEED these columns for accurate filtering.
-    projection = None
+    projected_columns = None
     if columns and filters:
-        filtered_columns = _filtered_columns(filters)
-        if filtered_columns - set(columns):
-            projection = columns
-            columns = sorted(filtered_columns | set(columns))
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
 
     # Convert parquet data to a cudf.DataFrame
     df = _parquet_to_frame(
@@ -586,8 +588,10 @@ def read_parquet(
 
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
-    if projection:
-        return df[projection]
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        return df[[col for col in projected_columns if col in df.columns]]
     return df
 
 
@@ -1446,23 +1450,3 @@ def _hive_dirname(name, val):
     if pd.isna(val):
         val = "__HIVE_DEFAULT_PARTITION__"
     return f"{name}={val}"
-
-
-def _filtered_columns(filters):
-    # Utility to extract the set of columns
-    # used in a parquet `filters` argument
-
-    def _flatten_lists(seq):
-        # Logic based on `dask.core.flatten`
-        if isinstance(seq, str):
-            yield seq
-        else:
-            for item in seq:
-                if isinstance(item, list):
-                    yield from _flatten_lists(item)
-                else:
-                    yield item
-
-    # Assume column name is always first element in the
-    # flattened list of tuples
-    return {v[0] for v in _flatten_lists(filters) if len(v)}
