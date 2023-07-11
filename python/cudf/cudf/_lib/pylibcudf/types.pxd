@@ -6,6 +6,10 @@ from libcpp cimport bool as cbool
 from cudf._lib.cpp.types cimport data_type, interpolation, null_policy, type_id
 
 ctypedef int32_t underlying_type_t_type_id
+
+
+# Enum representing possible data type ids. This is the Cython representation
+# of libcudf's type_id.
 cpdef enum TypeId:
     EMPTY = <underlying_type_t_type_id> type_id.EMPTY
     INT8 = <underlying_type_t_type_id> type_id.INT8

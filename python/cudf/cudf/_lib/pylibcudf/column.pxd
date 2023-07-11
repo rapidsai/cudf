@@ -12,6 +12,7 @@ from .types cimport DataType
 
 
 cdef class Column:
+    # TODO: Should we document these attributes? Should we mark them readonly?
     cdef:
         # Core data
         DataType data_type

@@ -13,11 +13,23 @@ from .column cimport Column
 
 
 cdef class Table:
-    """A set of columns of the same size."""
-    def __init__(self, object columns):
+    """A set of columns of the same size.
+
+    Parameters
+    ----------
+    columns : list
+        The columns in this table.
+    """
+    def __init__(self, list columns):
         self.columns = columns
 
     cdef table_view view(self) nogil:
+        """Generate a libcudf table_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
         # TODO: Make c_columns a class attribute that is updated along with
         # self.columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
@@ -30,6 +42,12 @@ cdef class Table:
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):
+        """Create a Table from a libcudf table.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
         cdef vector[unique_ptr[column]] c_columns = move(
             dereference(libcudf_tbl).release()
         )

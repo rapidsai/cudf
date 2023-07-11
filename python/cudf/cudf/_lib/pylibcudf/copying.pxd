@@ -8,6 +8,10 @@ from .column cimport Column
 from .table cimport Table
 
 ctypedef cbool underlying_type_t_out_of_bounds_policy
+
+
+# Enum representing possible enum policies. This is the Cython representation
+# of libcudf's out_of_bounds_policy.
 cpdef enum OutOfBoundsPolicy:
     NULLIFY = <underlying_type_t_out_of_bounds_policy> cpp_copying.NULLIFY
     DONT_CHECK = (

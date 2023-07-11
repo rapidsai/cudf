@@ -14,7 +14,32 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
 cdef class Column:
-    """A container of nullable device data as a column of elements."""
+    """A container of nullable device data as a column of elements.
+
+    This class is an implementation of [Arrow columnar data
+    specification](https://arrow.apache.org/docs/format/Columnar.html) for data
+    stored on GPUs. It relies on Python memoryview-like semantics to maintain
+    shared ownership of the data it is constructed with, so any input data may
+    also be co-owned by other data structures. The Column is designed to be
+    operated on using algorithms backed by libcudf.
+
+    Parameters
+    ----------
+    data_type : DataType
+        The type of data in the column.
+    size : size_type
+        The number of rows in the column.
+    data : gpumemoryview
+        The data the column will refer to.
+    mask : gpumemoryview
+        The null mask for the column.
+    null_count : int
+        The number of null rows in the column.
+    offset : int
+        The offset into the data buffer where the column's data begins.
+    children : list
+        The children of this column if it is a compound column type.
+    """
     def __init__(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, offset_type offset,
@@ -29,6 +54,12 @@ cdef class Column:
         self.children = children
 
     cdef column_view view(self) nogil:
+        """Generate a libcudf column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
 
@@ -60,6 +91,12 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
+        """Create a Column from a libcudf column.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
         cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
         cdef size_type null_count = libcudf_col.get().null_count()

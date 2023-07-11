@@ -446,6 +446,24 @@ cdef class Column:
     # publicly.  User requests to convert to pylibcudf must assume that the
     # data may be modified afterwards.
     cpdef pylibcudf.Column to_pylibcudf(self, mode: Literal["read", "write"]):
+        """Convert this Column to a pylibcudf.Column.
+
+        This function will generate a pylibcudf Column pointing to the same
+        data, mask, and children as this one.
+
+        Parameters
+        ----------
+        mode : str
+            Supported values are {"read", "write"} If "write", the data pointed
+            to may be modified by the caller. If "read", the data pointed to
+            must not be modified by the caller.  Failure to fulfill this
+            contract will cause incorrect behavior.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        """
 
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
@@ -564,10 +582,30 @@ cdef class Column:
             children=tuple(children)
         )
 
+    #  TODO: Actually support exposed data pointers.
     @staticmethod
     def from_pylibcudf(
         pylibcudf.Column col, bint data_ptr_exposed=False
     ):
+        """Create a Column from a pylibcudf.Column.
+
+        This function will generate a Column pointing to the provided pylibcudf
+        Column.  It will directly access the data and mask buffers of the
+        pylibcudf Column, so the newly created object is not tied to the
+        lifetime of the original pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The object to copy.
+        data_ptr_exposed : bool
+            This parameter is not yet supported
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        """
         # TODO: Rewrite utility for dtype conversion to not need a column view.
         dtype = dtype_from_column_view(col.view())
 
