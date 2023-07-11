@@ -2622,19 +2622,26 @@ TEST_F(ListReductionTest, ReductionMinMaxWithNulls)
 {
   using INTS_CW  = cudf::test::fixed_width_column_wrapper<int>;
   using LISTS_CW = cudf::test::lists_column_wrapper<int>;
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
+  constexpr int null{0};
 
   auto const input = LISTS_CW{{LISTS_CW{3, 4},
                                LISTS_CW{1, 2},
+                               LISTS_CW{{1, null}, null_at(1)},
                                LISTS_CW{} /*null*/,
                                LISTS_CW{5, 6, 7},
-                               LISTS_CW{0, 8},
-                               LISTS_CW{{9, 0}, cudf::test::iterators::null_at(1)},
+                               LISTS_CW{1, 8},
+                               LISTS_CW{{9, null}, null_at(1)},
                                LISTS_CW{} /*null*/},
-                              cudf::test::iterators::nulls_at({2, 6})};
-  this->reduction_test(
-    input, INTS_CW{} /*null*/, true, false, *cudf::make_min_aggregation<reduce_aggregation>());
+                              nulls_at({3, 7})};
   this->reduction_test(input,
-                       INTS_CW{{9, 0}, cudf::test::iterators::null_at(1)},
+                       INTS_CW{{1, null}, null_at(1)},
+                       true,
+                       true,
+                       *cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(input,
+                       INTS_CW{{9, null}, null_at(1)},
                        true,
                        true,
                        *cudf::make_max_aggregation<reduce_aggregation>());
