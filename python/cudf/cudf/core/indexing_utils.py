@@ -17,37 +17,36 @@ from cudf.api.types import (
 from cudf.core.copy_types import BooleanMask, GatherMap
 
 
-# Poor man's algebraic data types
 class EmptyIndexer:
-    """An indexer that will produce an empty result"""
+    """An indexer that will produce an empty result."""
 
     pass
 
 
 @dataclass
 class MapIndexer:
-    """An indexer for a gather map"""
+    """An indexer for a gather map."""
 
     key: GatherMap
 
 
 @dataclass
 class MaskIndexer:
-    """An indexer for a boolean mask"""
+    """An indexer for a boolean mask."""
 
     key: BooleanMask
 
 
 @dataclass
 class SliceIndexer:
-    """An indexer for a slice"""
+    """An indexer for a slice."""
 
     key: slice
 
 
 @dataclass
 class ScalarIndexer:
-    """An indexer for a scalar value"""
+    """An indexer for a scalar value."""
 
     key: GatherMap
 
@@ -63,7 +62,7 @@ def destructure_iloc_key(
     key: Any, frame: Union[cudf.Series, cudf.DataFrame]
 ) -> tuple[Any, ...]:
     """
-    Destructure a potentially tuple-typed key into row and column indexers
+    Destructure a potentially tuple-typed key into row and column indexers.
 
     Tuple arguments to iloc indexing are treated specially. They are
     picked apart into indexers for the row and column. If the number
@@ -95,7 +94,8 @@ def destructure_iloc_key(
 
     Returns
     -------
-    tuple of indexers with length equal to the dimension of the frame
+    tuple
+        Indexers with length equal to the dimension of the frame
 
     Raises
     ------
@@ -107,8 +107,10 @@ def destructure_iloc_key(
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
         indexers = key + (slice(None),) * (n - len(key))
-        if (ni := len(indexers)) > n:
-            raise IndexError(f"Too many indexers: got {ni} expected {n}")
+        if len(indexers) > n:
+            raise IndexError(
+                f"Too many indexers: got {len(indexers)} expected {n}"
+            )
     else:
         # Key indexes rows, slice-expand to shape of frame
         indexers = (key, *(slice(None),) * (n - 1))
@@ -192,7 +194,7 @@ def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
 
 def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
     """
-    Normalize and produce structured information about a row indexer
+    Normalize and produce structured information about a row indexer.
 
     Given a row indexer that has already been destructured by
     :func:`destructure_iloc_key`, inspect further and produce structured

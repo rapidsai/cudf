@@ -22,7 +22,7 @@ class GatherMap:
     nullify: bool
 
     def __init__(self, column: Any, nrows: int, *, nullify: bool):
-        """A representation of a column as a gather map
+        """A representation of a column as a gather map.
 
         This object augments the column with the information that it
         is valid as a gather map for the specified number of rows with
@@ -74,7 +74,7 @@ class GatherMap:
     def from_column_unchecked(
         cls, column: "NumericalColumn", nrows: int, *, nullify: bool
     ) -> Self:
-        """Construct a new GatherMap from a column without checks
+        """Construct a new GatherMap from a column without checks.
 
         Parameters
         ----------
@@ -110,7 +110,7 @@ class BooleanMask:
     nrows: int
 
     def __init__(self, column: Any, nrows: int):
-        """A representation of a column as a boolean mask
+        """A representation of a column as a boolean mask.
 
         This augments the column with information that it is valid as a
         boolean mask for columns with a given number of rows
@@ -149,7 +149,7 @@ class BooleanMask:
     def from_column_unchecked(
         cls, column: "NumericalColumn", nrows: int
     ) -> Self:
-        """Construct a new BooleanMask from a column without checks
+        """Construct a new BooleanMask from a column without checks.
 
         Parameters
         ----------
