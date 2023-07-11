@@ -42,7 +42,7 @@ cdef class DataType:
     cpdef int32_t scale(self)
 
     @staticmethod
-    cdef DataType from_data_type(data_type dt)
+    cdef DataType from_libcudf(data_type dt)
 ```
 
 This allows pylibcudf functions to accept a typed `DataType` parameter and then trivially call underlying libcudf algorithms by accessing the argument's `c_obj`.
@@ -52,7 +52,7 @@ This allows pylibcudf functions to accept a typed `DataType` parameter and then 
 The primary exception to the above set of rules are libcudf's core data owning types, `cudf::table` and `cudf::column`.
 libcudf uses modern C++ idioms based on smart pointers to avoid resource leaks and make code exception-safe.
 To avoid passing around raw pointers, and to ensure that ownership semantics are clear, libcudf has separate `view` types corresponding to data owning types.
-For example, `cudf::column` owns data, while `cudf::column_view` represents an view on a column of data, while `cudf::mutable_column_view` represents a mutable view.
+For example, `cudf::column` owns data, while `cudf::column_view` represents an view on a column of data and `cudf::mutable_column_view` represents a mutable view.
 A `column_view` need not actually reference data owned by a `cudf::column`; any memory buffer will do.
 This separation allows libcudf algorithms to clearly communicate ownership expectations and allows multiple views into the same data to coexist.
 
@@ -103,9 +103,9 @@ Cython does not support scoped enumerations.
 It assumes that enums correspond to their underlying value types and will thus attempt operations that are invalid.
 To fix this, many places in pylibcudf Cython code contain double casts that look like
 ```cython
-return <cpp_types> (
+return <cpp_type> (
     <underlying_type_t_cpp_type> py_policy
 )
 ```
-where cpp_type is some libcudf enum with a specified underlying type.
+where `cpp_type` is some libcudf enum with a specified underlying type.
 This double-cast will be removed when we migrate to Cython 3, which adds proper support for C++ scoped enumerations.
