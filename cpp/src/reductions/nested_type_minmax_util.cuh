@@ -110,22 +110,37 @@ class comparison_binop_generator {
                       &flattened_input = flattened_input,
                       is_min_op_,
                       stream_]() {
-        if (is_min_op_) {
-          auto null_orders = flattened_input->null_orders();
-          // If the input column has nulls (at the top level), null structs are excluded from the
-          // operations, and that is equivalent to considering top-level nulls as larger than all
-          // other non-null STRUCT elements (if finding for ARGMIN), or smaller than all other
-          // non-null STRUCT elements (if finding for ARGMAX). Thus, we need to set a separate
-          // null order for the top level structs column (which is stored at the first position in
-          // the null_orders array) to achieve this purpose.
-          if (input_.type().id() == cudf::type_id::STRUCT && input_.has_nulls() &&
-              input_.num_children() > 0) {
-            CUDF_EXPECTS(null_orders.size() > 1,
-                         "There was something wrong while flattening the input structs column.");
+        if (is_min_op_ && input_.has_nulls()) {
+          // If the input column is nested type (struct/list) and has nulls (at the top level), null
+          // structs/lists are excluded from the operations. That is equivalent to considering
+          // top-level nulls as larger than all other non-null elements (if finding for ARGMIN), or
+          // smaller than all other non-null elements (if finding for ARGMAX).
+
+          if (input_.type().id() == cudf::type_id::STRUCT) {
+            // For struct type, it is simple: Just set a separate null order (`null_order::AFTER`)
+            // for the top level column, which is stored at the first position in the null_orders
+            // array resulted from struct flattening.
+            auto null_orders    = flattened_input->null_orders();
             null_orders.front() = cudf::null_order::AFTER;
+            return cudf::experimental::row::lexicographic::self_comparator{
+              flattened_input->flattened_columns(), {}, null_orders, stream_};
+          } else {
+            // For list type, we cannot set a separate null order for the top level column.
+            // Thus, we have to workaround this by creating a dummy (empty) struct column view
+            // having the same null mask as the input lists column.
+            // This dummy column will have a different null order (`null_order::AFTER`).
+            auto const null_orders =
+              std::vector<null_order>{cudf::null_order::AFTER, DEFAULT_NULL_ORDER};
+            auto const dummy_struct = column_view{data_type{type_id::STRUCT},
+                                                  input_.size(),
+                                                  nullptr,
+                                                  input_.null_mask(),
+                                                  input_.null_count(),
+                                                  0,
+                                                  {}};
+            return cudf::experimental::row::lexicographic::self_comparator{
+              cudf::table_view{{dummy_struct, input_}}, {}, null_orders, stream_};
           }
-          return cudf::experimental::row::lexicographic::self_comparator{
-            flattened_input->flattened_columns(), {}, null_orders, stream_};
         } else {
           return cudf::experimental::row::lexicographic::self_comparator{
             input_tview, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_};
@@ -144,6 +159,8 @@ class comparison_binop_generator {
   template <typename BinOp>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
+    CUDF_EXPECTS(cudf::is_nested(input.type()),
+                 "This utility class only is designed exclusively for nested input types.");
     return comparison_binop_generator(input,
                                       std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
                                         std::is_same_v<BinOp, cudf::DeviceMin>,
@@ -152,8 +169,9 @@ class comparison_binop_generator {
 
   template <cudf::aggregation::Kind K>
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
-
   {
+    CUDF_EXPECTS(cudf::is_nested(input.type()),
+                 "This utility class only is designed exclusively for nested input types.");
     return comparison_binop_generator(
       input, K == cudf::aggregation::MIN || K == cudf::aggregation::ARGMIN, stream);
   }
