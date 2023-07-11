@@ -445,7 +445,7 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
@@ -550,7 +550,7 @@ class orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -649,7 +649,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets metadata.
@@ -779,9 +779,9 @@ class orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -861,7 +861,7 @@ class chunked_orc_writer_options {
   // Row index stride (maximum number of rows in each row group)
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
@@ -944,7 +944,7 @@ class chunked_orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -1036,7 +1036,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets Key-Value footer metadata.
@@ -1151,9 +1151,9 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
