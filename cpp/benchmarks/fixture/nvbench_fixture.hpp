@@ -54,6 +54,11 @@ struct nvbench_base_fixture {
     return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
   }
 
+  inline auto make_managed_pool()
+  {
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_managed());
+  }
+
   inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
     std::string const& mode)
   {
@@ -62,7 +67,9 @@ struct nvbench_base_fixture {
     if (mode == "async") return make_async();
     if (mode == "arena") return make_arena();
     if (mode == "managed") return make_managed();
-    CUDF_FAIL("unknown rmm_mode parameter: " + mode);
+    if (mode == "managed_pool") return make_managed_pool();
+    CUDF_FAIL("Unknown rmm_mode parameter: " + mode +
+              "\nExpecting: cuda, pool, async, arena, managed, or managed_pool");
   }
 
   nvbench_base_fixture(int argc, char const* const* argv)
