@@ -79,10 +79,11 @@ body:
     id: env-details
     attributes:
       label: Environment details
-      description: Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here.
+      description: |
+        Please specify installation info and paste the results from [print_env.sh](https://github.com/rapidsai/cudf/blob/main/print_env.sh) here.
+        If using Docker, provide the `docker pull` & `docker run` commands used.
       value: |
-       Environment location: Bare metal, Docker, Cloud (specify cloud provider)
-       If using Docker, provide the `docker pull` & `docker run` commands used
+       Environment location (select one): [Bare metal, Docker, Cloud (specify cloud provider)]
 
        <details><summary>Click here to see environment details</summary><pre>
 
