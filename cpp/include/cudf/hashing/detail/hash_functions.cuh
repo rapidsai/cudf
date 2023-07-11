@@ -16,12 +16,9 @@
 
 #pragma once
 
-#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
-#include <thrust/pair.h>
-
-#include <cstring>
+#include <limits>
 
 namespace cudf::hashing::detail {
 
