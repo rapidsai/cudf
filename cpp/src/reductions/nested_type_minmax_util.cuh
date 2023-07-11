@@ -160,7 +160,7 @@ class comparison_binop_generator {
   static auto create(column_view const& input, rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(cudf::is_nested(input.type()),
-                 "This utility class only is designed exclusively for nested input types.");
+                 "This utility class is designed exclusively for nested input types.");
     return comparison_binop_generator(input,
                                       std::is_same_v<BinOp, cudf::reduction::detail::op::min> ||
                                         std::is_same_v<BinOp, cudf::DeviceMin>,
