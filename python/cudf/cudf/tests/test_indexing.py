@@ -1903,10 +1903,8 @@ def test_iloc_repeated_column_label_issue_13266():
     df = pd.DataFrame(np.arange(4).reshape(2, 2))
     cdf = cudf.from_pandas(df)
 
-    expect = df.iloc[:, [0, 1, 0]]
     with pytest.raises(NotImplementedError):
-        actual = cdf.iloc[:, [0, 1, 0]]
-        assert_eq(expect, actual)
+        cdf.iloc[:, [0, 1, 0]]
 
 
 @pytest.mark.parametrize(
