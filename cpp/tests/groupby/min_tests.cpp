@@ -470,7 +470,7 @@ TEST_F(groupby_min_list_test, null_keys_and_values)
   // Null list element.
   {
     auto const vals = lists{{{} /*null*/, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}}, null_at(0)};
-    auto const expect_vals = lists{{{} /*null*/, {1, 2}, {3, 4}}, null_at(0)};
+    auto const expect_vals = lists{{0, 8}, {1, 2}, {3, 4}};
     test_single_agg(keys,
                     vals,
                     expect_keys,
