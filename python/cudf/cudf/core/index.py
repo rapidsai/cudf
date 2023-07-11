@@ -27,6 +27,7 @@ from cudf import _lib as libcudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
@@ -220,6 +221,18 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
+
+    def searchsorted(
+        self,
+        value: int,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
+    ):
+        assert (len(self) <= 1) or (
+            ascending == (self._step > 0)
+        ), "Invalid ascending flag"
+        return search_range(value, self.as_range, side=side)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -446,46 +459,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def find_label_range(self, first=None, last=None):
-        """Find subrange in the ``RangeIndex``, marked by their positions, that
-        starts greater or equal to ``first`` and ends less or equal to ``last``
-
-        The range returned is assumed to be monotonically increasing. In cases
-        where there is no such range that suffice the constraint, an exception
-        will be raised.
-
-        Parameters
-        ----------
-        first, last : int, optional, Default None
-            The "start" and "stop" values of the subrange. If None, will use
-            ``self._start`` as first, ``self._stop`` as last.
-
-        Returns
-        -------
-        begin, end : 2-tuple of int
-            The starting index and the ending index.
-            The `last` value occurs at ``end - 1`` position.
-        """
-
-        first = self._start if first is None else first
-        last = self._stop if last is None else last
-
-        if self._step < 0:
-            first = -first
-            last = -last
-            start = -self._start
-            step = -self._step
-        else:
-            start = self._start
-            step = self._step
-
-        stop = start + len(self) * step
-        begin = search_range(start, stop, first, step, side="left")
-        end = search_range(start, stop, last, step, side="right")
-
-        return begin, end
-
-    @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
@@ -502,48 +475,19 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         return True
 
-    @property  # type: ignore
+    @cached_property
+    def as_range(self):
+        return range(self._start, self._stop, self._step)
+
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         return self._step > 0 or len(self) <= 1
 
-    @property  # type: ignore
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         return self._step < 0 or len(self) <= 1
-
-    @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side):
-        """
-        Calculate slice bound that corresponds to given label.
-        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
-        of given label.
-
-        Parameters
-        ----------
-        label : int
-            A valid value in the ``RangeIndex``
-        side : {'left', 'right'}
-
-        Returns
-        -------
-        int
-            Index of label.
-        """
-        if side not in {"left", "right"}:
-            raise ValueError(f"Unrecognized side parameter: {side}")
-
-        if self._step < 0:
-            label = -label
-            start = -self._start
-            step = -self._step
-        else:
-            start = self._start
-            step = self._step
-
-        stop = start + len(self) * step
-        pos = search_range(start, stop, label, step, side=side)
-        return pos
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
@@ -816,9 +760,25 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
-        # TODO: pandas supports directly merging RangeIndex objects and can
-        # intelligently create RangeIndex outputs depending on the type of
-        # join. We need to implement that for the supported special cases.
+        if how in {"left", "right"} or self.equals(other):
+            # pandas supports directly merging RangeIndex objects and can
+            # intelligently create RangeIndex outputs depending on the type of
+            # join. Hence falling back to performing a merge on pd.RangeIndex
+            # since the conversion is cheap.
+            if isinstance(other, RangeIndex):
+                result = self.to_pandas().join(
+                    other.to_pandas(),
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
+                )
+                if return_indexers:
+                    return tuple(
+                        cudf.from_pandas(result[0]), result[1], result[2]
+                    )
+                else:
+                    return cudf.from_pandas(result)
         return self._as_int_index().join(
             other, how, level, return_indexers, sort
         )
@@ -917,6 +877,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def append(self, other):
         return self._as_int_index().append(other)
+
+    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        try:
+            i = [range(self._start, self._stop, self._step).index(value)]
+        except ValueError:
+            i = []
+        return as_column(i, dtype=size_type_dtype)
 
     def isin(self, values):
         if is_scalar(values):
@@ -1339,26 +1306,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._values.dtype
 
     @_cudf_nvtx_annotate
-    def find_label_range(self, first, last):
-        """Find range that starts with *first* and ends with *last*,
-        inclusively.
-
-        Returns
-        -------
-        begin, end : 2-tuple of int
-            The starting index and the ending index.
-            The *last* value occurs at ``end - 1`` position.
-        """
-        col = self._values
-        begin, end = None, None
-        if first is not None:
-            begin = col.find_first_value(first, closest=True)
-        if last is not None:
-            end = col.find_last_value(last, closest=True)
-            end += 1
-        return begin, end
-
-    @_cudf_nvtx_annotate
     def isna(self):
         return self._column.isnull().values
 
@@ -1369,10 +1316,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.notnull().values
 
     notnull = notna
-
-    @_cudf_nvtx_annotate
-    def get_slice_bound(self, label, side):
-        return self._values.get_slice_bound(label, side)
 
     def _is_numeric(self):
         return isinstance(
@@ -1531,6 +1474,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return self._values.isin(values).values
 
+    def _indices_of(self, value):
+        """Return indices of value in index"""
+        return self._column.indices_of(value)
+
     @copy_docstring(StringMethods)  # type: ignore
     @property
     @_cudf_nvtx_annotate
@@ -1634,6 +1581,18 @@ class DatetimeIndex(Index):
         if copy:
             data = data.copy()
         super().__init__(data, **kwargs)
+
+    def searchsorted(
+        self,
+        value,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
+    ):
+        value = self.dtype.type(value)
+        return super().searchsorted(
+            value, side=side, ascending=ascending, na_position=na_position
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2145,10 +2104,10 @@ class DatetimeIndex(Index):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """
-        from cudf.core._internals.timezones import localize
+        from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
-            result_col = self._column._local_time
+            result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data({self.name: result_col})

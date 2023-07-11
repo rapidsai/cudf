@@ -37,15 +37,22 @@ build:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
-    - {{ compiler('cuda') }}
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% endif %}
 
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - ninja
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - {{ compiler('cuda') }} {{ cuda_version }}
-    - ninja
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - protobuf >=4.21.6,<4.22
@@ -57,30 +64,47 @@ requirements:
     - pyarrow =11
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
-    - cudatoolkit ={{ cuda_version }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    {% else %}
+    - cuda-cudart-dev
+    - cuda-nvrtc
+    - libcufile-dev  # [linux64]
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
   run:
     - protobuf >=4.21.6,<4.22
     - python
-    - typing_extensions
+    - typing_extensions >=4.0.0
     - pandas >=1.3,<1.6.0dev0
     - cupy >=12.0.0
     - numba >=0.57
     - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
-    - libcudf {{ version }}
+    - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    - ptxcompiler >=0.7.0
+    - cubinlinker  # CUDA enhanced compatibility.
+    - cuda-python >=11.7.1,<12.0a0
+    {% else %}
+    # Needed by Numba for CUDA support
+    - cuda-nvcc-impl
+    # TODO: Add nvjitlink here
+    # xref: https://github.com/rapidsai/cudf/issues/12822
+    - cuda-nvrtc
+    - cuda-python >=12.0,<13.0a0
+    {% endif %}
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
-    - ptxcompiler >=0.7.0
     - cachetools
-    - cubinlinker  # CUDA enhanced compatibility.
-    - cuda-python >=11.7.1,<12.0
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf
 

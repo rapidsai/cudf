@@ -25,7 +25,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -40,6 +39,8 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <limits>
+
+#include <cuda/atomic>
 
 namespace nvtext {
 namespace detail {
@@ -92,7 +93,9 @@ struct minhash_fn {
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
         auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
         auto const hvalue = hasher(hash_str);
-        atomicMin(d_output + seed_idx, hvalue);
+        cuda::atomic_ref<cudf::hash_value_type, cuda::thread_scope_block> ref{
+          *(d_output + seed_idx)};
+        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       }
     }
   }

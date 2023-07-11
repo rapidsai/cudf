@@ -50,10 +50,9 @@ struct contains_fn {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<string_view>(idx);
 
-    size_type begin = 0;
-    size_type end   = beginning_only ? 1    // match only the beginning of the string;
-                                     : -1;  // match anywhere in the string
-    return static_cast<bool>(prog.find(thread_idx, d_str, begin, end));
+    size_type end = beginning_only ? 1    // match only the beginning of the string;
+                                   : -1;  // match anywhere in the string
+    return prog.find(thread_idx, d_str, d_str.begin(), end).has_value();
   }
 };
 

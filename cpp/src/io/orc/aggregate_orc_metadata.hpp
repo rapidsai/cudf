@@ -117,8 +117,8 @@ class aggregate_orc_metadata {
    */
   std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
-    int64_t row_start,
-    std::optional<size_type> const& num_rows_opt,
+    uint64_t skip_rows,
+    std::optional<size_type> const& num_rows,
     rmm::cuda_stream_view stream);
 
   /**
@@ -131,7 +131,8 @@ class aggregate_orc_metadata {
    * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::optional<std::vector<std::string>> const& column_paths);
+  column_hierarchy select_columns(
+    std::optional<std::vector<std::string>> const& column_paths) const;
 };
 
 }  // namespace cudf::io::orc::detail

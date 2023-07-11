@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
+from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -122,6 +123,11 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
+    elif is_datetime64tz_dtype(s.dtype):
+        from cudf.utils.dtypes import get_time_unit
+
+        data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
+        data = data.tz_localize(str(s.dtype.tz))._column
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
             data = cudf.core.column.as_column(

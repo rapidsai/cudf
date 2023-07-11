@@ -74,23 +74,23 @@ def test_df_slice_empty_index():
 def test_index_find_label_range_genericindex():
     # Monotonic Index
     idx = cudf.Index(np.asarray([4, 5, 6, 10]))
-    assert idx.find_label_range(4, 6) == (0, 3)
-    assert idx.find_label_range(5, 10) == (1, 4)
-    assert idx.find_label_range(0, 6) == (0, 3)
-    assert idx.find_label_range(4, 11) == (0, 4)
+    assert idx.find_label_range(slice(4, 6)) == slice(0, 3, 1)
+    assert idx.find_label_range(slice(5, 10)) == slice(1, 4, 1)
+    assert idx.find_label_range(slice(0, 6)) == slice(0, 3, 1)
+    assert idx.find_label_range(slice(4, 11)) == slice(0, 4, 1)
 
     # Non-monotonic Index
     idx_nm = cudf.Index(np.asarray([5, 4, 6, 10]))
-    assert idx_nm.find_label_range(4, 6) == (1, 3)
-    assert idx_nm.find_label_range(5, 10) == (0, 4)
+    assert idx_nm.find_label_range(slice(4, 6)) == slice(1, 3, 1)
+    assert idx_nm.find_label_range(slice(5, 10)) == slice(0, 4, 1)
     # Last value not found
-    with pytest.raises(ValueError) as raises:
-        idx_nm.find_label_range(0, 6)
-    raises.match("value not found")
+    with pytest.raises(KeyError) as raises:
+        idx_nm.find_label_range(slice(0, 6))
+    raises.match("not in index")
     # Last value not found
-    with pytest.raises(ValueError) as raises:
-        idx_nm.find_label_range(4, 11)
-    raises.match("value not found")
+    with pytest.raises(KeyError) as raises:
+        idx_nm.find_label_range(slice(4, 11))
+    raises.match("not in index")
 
 
 def test_index_find_label_range_rangeindex():
@@ -98,18 +98,19 @@ def test_index_find_label_range_rangeindex():
     # step > 0
     # 3, 8, 13, 18
     ridx = RangeIndex(3, 20, 5)
-    assert ridx.find_label_range(3, 8) == (0, 2)
-    assert ridx.find_label_range(0, 7) == (0, 1)
-    assert ridx.find_label_range(3, 19) == (0, 4)
-    assert ridx.find_label_range(2, 21) == (0, 4)
+    assert ridx.find_label_range(slice(3, 8)) == slice(0, 2, 1)
+    assert ridx.find_label_range(slice(0, 7)) == slice(0, 1, 1)
+    assert ridx.find_label_range(slice(3, 19)) == slice(0, 4, 1)
+    assert ridx.find_label_range(slice(2, 21)) == slice(0, 4, 1)
 
     # step < 0
     # 20, 15, 10, 5
     ridx = RangeIndex(20, 3, -5)
-    assert ridx.find_label_range(15, 10) == (1, 3)
-    assert ridx.find_label_range(10, 0) == (2, 4)
-    assert ridx.find_label_range(30, 13) == (0, 2)
-    assert ridx.find_label_range(30, 0) == (0, 4)
+    assert ridx.find_label_range(slice(15, 10)) == slice(1, 3, 1)
+    assert ridx.find_label_range(slice(10, 15, -1)) == slice(2, 0, -1)
+    assert ridx.find_label_range(slice(10, 0)) == slice(2, 4, 1)
+    assert ridx.find_label_range(slice(30, 13)) == slice(0, 2, 1)
+    assert ridx.find_label_range(slice(30, 0)) == slice(0, 4, 1)
 
 
 def test_index_comparision():
@@ -1264,7 +1265,6 @@ def test_float_index_apis(data, name, dtype):
 @pytest.mark.parametrize("ordered", [True, False])
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_categorical_index_basic(data, categories, dtype, ordered, name):
-
     # can't have both dtype and categories/ordered
     if dtype is not None:
         categories = None
@@ -1521,7 +1521,6 @@ def test_interval_index_empty(closed):
     ],
 )
 def test_interval_index_many_params(data, closed):
-
     pindex = pd.IntervalIndex(data, closed=closed)
     gindex = IntervalIndex(data, closed=closed)
 
@@ -1790,14 +1789,10 @@ def test_index_equals_categories():
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    stop = ridx._start + ridx._step * len(ridx)
+    ri = ridx.as_range
     for i in range(len(ridx)):
-        assert i == search_range(
-            ridx._start, stop, ridx[i], ridx._step, side="left"
-        )
-        assert i + 1 == search_range(
-            ridx._start, stop, ridx[i], ridx._step, side="right"
-        )
+        assert i == search_range(ridx[i], ri, side="left")
+        assert i + 1 == search_range(ridx[i], ri, side="right")
 
 
 @pytest.mark.parametrize(
@@ -2534,7 +2529,6 @@ def test_union_index(idx1, idx2, sort):
 )
 @pytest.mark.parametrize("sort", [None, False, True])
 def test_intersection_index(idx1, idx2, sort):
-
     expected = idx1.intersection(idx2, sort=sort)
 
     idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
@@ -2891,14 +2885,12 @@ def test_rangeindex_binops_user_option(
 def test_rangeindex_join_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for join.
-    idx1 = cudf.RangeIndex(0, 10)
-    idx2 = cudf.RangeIndex(5, 15)
+    idx1 = cudf.RangeIndex(0, 10, name="a")
+    idx2 = cudf.RangeIndex(5, 15, name="b")
 
     actual = idx1.join(idx2, how="inner", sort=True)
-    expected = cudf.Index(
-        [5, 6, 7, 8, 9], dtype=f"int{default_integer_bitwidth}", name=0
-    )
-
+    expected = idx1.to_pandas().join(idx2.to_pandas(), how="inner", sort=True)
+    assert actual.dtype == cudf.dtype(f"int{default_integer_bitwidth}")
     assert_eq(expected, actual)
 
 

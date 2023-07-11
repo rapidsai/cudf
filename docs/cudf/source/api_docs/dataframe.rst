@@ -41,6 +41,7 @@ Conversion
    :toctree: api/
 
    DataFrame.astype
+   DataFrame.convert_dtypes
    DataFrame.copy
 
 Indexing, iteration

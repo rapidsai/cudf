@@ -785,6 +785,25 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
   return out_dtypes;
 }
 
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  for (cudf::size_type col = 0; col < first_num; ++col)
+    out_dtypes.push_back(dtype_ids.first);
+  for (cudf::size_type col = first_num; col < num_cols; ++col)
+    out_dtypes.push_back(dtype_ids.second);
+  return out_dtypes;
+}
+
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,
