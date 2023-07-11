@@ -112,7 +112,6 @@ struct table_flattener {
       mr{mr}
   {
     superimpose_nulls(input);
-    fail_if_unsupported_types(input);
   }
 
   /**
@@ -124,12 +123,6 @@ struct table_flattener {
     auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
-  }
-
-  void fail_if_unsupported_types(table_view const& input) const
-  {
-    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
-    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
