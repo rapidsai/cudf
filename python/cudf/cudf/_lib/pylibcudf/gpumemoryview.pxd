@@ -2,5 +2,5 @@
 
 
 cdef class gpumemoryview:
-    cdef readonly Py_ssize_t ptr
+    cdef Py_ssize_t ptr
     cdef object obj

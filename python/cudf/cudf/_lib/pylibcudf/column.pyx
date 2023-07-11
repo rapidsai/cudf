@@ -78,10 +78,11 @@ cdef class Column:
                     # `view` returns a typed object, not a Python object. We
                     # cannot use a typed variable for `child` because cdef
                     # declarations cannot be inside nested blocks (`if` or
-                    # `with` blocks) but without that we cannot declare it
-                    # inside the `with gil` block and it is erroneous to
-                    # declare a variable of a cdef class type in a `nogil`
-                    # context (which this whole function is).
+                    # `with` blocks) so we cannot declare it inside the `with
+                    # gil` block, but we also cannot declare it outside the
+                    # `with gil` block because it is erroneous to declare a
+                    # variable of a cdef class type in a `nogil` context (which
+                    # this whole function is).
                     c_children.push_back((<Column> child).view())
 
         return column_view(

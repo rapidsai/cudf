@@ -13,7 +13,7 @@ from .column cimport Column
 
 
 cdef class Table:
-    """A set of columns of the same size.
+    """A list of columns of the same size.
 
     Parameters
     ----------
