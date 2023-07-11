@@ -565,7 +565,7 @@ def read_parquet(
     # we do NEED these columns for accurate filtering.
     projected_columns = None
     if columns and filters:
-        projected_columns = list(columns)
+        projected_columns = columns
         columns = sorted(
             set(v[0] for v in itertools.chain.from_iterable(filters))
             | set(columns)
@@ -591,7 +591,10 @@ def read_parquet(
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
         # We must filter these names from our projection
-        return df[[col for col in projected_columns if col in df.columns]]
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
     return df
 
 
