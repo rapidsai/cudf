@@ -139,9 +139,9 @@ class BooleanMask:
         self.nrows = nrows
         if self.column.dtype.kind != "b":
             raise IndexError("Boolean mask must have bool dtype")
-        if (n := len(column)) != nrows:
+        if len(column) != nrows:
             raise IndexError(
-                f"Column with {n} rows not suitable "
+                f"Column with {len(column)} rows not suitable "
                 f"as a boolean mask for {nrows} rows"
             )
 
