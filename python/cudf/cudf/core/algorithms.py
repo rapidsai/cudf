@@ -4,7 +4,7 @@ import warnings
 import cupy as cp
 import numpy as np
 
-from cudf.core import copy_types as ct
+from cudf.core.copy_types import BooleanMask
 from cudf.core.index import Index, RangeIndex
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
@@ -171,7 +171,7 @@ def _index_or_values_interpolation(column, index=None):
 
     to_interp = IndexedFrame(data={None: column}, index=index)
     known_x_and_y = to_interp._apply_boolean_mask(
-        ct.as_boolean_mask(~mask, len(to_interp))
+        BooleanMask(~mask, len(to_interp))
     )
 
     known_x = known_x_and_y._index._column.values

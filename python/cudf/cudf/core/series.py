@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import indexing_utils as iu
+from cudf.core import indexing_utils
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -186,8 +186,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
-        indexing_spec = iu.parse_row_iloc_indexer(
-            iu.destructure_series_iloc_indexer(arg, self._frame),
+        indexing_spec = indexing_utils.parse_row_iloc_indexer(
+            indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
             len(self._frame),
             check_bounds=True,
         )
@@ -1303,7 +1303,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def _getitem_preprocessed(
         self,
-        spec: iu.IndexingSpec,
+        spec: indexing_utils.IndexingSpec,
     ) -> Union[Self, ScalarLike]:
         """Get subset of entries given structured data
 
@@ -1322,17 +1322,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         This function performs no bounds-checking or massaging of the
         inputs.
         """
-        if isinstance(spec, iu.MapIndexer):
+        if isinstance(spec, indexing_utils.MapIndexer):
             return self._gather(spec.key, keep_index=True)
-        elif isinstance(spec, iu.MaskIndexer):
+        elif isinstance(spec, indexing_utils.MaskIndexer):
             return self._apply_boolean_mask(spec.key, keep_index=True)
-        elif isinstance(spec, iu.SliceIndexer):
+        elif isinstance(spec, indexing_utils.SliceIndexer):
             return self._slice(spec.key)
-        elif isinstance(spec, iu.ScalarIndexer):
+        elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False
             )._column.element_indexing(0)
-        elif isinstance(spec, iu.EmptyIndexer):
+        elif isinstance(spec, indexing_utils.EmptyIndexer):
             return self._empty_like(keep_index=True)
         assert_never(spec)
 

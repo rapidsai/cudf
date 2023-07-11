@@ -14,7 +14,7 @@ from cudf.api.types import (
     is_integer,
     is_integer_dtype,
 )
-from cudf.core import copy_types as ct
+from cudf.core.copy_types import BooleanMask, GatherMap
 
 
 # Poor man's algebraic data types
@@ -28,14 +28,14 @@ class EmptyIndexer:
 class MapIndexer:
     """An indexer for a gather map"""
 
-    key: ct.GatherMap
+    key: GatherMap
 
 
 @dataclass
 class MaskIndexer:
     """An indexer for a boolean mask"""
 
-    key: ct.BooleanMask
+    key: BooleanMask
 
 
 @dataclass
@@ -49,7 +49,7 @@ class SliceIndexer:
 class ScalarIndexer:
     """An indexer for a scalar value"""
 
-    key: ct.GatherMap
+    key: GatherMap
 
 
 IndexingSpec: TypeAlias = Union[
@@ -190,7 +190,7 @@ def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
     return rows
 
 
-def parse_row_iloc_indexer(key: Any, n: int, *, check_bounds) -> IndexingSpec:
+def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
     """
     Normalize and produce structured information about a row indexer
 
@@ -204,9 +204,6 @@ def parse_row_iloc_indexer(key: Any, n: int, *, check_bounds) -> IndexingSpec:
         Suitably destructured key for row indexing
     n
         Length of frame to index
-    check_bounds
-        If True, perform bounds checking of the key if it is a gather
-        map.
 
     Returns
     -------
@@ -226,23 +223,17 @@ def parse_row_iloc_indexer(key: Any, n: int, *, check_bounds) -> IndexingSpec:
     elif isinstance(key, slice):
         return SliceIndexer(key)
     elif _is_scalar_or_zero_d_array(key):
-        return ScalarIndexer(
-            ct.as_gather_map(key, n, nullify=False, check_bounds=check_bounds)
-        )
+        return ScalarIndexer(GatherMap(key, n, nullify=False))
     else:
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
             key = key.as_numerical_column(key.codes.dtype)
         if is_bool_dtype(key.dtype):
-            return MaskIndexer(ct.as_boolean_mask(key, n))
+            return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:
             return EmptyIndexer()
         elif is_integer_dtype(key.dtype):
-            return MapIndexer(
-                ct.as_gather_map(
-                    key, n, nullify=False, check_bounds=check_bounds
-                )
-            )
+            return MapIndexer(GatherMap(key, n, nullify=False))
         else:
             raise TypeError(
                 "Cannot index by location "

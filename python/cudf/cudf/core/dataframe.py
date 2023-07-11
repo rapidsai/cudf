@@ -57,13 +57,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import (
-    column,
-    copy_types as ct,
-    df_protocol,
-    indexing_utils as iu,
-    reshape,
-)
+from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -75,6 +69,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import BaseIndex, RangeIndex, _index_from_data, as_index
 from cudf.core.indexed_frame import (
@@ -272,7 +267,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df = columns_df._slice(out)
                 else:
                     df = columns_df._apply_boolean_mask(
-                        ct.as_boolean_mask(out, len(columns_df))
+                        BooleanMask.from_column_unchecked(out, len(columns_df))
                     )
             else:
                 tmp_arg = arg
@@ -287,7 +282,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
                 if is_bool_dtype(tmp_arg[0]):
                     df = columns_df._apply_boolean_mask(
-                        ct.as_boolean_mask(tmp_arg[0], len(columns_df))
+                        BooleanMask(tmp_arg[0], len(columns_df))
                     )
                 else:
                     tmp_col_name = str(uuid4())
@@ -411,8 +406,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         row_key, (
             col_is_scalar,
             column_names,
-        ) = iu.destructure_dataframe_iloc_indexer(arg, self._frame)
-        row_spec = iu.parse_row_iloc_indexer(
+        ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
+        row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame), check_bounds=True
         )
         ca = self._frame._data
@@ -428,13 +423,13 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             )
         else:
             frame = self._frame
-        if isinstance(row_spec, iu.MapIndexer):
+        if isinstance(row_spec, indexing_utils.MapIndexer):
             return frame._gather(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, iu.MaskIndexer):
+        elif isinstance(row_spec, indexing_utils.MaskIndexer):
             return frame._apply_boolean_mask(row_spec.key, keep_index=True)
-        elif isinstance(row_spec, iu.SliceIndexer):
+        elif isinstance(row_spec, indexing_utils.SliceIndexer):
             return frame._slice(row_spec.key)
-        elif isinstance(row_spec, iu.ScalarIndexer):
+        elif isinstance(row_spec, indexing_utils.ScalarIndexer):
             result = frame._gather(row_spec.key, keep_index=True)
             # Attempt to turn into series.
             try:
@@ -451,7 +446,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             except TypeError:
                 # Couldn't find a common type, just return a 1xN dataframe.
                 return result
-        elif isinstance(row_spec, iu.EmptyIndexer):
+        elif isinstance(row_spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
         assert_never(row_spec)
 
@@ -1173,9 +1168,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
-                return self._apply_boolean_mask(
-                    ct.as_boolean_mask(mask, len(self))
-                )
+                return self._apply_boolean_mask(BooleanMask(mask, len(self)))
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
@@ -4081,7 +4074,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(
-                ct.as_boolean_mask(boolmask, len(self))
+                BooleanMask.from_column_unchecked(boolmask, len(self))
             )
 
     @_cudf_nvtx_annotate
