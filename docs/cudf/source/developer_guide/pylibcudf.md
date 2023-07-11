@@ -28,8 +28,9 @@ In general, the relationship between pylibcudf and libcudf can be understood in 
 ### Data Structures
 
 Typically, every type in libcudf should have a mirror Cython `cdef` class with an attribute `self.c_obj: unique_ptr[${underlying_type}]` that owns an instance of the underlying libcudf type.
-Each type should also implement a corresponding method `cdef ${cython_type} from_${underlying_type}(${underlying_type} dt)` to enable constructing the Cython object from ann underlying libcudf instance.
-Depending on the nature of the type, the function may need to accept a `unique_ptr` and take ownership (TODO: This will typically be the case for types that own GPU data, may want to codify further).
+Each type should also implement a corresponding method `cdef ${cython_type} from_libcudf(${underlying_type} dt)` to enable constructing the Cython object from an underlying libcudf instance.
+Depending on the nature of the type, the function may need to accept a `unique_ptr` and take ownership e.g. `cdef ${cython_type} from_libcudf(unique_ptr[${underlying_type}] obj)`.
+This will typically be the case for types that own GPU data, may want to codify further.
 
 For example, `libcudf::data_type` maps to `pylibcudf.DataType`, which looks like this (implementation omitted):
 ```cython
@@ -53,7 +54,7 @@ libcudf uses modern C++ idioms based on smart pointers to avoid resource leaks a
 To avoid passing around raw pointers, and to ensure that ownership semantics are clear, libcudf has separate `view` types corresponding to data owning types.
 For example, `cudf::column` owns data, while `cudf::column_view` represents an view on a column of data, while `cudf::mutable_column_view` represents a mutable view.
 A `column_view` need not actually reference data owned by a `cudf::column`; any memory buffer will do.
-This separate allows libcudf algorithms to clearly communicate ownership expectations and allows multiple views into the same data to coexist.
+This separation allows libcudf algorithms to clearly communicate ownership expectations and allows multiple views into the same data to coexist.
 
 While libcudf algorithms accept views as inputs, any algorithms that allocate data must return `cudf::column` and `cudf::table` objects.
 libcudf's ownership model is problematic for pylibcudf, which must be able to seamlessly interoperate with data provided by other Python libraries like PyTorch or Numba.
@@ -63,7 +64,7 @@ Therefore, pylibcudf employs the following strategy:
 - pylibcudf defines its own Table and Column classes.
   - A Table maintains Python references to the Columns it contains, so multiple Tables may share the same Column.
   - A Column consists of `gpumemoryview`s of its data buffers (which may include children for nested types) and its null mask.
-- `pylibcudf.Table` and `pylibcudf.Column` provide easy access to `cudf::table_view` and `cudf::column_view` objects viewing the same columns/memory. These can be then be used when implementing any pylibcudf algorithm in terms of the underlying libcudf algorithm. Specifically, each of these classes owns an instance of the libcudf view type and provides a method `get_underlying` that may be used to access a pointer to that object to be passed to libcudf.
+- `pylibcudf.Table` and `pylibcudf.Column` provide easy access to `cudf::table_view` and `cudf::column_view` objects viewing the same columns/memory. These can be then be used when implementing any pylibcudf algorithm in terms of the underlying libcudf algorithm. Specifically, each of these classes owns an instance of the libcudf view type and provides a method `view` that may be used to access a pointer to that object to be passed to libcudf.
 
 
 ### Algorithms
@@ -80,21 +81,18 @@ cpdef Table gather(
     OutOfBoundsPolicy bounds_policy
 ):
     cdef unique_ptr[table] c_result
-    cdef table_view* c_src = source_table.get_underlying()
-    cdef column_view* c_col = gather_map.get_underlying()
     with nogil:
         c_result = move(
             cpp_copying.gather(
-                dereference(c_src),
-                dereference(c_col),
+                source_table.view(),
+                gather_map.view(),
                 py_policy_to_c_policy(bounds_policy)
             )
         )
     return Table.from_libcudf(move(c_result))
 ```
 
-There are a few notable points from the snippet above:
-- The `get_underlying` method must be called outside the `with nogil` block because operations on Cython classes are not permitted inside it.
+There are a couple of notable points from the snippet above:
 - The object returned from libcudf is immediately converted to a pylibcudf type.
 - `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter, which is mirrored by the `cdef `class OutOfBoundsPolicy` as mentioned in [the data structures example above](data-structures).
 
