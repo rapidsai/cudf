@@ -1827,8 +1827,8 @@ class IndexedFrame(Frame):
         if (stop - start) * stride <= 0:
             return self._empty_like(keep_index=True)
 
-        start = len(self) if start > num_rows else start
-        stop = len(self) if stop > num_rows else stop
+        start = min(start, num_rows)
+        stop = min(stop, num_rows)
 
         if stride != 1:
             return self._gather(
