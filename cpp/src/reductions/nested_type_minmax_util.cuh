@@ -85,7 +85,7 @@ class comparison_binop_generator {
   bool const is_min_op;
   rmm::cuda_stream_view stream;
 
-  // Contain data used in `row_comparator` below, thus needs to be kept alive as a member variable.
+  // Contains data used in `row_comparator` below, thus needs to be kept alive as a member variable.
   std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
 
   // Contain data used in the returned binop, thus needs to be kept alive as a member variable.
