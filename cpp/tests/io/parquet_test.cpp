@@ -643,7 +643,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -713,7 +713,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   auto filepath = temp_env->get_temp_filepath("MultiColumnWithNulls.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
 
   cudf::io::write_parquet(out_opts);
 
@@ -752,7 +752,7 @@ TEST_F(ParquetWriterTest, Strings)
   auto filepath = temp_env->get_temp_filepath("Strings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -803,7 +803,7 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
   auto filepath = temp_env->get_temp_filepath("BinaryStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -924,7 +924,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto filepath = temp_env->get_temp_filepath("SlicedTable.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -1021,7 +1021,7 @@ TEST_F(ParquetWriterTest, ListColumn)
 
   auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-                    .metadata(&expected_metadata)
+                    .metadata(expected_metadata)
                     .compression(cudf::io::compression_type::NONE);
 
   cudf::io::write_parquet(out_opts);
@@ -1062,7 +1062,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata)
+      .metadata(expected_metadata)
       .key_value_metadata(
         {{{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}}});
   cudf::io::write_parquet(out_opts);
@@ -1093,7 +1093,7 @@ TEST_F(ParquetWriterTest, BufferSource)
   std::vector<char> out_buffer;
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer), expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   // host buffer
@@ -1260,7 +1260,7 @@ TEST_F(ParquetWriterTest, StructOfList)
   auto filepath = temp_env->get_temp_filepath("StructOfList.parquet");
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options read_args =
@@ -1312,7 +1312,7 @@ TEST_F(ParquetWriterTest, ListOfStruct)
   auto filepath = temp_env->get_temp_filepath("ListOfStruct.parquet");
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options read_args =
@@ -1794,7 +1794,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
   auto filepath = temp_env->get_temp_filepath("ChunkedListOfStruct.parquet");
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(expected_metadata);
   cudf::io::parquet_chunked_writer(args).write(table_1).write(table_2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -1881,7 +1881,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
   auto filepath = temp_env->get_temp_filepath("ListOfStructOfStructOfListOfList.parquet");
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(expected_metadata);
   cudf::io::parquet_chunked_writer(args).write(table_1).write(table_2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2052,7 +2052,7 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
   auto filepath = temp_env->get_temp_filepath("ChunkedNullableStruct.parquet");
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(expected_metadata);
   cudf::io::parquet_chunked_writer(args).write(table_1).write(table_2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2085,7 +2085,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
 
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath})
-      .metadata(&metadata);
+      .metadata(std::move(metadata));
   cudf::io::parquet_chunked_writer(args).write(*table1).write(*table2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2140,7 +2140,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
 
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath})
-      .metadata(&metadata);
+      .metadata(std::move(metadata));
   cudf::io::parquet_chunked_writer(args).write(table1).write(table2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2185,7 +2185,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto filepath = temp_env->get_temp_filepath("ChunkedNullableStruct.parquet");
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(expected_metadata);
   cudf::io::parquet_chunked_writer(args).write(table_1).write(table_2);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2263,13 +2263,13 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   // verify failure if too small a precision is given
   expected_metadata.column_metadata[0].set_decimal_precision(7);
   expected_metadata.column_metadata[1].set_decimal_precision(1);
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(expected_metadata);
   EXPECT_THROW(cudf::io::write_parquet(args), cudf::logic_error);
 
   // verify success if equal precision is given
   expected_metadata.column_metadata[0].set_decimal_precision(7);
   expected_metadata.column_metadata[1].set_decimal_precision(9);
-  args.set_metadata(&expected_metadata);
+  args.set_metadata(std::move(expected_metadata));
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options read_opts =
@@ -2847,7 +2847,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     md.column_metadata[0].set_name("a");
     md.column_metadata[1].set_name("b");
     cudf::io::parquet_writer_options opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl).metadata(&md);
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl).metadata(md);
     cudf::io::write_parquet(opts);
 
     // read them out of order
@@ -2870,7 +2870,7 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     md.column_metadata[0].set_name("a");
     md.column_metadata[1].set_name("b");
     cudf::io::parquet_writer_options opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl).metadata(&md);
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl).metadata(md);
     cudf::io::write_parquet(opts);
 
     // read them out of order
@@ -2898,7 +2898,8 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   md.column_metadata[2].set_name("c");
   md.column_metadata[3].set_name("d");
   cudf::io::parquet_writer_options opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl).metadata(&md);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .metadata(std::move(md));
   cudf::io::write_parquet(opts);
 
   {
@@ -2976,7 +2977,7 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   auto filepath = temp_env->get_temp_filepath("SelectNestedColumn.parquet");
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input)
-      .metadata(&input_metadata);
+      .metadata(std::move(input_metadata));
   cudf::io::write_parquet(args);
 
   {  // Test selecting a single leaf from the table
@@ -3478,7 +3479,7 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   auto filepath = temp_env->get_temp_filepath("EmptyOutput.parquet");
   cudf::io::parquet_writer_options out_args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
-  out_args.set_metadata(&expected_metadata);
+  out_args.set_metadata(std::move(expected_metadata));
   cudf::io::write_parquet(out_args);
 
   cudf::io::parquet_reader_options read_args =
@@ -4696,7 +4697,7 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
   auto const filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&output_metadata)
+      .metadata(std::move(output_metadata))
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .column_index_truncate_length(8);
   cudf::io::write_parquet(out_opts);
@@ -4782,7 +4783,7 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   auto filepath = temp_env->get_temp_filepath("BinaryReadStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, output)
-      .metadata(&output_metadata);
+      .metadata(std::move(output_metadata));
   cudf::io::write_parquet(out_opts);
 
   auto expected_string = table_view{{int_col, string_col, float_col, string_col, string_col}};
@@ -4858,7 +4859,7 @@ TEST_F(ParquetReaderTest, NestedByteArray)
   auto filepath = temp_env->get_temp_filepath("NestedByteArray.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&output_metadata);
+      .metadata(std::move(output_metadata));
   cudf::io::write_parquet(out_opts);
 
   auto source = cudf::io::datasource::create(filepath);
@@ -4904,7 +4905,7 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   auto filepath = temp_env->get_temp_filepath("ByteArrayStats.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&output_metadata);
+      .metadata(std::move(output_metadata));
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -4953,7 +4954,7 @@ TEST_F(ParquetReaderTest, StructByteArray)
   auto filepath = temp_env->get_temp_filepath("StructByteArray.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&output_metadata);
+      .metadata(std::move(output_metadata));
   cudf::io::write_parquet(out_opts);
 
   std::vector<cudf::io::reader_column_schema> md{cudf::io::reader_column_schema().add_child(
@@ -5373,7 +5374,7 @@ TEST_F(ParquetWriterTest, UserNullability)
   auto filepath = temp_env->get_temp_filepath("SingleWriteNullable.parquet");
   cudf::io::parquet_writer_options write_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   cudf::io::write_parquet(write_opts);
 
   cudf::io::parquet_reader_options read_opts =
@@ -5400,7 +5401,7 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
 
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_nullability(false);
-  write_opts.set_metadata(&expected_metadata);
+  write_opts.set_metadata(std::move(expected_metadata));
   // Can't write a column with nulls as not nullable
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }

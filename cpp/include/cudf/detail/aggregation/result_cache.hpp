@@ -36,7 +36,7 @@ struct pair_column_aggregation_equal_to {
 struct pair_column_aggregation_hash {
   size_t operator()(std::pair<column_view, aggregation const&> const& key) const
   {
-    return hash_combine(shallow_hash(key.first), key.second.do_hash());
+    return cudf::hashing::detail::hash_combine(shallow_hash(key.first), key.second.do_hash());
   }
 };
 

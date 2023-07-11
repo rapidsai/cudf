@@ -231,39 +231,6 @@ struct DeviceProduct {
 };
 
 /**
- * @brief binary `and` operator
- */
-struct DeviceAnd {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs & rhs)
-  {
-    return (lhs & rhs);
-  }
-};
-
-/**
- * @brief binary `or` operator
- */
-struct DeviceOr {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs | rhs)
-  {
-    return (lhs | rhs);
-  }
-};
-
-/**
- * @brief binary `xor` operator
- */
-struct DeviceXor {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs ^ rhs)
-  {
-    return (lhs ^ rhs);
-  }
-};
-
-/**
  * @brief Operator for calculating Lead/Lag window function.
  */
 struct DeviceLeadLag {
