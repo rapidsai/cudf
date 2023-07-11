@@ -29,8 +29,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cuco/static_map.cuh>
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuco/static_map.cuh>
 
 namespace cudf {
 namespace io {
