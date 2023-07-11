@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 
+from typing import Literal
+
 import cupy as cp
 import numpy as np
 
@@ -19,6 +21,7 @@ from cudf.core.buffer import (
     SpillableBuffer,
     acquire_spill_lock,
     as_buffer,
+    cuda_array_interface_wrapper,
 )
 from cudf.utils.dtypes import _get_base_dtype
 
@@ -436,7 +439,14 @@ cdef class Column:
             offset,
             children)
 
-    cpdef pylibcudf.Column to_pylibcudf(self):
+    # TODO: Consider whether this function should support some sort of `copy`
+    # parameter. Not urgent until this functionality is moved up to the Frame
+    # layer and made public. This function will also need to mark the
+    # underlying buffers as exposed before this function can itself be exposed
+    # publicly.  User requests to convert to pylibcudf must assume that the
+    # data may be modified afterwards.
+    cpdef pylibcudf.Column to_pylibcudf(self, mode: Literal["read", "write"]):
+
         # TODO: Categoricals will need to be treated differently eventually.
         # There is no 1-1 correspondence between cudf and libcudf for
         # categoricals because cudf supports ordered and unordered categoricals
@@ -451,19 +461,29 @@ cdef class Column:
 
         cdef pylibcudf.gpumemoryview data = None
         if col.base_data is not None:
-            data = pylibcudf.gpumemoryview(col.base_data)
+            cai = cuda_array_interface_wrapper(
+                ptr=col.base_data.get_ptr(mode=mode),
+                size=col.base_data.size,
+                owner=col.base_data,
+            )
+            data = pylibcudf.gpumemoryview(cai)
 
         cdef pylibcudf.gpumemoryview mask = None
         if self.nullable:
             # TODO: Are we intentionally use self's mask instead of col's?
             # Where is the mask stored for categoricals?
-            mask = pylibcudf.gpumemoryview(self.base_mask)
+            cai = cuda_array_interface_wrapper(
+                ptr=self.base_mask.get_ptr(mode=mode),
+                size=self.base_mask.size,
+                owner=self.base_mask,
+            )
+            mask = pylibcudf.gpumemoryview(cai)
 
         cdef Column child_column
         children = []
         if col.base_children:
             for child_column in col.base_children:
-                children.append(child_column.to_pylibcudf())
+                children.append(child_column.to_pylibcudf(mode=mode))
 
         return pylibcudf.Column(
             dtype,

@@ -177,8 +177,8 @@ def gather(
     bool nullify=False
 ):
     cdef pylibcudf.Table tbl = pylibcudf.copying.gather(
-        pylibcudf.Table([col.to_pylibcudf() for col in columns]),
-        gather_map.to_pylibcudf(),
+        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]),
+        gather_map.to_pylibcudf(mode="read"),
         pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
         else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
     )
