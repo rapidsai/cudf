@@ -5613,7 +5613,7 @@ TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
   auto filepath = temp_env->get_temp_filepath("NonNullable.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   // Writer should be able to write a column without nulls as non-nullable
   EXPECT_NO_THROW(cudf::io::write_parquet(out_opts));
 }

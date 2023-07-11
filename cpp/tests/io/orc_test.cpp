@@ -1818,7 +1818,7 @@ TEST_F(OrcWriterTest, NoNullsAsNonNullable)
   auto filepath = temp_env->get_temp_filepath("NonNullable.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata);
+      .metadata(std::move(expected_metadata));
   // Writer should be able to write a column without nulls as non-nullable
   EXPECT_NO_THROW(cudf::io::write_orc(out_opts));
 }
