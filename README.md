@@ -61,11 +61,11 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ### Conda
 
-cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
+cuDF can be installed with conda (via [miniconda](https://conda.io/miniconda.html) or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=23.08 python=3.10 cudatoolkit=11.8
+    cudf=23.08 python=3.10 cuda-version=11.8
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

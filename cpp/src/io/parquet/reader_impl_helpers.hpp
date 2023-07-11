@@ -188,7 +188,7 @@ class aggregate_reader_metadata {
    * indices
    */
   [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
+    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
     select_columns(std::optional<std::vector<std::string>> const& use_names,
                    bool include_index,
                    bool strings_to_categorical,

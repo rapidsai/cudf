@@ -62,16 +62,15 @@ struct findall_fn {
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    size_type begin = 0;
-    size_type end   = nchars;
-    while ((begin < end) && (prog.find(prog_idx, d_str, begin, end) > 0)) {
-      auto const spos = d_str.byte_offset(begin);  // convert
-      auto const epos = d_str.byte_offset(end);    // to bytes
+    auto itr = d_str.begin();
+    while (itr.position() < nchars) {
+      auto const match = prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
 
-      d_output[output_idx++] = string_index_pair{d_str.data() + spos, (epos - spos)};
+      auto const d_result    = string_from_match(*match, d_str, itr);
+      d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      begin = end + (begin == end);
-      end   = nchars;
+      itr += (match->second - itr.position());
     }
   }
 };

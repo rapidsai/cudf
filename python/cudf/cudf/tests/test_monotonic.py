@@ -22,7 +22,6 @@ from cudf.testing._utils import assert_eq
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
 def test_range_index(testrange):
-
     index = RangeIndex(
         start=testrange[0], stop=testrange[1], step=testrange[2]
     )
@@ -68,7 +67,6 @@ def test_generic_index(testlist):
     ],
 )
 def test_string_index(testlist):
-
     index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
@@ -81,7 +79,6 @@ def test_string_index(testlist):
     "testlist", [["c", "d", "e", "f"], ["z", "y", "x", "r"]]
 )
 def test_categorical_index(testlist):
-
     # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
     index = CategoricalIndex(raw_cat)
@@ -123,7 +120,6 @@ def test_categorical_index(testlist):
     ],
 )
 def test_datetime_index(testlist):
-
     index = DatetimeIndex(testlist)
     index_pd = pd.DatetimeIndex(testlist)
 
@@ -278,12 +274,9 @@ def test_get_slice_bound_missing(label, side):
     assert got == expect
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize("label", ["a", "c", "e", "g"])
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound_missing_str(label, side):
-    # Slicing for monotonic string indices not yet supported
-    # when missing values are specified (allowed in pandas)
     mylist = ["b", "d", "f"]
     index = Index(mylist)
     index_pd = pd.Index(mylist)

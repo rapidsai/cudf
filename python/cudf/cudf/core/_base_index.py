@@ -1434,7 +1434,7 @@ class BaseIndex(Serializable):
         else:
             lhs = self.copy(deep=False)
             rhs = other.copy(deep=False)
-
+        same_names = lhs.names == rhs.names
         # There should be no `None` values in Joined indices,
         # so essentially it would be `left/right` or 'inner'
         # in case of MultiIndex
@@ -1454,7 +1454,7 @@ class BaseIndex(Serializable):
                 how = "inner"
         else:
             # Both are normal indices
-            on = rhs.names[0]
+            on = lhs.names[0]
             rhs.names = lhs.names
 
         lhs = lhs.to_frame()
@@ -1468,7 +1468,9 @@ class BaseIndex(Serializable):
         if self_is_multi and other_is_multi:
             return cudf.MultiIndex._from_data(output._data)
         else:
-            return cudf.core.index._index_from_data(output._data)
+            idx = cudf.core.index._index_from_data(output._data)
+            idx.name = self.name if same_names else None
+            return idx
 
     def rename(self, name, inplace=False):
         """
@@ -1507,7 +1509,94 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def get_slice_bound(self, label, side):
+    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+        """
+        Return indices corresponding to value
+
+        Parameters
+        ----------
+        value
+            Value to look for in index
+
+        Returns
+        -------
+        Column of indices
+        """
+        raise NotImplementedError
+
+    def find_label_range(self, loc: slice) -> slice:
+        """
+        Translate a label-based slice to an index-based slice
+
+        Parameters
+        ----------
+        loc
+            slice to search for.
+
+        Notes
+        -----
+        As with all label-based searches, the slice is right-closed.
+
+        Returns
+        -------
+        New slice translated into integer indices of the index (right-open).
+        """
+        start = loc.start
+        stop = loc.stop
+        step = 1 if loc.step is None else loc.step
+        if step < 0:
+            start_side, stop_side = "right", "left"
+        else:
+            start_side, stop_side = "left", "right"
+        istart = (
+            None
+            if start is None
+            else self.get_slice_bound(start, side=start_side)
+        )
+        istop = (
+            None
+            if stop is None
+            else self.get_slice_bound(stop, side=stop_side)
+        )
+        if step < 0:
+            # Fencepost
+            istart = None if istart is None else max(istart - 1, 0)
+            istop = None if (istop is None or istop == 0) else istop - 1
+        return slice(istart, istop, step)
+
+    def searchsorted(
+        self,
+        value,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
+    ):
+        """Find index where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value :
+            Value to be hypothetically inserted into Self
+        side : str {'left', 'right'} optional, default 'left'
+            If 'left', the index of the first suitable location found is given
+            If 'right', return the last such index
+        ascending : bool optional, default True
+            Index is in ascending order (otherwise descending)
+        na_position : str {'last', 'first'} optional, default 'last'
+            Position of null values in sorted order
+
+        Returns
+        -------
+        Insertion point.
+
+        Notes
+        -----
+        As a precondition the index must be sorted in the same order
+        as requested by the `ascending` flag.
+        """
+        raise NotImplementedError()
+
+    def get_slice_bound(self, label, side: str) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1523,7 +1612,26 @@ class BaseIndex(Serializable):
         int
             Index of label.
         """
-        raise NotImplementedError
+
+        if side not in {"left", "right"}:
+            raise ValueError(f"Invalid side argument {side}")
+        if self.is_monotonic_increasing or self.is_monotonic_decreasing:
+            return self.searchsorted(
+                label, side=side, ascending=self.is_monotonic_increasing
+            )
+        else:
+            try:
+                left, right = self._values._find_first_and_last(label)
+            except ValueError:
+                raise KeyError(f"{label=} not in index")
+            if left != right:
+                raise KeyError(
+                    f"Cannot get slice bound for non-unique label {label=}"
+                )
+            if side == "left":
+                return left
+            else:
+                return right + 1
 
     def __array_function__(self, func, types, args, kwargs):
         # check if the function is implemented for the current type

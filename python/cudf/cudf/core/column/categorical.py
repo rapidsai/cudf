@@ -1106,19 +1106,10 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches
-        """
-        return self.as_numerical.find_first_value(self._encode(value))
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches
-        """
-        return self.as_numerical.find_last_value(self._encode(value))
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
+        return self.as_numerical.indices_of(self._encode(value))
 
     @property
     def is_monotonic_increasing(self) -> bool:

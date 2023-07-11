@@ -4,7 +4,6 @@ import functools
 import hashlib
 import os
 import traceback
-import warnings
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -191,49 +190,6 @@ def initfunc(f):
     return wrapper
 
 
-@initfunc
-def set_allocator(
-    allocator="default",
-    pool=False,
-    initial_pool_size=None,
-    enable_logging=False,
-):
-    """
-    Set the GPU memory allocator. This function should be run only once,
-    before any cudf objects are created.
-
-    allocator : {"default", "managed"}
-        "default": use default allocator.
-        "managed": use managed memory allocator.
-    pool : bool
-        Enable memory pool.
-    initial_pool_size : int
-        Memory pool size in bytes. If ``None`` (default), 1/2 of total
-        GPU memory is used. If ``pool=False``, this argument is ignored.
-    enable_logging : bool, optional
-        Enable logging (default ``False``).
-        Enabling this option will introduce performance overhead.
-    """
-    # TODO: Remove this in 23.04 to give users some time to switch.
-    warnings.warn(
-        "The cudf.set_allocator function is deprecated and will be removed in "
-        "a future release. Please use rmm.reinitialize "
-        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
-        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
-        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
-        FutureWarning,
-    )
-
-    use_managed_memory = allocator == "managed"
-
-    rmm.reinitialize(
-        pool_allocator=pool,
-        managed_memory=use_managed_memory,
-        initial_pool_size=initial_pool_size,
-        logging=enable_logging,
-    )
-
-
 def clear_cache():
     """Clear all internal caches"""
     cudf.Scalar._clear_instance_cache()
@@ -328,50 +284,63 @@ def _fillna_natwise(col):
     )
 
 
-def search_range(start, stop, x, step=1, side="left"):
-    """Find the position to insert a value in a range, so that the resulting
-    sequence remains sorted.
+def search_range(x: int, ri: range, *, side: str) -> int:
+    """
 
-    When ``side`` is set to 'left', the insertion point ``i`` will hold the
-    following invariant:
-    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
-    where ``range_left`` and ``range_right`` refers to the range to the left
-    and right of position ``i``, respectively.
-
-    When ``side`` is set to 'right', ``i`` will hold the following invariant:
-    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
+    Find insertion point in a range to maintain sorted order
 
     Parameters
     ----------
-    start : int
-        Start value of the series
-    stop : int
-        Stop value of the range
-    x : int
-        The value to insert
-    step : int, default 1
-        Step value of the series, assumed positive
-    side : {'left', 'right'}, default 'left'
-        See description for usage.
+    x
+        Integer to insert
+    ri
+        Range to insert into
+    side
+        Tie-breaking decision for the case that `x` is a member of the
+        range. If `"left"` then the insertion point is before the
+        entry, otherwise it is after.
 
     Returns
     -------
     int
-        Insertion position of n.
+        The insertion point
+
+    See Also
+    --------
+    numpy.searchsorted
+
+    Notes
+    -----
+    Let ``p`` be the return value, then if ``side="left"`` the
+    following invariants are maintained::
+
+        all(x < n for n in ri[:p])
+        all(x >= n for n in ri[p:])
+
+    Conversely, if ``side="right"`` then we have::
+
+        all(x <= n for n in ri[:p])
+        all(x > n for n in ri[p:])
 
     Examples
     --------
     For series: 1 4 7
-    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
+    >>> search_range(4, range(1, 10, 3), side="left")
     1
-    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
+    >>> search_range(4, range(1, 10, 3), side="right")
     2
     """
-    z = 1 if side == "left" else 0
-    i = (x - start - z) // step + 1
+    assert side in {"left", "right"}
+    if flip := (ri.step < 0):
+        ri = ri[::-1]
+        shift = int(side == "right")
+    else:
+        shift = int(side == "left")
 
-    length = (stop - start) // step
-    return max(min(length, i), 0)
+    offset = (x - ri.start - shift) // ri.step + 1
+    if flip:
+        offset = len(ri) - offset
+    return max(min(len(ri), offset), 0)
 
 
 def _get_color_for_nvtx(name):

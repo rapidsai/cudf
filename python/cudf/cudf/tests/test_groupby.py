@@ -224,20 +224,22 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(),
-        gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x", as_index=as_index)["y"].sum(),
+        gdf.groupby("x", as_index=as_index)["y"].sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(),
-        gdf.groupby("x").y.sum(),
+        pdf.groupby("x", as_index=as_index).y.sum(),
+        gdf.groupby("x", as_index=as_index).y.sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(),
-        gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        gdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -1330,11 +1332,6 @@ def test_groupby_quantile(request, interpolation, q):
 
     pdresult = pdg.quantile(q, interpolation=interpolation)
     gdresult = gdg.quantile(q, interpolation=interpolation)
-
-    # There's a lot left to add to python bindings like index name
-    # so this is a temporary workaround
-    pdresult = pdresult["y"].reset_index(drop=True)
-    gdresult = gdresult["y"].reset_index(drop=True)
 
     assert_groupby_results_equal(pdresult, gdresult)
 
@@ -3323,4 +3320,26 @@ def test_head_tail_empty():
 
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
+
     assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )

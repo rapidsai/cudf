@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "detail/range_comparator_utils.cuh"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
 #include "detail/rolling_jit.hpp"
@@ -218,58 +219,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
 namespace {
 
-/// For order-by columns of signed types, bounds calculation might cause accidental
-/// overflow/underflows. This needs to be detected and handled appropriately
-/// for signed and unsigned types.
-
-/**
- * @brief Add `delta` to value, and cap at numeric_limits::max(), for signed types.
- */
-template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
-__device__ T add_safe(T const& value, T const& delta)
-{
-  // delta >= 0.
-  return (value < 0 || (cuda::std::numeric_limits<T>::max() - value) >= delta)
-           ? (value + delta)
-           : cuda::std::numeric_limits<T>::max();
-}
-
-/**
- * @brief Add `delta` to value, and cap at numeric_limits::max(), for unsigned types.
- */
-template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
-__device__ T add_safe(T const& value, T const& delta)
-{
-  // delta >= 0.
-  return ((cuda::std::numeric_limits<T>::max() - value) >= delta)
-           ? (value + delta)
-           : cuda::std::numeric_limits<T>::max();
-}
-
-/**
- * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for signed types.
- */
-template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
-__device__ T subtract_safe(T const& value, T const& delta)
-{
-  // delta >= 0;
-  return (value >= 0 || (value - cuda::std::numeric_limits<T>::min()) >= delta)
-           ? (value - delta)
-           : cuda::std::numeric_limits<T>::min();
-}
-
-/**
- * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for unsigned types.
- */
-template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
-__device__ T subtract_safe(T const& value, T const& delta)
-{
-  // delta >= 0;
-  return ((value - cuda::std::numeric_limits<T>::min()) >= delta)
-           ? (value - delta)
-           : cuda::std::numeric_limits<T>::min();
-}
-
 /**
  * @brief For a specified idx, find the lowest value of the (sorted) orderby column that
  * participates in a range-window query.
@@ -282,7 +231,7 @@ __device__ ElementT compute_lowest_in_window(ElementIter orderby_iter,
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
   } else {
-    return subtract_safe(orderby_iter[idx], delta);
+    return cudf::detail::subtract_safe(orderby_iter[idx], delta);
   }
 }
 
@@ -298,7 +247,7 @@ __device__ ElementT compute_highest_in_window(ElementIter orderby_iter,
   if constexpr (std::is_same_v<ElementT, cudf::string_view>) {
     return orderby_iter[idx];
   } else {
-    return add_safe(orderby_iter[idx], delta);
+    return cudf::detail::add_safe(orderby_iter[idx], delta);
   }
 }
 
@@ -427,7 +376,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + group_start,
                                                     d_orderby + idx,
-                                                    lowest_in_window)) +
+                                                    lowest_in_window,
+                                                    cudf::detail::nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -457,8 +407,11 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     auto const group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(
-              thrust::seq, d_orderby + idx, d_orderby + group_end, highest_in_window) -
+    return (thrust::upper_bound(thrust::seq,
+                                d_orderby + idx,
+                                d_orderby + group_end,
+                                highest_in_window,
+                                cudf::detail::nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -603,7 +556,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + search_start,
                                                     d_orderby + idx,
-                                                    lowest_in_window)) +
+                                                    lowest_in_window,
+                                                    cudf::detail::nan_aware_less{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -644,8 +598,11 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     auto const search_end        = nulls_begin == group_start ? group_end : nulls_begin;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, following_window);
 
-    return (thrust::upper_bound(
-              thrust::seq, d_orderby + idx, d_orderby + search_end, highest_in_window) -
+    return (thrust::upper_bound(thrust::seq,
+                                d_orderby + idx,
+                                d_orderby + search_end,
+                                highest_in_window,
+                                cudf::detail::nan_aware_less{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -701,12 +658,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     auto const group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) -
-            thrust::lower_bound(thrust::seq,
-                                d_orderby + group_start,
-                                d_orderby + idx,
-                                highest_in_window,
-                                thrust::greater<decltype(highest_in_window)>())) +
+    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                    d_orderby + group_start,
+                                                    d_orderby + idx,
+                                                    highest_in_window,
+                                                    cudf::detail::nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -740,7 +696,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + group_end,
                                 lowest_in_window,
-                                thrust::greater<decltype(lowest_in_window)>()) -
+                                cudf::detail::nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };
@@ -801,12 +757,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     auto const search_start      = nulls_begin == group_start ? nulls_end : group_start;
     auto const highest_in_window = compute_highest_in_window(d_orderby, idx, preceding_window);
 
-    return ((d_orderby + idx) -
-            thrust::lower_bound(thrust::seq,
-                                d_orderby + search_start,
-                                d_orderby + idx,
-                                highest_in_window,
-                                thrust::greater<decltype(highest_in_window)>())) +
+    return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
+                                                    d_orderby + search_start,
+                                                    d_orderby + idx,
+                                                    highest_in_window,
+                                                    cudf::detail::nan_aware_greater{})) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
@@ -848,7 +803,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                 d_orderby + idx,
                                 d_orderby + search_end,
                                 lowest_in_window,
-                                thrust::greater<decltype(lowest_in_window)>()) -
+                                cudf::detail::nan_aware_greater{}) -
             (d_orderby + idx)) -
            1;
   };

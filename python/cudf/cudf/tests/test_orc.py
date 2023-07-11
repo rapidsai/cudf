@@ -928,7 +928,6 @@ def test_orc_writer_decimal(tmpdir, scale, decimal_type):
 
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
 def test_orc_reader_multiple_files(datadir, num_rows):
-
     path = datadir / "TestOrcFile.testSnappy.orc"
 
     df_1 = pd.read_orc(path)
@@ -946,7 +945,6 @@ def test_orc_reader_multiple_files(datadir, num_rows):
 
 
 def test_orc_reader_multi_file_single_stripe(datadir):
-
     path = datadir / "TestOrcFile.testSnappy.orc"
 
     # should raise an exception
@@ -955,7 +953,6 @@ def test_orc_reader_multi_file_single_stripe(datadir):
 
 
 def test_orc_reader_multi_file_multi_stripe(datadir):
-
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     gdf = cudf.read_orc([path, path], stripes=[[0, 1], [2]])
     pdf = pd.read_orc(path)
@@ -1107,7 +1104,6 @@ def list_struct_buff():
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
-
     gdf = cudf.read_orc(
         list_struct_buff,
         columns=columns,
@@ -1924,3 +1920,15 @@ def test_reader_row_index_order(data):
     expected.to_pandas().to_orc(buffer)
     got = cudf.read_orc(buffer)
     assert_eq(expected, got)
+
+
+# Test the corner case where empty blocks are compressed
+# Decompressed data size is zero, even though compressed data size is non-zero
+# For more information see https://github.com/rapidsai/cudf/issues/13608
+def test_orc_reader_empty_decomp_data(datadir):
+    path = datadir / "TestOrcFile.Spark.EmptyDecompData.orc"
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_eq(expect, got)

@@ -497,27 +497,13 @@ class DatetimeColumn(column.ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches
-        """
-        value = pd.to_datetime(value)
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_first_value(value, closest=closest)
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches
-        """
-        value = pd.to_datetime(value)
-        value = column.as_column(
-            value, dtype=self.dtype
-        ).as_numerical.element_indexing(0)
-        return self.as_numerical.find_last_value(value, closest=closest)
+            pd.to_datetime(value), dtype=self.dtype
+        ).as_numerical
+        return self.as_numerical.indices_of(value)
 
     @property
     def is_unique(self) -> bool:

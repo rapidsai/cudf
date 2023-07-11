@@ -40,6 +40,41 @@ using gather_map_t  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
+struct HasNonEmptyNullsTest : public cudf::test::BaseFixture {};
+
+TEST_F(HasNonEmptyNullsTest, TrivialTest)
+{
+  auto const input = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
+                             {5},
+                             {6, 7},  // <--- Will be set to NULL. Unsanitized row.
+                             {8, 9, 10}},
+                            no_nulls()}
+                       .release();
+  EXPECT_FALSE(cudf::may_have_nonempty_nulls(*input));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
+
+  // Set nullmask, post construction.
+  cudf::detail::set_null_mask(
+    input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  input->set_null_count(1);
+  EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
+}
+
+TEST_F(HasNonEmptyNullsTest, SlicedInputTest)
+{
+  auto const input = cudf::test::strings_column_wrapper{
+    {"" /*NULL*/, "111", "222", "333", "444", "" /*NULL*/, "", "777", "888", "" /*NULL*/, "101010"},
+    cudf::test::iterators::nulls_at({0, 5, 9})};
+
+  // Split into 2 columns from rows [0, 2) and [2, 10).
+  auto const result = cudf::split(input, {2});
+  for (auto const& col : result) {
+    EXPECT_TRUE(cudf::may_have_nonempty_nulls(col));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(col));
+  }
+}
+
 struct PurgeNonEmptyNullsTest : public cudf::test::BaseFixture {
   /// Helper to run gather() on a single column, and extract the single column from the result.
   std::unique_ptr<cudf::column> gather(cudf::column_view const& input,
@@ -69,15 +104,11 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
                              {8, 9, 10}},
                             no_nulls()}
                        .release();
-  EXPECT_FALSE(cudf::may_have_nonempty_nulls(*input));
-  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
   input->set_null_count(1);
-  EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
-  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
   test_purge(*input);
 

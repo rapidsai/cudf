@@ -59,32 +59,36 @@ struct extract_fn {
   {
     if (d_strings.is_null(idx)) { return; }
 
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+
     auto const groups    = d_prog.group_counts();
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const nchars = d_str.length();
+    auto itr = d_str.begin();
 
-    size_type begin = 0;
-    size_type end   = nchars;
-    // match the regex
-    while ((begin < end) && d_prog.find(prog_idx, d_str, begin, end) > 0) {
+    while (itr.position() < nchars) {
+      // first, match the regex
+      auto const match = d_prog.find(prog_idx, d_str, itr);
+      if (!match) { break; }
+      itr += (match->first - itr.position());  // position to beginning of the match
+      auto last_pos = itr;
       // extract each group into the output
       for (auto group_idx = 0; group_idx < groups; ++group_idx) {
         // result is an optional containing the bounds of the extracted string at group_idx
-        auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, group_idx);
-
-        d_output[group_idx + output_idx] = [&] {
-          if (!extracted) { return string_index_pair{nullptr, 0}; }
-          auto const start_offset = d_str.byte_offset(extracted->first);
-          auto const end_offset   = d_str.byte_offset(extracted->second);
-          return string_index_pair{d_str.data() + start_offset, end_offset - start_offset};
-        }();
+        auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, group_idx);
+        if (extracted) {
+          auto const d_result = string_from_match(*extracted, d_str, last_pos);
+          d_output[group_idx + output_idx] =
+            string_index_pair{d_result.data(), d_result.size_bytes()};
+        } else {
+          d_output[group_idx + output_idx] = string_index_pair{nullptr, 0};
+        }
+        last_pos += (extracted->second - last_pos.position());
       }
-      // continue to next match
-      begin = end;
-      end   = nchars;
+      // point to the end of this match to start the next match
+      itr += (match->second - itr.position());
       output_idx += groups;
     }
   }

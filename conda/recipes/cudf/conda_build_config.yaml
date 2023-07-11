@@ -11,4 +11,7 @@ cmake_version:
   - ">=3.26.4"
 
 cuda_compiler:
+  - cuda-nvcc
+
+cuda11_compiler:
   - nvcc
