@@ -600,7 +600,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // Hash the first column w/ the seed
-    auto const initial_hash = cudf::detail::hash_combine(
+    auto const initial_hash = cudf::hashing::detail::hash_combine(
       hash_value_type{0},
       type_dispatcher<dispatch_storage_type>(
         _table.column(0).type(),
@@ -626,7 +626,7 @@ class row_hasher {
       hasher,
       initial_hash,
       [](hash_value_type lhs, hash_value_type rhs) {
-        return cudf::detail::hash_combine(lhs, rhs);
+        return cudf::hashing::detail::hash_combine(lhs, rhs);
       });
   }
 
