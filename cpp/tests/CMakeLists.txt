@@ -163,7 +163,13 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
-ConfigureTest(HASHING_TEST hashing/hash_test.cpp hashing/murmur64_test.cpp)
+ConfigureTest(
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmur3_test.cpp
+  hashing/murmur64_test.cpp
+  hashing/spark_murmur3_test.cpp
+)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
