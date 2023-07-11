@@ -118,7 +118,8 @@ class comparison_binop_generator {
           // non-null STRUCT elements (if finding for ARGMAX). Thus, we need to set a separate
           // null order for the top level structs column (which is stored at the first position in
           // the null_orders array) to achieve this purpose.
-          if (input_.has_nulls() && input_.type().id() == cudf::type_id::STRUCT) {
+          if (input_.type().id() == cudf::type_id::STRUCT && input_.has_nulls() &&
+              input_.num_children() > 0) {
             CUDF_EXPECTS(null_orders.size() > 1,
                          "There was something wrong while flattening the input structs column.");
             null_orders.front() = cudf::null_order::AFTER;
