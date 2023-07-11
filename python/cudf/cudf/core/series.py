@@ -1309,7 +1309,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Parameters
         ----------
-        spec:
+        spec
             Indexing specification
 
         Returns
