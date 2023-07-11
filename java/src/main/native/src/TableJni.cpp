@@ -1605,7 +1605,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .metadata(&metadata)
+            .metadata(std::move(metadata))
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
@@ -1652,7 +1652,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
-            .metadata(&metadata)
+            .metadata(std::move(metadata))
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .key_value_metadata({kv_metadata})
@@ -1792,7 +1792,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
 
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                          .metadata(&metadata)
+                                          .metadata(std::move(metadata))
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
@@ -1843,7 +1843,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     sink_info sink{output_path.get()};
     auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                          .metadata(&metadata)
+                                          .metadata(std::move(metadata))
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                           .key_value_metadata(kv_metadata)
