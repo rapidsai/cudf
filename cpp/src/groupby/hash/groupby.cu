@@ -69,12 +69,12 @@ namespace {
 // TODO: replace it with `cuco::static_map`
 // https://github.com/rapidsai/cudf/issues/10401
 template <typename ComparatorType>
-using map_type =
-  concurrent_unordered_map<cudf::size_type,
-                           cudf::size_type,
-                           cudf::experimental::row::hash::
-                             device_row_hasher<cudf::detail::default_hash, cudf::nullate::DYNAMIC>,
-                           ComparatorType>;
+using map_type = concurrent_unordered_map<
+  cudf::size_type,
+  cudf::size_type,
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>,
+  ComparatorType>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based

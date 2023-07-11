@@ -26,8 +26,7 @@
 
 #include <cstddef>
 
-namespace cudf {
-namespace detail {
+namespace cudf::hashing::detail {
 
 // MurmurHash3_32 implementation from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
@@ -66,7 +65,7 @@ struct MurmurHash3_32 {
 
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
-    return compute(detail::normalize_nans_and_zeros(key));
+    return compute(normalize_nans_and_zeros(key));
   }
 
   template <typename T>
@@ -88,7 +87,7 @@ struct MurmurHash3_32 {
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
+        k1 = rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h ^= k1;
     };
@@ -106,10 +105,10 @@ struct MurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
 
@@ -139,13 +138,13 @@ hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& k
 template <>
 hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
-  return compute(detail::normalize_nans_and_zeros(key));
+  return compute(normalize_nans_and_zeros(key));
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
-  return compute(detail::normalize_nans_and_zeros(key));
+  return compute(normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -192,5 +191,4 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
   CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::hashing::detail

@@ -40,7 +40,7 @@ namespace detail {
  *  Device view of the unordered multiset
  */
 template <typename Element,
-          typename Hasher   = default_hash<Element>,
+          typename Hasher   = cudf::hashing::detail::default_hash<Element>,
           typename Equality = equal_to<Element>>
 class unordered_multiset_device_view {
  public:
@@ -74,7 +74,7 @@ class unordered_multiset_device_view {
  * Fixed size set on a device.
  */
 template <typename Element,
-          typename Hasher   = default_hash<Element>,
+          typename Hasher   = cudf::hashing::detail::default_hash<Element>,
           typename Equality = equal_to<Element>>
 class unordered_multiset {
  public:

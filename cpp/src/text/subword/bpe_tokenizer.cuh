@@ -41,7 +41,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
                                               cuda::thread_scope_device,
                                               hash_table_allocator_type>;
 
-using string_hasher_type = cudf::detail::MurmurHash3_32<cudf::string_view>;
+using string_hasher_type = cudf::hashing::detail::MurmurHash3_32<cudf::string_view>;
 
 }  // namespace detail
 

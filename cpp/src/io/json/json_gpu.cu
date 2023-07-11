@@ -185,7 +185,7 @@ __device__ field_descriptor next_field_descriptor(char const* begin,
                          false}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
-          auto const key_hash  = cudf::detail::MurmurHash3_32<cudf::string_view>{}(
+          auto const key_hash  = cudf::hashing::detail::MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
           auto const hash_col = col_map.find(key_hash);
           // Fall back to field index if not found (parsing error)
@@ -506,7 +506,7 @@ __global__ void collect_keys_info_kernel(parse_options_view const options,
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data.begin();
       keys_info->column(1).element<uint16_t>(idx) = len;
       keys_info->column(2).element<uint32_t>(idx) =
-        cudf::detail::MurmurHash3_32<cudf::string_view>{}(
+        cudf::hashing::detail::MurmurHash3_32<cudf::string_view>{}(
           cudf::string_view(field_range.key_begin, len));
     }
   }

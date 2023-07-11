@@ -47,7 +47,8 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
     cudf::string_view const sv{ptr, static_cast<size_type>(len)};
-    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
+    *static_cast<uint32_t*>(dstv) =
+      cudf::hashing::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);

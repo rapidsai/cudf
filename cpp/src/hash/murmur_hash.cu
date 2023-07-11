@@ -53,7 +53,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   thrust::tabulate(rmm::exec_policy(stream),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
-                   row_hasher.device_hasher<cudf::detail::MurmurHash3_32>(nullable, seed));
+                   row_hasher.device_hasher<MurmurHash3_32>(nullable, seed));
 
   return output;
 }

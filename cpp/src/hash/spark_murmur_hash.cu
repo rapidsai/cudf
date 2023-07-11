@@ -86,10 +86,10 @@ struct SparkMurmurHash3_32 {
       // casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
     return h;
@@ -106,10 +106,10 @@ struct SparkMurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
 
@@ -168,14 +168,14 @@ template <>
 spark_hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(
   float const& key) const
 {
-  return compute<float>(cudf::detail::normalize_nans(key));
+  return compute<float>(normalize_nans(key));
 }
 
 template <>
 spark_hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(
   double const& key) const
 {
-  return compute<double>(cudf::detail::normalize_nans(key));
+  return compute<double>(normalize_nans(key));
 }
 
 template <>
