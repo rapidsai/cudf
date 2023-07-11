@@ -15,8 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
-#include <nvbench/nvbench.cuh>
 
 #include <io/fst/lookup_tables.cuh>
 #include <io/utilities/hostdevice_vector.hpp>  //TODO find better replacement
@@ -34,6 +32,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
+
+#include <nvbench/nvbench.cuh>
 
 #include <cstdlib>
 
