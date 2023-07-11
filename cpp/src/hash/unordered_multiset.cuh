@@ -18,7 +18,6 @@
 
 #include <hash/helper_functions.cuh>
 
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/span.hpp>
@@ -31,6 +30,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
+
+#include <cuda/atomic>
 
 namespace cudf {
 namespace detail {
@@ -95,16 +96,18 @@ class unordered_multiset {
     size_type* d_hash_bins_end   = hash_bins_end.data();
     Element* d_hash_data         = hash_data.data();
 
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(col.size()),
-                     [d_hash_bins_start, d_col, hasher] __device__(size_t idx) {
-                       if (!d_col.is_null(idx)) {
-                         Element e     = d_col.element<Element>(idx);
-                         size_type tmp = hasher(e) % (2 * d_col.size());
-                         atomicAdd(d_hash_bins_start + tmp, size_type{1});
-                       }
-                     });
+    thrust::for_each(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(col.size()),
+      [d_hash_bins_start, d_col, hasher] __device__(size_t idx) {
+        if (!d_col.is_null(idx)) {
+          Element e     = d_col.element<Element>(idx);
+          size_type tmp = hasher(e) % (2 * d_col.size());
+          cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_hash_bins_start + tmp)};
+          ref.fetch_add(1, cuda::std::memory_order_relaxed);
+        }
+      });
 
     thrust::exclusive_scan(rmm::exec_policy(stream),
                            hash_bins_start.begin(),
@@ -116,17 +119,19 @@ class unordered_multiset {
                  hash_bins_end.end(),
                  hash_bins_start.begin());
 
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     thrust::make_counting_iterator<size_type>(col.size()),
-                     [d_hash_bins_end, d_hash_data, d_col, hasher] __device__(size_t idx) {
-                       if (!d_col.is_null(idx)) {
-                         Element e           = d_col.element<Element>(idx);
-                         size_type tmp       = hasher(e) % (2 * d_col.size());
-                         size_type offset    = atomicAdd(d_hash_bins_end + tmp, size_type{1});
-                         d_hash_data[offset] = e;
-                       }
-                     });
+    thrust::for_each(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(col.size()),
+      [d_hash_bins_end, d_hash_data, d_col, hasher] __device__(size_t idx) {
+        if (!d_col.is_null(idx)) {
+          Element e     = d_col.element<Element>(idx);
+          size_type tmp = hasher(e) % (2 * d_col.size());
+          cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_hash_bins_end + tmp)};
+          size_type offset    = ref.fetch_add(1, cuda::std::memory_order_relaxed);
+          d_hash_data[offset] = e;
+        }
+      });
 
     return unordered_multiset(d_col.size(), std::move(hash_bins_start), std::move(hash_data));
   }

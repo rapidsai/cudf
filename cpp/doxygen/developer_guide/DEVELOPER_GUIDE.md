@@ -440,17 +440,18 @@ libcudf throws under different circumstances, see the [section on error handling
 
 ## Streams
 
-CUDA streams are not yet exposed in external libcudf APIs. However, in order to ease the transition
-to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be
-implemented using asynchronous APIs on the default stream (e.g., stream 0).
-
-The recommended pattern for doing this is to make the definition of the external API invoke an
-internal API in the `detail` namespace. The internal `detail` API has the same parameters as the
-public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
-detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
-just *before* the memory resource. The public API will call the detail API and provide
-`cudf::get_default_stream()`. The implementation should be wholly contained in the `detail` API
-definition and use only asynchronous versions of CUDA APIs with the stream parameter.
+libcudf is in the process of adding support for asynchronous execution using
+CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
+that allocate device memory or execute a kernel should accept an
+`rmm::cuda_stream_view` parameter at the end with a default value of
+`cudf::get_default_stream()`.  There is one exception to this rule: if the API
+also accepts a memory resource parameter, the stream parameter should be placed
+just *before* the memory resource. This API should then forward the call to a
+corresponding `detail` API with an identical signature, except that the
+`detail` API should not have a default parameter for the stream ([detail APIs
+should always avoid default parameters](#default-parameters)). The
+implementation should be wholly contained in the `detail` API definition and
+use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
@@ -488,7 +489,7 @@ void external_function(...){
 when a non-pointer value is returned from the API that is the result of an asynchronous
 device-to-host copy, the stream used for the copy should be synchronized before returning. However,
 when a column is returned, the stream should not be synchronized because doing so will break
-asynchrony if and when we add an asynchronous API to libcudf.
+asynchrony.
 
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
