@@ -578,18 +578,18 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                          list_indices    = list_indices.begin(),
                          is_array_of_arrays,
                          row_array_children_level] __device__(auto node_id) {
-    auto hash =
-      cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
-                                 cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+    auto hash = cudf::hashing::detail::hash_combine(
+      cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
+      cudf::detail::default_hash<size_type>{}(node_type[node_id]));
     node_id = parent_node_ids[node_id];
     // Each node computes its hash by walking from its node up to the root.
     while (node_id != parent_node_sentinel) {
-      hash = cudf::detail::hash_combine(
+      hash = cudf::hashing::detail::hash_combine(
         hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
-      hash = cudf::detail::hash_combine(
+      hash = cudf::hashing::detail::hash_combine(
         hash, cudf::detail::default_hash<size_type>{}(node_type[node_id]));
       if (is_array_of_arrays and node_level[node_id] == row_array_children_level)
-        hash = cudf::detail::hash_combine(hash, list_indices[node_id]);
+        hash = cudf::hashing::detail::hash_combine(hash, list_indices[node_id]);
       node_id = parent_node_ids[node_id];
     }
     return hash;

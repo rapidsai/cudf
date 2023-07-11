@@ -108,6 +108,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
+ * The hash algorithm uses MurmurHash32 on each ngram.
+ *
  * @throw cudf::logic_error if `ngrams < 5`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *

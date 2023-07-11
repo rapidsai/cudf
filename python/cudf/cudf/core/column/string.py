@@ -4855,6 +4855,7 @@ class StringMethods(ColumnMethods):
     ) -> SeriesOrIndex:
         """
         Generate hashes of n-grams from characters in a column of strings.
+        The MurmurHash32 algorithm is used to produce the hash results.
 
         Parameters
         ----------
