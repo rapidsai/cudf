@@ -73,9 +73,9 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  * The binary operator provided by this class has an explicit non-inline `operator()` method to
  * prevent excessive compile time when working with `thrust::reduce_by_key`.
  *
- * When it is a structs or a lists column, top-level NULLs are compared as larger than all other non-null
- * elements - if finding for ARGMIN, or smaller than all other non-null elements - if finding
- * for ARGMAX. This helps achieve the results of finding the min or max element when nulls
+ * When it is a structs or a lists column, top-level NULLs are compared as larger than all other
+ * non-null elements - if finding for ARGMIN, or smaller than all other non-null elements - if
+ * finding for ARGMAX. This helps achieve the results of finding the min or max element when nulls
  * are excluded from the operations, returning null only when all the input elements are nulls.
  */
 class comparison_binop_generator {
