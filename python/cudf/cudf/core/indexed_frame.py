@@ -1800,8 +1800,10 @@ class IndexedFrame(Frame):
         has_range_index = isinstance(index, RangeIndex)
         if len(range(start, stop, stride)) == 0:
             # Avoid materialising the range index column
-            result = self._empty_like(keep_index=not has_range_index)
-            if has_range_index:
+            result = self._empty_like(
+                keep_index=keep_index and not has_range_index
+            )
+            if keep_index and has_range_index:
                 lo = index.start + start * index.step
                 hi = index.start + stop * index.step
                 step = index.step * stride
@@ -1812,9 +1814,12 @@ class IndexedFrame(Frame):
         if start < 0:
             start = start + num_rows
 
-        # Decreasing slices that terminates at -1, such as slice(4, -1, -1),
-        # has end index of 0, The check below makes sure -1 is not wrapped
-        # to `-1 + num_rows`.
+        # At this point, we have converted slice arguments into
+        # indices that no longer wrap around.
+        # For example slice(4, None, -1) will produce the
+        # start, stop, stride tuple (4, -1, -1)
+        # This check makes sure -1 is not wrapped (again) to
+        # produce -1 + num_rows.
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + num_rows
         stride = 1 if stride is None else stride
@@ -1837,20 +1842,24 @@ class IndexedFrame(Frame):
                     len(self),
                     nullify=False,
                 ),
-                keep_index=True,
+                keep_index=keep_index,
             )
 
         columns_to_slice = [
-            *(self._index._data.columns if not has_range_index else []),
+            *(
+                self._index._data.columns
+                if keep_index and not has_range_index
+                else []
+            ),
             *self._columns,
         ]
         result = self._from_columns_like_self(
             libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
             self._column_names,
-            None if has_range_index else self._index.names,
+            None if has_range_index or not keep_index else self._index.names,
         )
 
-        if has_range_index:
+        if keep_index and has_range_index:
             result.index = self.index[start:stop]
         return result
 
