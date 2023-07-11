@@ -22,8 +22,6 @@
 
 namespace cudf {
 
-using hash_value_type = uint32_t;  ///< Type of hash value
-
 /**
  * @addtogroup column_hash
  * @{
@@ -31,7 +29,14 @@ using hash_value_type = uint32_t;  ///< Type of hash value
  */
 
 /**
- *  @brief Identifies the hash function to be used
+ * @brief Type of hash value
+ *
+ */
+using hash_value_type = uint32_t;
+
+/**
+ * @brief Identifies the hash function to be used
+ *
  */
 enum class hash_id {
   HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
@@ -48,6 +53,8 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 /**
  * @brief Computes the hash value of each row in the input set of columns.
  *
+ * @deprecated Since 23.08
+ *
  * @param input The table of columns to hash
  * @param hash_function The hash function enum to use
  * @param seed Optional seed value to use for the hash function
@@ -62,6 +69,63 @@ std::unique_ptr<column> hash(
   uint32_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+namespace hashing {
+
+/**
+ * @brief Computes the MurmurHash3 32-bit of each row in the given table
+ *
+ * This function computes the hash of each column using the `seed` for the first column
+ * and the resulting hash as a seed for the next column and so on.
+ * The result is a uint32 value for each row.
+ *
+ * @param input The table of columns to hash
+ * @param seed Optional seed value to use for the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> murmur_hash3_32(
+  table_view const& input,
+  uint32_t seed                       = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the MurmurHash3 32-bit of each row in the given table
+ *
+ * This function computes the hash similar to MurmurHash3_32 with special processing
+ * to match Spark's implementation results.
+ *
+ * @param input The table of columns to hash
+ * @param seed Optional seed value to use for the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> spark_murmur_hash3_32(
+  table_view const& input,
+  uint32_t seed                       = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Computes the MD5 hash of each row in the given table
+ *
+ * @param input The table of columns to hash
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> md5(
+  table_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+}  // namespace hashing
 
 /** @} */  // end of group
 }  // namespace cudf
