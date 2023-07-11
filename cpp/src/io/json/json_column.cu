@@ -21,7 +21,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/data_casting.cuh>
@@ -47,6 +46,8 @@
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
+
+#include <cuda/atomic>
 
 #include <algorithm>
 #include <cstdint>
@@ -232,8 +233,9 @@ reduce_to_column_tree(tree_meta_t& tree,
                        auto parent_col_id = parent_col_ids[col_id];
                        if (parent_col_id != parent_node_sentinel and
                            column_categories[parent_col_id] == node_t::NC_LIST) {
-                         atomicMax(list_parents_children_max_row_offsets + parent_col_id,
-                                   max_row_offsets[col_id]);
+                         cuda::atomic_ref<NodeIndexT, cuda::thread_scope_device> ref{
+                           *(list_parents_children_max_row_offsets + parent_col_id)};
+                         ref.fetch_max(max_row_offsets[col_id], cuda::std::memory_order_relaxed);
                        }
                      });
     thrust::gather_if(
