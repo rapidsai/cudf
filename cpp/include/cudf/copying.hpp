@@ -77,7 +77,7 @@ enum class out_of_bounds_policy : bool {
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
  * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Result of the gather
  */
@@ -99,7 +99,7 @@ std::unique_ptr<table> gather(
  * ```
  *
  * @param source_table Table that will be reversed
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Reversed table
  */
@@ -119,7 +119,7 @@ std::unique_ptr<table> reverse(
  * ```
  *
  * @param source_column Column that will be reversed
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Reversed column
  */
@@ -159,7 +159,7 @@ std::unique_ptr<column> reverse(
  * to or less than the number of elements in the source columns.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
@@ -197,7 +197,7 @@ std::unique_ptr<table> scatter(
  * the rows in the target table to be replaced by source.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
@@ -244,7 +244,7 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * @param[in] input Immutable view of input column to emulate
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A column with sufficient uninitialized capacity to hold the same
  * number of elements as `input` of the same type as `input.type()`
  */
@@ -265,7 +265,7 @@ std::unique_ptr<column> allocate_like(
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
@@ -319,7 +319,7 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -354,7 +354,7 @@ void copy_range_in_place(column_view const& source,
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result target column
  */
@@ -396,7 +396,7 @@ std::unique_ptr<column> copy_range(
  * @param input      Column to be shifted
  * @param offset     The offset by which to shift the input
  * @param fill_value Fill value for indeterminable outputs
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream     CUDA stream used for device memory operations and kernel launches
  * @param mr         Device memory resource used to allocate the returned result's device memory
  *
  * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
@@ -439,7 +439,7 @@ std::unique_ptr<column> shift(
  *
  * @param input View of column to slice
  * @param indices Indices used to take slices of `input`
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Vector of views of `input` indicated by the ranges in `indices`
  */
 std::vector<column_view> slice(column_view const& input,
@@ -483,7 +483,7 @@ std::vector<column_view> slice(column_view const& input,
  *
  * @param input View of table to slice
  * @param indices Indices used to take slices of `input`
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Vector of views of `input` indicated by the ranges in `indices`
  */
 std::vector<table_view> slice(table_view const& input,
@@ -527,7 +527,7 @@ std::vector<table_view> slice(table_view const& input,
  *
  * @param input View of column to split
  * @param splits Indices where the view will be split
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The set of requested views of `input` indicated by the `splits`
  */
 std::vector<column_view> split(column_view const& input,
@@ -573,7 +573,7 @@ std::vector<column_view> split(column_view const& input,
  *
  * @param input View of a table to split
  * @param splits Indices where the view will be split
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The set of requested views of `input` indicated by the `splits`
  */
 std::vector<table_view> split(table_view const& input,
@@ -602,7 +602,7 @@ std::vector<table_view> split(table_view const& input,
  * @param[in] rhs right-hand column_view
  * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -628,7 +628,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand column_view
  * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -654,7 +654,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -678,7 +678,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. null element represents false.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -722,7 +722,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] input table_view (set of dense columns) to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
@@ -761,7 +761,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param[in] input scalars to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
@@ -783,7 +783,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Scalar containing the single value
  */
@@ -824,7 +824,7 @@ enum class sample_with_replacement : bool {
  * @param n non-negative number of samples expected from `input`
  * @param replacement Allow or disallow sampling of the same row more than once
  * @param seed Seed value to initiate random number generator
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Table containing samples from `input`
@@ -850,7 +850,7 @@ std::unique_ptr<table> sample(
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return true If either the column or its descendants have non-empty null rows
  * @return false If neither the column or its descendants have non-empty null rows
  */
@@ -945,7 +945,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  * @endcode
  *
  * @param input The column whose null rows are to be checked and purged
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A new column with equivalent contents to `input`, but with null rows purged
  */
