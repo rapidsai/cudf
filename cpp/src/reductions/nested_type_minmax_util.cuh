@@ -88,7 +88,7 @@ class comparison_binop_generator {
   // Contains data used in `row_comparator` below, thus needs to be kept alive as a member variable.
   std::unique_ptr<cudf::structs::detail::flattened_table> const flattened_input;
 
-  // Contain data used in the returned binop, thus needs to be kept alive as a member variable.
+  // Contains data used in the returned binop, thus needs to be kept alive as a member variable.
   cudf::experimental::row::lexicographic::self_comparator row_comparator;
 
   comparison_binop_generator(column_view const& input_,
