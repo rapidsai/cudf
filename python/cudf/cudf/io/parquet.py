@@ -565,7 +565,7 @@ def read_parquet(
     # we do NEED these columns for accurate filtering.
     projected_columns = None
     if columns and filters:
-        projected_columns = columns
+        projected_columns = list(columns)
         columns = sorted(
             set(v[0] for v in itertools.chain.from_iterable(filters))
             | set(columns)
