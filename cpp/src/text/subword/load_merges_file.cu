@@ -22,7 +22,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 

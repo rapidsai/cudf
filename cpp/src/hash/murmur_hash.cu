@@ -16,7 +16,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmur_hash32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
