@@ -68,17 +68,17 @@ enum class out_of_bounds_policy : bool {
  *
  * @throws cudf::logic_error if gather_map contains null values.
  *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map View into a non-nullable column of integral indices that maps the
+ * @param source_table The input columns whose rows will be gathered
+ * @param gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] bounds_policy Policy to apply to account for possible out-of-bounds indices
+ * @param bounds_policy Policy to apply to account for possible out-of-bounds indices
  * `DONT_CHECK` skips all bounds checking for gather map values. `NULLIFY` coerces rows that
  * corresponds to out-of-bounds indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
  * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of the gather
  */
 std::unique_ptr<table> gather(
@@ -241,9 +241,9 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
  * and the validity bits and the null count should be set by the caller.
  *
- * @param[in] input Immutable view of input column to emulate
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param input Immutable view of input column to emulate
+ * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A column with sufficient uninitialized capacity to hold the same
  * number of elements as `input` of the same type as `input.type()`
@@ -262,11 +262,11 @@ std::unique_ptr<column> allocate_like(
  * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
  * and the validity bits and the null count should be set by the caller.
  *
- * @param[in] input Immutable view of input column to emulate
- * @param[in] size The desired number of elements that the new column should have capacity for
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
+ * @param input Immutable view of input column to emulate
+ * @param size The desired number of elements that the new column should have capacity for
+ * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
  */
@@ -598,12 +598,12 @@ std::vector<table_view> split(table_view const& input,
  * @throws cudf::logic_error if lhs and rhs are not of the same length
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
- * @param[in] lhs left-hand column_view
- * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @param lhs left-hand column_view
+ * @param rhs right-hand column_view
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -624,12 +624,12 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
- * @param[in] lhs left-hand scalar
- * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @param lhs left-hand scalar
+ * @param rhs right-hand column_view
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -650,12 +650,12 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
- * @param[in] lhs left-hand column_view
- * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @param lhs left-hand column_view
+ * @param rhs right-hand scalar
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -674,12 +674,12 @@ std::unique_ptr<column> copy_if_else(
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
  *
  * @throws cudf::logic_error if boolean mask is not of type bool
- * @param[in] lhs left-hand scalar
- * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @param lhs left-hand scalar
+ * @param rhs right-hand scalar
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. null element represents false.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -719,11 +719,11 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
  * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
  *
- * @param[in] input table_view (set of dense columns) to scatter
- * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask
+ * @param input table_view (set of dense columns) to scatter
+ * @param target table_view to modify with scattered values from `input`
+ * @param boolean_mask column_view which acts as boolean mask
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate device memory of the returned table
+ * @param mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
@@ -758,11 +758,11 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.size()
  *
- * @param[in] input scalars to scatter
- * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask
+ * @param input scalars to scatter
+ * @param target table_view to modify with scattered values from `input`
+ * @param boolean_mask column_view which acts as boolean mask
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate device memory of the returned table
+ * @param mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
