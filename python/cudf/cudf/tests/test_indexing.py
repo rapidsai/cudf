@@ -685,9 +685,6 @@ def test_dataframe_iloc_tuple():
     assert_eq(gdf.iloc[:, -1], pdf.iloc[:, -1])
 
 
-@pytest.mark.xfail(
-    raises=IndexError, reason="positional indexers are out-of-bounds"
-)
 def test_dataframe_iloc_index_error():
     gdf = cudf.DataFrame()
     nelem = 123
@@ -700,11 +697,10 @@ def test_dataframe_iloc_index_error():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    def assert_col(g, p):
-        np.testing.assert_equal(g["a"].to_numpy(), p["a"])
-        np.testing.assert_equal(g["b"].to_numpy(), p["b"])
-
-    assert_col(gdf.iloc[nelem * 2], pdf.iloc[nelem * 2])
+    with pytest.raises(IndexError):
+        pdf.iloc[nelem * 2]
+    with pytest.raises(IndexError):
+        gdf.iloc[nelem * 2]
 
 
 @pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
