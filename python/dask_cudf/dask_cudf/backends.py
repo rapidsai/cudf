@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import uuid
 import warnings
 from collections.abc import Iterator
 
@@ -12,6 +13,7 @@ from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
+from dask.base import normalize_token
 from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
@@ -471,6 +473,25 @@ def sizeof_cudf_dataframe(df):
 @_dask_cudf_nvtx_annotate
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
+
+
+@normalize_token.register(cudf.core.frame.Frame)
+def _normalize_cudf_frame(obj):
+    # Only move data to pandas if we "need" to
+    if config.get("tokenize.ensure-deterministic", False):
+        return [
+            type(obj),
+            obj._dtypes,
+            (
+                obj.hash_values() if hasattr(obj, "hash_values") else obj
+            ).to_pandas(),
+        ]
+    return uuid.uuid4().hex
+
+
+@normalize_token.register(cudf.core.index.RangeIndex)
+def _normalize_cudf_rangeindex(index):
+    return index.to_pandas()
 
 
 def _default_backend(func, *args, **kwargs):

@@ -6,6 +6,7 @@ import pytest
 from packaging import version
 
 import dask
+from dask.base import tokenize
 from dask.dataframe import assert_eq
 from dask.dataframe.methods import is_categorical_dtype
 
@@ -38,3 +39,16 @@ def test_pyarrow_conversion_dispatch():
 
     assert type(df1) == type(df2)
     assert_eq(df1, df2)
+
+
+def test_deterministic_tokenize():
+    # Checks that `dask.base.normalize_token` correctly
+    # dispatches to the logic defined in `backends.py`
+    # when "tokenize.ensure-deterministic" == `True`
+    # (making `tokenize(<cudf-data>)` deterministic).
+    df = cudf.DataFrame({"A": list(range(10)), "B": ["dog", "cat"] * 5})
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        assert tokenize(df) == tokenize(df)
+        assert tokenize(df.A) == tokenize(df.A)
+        assert tokenize(df.index) == tokenize(df.index)
