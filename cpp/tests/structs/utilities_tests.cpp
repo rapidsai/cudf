@@ -64,27 +64,6 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
   CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
 
-TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
-{
-  using T     = TypeParam;
-  using lists = cudf::test::lists_column_wrapper<T, int32_t>;
-  using nums  = cudf::test::fixed_width_column_wrapper<T, int32_t>;
-
-  auto lists_member = lists{{0, 1}, {22, 33}, {44, 55, 66}};
-  auto nums_member  = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
-  auto structs_col  = cudf::test::structs_column_wrapper{{nums_member, lists_member}};
-  auto nums_col     = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
-
-  EXPECT_THROW((void)cudf::structs::detail::flatten_nested_columns(
-                 cudf::table_view{{nums_col, structs_col}},
-                 {},
-                 {},
-                 cudf::structs::detail::column_nullability::FORCE,
-                 cudf::get_default_stream(),
-                 rmm::mr::get_current_device_resource()),
-               cudf::logic_error);
-}
-
 TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
 {
   using T    = TypeParam;
@@ -370,29 +349,6 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
                                                   cudf::get_default_stream(),
                                                   rmm::mr::get_current_device_resource());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
-}
-
-TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
-{
-  using T    = TypeParam;
-  using ints = cudf::test::fixed_width_column_wrapper<int32_t>;
-  using lcw  = cudf::test::lists_column_wrapper<T, int32_t>;
-
-  // clang-format off
-  auto lists_member = lcw{  {0,1,2}, {3,4,5}, {6,7,8,9} };
-  auto ints_member  = ints{       0,       1,         2 };
-  // clang-format on
-
-  auto structs_with_lists_col = cudf::test::structs_column_wrapper{lists_member, ints_member};
-
-  EXPECT_THROW((void)cudf::structs::detail::flatten_nested_columns(
-                 cudf::table_view{{structs_with_lists_col}},
-                 {},
-                 {},
-                 cudf::structs::detail::column_nullability::FORCE,
-                 cudf::get_default_stream(),
-                 rmm::mr::get_current_device_resource()),
-               cudf::logic_error);
 }
 
 struct SuperimposeTest : StructUtilitiesTest {};
