@@ -313,6 +313,26 @@ def test_character_ngrams(n, expected_values, expected_index, as_list):
     assert_eq(expected, actual)
 
 
+def test_hash_character_ngrams():
+    strings = cudf.Series(["abcdefg", "stuvwxyz"])
+    expected = cudf.Series(
+        [
+            cudf.Series([3902511862, 570445242, 4202475763], dtype=np.uint32),
+            cudf.Series(
+                [556054766, 3166857694, 3760633458, 192452857], dtype=np.uint32
+            ),
+        ]
+    )
+    actual = strings.str.hash_character_ngrams(5, True)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    actual = strings.str.hash_character_ngrams(5)
+    expected = expected.explode()
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "n, separator, expected_values",
     [
