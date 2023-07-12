@@ -650,8 +650,8 @@ bool can_use_hash_groupby(host_span<aggregation_request const> requests)
                           ? cudf::dictionary_column_view(r.values).keys().type()
                           : r.values.type();
 
-    // Currently, structs and lists values are not supported in any of hash-based aggregations.
-    // For those situations, we must fallback to sort-based aggregations.
+    // Currently, input values (not keys) of STRUCT and LIST types are not supported in any of
+    // hash-based aggregations. For those situations, we fallback to sort-based aggregations.
     if (v_type.id() == type_id::STRUCT or v_type.id() == type_id::LIST) { return false; }
 
     return std::all_of(r.aggregations.begin(), r.aggregations.end(), [v_type](auto const& a) {

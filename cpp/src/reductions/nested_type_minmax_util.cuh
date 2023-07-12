@@ -42,9 +42,9 @@ struct row_arg_minmax_fn {
   }
 
   // This function is explicitly prevented from inlining, because it calls to
-  // `DeviceComparator::operator()` which is inlined and very heavy-weight. Otherwise,
-  // instantiating this functor will result in huge code, and objects of this functor used with
-  // `thrust::reduce_by_key` or `thrust::scan_by_key` will result in significant compile time.
+  // `DeviceComparator::operator()` which is inlined and very heavy-weight. Inlining
+  // this would result in huge code and significantly compile time when instantiated and
+  // used with `thrust::reduce_by_key` or `thrust::scan_by_key`.
   __attribute__((noinline)) __device__ auto operator()(size_type lhs_idx, size_type rhs_idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/issues/9156 and
