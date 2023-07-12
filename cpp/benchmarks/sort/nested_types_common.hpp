@@ -17,7 +17,6 @@
 #pragma once
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 

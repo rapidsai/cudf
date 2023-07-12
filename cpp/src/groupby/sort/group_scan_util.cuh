@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/struct_minmax_util.cuh>
+#include <reductions/nested_type_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
