@@ -50,6 +50,8 @@ class GatherMap:
             If the column is of unsuitable dtype, or the map is not in bounds.
         """
         self.column = cudf.core.column.as_column(column)
+        self.nrows = nrows
+        self.nullify = nullify
         if len(self.column) == 0:
             # Any empty column is valid as a gather map
             # This is necessary because as_column([]) defaults to float64
@@ -59,16 +61,15 @@ class GatherMap:
             self.column = cast(
                 "NumericalColumn", self.column.astype(size_type_dtype)
             )
-        if self.column.dtype.kind not in {"i", "u"}:
-            raise IndexError("Gather map must have integer dtype")
-        if not nullify:
-            lo, hi = libcudf.reduce.minmax(self.column)
-            if lo.value < -nrows or hi.value >= nrows:
-                raise IndexError(
-                    f"Gather map is out of bounds for [0, {nrows})"
-                )
-        self.nrows = nrows
-        self.nullify = nullify
+        else:
+            if self.column.dtype.kind not in {"i", "u"}:
+                raise IndexError("Gather map must have integer dtype")
+            if not nullify:
+                lo, hi = libcudf.reduce.minmax(self.column)
+                if lo.value < -nrows or hi.value >= nrows:
+                    raise IndexError(
+                        f"Gather map is out of bounds for [0, {nrows})"
+                    )
 
     @classmethod
     def from_column_unchecked(

@@ -189,7 +189,6 @@ class _SeriesIlocIndexer(_FrameIndexer):
         indexing_spec = indexing_utils.parse_row_iloc_indexer(
             indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
             len(self._frame),
-            check_bounds=True,
         )
         return self._frame._getitem_preprocessed(indexing_spec)
 

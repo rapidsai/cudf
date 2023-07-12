@@ -267,7 +267,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df = columns_df._slice(out)
                 else:
                     df = columns_df._apply_boolean_mask(
-                        BooleanMask.from_column_unchecked(out, len(columns_df))
+                        BooleanMask.from_column_unchecked(
+                            cudf.core.column.as_column(out), len(columns_df)
+                        )
                     )
             else:
                 tmp_arg = arg
@@ -408,7 +410,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             column_names,
         ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
         row_spec = indexing_utils.parse_row_iloc_indexer(
-            row_key, len(self._frame), check_bounds=True
+            row_key, len(self._frame)
         )
         ca = self._frame._data
         index = self._frame.index

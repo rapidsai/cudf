@@ -314,7 +314,7 @@ class Merge:
         if by:
             to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
             sort_order = GatherMap.from_column_unchecked(
-                to_sort.argsort(),
+                cudf.core.column.as_column(to_sort.argsort()),
                 len(result),
                 nullify=False,
             )
