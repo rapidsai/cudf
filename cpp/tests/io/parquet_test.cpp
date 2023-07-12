@@ -5684,7 +5684,7 @@ TEST_F(ParquetReaderTest, FilterIdentity)
 {
   auto [src, filepath] = create_parquet_with_stats("FilterIdentity.parquet");
 
-  // Filtering AST - true
+  // Filtering AST - identity function, always true.
   auto literal_value     = cudf::numeric_scalar<bool>(true);
   auto literal           = cudf::ast::literal(literal_value);
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, literal);
