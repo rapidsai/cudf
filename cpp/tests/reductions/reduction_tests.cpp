@@ -2583,15 +2583,15 @@ TEST_F(ListReductionTest, ReductionMinMaxSlicedInput)
   using LISTS_STRINGS_CW = cudf::test::lists_column_wrapper<cudf::string_view>;
 
   {
-    auto const input_original = LISTS_CW{{9, 9} /*dont care*/,
-                                         {0, 0} /*dont care*/,
+    auto const input_original = LISTS_CW{{9, 9} /*don't care*/,
+                                         {0, 0} /*don't care*/,
                                          {3, 4},
                                          {1, 2},
                                          {5, 6, 7},
                                          {0, 8},
                                          {9, 10},
                                          {1, 0},
-                                         {0, 7} /*dont care*/};
+                                         {0, 7} /*don't care*/};
     auto const input          = cudf::slice(input_original, {2, 8})[0];
     this->reduction_test(
       input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
@@ -2599,8 +2599,8 @@ TEST_F(ListReductionTest, ReductionMinMaxSlicedInput)
       input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
   }
   {
-    auto const input_original = LISTS_STRINGS_CW{{"08", "8"} /*dont care*/,
-                                                 {"999", "8"} /*dont care*/,
+    auto const input_original = LISTS_STRINGS_CW{{"08", "8"} /*don't care*/,
+                                                 {"999", "8"} /*don't care*/,
                                                  {"34", "43"},
                                                  {"12", "21"},
                                                  {"567", "6", "765"},
