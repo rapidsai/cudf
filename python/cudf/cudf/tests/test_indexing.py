@@ -1994,6 +1994,20 @@ def test_loc_missing_label_keyerror_issue_13379(index):
         cdf.loc[[0, 5]]
 
 
+@pytest.mark.parametrize("series", [True, False], ids=["Series", "DataFrame"])
+def test_loc_repeated_label_ordering_issue_13658(series):
+    # https://github.com/rapidsai/cudf/issues/13658
+    values = range(2048)
+    index = [1 for _ in values]
+    if series:
+        frame = cudf.Series(values, index=index)
+    else:
+        frame = cudf.DataFrame({"a": values}, index=index)
+    expect = frame.to_pandas().loc[[1]]
+    actual = frame.loc[[1]]
+    assert_eq(actual, expect)
+
+
 class TestLocIndexWithOrder:
     # https://github.com/rapidsai/cudf/issues/12833
     @pytest.fixture(params=["increasing", "decreasing", "neither"])
