@@ -107,3 +107,15 @@ def test_cudf_create_series_cuinit(cuda_gdb):
     print(output.stderr)
     assert output.returncode == 0
     assert cuInit_called >= 0
+
+
+def test_cudf_import_no_device():
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = "-1"
+    output = subprocess.run(
+        ["python", "-c", "import cudf"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert output.returncode == 0
