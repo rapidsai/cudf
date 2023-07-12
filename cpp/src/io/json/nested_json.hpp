@@ -199,7 +199,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        rmm::cuda_stream_view stream);
 
 /**
- * @brief Post-processes a token stream that may contain tokens from invalid lines.
+ * @brief Post-processes a token stream that may contain tokens from invalid lines. Expects that the
+ * token stream begins with a LineEnd token.
  *
  * @param tokens The tokens to be post-processed
  * @param token_indices The tokens' corresponding indices that are post-processed
