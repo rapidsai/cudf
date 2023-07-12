@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -11,6 +11,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.generate_ngrams cimport (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
+    hash_character_ngrams as cpp_hash_character_ngrams,
 )
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
@@ -49,6 +50,23 @@ def generate_character_ngrams(Column strings, int ngrams):
     with nogil:
         c_result = move(
             cpp_generate_character_ngrams(
+                c_strings,
+                c_ngrams
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
+def hash_character_ngrams(Column strings, int ngrams):
+    cdef column_view c_strings = strings.view()
+    cdef size_type c_ngrams = ngrams
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_hash_character_ngrams(
                 c_strings,
                 c_ngrams
             )

@@ -90,6 +90,8 @@ requirements:
     - cubinlinker  # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0a0
     {% else %}
+    # Needed by Numba for CUDA support
+    - cuda-nvcc-impl
     # TODO: Add nvjitlink here
     # xref: https://github.com/rapidsai/cudf/issues/12822
     - cuda-nvrtc
