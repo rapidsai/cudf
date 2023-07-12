@@ -268,7 +268,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     df = columns_df._apply_boolean_mask(
                         BooleanMask.from_column_unchecked(
-                            cudf.core.column.as_column(out), len(columns_df)
+                            cudf.core.column.as_column(out)
                         )
                     )
             else:
@@ -4076,7 +4076,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(
-                BooleanMask.from_column_unchecked(boolmask, len(self))
+                BooleanMask.from_column_unchecked(boolmask)
             )
 
     @_cudf_nvtx_annotate

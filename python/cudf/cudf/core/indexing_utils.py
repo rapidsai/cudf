@@ -171,7 +171,7 @@ def destructure_dataframe_iloc_indexer(
             len(column_names) == 1
         ), "Scalar column indexer should not produce more than one column"
 
-    return (rows, (scalar, column_names))
+    return rows, (scalar, column_names)
 
 
 def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:

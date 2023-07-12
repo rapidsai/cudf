@@ -3026,10 +3026,10 @@ class IndexedFrame(Frame):
 
         If keep_index is False, the index is not preserved.
         """
-        if boolean_mask.nrows != len(self):
+        if len(boolean_mask.column) != len(self):
             raise IndexError(
                 "Boolean mask has wrong length: "
-                f"{boolean_mask.nrows} not {len(self)}"
+                f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(

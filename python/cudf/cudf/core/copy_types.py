@@ -14,6 +14,36 @@ if TYPE_CHECKING:
 
 @dataclass
 class GatherMap:
+    """A representation of a column as a gather map.
+
+    This object augments the column with the information that it
+    is valid as a gather map for the specified number of rows with
+    the given nullification flag.
+
+    Parameters
+    ----------
+    column
+        The data to turn into a column and then verify
+    nrows
+        The number of rows to verify against
+    nullify
+        Will the gather map be used nullifying out of bounds
+        accesses?
+
+    Returns
+    -------
+    GatherMap
+        New object wrapping the column bearing witness to its
+        suitability as a gather map for columns with nrows.
+
+    Raises
+    ------
+    TypeError
+        If the column is of unsuitable dtype
+    IndexError
+        If the map is not in bounds.
+    """
+
     #: The gather map
     column: "NumericalColumn"
     #: The number of rows the gather map has been validated for
@@ -22,33 +52,6 @@ class GatherMap:
     nullify: bool
 
     def __init__(self, column: Any, nrows: int, *, nullify: bool):
-        """A representation of a column as a gather map.
-
-        This object augments the column with the information that it
-        is valid as a gather map for the specified number of rows with
-        the given nullification flag.
-
-        Parameters
-        ----------
-        column
-            The data to turn into a column and then verify
-        nrows
-            The number of rows to verify against
-        nullify
-            Will the gather map be used nullifying out of bounds
-            accesses?
-
-        Returns
-        -------
-        GatherMap
-            New object wrapping the column bearing witness to its
-            suitability as a gather map for columns with nrows.
-
-        Raises
-        ------
-        IndexError
-            If the column is of unsuitable dtype, or the map is not in bounds.
-        """
         self.column = cudf.core.column.as_column(column)
         self.nrows = nrows
         self.nullify = nullify
@@ -63,7 +66,7 @@ class GatherMap:
             )
         else:
             if self.column.dtype.kind not in {"i", "u"}:
-                raise IndexError("Gather map must have integer dtype")
+                raise TypeError("Gather map must have integer dtype")
             if not nullify:
                 lo, hi = libcudf.reduce.minmax(self.column)
                 if lo.value < -nrows or hi.value >= nrows:
@@ -105,41 +108,40 @@ class GatherMap:
 
 @dataclass
 class BooleanMask:
+    """A representation of a column as a boolean mask.
+
+    This augments the column with information that it is valid as a
+    boolean mask for columns with a given number of rows
+
+    Parameters
+    ----------
+    column
+        The data to turn into a column to then verify
+    nrows
+        the number of rows to verify against
+
+    Returns
+    -------
+    BooleanMask
+        New object wrapping the column bearing witness to its
+        suitability as a boolean mask for columns with matching
+        row count.
+
+    Raises
+    ------
+    TypeError
+        If the column is of unsuitable dtype
+    IndexError
+        If the mask has the wrong number of rows
+    """
+
     #: The boolean mask
     column: "NumericalColumn"
-    #: The number of rows
-    nrows: int
 
     def __init__(self, column: Any, nrows: int):
-        """A representation of a column as a boolean mask.
-
-        This augments the column with information that it is valid as a
-        boolean mask for columns with a given number of rows
-
-        Parameters
-        ----------
-        column
-            The data to turn into a column to then verify
-        nrows
-            the number of rows to verify against
-
-        Returns
-        -------
-        BooleanMask
-            New object wrapping the column bearing witness to its
-            suitability as a boolean mask for columns with matching
-            row count.
-
-        Raises
-        ------
-        IndexError
-            If the column is of unsuitable dtype. Or does not have the
-            requested number of rows.
-        """
         self.column = cudf.core.column.as_column(column)
-        self.nrows = nrows
         if self.column.dtype.kind != "b":
-            raise IndexError("Boolean mask must have bool dtype")
+            raise TypeError("Boolean mask must have bool dtype")
         if len(column) != nrows:
             raise IndexError(
                 f"Column with {len(column)} rows not suitable "
@@ -147,17 +149,13 @@ class BooleanMask:
             )
 
     @classmethod
-    def from_column_unchecked(
-        cls, column: "NumericalColumn", nrows: int
-    ) -> Self:
+    def from_column_unchecked(cls, column: "NumericalColumn") -> Self:
         """Construct a new BooleanMask from a column without checks.
 
         Parameters
         ----------
         column
            The column that will be used as a boolean mask
-        nrows
-           The number of rows the mask will be used for
 
         Returns
         -------
@@ -170,5 +168,4 @@ class BooleanMask:
         """
         self = cls.__new__(cls)
         self.column = column
-        self.nrows = nrows
         return self
