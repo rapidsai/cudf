@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/default_stream.hpp"
-#include "cudf/utilities/type_dispatcher.hpp"
-#include "cudf_test/iterator_utilities.hpp"
-#include <cudf/copying.hpp>
-#include <cudf/detail/null_mask.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
+
 #include <limits>
-#include <utility>
 
 class CopyingTest : public cudf::test::BaseFixture {};
 
