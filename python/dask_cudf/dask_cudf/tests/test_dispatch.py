@@ -52,3 +52,6 @@ def test_deterministic_tokenize():
         assert tokenize(df) == tokenize(df)
         assert tokenize(df.A) == tokenize(df.A)
         assert tokenize(df.index) == tokenize(df.index)
+        assert tokenize(df) == tokenize(df.copy(deep=True))
+        assert tokenize(df.A) == tokenize(df.A.copy(deep=True))
+        assert tokenize(df.index) == tokenize(df.index.copy(deep=True))
