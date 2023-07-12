@@ -40,10 +40,10 @@ TEST_F(CopyingTest, Gather)
 
   cudf::table_view source_table({source_column});
 
-  std::unique_ptr<cudf::table> result = cudf::gather(source_table,
-                                                     gather_map,
-                                                     cudf::out_of_bounds_policy::DONT_CHECK,
-                                                     cudf::test::get_default_stream());
+  cudf::gather(source_table,
+               gather_map,
+               cudf::out_of_bounds_policy::DONT_CHECK,
+               cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, ReverseTable)
@@ -54,7 +54,7 @@ TEST_F(CopyingTest, ReverseTable)
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   auto input_table = cudf::table_view{{input}};
-  auto const p_ret = cudf::reverse(input_table, cudf::test::get_default_stream());
+  cudf::reverse(input_table, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, ReverseColumn)
@@ -64,7 +64,7 @@ TEST_F(CopyingTest, ReverseColumn)
   auto input = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
-  auto const column_ret = cudf::reverse(input, cudf::test::get_default_stream());
+  cudf::reverse(input, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, ScatterTable)
@@ -76,8 +76,7 @@ TEST_F(CopyingTest, ScatterTable)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  auto const result =
-    cudf::scatter(source_table, scatter_map, target_table, cudf::test::get_default_stream());
+  cudf::scatter(source_table, scatter_map, target_table, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, ScatterScalars)
@@ -91,8 +90,7 @@ TEST_F(CopyingTest, ScatterScalars)
 
   auto const target_table = cudf::table_view({target});
 
-  auto const result =
-    cudf::scatter(source_vector, scatter_map, target_table, cudf::test::get_default_stream());
+  cudf::scatter(source_vector, scatter_map, target_table, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, AllocateLike)
@@ -104,7 +102,7 @@ TEST_F(CopyingTest, AllocateLike)
                                          size,
                                          cudf::mask_state::UNALLOCATED,
                                          cudf::test::get_default_stream());
-  auto got   = cudf::allocate_like(
+  cudf::allocate_like(
     input->view(), cudf::mask_allocation_policy::RETAIN, cudf::test::get_default_stream());
 }
 
@@ -118,10 +116,10 @@ TEST_F(CopyingTest, AllocateLikeSize)
                                          size,
                                          cudf::mask_state::UNALLOCATED,
                                          cudf::test::get_default_stream());
-  auto got   = cudf::allocate_like(input->view(),
-                                 new_size,
-                                 cudf::mask_allocation_policy::RETAIN,
-                                 cudf::test::get_default_stream());
+  cudf::allocate_like(input->view(),
+                      new_size,
+                      cudf::mask_allocation_policy::RETAIN,
+                      cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, CopyRangeInPlace)
@@ -183,7 +181,7 @@ TEST_F(CopyingTest, Shift)
                                                     std::numeric_limits<int32_t>::max()};
   auto fill = cudf::scalar_type_t<int32_t>(
     cudf::test::make_type_param_scalar<int32_t>(7), true, cudf::test::get_default_stream());
-  auto actual = cudf::shift(input, 2, fill, cudf::test::get_default_stream());
+  cudf::shift(input, 2, fill, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, SliceColumn)
@@ -275,8 +273,7 @@ TEST_F(CopyingTest, BooleanMaskScatter)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  auto got =
-    cudf::boolean_mask_scatter(source_table, target_table, mask, cudf::test::get_default_stream());
+  cudf::boolean_mask_scatter(source_table, target_table, mask, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, BooleanMaskScatterScalars)
@@ -291,8 +288,7 @@ TEST_F(CopyingTest, BooleanMaskScatterScalars)
 
   auto target_table = cudf::table_view({target});
 
-  auto got =
-    cudf::boolean_mask_scatter(scalars, target_table, mask, cudf::test::get_default_stream());
+  cudf::boolean_mask_scatter(scalars, target_table, mask, cudf::test::get_default_stream());
 }
 
 TEST_F(CopyingTest, GetElement)
