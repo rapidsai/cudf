@@ -132,4 +132,37 @@ TEST_F(TextGenerateNgramsTest, Errors)
                cudf::logic_error);
 }
 
+TEST_F(TextGenerateNgramsTest, NgramsHash)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"the quick brown fox", "jumped over the lazy dog."});
+
+  auto view    = cudf::strings_column_view(input);
+  auto results = nvtext::hash_character_ngrams(view);
+
+  using LCW = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW expected({LCW{2169381797u, 3924065905u, 1634753325u, 3766025829u,  771291085u,
+                    2286480985u, 2815102125u, 2383213292u, 1587939873u, 3417728802u,
+                     741580288u, 1721912990u, 3322339040u, 2530504717u, 1448945146u},
+                LCW{3542029734u, 2351937583u, 2373822151u, 2610417165u, 1303810911u,
+                    2541942822u, 1736466351u, 3466558519u,  408633648u, 1698719372u,
+                     620653030u,   16851044u,  608863326u,  948572753u, 3672211877u,
+                    4097451013u, 1444462157u, 3762829398u,  743082018u, 2953783152u,
+                    2319357747u}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(TextGenerateNgramsTest, NgramsHashErrors)
+{
+  auto input = cudf::test::strings_column_wrapper({"1", "2", "3"});
+  auto view  = cudf::strings_column_view(input);
+
+  // invalid parameter value
+  EXPECT_THROW(nvtext::hash_character_ngrams(view, 1), cudf::logic_error);
+  // strings not long enough to generate ngrams
+  EXPECT_THROW(nvtext::hash_character_ngrams(view), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
