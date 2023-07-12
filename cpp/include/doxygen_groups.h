@@ -167,6 +167,7 @@
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
  *   @defgroup nvtext_minhash MinHashing
+ *   @defgroup nvtext_jaccard Jaccard Index
  * @}
  * @defgroup utility_apis Utilities
  * @{
