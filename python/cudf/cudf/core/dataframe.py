@@ -4164,8 +4164,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.query**
 
-            unlike pandas, DataFrame.query currently only supports
-            numeric, datetime, timedelta, or bool dtypes.
+            One difference from pandas is that DataFrame.query currently only
+            supports numeric, datetime, timedelta, or bool dtypes.
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
