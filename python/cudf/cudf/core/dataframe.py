@@ -291,7 +291,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
-                    cantor_name = "_" + "_".join(map(str, columns_df._data.names))
+                    cantor_name = "_" + "_".join(
+                           map(str, columns_df._data.names)
+                    )
                     columns_df[cantor_name] = column.arange(len(columns_df))
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index,
