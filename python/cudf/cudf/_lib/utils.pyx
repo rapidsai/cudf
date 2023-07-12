@@ -11,6 +11,7 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table
@@ -244,6 +245,23 @@ cdef columns_from_unique_ptr(
                for i in range(c_columns.size())]
 
     return columns
+
+
+cdef columns_from_pylibcudf_table(pylibcudf.Table table):
+    """Convert a pylibcudf table into list of columns.
+
+    Parameters
+    ----------
+    tbl : pylibcudf.Table
+        The pylibcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
+    """
+    cdef pylibcudf.Column plc
+    return [Column.from_pylibcudf(plc) for plc in table.columns]
 
 
 cdef data_from_unique_ptr(

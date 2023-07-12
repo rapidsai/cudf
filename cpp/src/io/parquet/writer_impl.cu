@@ -515,9 +515,9 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             single_write_mode write_mode)
 {
   if (col_meta.is_nullability_defined()) {
-    CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
-                 "Mismatch in metadata prescribed nullability and input column nullability. "
-                 "Metadata for nullable input column cannot prescribe nullability = false");
+    CUDF_EXPECTS(col_meta.nullable() or col->null_count() == 0,
+                 "Mismatch in metadata prescribed nullability and input column. "
+                 "Metadata for input column with nulls cannot prescribe nullability = false");
     return col_meta.nullable();
   }
   // For chunked write, when not provided nullability, we assume the worst case scenario
