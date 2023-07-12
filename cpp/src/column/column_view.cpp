@@ -78,7 +78,7 @@ struct HashValue {
   explicit HashValue(std::size_t h) : hash{h} {}
   HashValue operator^(HashValue const& other) const
   {
-    return HashValue{hash_combine(hash, other.hash)};
+    return HashValue{cudf::hashing::detail::hash_combine(hash, other.hash)};
   }
 };
 
@@ -97,7 +97,7 @@ std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false
                          c.child_end(),
                          init,
                          [&c, is_parent_empty](std::size_t hash, auto const& child) {
-                           return hash_combine(
+                           return cudf::hashing::detail::hash_combine(
                              hash, shallow_hash_impl(child, c.is_empty() or is_parent_empty));
                          });
 }
