@@ -59,12 +59,14 @@ struct stats_caster {
       return static_cast<ToType>(value);
     }
   }
+
   // uses storage type as T
   template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>() or cudf::is_nested<T>())>
   static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
     CUDF_FAIL("unsupported type for stats casting");
   }
+
   template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
   static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
@@ -72,8 +74,9 @@ struct stats_caster {
     return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
   }
 
+  // integral but not boolean, and fixed_point, and chrono.
   template <typename T,
-            CUDF_ENABLE_IF((!cudf::is_boolean<T>() and cudf::is_integral<T>()) or
+            CUDF_ENABLE_IF((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
                            cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>
   static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
   {
@@ -88,10 +91,11 @@ struct stats_caster {
       case FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           // if type size == length of stats_val. then typecast and return.
-          if constexpr (cudf::is_chrono<T>())
+          if constexpr (cudf::is_chrono<T>()) {
             return targetType<T>(*reinterpret_cast<typename T::rep const*>(stats_val));
-          else
+          } else {
             return targetType<T>(*reinterpret_cast<T const*>(stats_val));
+          }
         }
         // unsupported type
       default: CUDF_FAIL("Invalid type and stats combination");
@@ -125,11 +129,12 @@ struct stats_caster {
     size_t col_idx, cudf::data_type dtype) const
   {
     // List, Struct, Dictionary types are not supported
-    if constexpr (is_compound<T>() && !std::is_same_v<T, string_view>)
+    if constexpr (is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
-    else {
+    } else {
       // Local struct to hold host columns
       struct host_column {
+        // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
         thrust::host_vector<T> val;
         std::vector<bitmask_type> null_mask;
         cudf::size_type null_count = 0;
@@ -144,8 +149,9 @@ struct stats_caster {
 
         void set_index(size_type index, std::vector<uint8_t> const& binary_value, Type const type)
         {
-          if (!binary_value.empty())
+          if (!binary_value.empty()) {
             val[index] = convert<T>(binary_value.data(), binary_value.size(), type);
+          }
           if (binary_value.empty()) {
             clear_bit_unsafe(null_mask.data(), index);
             null_count++;
@@ -211,8 +217,6 @@ struct stats_caster {
           // translate binary data to Type then to <T>
           min.set_index(stats_idx, min_value, colchunk.meta_data.type);
           max.set_index(stats_idx, max_value, colchunk.meta_data.type);
-          // if constexpr(std::is_integral_v<T> && sizeof(T)<16)
-          //   std::cout << min.val[stats_idx] << "," << max.val[stats_idx] << "\n";
           stats_idx++;
         }
       };

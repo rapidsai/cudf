@@ -230,7 +230,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
     std::transform(metadata.schema_info.begin(),
                    metadata.schema_info.end(),
                    std::inserter(column_name_to_index, column_name_to_index.end()),
-                   [i = 0](const auto& data) mutable { return make_pair(data.name, i++); });
+                   [i = 0](auto const& data) mutable { return make_pair(data.name, i++); });
     expr.value().get().accept(*this);
   }
 
@@ -270,6 +270,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   table_metadata const& metadata;
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
+  // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
 };

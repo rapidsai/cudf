@@ -125,7 +125,7 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
-   * @param filter Optional AST expression to filter row groups based on Column chunk statistics
+   * @param filter Optional AST expression to filter row groups based on column chunk statistics
    */
   void prepare_data(int64_t skip_rows,
                     std::optional<size_type> const& num_rows,

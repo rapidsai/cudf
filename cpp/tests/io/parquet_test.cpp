@@ -5623,7 +5623,7 @@ TEST_F(ParquetReaderTest, FilterSimple)
     << "Predicate filter should return a boolean";
   auto expected = cudf::apply_boolean_mask(*written_table, *predicate);
   // To make sure AST filters out some elements
-  EXPECT_NE(written_table->num_rows(), expected->num_rows());
+  EXPECT_LT(expected->num_rows(), written_table->num_rows());
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -5666,7 +5666,7 @@ TEST_F(ParquetReaderTest, FilterIdentity)
 {
   auto [src, filepath] = create_parquet_with_stats("FilterIdentity.parquet");
 
-  // Filtering AST - table[0] < RAND_MAX/2
+  // Filtering AST - true
   auto literal_value     = cudf::numeric_scalar<bool>(true);
   auto literal           = cudf::ast::literal(literal_value);
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, literal);
@@ -5695,6 +5695,7 @@ TEST_F(ParquetReaderTest, FilterReferenceExpression)
   // Expected result
   auto predicate = cudf::compute_column(src, filter_expression);
   auto expected  = cudf::apply_boolean_mask(src, *predicate);
+
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .filter(filter_expression);
@@ -5705,7 +5706,7 @@ TEST_F(ParquetReaderTest, FilterReferenceExpression)
 TEST_F(ParquetReaderTest, FilterNamedExpression)
 {
   auto [src, filepath] = create_parquet_with_stats("NamedExpression.parquet");
-  // Filtering AST - table[0] < 150
+  // Filtering AST - table["col_uint32"] < 150
   auto literal_value  = cudf::numeric_scalar<uint32_t>(150);
   auto literal        = cudf::ast::literal(literal_value);
   auto col_name_0     = cudf::ast::column_name_reference("col_uint32");
@@ -5713,14 +5714,16 @@ TEST_F(ParquetReaderTest, FilterNamedExpression)
   auto col_ref_0      = cudf::ast::column_reference(0);
   auto table_filter   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
+  // Expected result
+  auto predicate = cudf::compute_column(src, table_filter);
+  auto expected  = cudf::apply_boolean_mask(src, *predicate);
+
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .filter(parquet_filter);
   auto result = cudf::io::read_parquet(read_opts);
 
-  // Expected result
-  auto predicate = cudf::compute_column(src, table_filter);
-  auto expected  = cudf::apply_boolean_mask(src, *predicate);
+  // tests
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
@@ -5730,10 +5733,10 @@ struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 // These chrono types are not supported because parquet writer does not have a type to represent
 // them.
-using UnSupportedChronoTypes =
+using UnsupportedChronoTypes =
   cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
 // Also fixed point types unsupported, because AST does not support them yet.
-using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnSupportedChronoTypes>,
+using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>,
                                                 cudf::test::ComparableTypes>;
 
 TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
@@ -5757,7 +5760,6 @@ auto create_parquet_typed_with_stats(std::string const& filename)
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .metadata(&expected_metadata)
         .row_group_size_rows(8000);
-    // .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
     cudf::io::write_parquet(out_opts);
   }
 
@@ -5776,22 +5778,33 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterTyped.parquet");
   auto const written_table   = src.view();
 
-  // Filtering AST - table[0] < 100
+  // Filtering AST
   auto literal_value = []() {
-    if constexpr (cudf::is_timestamp<T>())
-      return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));   // i (0-20,000)
-    else if constexpr (cudf::is_duration<T>())
-      return cudf::duration_scalar<T>(T(10000));                          // i (0-20,000)
-    else if constexpr (std::is_same_v<T, cudf::string_view>)
-      return cudf::string_scalar("000010000");                            // i (0-20,000)
-    else
+    if constexpr (cudf::is_timestamp<T>()) {
+      // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
+      return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
+    } else if constexpr (cudf::is_duration<T>()) {
+      // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
+      return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
+    } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+      // table[0] < "000010000"
+      return cudf::string_scalar("000010000");  // i (0-20,000)
+    } else {
+      // table[0] < 0 or 100u
       return cudf::numeric_scalar<T>((100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+    }
   }();
   auto literal           = cudf::ast::literal(literal_value);
   auto col_name_0        = cudf::ast::column_name_reference("col0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
   auto col_ref_0         = cudf::ast::column_reference(0);
   auto ref_filter        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, ref_filter);
+  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+    << "Predicate filter should return a boolean";
+  auto expected = cudf::apply_boolean_mask(written_table, *predicate);
 
   // Reading with Predicate Pushdown
   cudf::io::parquet_reader_options read_opts =
@@ -5800,17 +5813,11 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   auto result       = cudf::io::read_parquet(read_opts);
   auto result_table = result.tbl->view();
 
-  // Expected result
-  auto predicate = cudf::compute_column(written_table, ref_filter);
-  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
-    << "Predicate filter should return a boolean";
-  auto expected = cudf::apply_boolean_mask(written_table, *predicate);
-
   // tests
   EXPECT_EQ(int(written_table.column(0).type().id()), int(result_table.column(0).type().id()))
     << "col0 type mismatch";
   // To make sure AST filters out some elements
-  EXPECT_NE(written_table.num_rows(), expected->num_rows());
+  EXPECT_LT(expected->num_rows(), written_table.num_rows());
   EXPECT_EQ(result_table.num_rows(), expected->num_rows());
   EXPECT_EQ(result_table.num_columns(), expected->num_columns());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
@@ -5835,14 +5842,14 @@ TEST_F(ParquetReaderTest, FilterMultiple1)
   auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col, hi_lit);
   auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
 
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, expr_3);
+  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
   auto si                  = cudf::io::source_info(filepath);
   auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr_3);
   auto table_with_metadata = cudf::io::read_parquet(builder);
   auto result              = table_with_metadata.tbl->view();
-
-  // Expected result
-  auto predicate = cudf::compute_column(written_table, expr_3);
-  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
 
   // tests
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
@@ -5858,6 +5865,8 @@ TEST_F(ParquetReaderTest, FilterMultiple2)
   // 0-8000, 8001-16000, 16001-20000
 
   // Filtering AST
+  // (table[0] >= "000010000" AND table[0] < "000012000") OR
+  // (table[0] >= "000017000" AND table[0] < "000019000")
   std::string const low1  = "000010000";
   std::string const high1 = "000012000";
   auto lov                = cudf::string_scalar(low1, true);
@@ -5879,14 +5888,14 @@ TEST_F(ParquetReaderTest, FilterMultiple2)
   auto expr_6 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_4, expr_5);
   auto expr_7 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr_3, expr_6);
 
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, expr_7);
+  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
   auto si                  = cudf::io::source_info(filepath);
   auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr_7);
   auto table_with_metadata = cudf::io::read_parquet(builder);
   auto result              = table_with_metadata.tbl->view();
-
-  // Expected result
-  auto predicate = cudf::compute_column(written_table, expr_7);
-  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
 
   // tests
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
@@ -5900,7 +5909,7 @@ TEST_F(ParquetReaderTest, FilterMultiple3)
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterMultiple3.parquet");
   auto const written_table   = src.view();
 
-  // Filtering AST -    (70 <= table[0] < 90) OR (100 <= table[1] < 120)
+  // Filtering AST - (table[0] >= 70 AND table[0] < 90) OR (table[1] >= 100 AND table[1] < 120)
   // row groups min, max:
   // table[0] 0-80, 81-160, 161-200.
   // table[1] 200-121, 120-41, 40-0.
@@ -5922,12 +5931,8 @@ TEST_F(ParquetReaderTest, FilterMultiple3)
   auto expr_4  = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col2, lo_lit2);
   auto expr_5  = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col2, hi_lit2);
   auto expr_6  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_4, expr_5);
-  auto expr_7  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr_3, expr_6);
-
-  auto si                  = cudf::io::source_info(filepath);
-  auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr_7);
-  auto table_with_metadata = cudf::io::read_parquet(builder);
-  auto result              = table_with_metadata.tbl->view();
+  // expression to test
+  auto expr_7 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr_3, expr_6);
 
   // Expected result
   auto filter_col2_ref = cudf::ast::column_reference(1);
@@ -5940,6 +5945,11 @@ TEST_F(ParquetReaderTest, FilterMultiple3)
   auto predicate  = cudf::compute_column(written_table, expr_7_ref);
   auto expected   = cudf::apply_boolean_mask(written_table, *predicate);
 
+  auto si                  = cudf::io::source_info(filepath);
+  auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr_7);
+  auto table_with_metadata = cudf::io::read_parquet(builder);
+  auto result              = table_with_metadata.tbl->view();
+
   // tests
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
 }
@@ -5950,7 +5960,8 @@ TEST_F(ParquetReaderTest, FilterSupported)
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterSupported.parquet");
   auto const written_table   = src.view();
 
-  // Filtering AST -   ( (70 < table[0] <= 90) OR (100 <= table[1] < 120) ) AND ( table[1] != 110)
+  // Filtering AST - ((table[0] > 70 AND table[0] <= 90) OR (table[1] >= 100 AND table[1] < 120))
+  //              AND (table[1] != 110)
   // row groups min, max:
   // table[0] 0-80, 81-160, 161-200.
   // table[1] 200-121, 120-41, 40-0.
@@ -5979,14 +5990,14 @@ TEST_F(ParquetReaderTest, FilterSupported)
   auto expr_8   = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, filter_col2, skip_lit);
   auto expr_9   = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_7, expr_8);
 
+  // Expected result
+  auto predicate = cudf::compute_column(written_table, expr_9);
+  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
   auto si                  = cudf::io::source_info(filepath);
   auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr_9);
   auto table_with_metadata = cudf::io::read_parquet(builder);
   auto result              = table_with_metadata.tbl->view();
-
-  // Expected result
-  auto predicate = cudf::compute_column(written_table, expr_9);
-  auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
 
   // tests
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
@@ -6022,14 +6033,15 @@ TEST_F(ParquetReaderTest, FilterSupported2)
   auto lit_value   = cudf::ast::literal(s_value);
 
   auto test_expr = [&](auto& expr) {
+    // Expected result
+    auto predicate = cudf::compute_column(written_table, expr);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    // tests
     auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr);
     auto table_with_metadata = cudf::io::read_parquet(builder);
     auto result              = table_with_metadata.tbl->view();
 
-    // Expected result
-    auto predicate = cudf::compute_column(written_table, expr);
-    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
-    // tests
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
   };
 
@@ -6123,12 +6135,13 @@ TEST_F(ParquetReaderTest, FilterErrors)
     auto builder = cudf::io::parquet_reader_options::builder(si).filter(expr_8);
     EXPECT_THROW(cudf::io::read_parquet(builder), cudf::logic_error);
 
-    // Expected result
+    // Expected result throw to show that the filter expression is invalid,
+    // not a limitation of the parquet predicate pushdown.
     auto predicate = cudf::compute_column(written_table, expr_8);
     EXPECT_THROW(cudf::apply_boolean_mask(written_table, *predicate), cudf::logic_error);
   }
 
-  // Filtering AST - non-bool expression
+  // Filtering AST - INT64(table[0] < 100) non-bool expression
   {
     auto filter_col1 = cudf::ast::column_reference(0);
     T constexpr low  = 100;
@@ -6169,16 +6182,18 @@ TEST_F(ParquetReaderTest, FilterNoStats)
 
   // row groups min, max:
   // table[0] 0-0, 1-1, 2-2, 3-3
+  // Filtering AST - table[0] > 1
   auto expr = cudf::ast::operation(cudf::ast::ast_operator::GREATER, filter_col0, lit_value);
-
-  auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr);
-  auto table_with_metadata = cudf::io::read_parquet(builder);
-  auto result              = table_with_metadata.tbl->view();
 
   // Expected result
   auto predicate = cudf::compute_column(written_table, expr);
   auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
   // tests
+  auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr);
+  auto table_with_metadata = cudf::io::read_parquet(builder);
+  auto result              = table_with_metadata.tbl->view();
+
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
 }
 

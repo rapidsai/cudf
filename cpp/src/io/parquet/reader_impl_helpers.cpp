@@ -350,9 +350,10 @@ aggregate_reader_metadata::select_row_groups(
   if (filter.has_value()) {
     filtered_row_group_indices =
       filter_row_groups(row_group_indices, output_dtypes, filter.value());
-    if (filtered_row_group_indices.has_value())
+    if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
+    }
   }
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {

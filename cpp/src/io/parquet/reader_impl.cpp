@@ -319,12 +319,13 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   // if filter is not empty, then create output types as vector and pass for filtering.
   std::vector<data_type> output_types;
-  if (filter.has_value())
+  if (filter.has_value()) {
     std::transform(_output_buffers.begin(),
                    _output_buffers.end(),
                    std::back_inserter(output_types),
                    [](auto const& col) { return col.type; });
-  const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
+  }
+  auto const [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, output_types, filter);
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {

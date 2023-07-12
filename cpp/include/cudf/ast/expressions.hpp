@@ -518,7 +518,7 @@ class column_name_reference : public expression {
   /**
    * @brief Get the column name.
    *
-   * @return This name of the column reference
+   * @return The name of this column reference
    */
   [[nodiscard]] std::string get_column_name() const { return column_name; }
 
