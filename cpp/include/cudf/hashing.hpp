@@ -28,7 +28,11 @@ namespace cudf {
  * @file
  */
 
-using hash_value_type = uint32_t;  ///< Type of hash 32-bit value
+/**
+ * @brief Type of hash value
+ *
+ */
+using hash_value_type = uint32_t;
 
 /**
  * @brief Identifies the hash function to be used
@@ -66,6 +70,7 @@ std::unique_ptr<column> hash(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+//! Hash APIs
 namespace hashing {
 
 /**
@@ -99,7 +104,7 @@ std::unique_ptr<column> murmur_hash3_32(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A column where each row is the hash of a column from the input
+ * @returns A column where each row is the hash of a row from the input
  */
 std::unique_ptr<column> spark_murmur_hash3_32(
   table_view const& input,
