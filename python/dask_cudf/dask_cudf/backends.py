@@ -486,6 +486,7 @@ def _normalize_cudf_frame(obj):
                 obj.hash_values() if hasattr(obj, "hash_values") else obj
             ).to_pandas(),
         ]
+    # If deterministic tokens are not needed, return a random UUID4 value.
     return uuid.uuid4().hex
 
 
