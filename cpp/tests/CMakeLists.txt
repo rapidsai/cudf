@@ -163,7 +163,9 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
-ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
+ConfigureTest(
+  HASHING_TEST hashing/murmur3_test.cpp hashing/spark_murmur3_test.cpp hashing/md5_test.cpp
+)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
@@ -446,6 +448,7 @@ ConfigureTest(
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
+  rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp

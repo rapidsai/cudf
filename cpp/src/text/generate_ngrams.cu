@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
-#include <nvtext/generate_ngrams.hpp>
+#include <nvtext/detail/generate_ngrams.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/hashing.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -156,31 +160,79 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 namespace detail {
 namespace {
 
-struct character_ngram_generator_fn {
+/**
+ * @brief Base class for generating character ngrams
+ *
+ * The ngrams are produced for each string and the derived class's
+ * `process_ngram` function is called for each ngram/substring.
+ *
+ * @tparam Derived class uses the CRTP pattern to reuse code logic.
+ */
+template <typename Derived>
+struct base_character_ngram_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
-  int32_t const* d_ngram_offsets{};
-  cudf::size_type* d_offsets{};
-  char* d_chars{};
+  cudf::size_type const* d_ngram_offsets{};
 
-  __device__ void operator()(cudf::size_type idx)
+  base_character_ngram_fn(cudf::column_device_view const& d_strings,
+                          cudf::size_type ngrams,
+                          cudf::size_type const* d_ngram_offsets)
+    : d_strings(d_strings), ngrams(ngrams), d_ngram_offsets(d_ngram_offsets)
+  {
+  }
+
+  __device__ void operator()(cudf::size_type idx) const
   {
     if (d_strings.is_null(idx)) return;
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     if (d_str.empty()) return;
+    auto const& derived     = static_cast<Derived const&>(*this);
     auto itr                = d_str.begin();
     auto const ngram_offset = d_ngram_offsets[idx];
     auto const ngram_count  = d_ngram_offsets[idx + 1] - ngram_offset;
-    auto d_sizes            = d_offsets + ngram_offset;
-    auto out_ptr            = d_chars ? d_chars + *d_sizes : nullptr;
     for (cudf::size_type n = 0; n < ngram_count; ++n, ++itr) {
       auto const begin = itr.byte_offset();
       auto const end   = (itr + ngrams).byte_offset();
-      if (out_ptr)
-        out_ptr =
-          cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + begin, (end - begin));
-      else
-        *d_sizes++ = end - begin;
+      auto const ngram = cudf::string_view(d_str.data() + begin, end - begin);
+      derived.process_ngram(ngram, n + ngram_offset);
+    }
+  }
+};
+
+/**
+ * @brief Generate character ngrams for each string
+ *
+ * Each string produces many strings depending on the ngram width and the string size.
+ * This functor can be used with `make_strings_children` to build the offsets and
+ * the chars child columns.
+ */
+struct character_ngram_generator_fn : base_character_ngram_fn<character_ngram_generator_fn> {
+  cudf::size_type* d_offsets{};
+  char* d_chars{};
+
+  character_ngram_generator_fn(cudf::column_device_view const& d_strings,
+                               cudf::size_type ngrams,
+                               cudf::size_type const* d_ngram_offsets)
+    : base_character_ngram_fn(d_strings, ngrams, d_ngram_offsets)
+  {
+  }
+
+  /**
+   * @brief Called through the base class for each ngram
+   *
+   * Either stores the size of each string or copies the string to the output
+   *
+   * @param d_str The ngram substring to process
+   * @param offset The output position relative to d_offsets
+   */
+  __device__ void process_ngram(cudf::string_view d_str, cudf::size_type offset) const
+  {
+    auto d_str_offsets = d_offsets + offset;
+    if (d_chars) {
+      auto out_ptr = d_chars + *d_str_offsets;
+      cudf::strings::detail::copy_string(out_ptr, d_str);
+    } else {
+      *d_str_offsets = d_str.size_bytes();
     }
   }
 };
@@ -229,6 +281,70 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
+namespace {
+/**
+ * @brief Computes the hash of each ngram as produced by the base class
+ */
+struct character_ngram_hash_fn : base_character_ngram_fn<character_ngram_hash_fn> {
+  cudf::hash_value_type* d_hashes;
+
+  character_ngram_hash_fn(cudf::column_device_view const& d_strings,
+                          cudf::size_type ngrams,
+                          cudf::size_type const* d_ngram_offsets,
+                          cudf::hash_value_type* d_hashes)
+    : base_character_ngram_fn(d_strings, ngrams, d_ngram_offsets), d_hashes(d_hashes)
+  {
+  }
+
+  __device__ void process_ngram(cudf::string_view d_str, cudf::size_type offset) const
+  {
+    auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{0};
+    d_hashes[offset]  = hasher(d_str);
+  }
+};
+}  // namespace
+
+std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
+                                                    cudf::size_type ngrams,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(ngrams > 4, "Parameter ngrams should be an integer value of 5 or greater");
+
+  auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
+  if (input.is_empty()) { return cudf::make_empty_column(output_type); }
+
+  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
+
+  // build offsets column by computing the number of ngrams per string
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0, [d_strings = *d_strings, ngrams] __device__(auto idx) {
+      if (d_strings.is_null(idx)) { return 0; }
+      auto const length = d_strings.element<cudf::string_view>(idx).length();
+      return std::max(0, static_cast<cudf::size_type>(length + 1 - ngrams));
+    });
+  auto [offsets, total_ngrams] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+  auto d_offsets = offsets->view().data<cudf::size_type>();
+
+  CUDF_EXPECTS(total_ngrams > 0,
+               "Insufficient number of characters in each string to generate ngrams");
+
+  // compute ngrams and build hashes
+  auto hashes =
+    cudf::make_numeric_column(output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
+
+  character_ngram_hash_fn generator{*d_strings, ngrams, d_offsets, d_hashes};
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     input.size(),
+                     generator);
+
+  return make_lists_column(
+    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
@@ -237,6 +353,14 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 {
   CUDF_FUNC_RANGE();
   return detail::generate_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
+                                                    cudf::size_type ngrams,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::hash_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

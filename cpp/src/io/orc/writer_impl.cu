@@ -687,9 +687,9 @@ orc_streams create_streams(host_span<orc_column_view> columns,
         // For chunked write, when not provided nullability, we assume the worst case scenario
         // that all columns are nullable.
         auto const chunked_nullable = column.user_defined_nullable().value_or(true);
-        CUDF_EXPECTS(chunked_nullable or !column.nullable(),
-                     "Mismatch in metadata prescribed nullability and input column nullability. "
-                     "Metadata for nullable input column cannot prescribe nullability = false");
+        CUDF_EXPECTS(chunked_nullable or column.null_count() == 0,
+                     "Mismatch in metadata prescribed nullability and input column. "
+                     "Metadata for input column with nulls cannot prescribe nullability = false");
         return chunked_nullable;
       }
     }();

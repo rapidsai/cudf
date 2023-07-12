@@ -13,12 +13,14 @@ from typing import (
     cast,
 )
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.stream_compaction import drop_nulls
+from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnBinaryOperand,
     ColumnLike,
@@ -31,14 +33,9 @@ from cudf.api.types import (
     is_float_dtype,
     is_integer,
     is_integer_dtype,
-    is_number,
     is_scalar,
 )
-from cudf.core.buffer import (
-    Buffer,
-    acquire_spill_lock,
-    cuda_array_interface_wrapper,
-)
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -49,14 +46,12 @@ from cudf.core.column import (
 )
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
-from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
     numeric_normalize_types,
-    to_cudf_compatible_scalar,
 )
 
 from .numerical_base import NumericalBaseColumn
@@ -123,6 +118,19 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.search.contains(
             self, column.as_column([item], dtype=self.dtype)
         ).any()
+
+    def indices_of(self, value: ScalarLike) -> NumericalColumn:
+        if (
+            value is not None
+            and self.dtype.kind in {"c", "f"}
+            and np.isnan(value)
+        ):
+            return column.as_column(
+                cp.argwhere(cp.isnan(self.data_array_view(mode="read"))),
+                dtype=size_type_dtype,
+            )
+        else:
+            return super().indices_of(value)
 
     def has_nulls(self, include_nan=False):
         return self.null_count != 0 or (
@@ -566,62 +574,6 @@ class NumericalColumn(NumericalBaseColumn):
                 fill_value = fill_value.astype(col.dtype)
 
         return super(NumericalColumn, col).fillna(fill_value, method)
-
-    @acquire_spill_lock()
-    def _find_value(
-        self, value: ScalarLike, closest: bool, find: Callable, compare: str
-    ) -> int:
-        value = to_cudf_compatible_scalar(value)
-        if not is_number(value):
-            raise ValueError("Expected a numeric value")
-        found = 0
-        if len(self):
-            found = find(
-                self.data_array_view(mode="read"),
-                value,
-                mask=self.mask,
-            )
-        if found == -1:
-            if self.is_monotonic_increasing and closest:
-                found = find(
-                    self.data_array_view(mode="read"),
-                    value,
-                    mask=self.mask,
-                    compare=compare,
-                )
-                if found == -1:
-                    raise ValueError("value not found")
-            else:
-                raise ValueError("value not found")
-        return found
-
-    def find_first_value(
-        self, value: ScalarLike, closest: bool = False
-    ) -> int:
-        """
-        Returns offset of first value that matches. For monotonic
-        columns, returns the offset of the first larger value
-        if closest=True.
-        """
-        if self.is_monotonic_increasing and closest:
-            if value < self.min():
-                return 0
-            elif value > self.max():
-                return len(self)
-        return self._find_value(value, closest, cudautils.find_first, "gt")
-
-    def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
-        """
-        Returns offset of last value that matches. For monotonic
-        columns, returns the offset of the last smaller value
-        if closest=True.
-        """
-        if self.is_monotonic_increasing and closest:
-            if value < self.min():
-                return -1
-            elif value > self.max():
-                return len(self) - 1
-        return self._find_value(value, closest, cudautils.find_last, "lt")
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """

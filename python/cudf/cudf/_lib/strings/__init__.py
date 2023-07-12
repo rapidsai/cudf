@@ -3,6 +3,7 @@ from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
     generate_ngrams,
+    hash_character_ngrams,
 )
 from cudf._lib.nvtext.minhash import minhash
 from cudf._lib.nvtext.ngrams_tokenize import ngrams_tokenize
