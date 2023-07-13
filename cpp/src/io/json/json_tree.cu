@@ -23,8 +23,8 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/hashing/detail/murmur_hash32.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 

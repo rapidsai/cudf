@@ -25,7 +25,7 @@
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/hashing/detail/murmur_hash32.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -92,7 +92,7 @@ struct minhash_fn {
       // computing the substrings for each seed
       for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
         auto const hasher =
-          cudf::hashing::detail::MurmurHash3_32<cudf::string_view>{seeds[seed_idx]};
+          cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{seeds[seed_idx]};
         auto const hvalue = hasher(hash_str);
         cuda::atomic_ref<cudf::hash_value_type, cuda::thread_scope_block> ref{
           *(d_output + seed_idx)};

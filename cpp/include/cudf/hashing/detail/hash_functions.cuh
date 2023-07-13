@@ -22,12 +22,6 @@
 
 namespace cudf::hashing::detail {
 
-template <typename K>
-struct MurmurHash3_32;
-
-template <typename Key>
-using default_hash = MurmurHash3_32<Key>;
-
 /**
  * Normalization of floating point NaNs, passthrough for all other values.
  */
@@ -68,33 +62,5 @@ __device__ inline uint64_t rotate_bits_right(uint64_t x, uint32_t r)
 {
   return (x >> r) | (x << (64 - r));
 }
-
-/**
- * @brief  This hash function simply returns the value that is asked to be hash
- * reinterpreted as the result_type of the functor.
- */
-template <typename Key>
-struct IdentityHash {
-  using result_type = uint32_t;
-  IdentityHash()    = default;
-  constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
-
-  template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
-  {
-    CUDF_UNREACHABLE("IdentityHash does not support this data type");
-  }
-
-  template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
-  {
-    return static_cast<result_type>(key);
-  }
-
- private:
-  uint32_t m_seed{0};
-};
 
 }  // namespace cudf::hashing::detail

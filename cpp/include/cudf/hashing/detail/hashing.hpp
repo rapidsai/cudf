@@ -27,15 +27,15 @@ namespace cudf {
 namespace hashing {
 namespace detail {
 
-std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        uint32_t seed,
-                                        rmm::cuda_stream_view,
-                                        rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
+                                           uint32_t seed,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
-                                              uint32_t seed,
-                                              rmm::cuda_stream_view,
-                                              rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
+                                                 uint32_t seed,
+                                                 rmm::cuda_stream_view,
+                                                 rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,

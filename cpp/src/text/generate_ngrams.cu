@@ -24,7 +24,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -298,7 +298,7 @@ struct character_ngram_hash_fn : base_character_ngram_fn<character_ngram_hash_fn
 
   __device__ void process_ngram(cudf::string_view d_str, cudf::size_type offset) const
   {
-    auto const hasher = cudf::detail::MurmurHash3_32<cudf::string_view>{0};
+    auto const hasher = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
     d_hashes[offset]  = hasher(d_str);
   }
 };

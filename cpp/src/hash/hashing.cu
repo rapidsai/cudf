@@ -30,8 +30,8 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
-    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
-    case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
+    case (hash_id::HASH_MURMUR3): return murmurhash3_x86_32(input, seed, stream, mr);
+    case (hash_id::HASH_SPARK_MURMUR3): return spark_murmurhash3_x86_32(input, seed, stream, mr);
     case (hash_id::HASH_MD5): return md5(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }

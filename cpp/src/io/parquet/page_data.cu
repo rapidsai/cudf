@@ -18,8 +18,7 @@
 
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/hashing/detail/hash_functions.cuh>
-#include <cudf/hashing/detail/murmur_hash32.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 namespace cudf {
 namespace io {
@@ -48,7 +47,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
     uint32_t constexpr hash_seed = 33;
     cudf::string_view const sv{ptr, static_cast<size_type>(len)};
     *static_cast<uint32_t*>(dstv) =
-      cudf::hashing::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
+      cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{hash_seed}(sv);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);

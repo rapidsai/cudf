@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 

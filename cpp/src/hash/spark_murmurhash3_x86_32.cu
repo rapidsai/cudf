@@ -36,11 +36,11 @@ namespace {
 using spark_hash_value_type = int32_t;
 
 template <typename Key, CUDF_ENABLE_IF(not cudf::is_nested<Key>())>
-struct SparkMurmurHash3_32 {
+struct SparkMurmurHash3_x86_32 {
   using result_type = spark_hash_value_type;
 
-  constexpr SparkMurmurHash3_32() = default;
-  constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr SparkMurmurHash3_x86_32() = default;
+  constexpr SparkMurmurHash3_x86_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
@@ -131,55 +131,56 @@ struct SparkMurmurHash3_32 {
 };
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<bool>::operator()(bool const& key) const
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<bool>::operator()(
+  bool const& key) const
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<int8_t>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<int8_t>::operator()(
   int8_t const& key) const
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<uint8_t>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<uint8_t>::operator()(
   uint8_t const& key) const
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<int16_t>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<int16_t>::operator()(
   int16_t const& key) const
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<uint16_t>::operator()(
   uint16_t const& key) const
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<float>::operator()(
   float const& key) const
 {
   return compute<float>(normalize_nans(key));
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<double>::operator()(
   double const& key) const
 {
   return compute<double>(normalize_nans(key));
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
@@ -188,21 +189,21 @@ spark_hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
   return compute<uint64_t>(key.value());
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal64>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
   return compute<uint64_t>(key.value());
 }
 
 template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::operator()(
+spark_hash_value_type __device__ inline SparkMurmurHash3_x86_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
   // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
@@ -266,9 +267,9 @@ spark_hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>
  * null.
  *
  * For additional differences such as special tail processing and decimal type
- * handling, refer to the SparkMurmurHash3_32 functor.
+ * handling, refer to the SparkMurmurHash3_x86_32 functor.
  *
- * @tparam hash_function Hash functor to use for hashing elements. Must be SparkMurmurHash3_32.
+ * @tparam hash_function Hash functor to use for hashing elements. Must be SparkMurmurHash3_x86_32.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
@@ -361,8 +362,8 @@ class spark_murmur_device_row_hasher {
   {
     // Error out if passed an unsupported hash_function
     static_assert(
-      std::is_base_of_v<SparkMurmurHash3_32<int>, hash_function<int>>,
-      "spark_murmur_device_row_hasher only supports the SparkMurmurHash3_32 hash function");
+      std::is_base_of_v<SparkMurmurHash3_x86_32<int>, hash_function<int>>,
+      "spark_murmur_device_row_hasher only supports the SparkMurmurHash3_x86_32 hash function");
   }
 
   Nullate const _check_nulls;
@@ -394,10 +395,10 @@ void check_hash_compatibility(table_view const& input)
 
 }  // namespace
 
-std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
-                                              uint32_t seed,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
+                                                 uint32_t seed,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
                                     input.num_rows(),
@@ -420,20 +421,21 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
     rmm::exec_policy(stream),
     output_view.begin<spark_hash_value_type>(),
     output_view.end<spark_hash_value_type>(),
-    row_hasher.device_hasher<SparkMurmurHash3_32, spark_murmur_device_row_hasher>(nullable, seed));
+    row_hasher.device_hasher<SparkMurmurHash3_x86_32, spark_murmur_device_row_hasher>(nullable,
+                                                                                      seed));
 
   return output;
 }
 
 }  // namespace detail
 
-std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
-                                              uint32_t seed,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
+                                                 uint32_t seed,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::spark_murmur_hash3_32(input, seed, stream, mr);
+  return detail::spark_murmurhash3_x86_32(input, seed, stream, mr);
 }
 
 }  // namespace hashing

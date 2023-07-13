@@ -28,7 +28,7 @@
 
 namespace cudf::hashing::detail {
 
-// MurmurHash3_32 implementation from
+// MurmurHash3_x86_32 implementation from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 //-----------------------------------------------------------------------------
 // MurmurHash3 was written by Austin Appleby, and is placed in the public
@@ -38,11 +38,11 @@ namespace cudf::hashing::detail {
 // compile and run any of them on any platform, but your performance with the
 // non-native version will be less than optimal.
 template <typename Key>
-struct MurmurHash3_32 {
+struct MurmurHash3_x86_32 {
   using result_type = hash_value_type;
 
-  constexpr MurmurHash3_32() = default;
-  constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+  constexpr MurmurHash3_x86_32() = default;
+  constexpr MurmurHash3_x86_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
@@ -130,25 +130,25 @@ struct MurmurHash3_32 {
 };
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline MurmurHash3_x86_32<bool>::operator()(bool const& key) const
 {
   return compute(static_cast<uint8_t>(key));
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
+hash_value_type __device__ inline MurmurHash3_x86_32<float>::operator()(float const& key) const
 {
   return compute(normalize_nans_and_zeros(key));
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
+hash_value_type __device__ inline MurmurHash3_x86_32<double>::operator()(double const& key) const
 {
   return compute(normalize_nans_and_zeros(key));
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
@@ -157,35 +157,35 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal32>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
   return compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal64>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
   return compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal128>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
   return compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::list_view>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<cudf::list_view>::operator()(
   cudf::list_view const& key) const
 {
   CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
+hash_value_type __device__ inline MurmurHash3_x86_32<cudf::struct_view>::operator()(
   cudf::struct_view const& key) const
 {
   CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");

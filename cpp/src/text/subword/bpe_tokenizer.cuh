@@ -21,7 +21,7 @@
 #include <hash/hash_allocator.cuh>
 
 #include <cudf/column/column.hpp>
-#include <cudf/hashing/detail/murmur_hash32.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 #include <cuco/static_map.cuh>
 
@@ -41,7 +41,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
                                               cuda::thread_scope_device,
                                               hash_table_allocator_type>;
 
-using string_hasher_type = cudf::hashing::detail::MurmurHash3_32<cudf::string_view>;
+using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 
 }  // namespace detail
 

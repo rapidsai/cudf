@@ -36,7 +36,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
