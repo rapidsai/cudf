@@ -292,12 +292,16 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
+                    cantor_name = "_" + "_".join(
+                        map(str, columns_df._data.names)
+                    )
+                    columns_df[cantor_name] = column.arange(len(columns_df))
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index,
                     # update it over here
                     df.index.name = columns_df.index.name
-                    df = df.sort_values(tmp_col_name)
-                    df.drop(columns=[tmp_col_name], inplace=True)
+                    df = df.sort_values(by=[tmp_col_name, cantor_name])
+                    df.drop(columns=[tmp_col_name, cantor_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:
                         raise KeyError(arg)
@@ -4050,6 +4054,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...          local_dict={'search_date': search_date2})
            datetimes
         1 2018-10-08
+
+        .. pandas-compat::
+            **DataFrame.query**
+
+            One difference from pandas is that ``query`` currently only
+            supports numeric, datetime, timedelta, or bool dtypes.
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
