@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,20 +50,24 @@ std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return std::move(cudf::reverse(table_view({source_column}))->release().front());
+  return std::move(
+    cudf::detail::reverse(table_view({source_column}), stream, mr)->release().front());
 }
 }  // namespace detail
 
-std::unique_ptr<table> reverse(table_view const& source_table, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> reverse(table_view const& source_table,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_table, cudf::get_default_stream(), mr);
+  return detail::reverse(source_table, stream, mr);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_column, cudf::get_default_stream(), mr);
+  return detail::reverse(source_column, stream, mr);
 }
 }  // namespace cudf
