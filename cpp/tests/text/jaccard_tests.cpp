@@ -46,10 +46,35 @@ TEST_F(JaccardTest, Basic)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(JaccardTest, WithNulls)
+{
+  auto input1 =
+    cudf::test::strings_column_wrapper({"brown fox", "jumps over dog", "", ""}, {1, 1, 0, 1});
+  auto input2 =
+    cudf::test::strings_column_wrapper({"brown cat", "jumps on fox", "", ""}, {1, 1, 1, 0});
+
+  auto view1 = cudf::strings_column_view(input1);
+  auto view2 = cudf::strings_column_view(input2);
+
+  auto results = nvtext::jaccard_index(view1, view2);
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<float>({0.25f, 0.200000003f, 0.f, 0.f}, {1, 1, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f, 0.f, 0.f}, {1, 1, 0, 1});
+  results  = nvtext::jaccard_index(view1, view1, 7);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(JaccardTest, Errors)
 {
   auto input = cudf::test::strings_column_wrapper({"1", "2", "3"});
   auto view  = cudf::strings_column_view(input);
   // invalid parameter value
   EXPECT_THROW(nvtext::jaccard_index(view, view), cudf::logic_error);
+  // invalid size
+  auto input2 = cudf::test::strings_column_wrapper({"1", "2"});
+  auto view2  = cudf::strings_column_view(input);
+  EXPECT_THROW(nvtext::jaccard_index(view, view2), cudf::logic_error);
 }

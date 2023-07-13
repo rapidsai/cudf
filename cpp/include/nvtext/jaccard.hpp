@@ -38,9 +38,7 @@ namespace nvtext {
  * The Jaccard index formula is https://en.wikipedia.org/wiki/Jaccard_index
  * ```
  *  J = |A ∩ B| / |A ∪ B|
- *    = |A ∩ B| / (|A| + |B| - |A ∩ B|)
- *
- *  where `|A ∩ B| is number of common values between A and B
+ *  where |A ∩ B| is number of common values between A and B
  *  and |x| is the number of unique values in x.
  * ```
  *
@@ -49,8 +47,8 @@ namespace nvtext {
  * algorithm applies a sliding window (size specified by the `width` parameter) to each string to
  * form the set of tokens to compare within each row of the two input columns.
  *
- * These substrings are essentially character ngrams and each substring is part of the union and
- * intersect calculations for that row. For efficiency, the substrings are hashed using the default
+ * These substrings are essentially character ngrams and used as part of the union and intersect
+ * calculations for that row. For efficiency, the substrings are hashed using the default
  * MurmurHash32 to identify uniqueness within each row. Once the union and intersect sizes for the
  * row are resolved, the Jaccard index is computed using the above formula and returned as a float32
  * value.
@@ -61,6 +59,8 @@ namespace nvtext {
  * r = jaccard_index(input1, input2)
  * r is now [0.5, 0.15384616, 1.0, 0]
  * @endcode
+ *
+ * If either input column's row is null, the output for that row will also be null.
  *
  * @throw std::invalid_argument if the `width < 5` or `input1.size() != input2.size()`
  *

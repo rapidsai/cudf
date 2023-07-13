@@ -48,8 +48,6 @@ namespace {
  *
  * where |A ∩ B| is number of common values between A and B
  * and |x| is the number of unique values in x.
- *
- * https://en.wikipedia.org/wiki/Jaccard_index
  */
 struct jaccard_fn {
   cudf::size_type const* d_offsets1;
@@ -84,11 +82,12 @@ rmm::device_uvector<cudf::size_type> intersect_counts(cudf::lists_column_view co
   auto const lhs_table  = cudf::table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = cudf::table_view{{rhs_labels->view(), rhs_child}};
 
-  auto const nulls_eq = cudf::null_equality::EQUAL;
-  auto const nans_eq  = cudf::nan_equality::ALL_EQUAL;
-  auto const contained =
+  auto const nulls_eq  = cudf::null_equality::EQUAL;
+  auto const nans_eq   = cudf::nan_equality::ALL_EQUAL;
+  auto const contained =  // lhs = haystack, rhs = needles
     cudf::detail::contains(lhs_table, rhs_table, nulls_eq, nans_eq, stream, mr);
 
+  // contained values are in context of the rhs/needles
   rmm::device_uvector<cudf::size_type> result(rhs.size(), stream);
   auto sum  = thrust::plus<cudf::size_type>{};
   auto init = cudf::size_type{0};
