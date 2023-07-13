@@ -240,8 +240,8 @@ struct minmax_functor {
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
-    return {get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
-            get_element(keys, static_cast<size_type>(host_result.max_val), stream, mr)};
+    return {detail::get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
+            detail::get_element(keys, static_cast<size_type>(host_result.max_val), stream, mr)};
   }
 
   template <typename T, std::enable_if_t<!is_supported<T>()>* = nullptr>
