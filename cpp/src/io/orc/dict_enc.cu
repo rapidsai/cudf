@@ -113,7 +113,7 @@ __global__ void __launch_bounds__(block_size)
   auto const stripe_idx = blockIdx.y;
   auto const t          = threadIdx.x;
   auto& dict            = dictionaries[col_idx][stripe_idx];
-  auto const col        = columns[dict.column_idx];
+  auto const& col       = columns[dict.column_idx];
 
   // Make a view of the hash map
   auto hash_map_mutable  = map_type::device_mutable_view(dict.map_slots.data(),
