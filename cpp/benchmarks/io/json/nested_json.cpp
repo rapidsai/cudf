@@ -16,9 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
-
-#include <nvbench/nvbench.cuh>
 
 #include <io/json/nested_json.hpp>
 
@@ -27,6 +24,8 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <string>
 #include <vector>

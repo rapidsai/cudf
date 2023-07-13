@@ -2793,3 +2793,30 @@ def test_parquet_writer_schema_nullability(data, force_nullable_schema):
     assert pa.parquet.read_schema(file_obj).field(0).nullable == (
         force_nullable_schema or df.isnull().any().any()
     )
+
+
+def test_parquet_read_filter_and_project():
+    # Filter on columns that are not included
+    # in the current column projection
+
+    with BytesIO() as buffer:
+        # Write parquet data
+        df = cudf.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5] * 10,
+                "b": [0, 1, 2, 3, 4] * 10,
+                "c": range(50),
+                "d": [6, 7] * 25,
+                "e": [8, 9] * 25,
+            }
+        )
+        df.to_parquet(buffer)
+
+        # Read back with filter and projection
+        columns = ["b"]
+        filters = [[("a", "==", 5), ("c", ">", 20)]]
+        got = cudf.read_parquet(buffer, columns=columns, filters=filters)
+
+    # Check result
+    expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
+    assert_eq(got, expected)
