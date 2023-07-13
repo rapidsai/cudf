@@ -24,8 +24,6 @@
 
 namespace cudf::io::orc::gpu {
 
-constexpr int DEFAULT_BLOCK_SIZE = 256;
-
 /**
  * @brief Counts the number of characters in each rowgroup of each string column.
  */
@@ -35,10 +33,10 @@ __global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts
                                             device_span<uint32_t const> str_col_indexes)
 {
   // Index of the column in the `str_col_indexes` array
-  uint32_t const str_col_idx = blockIdx.y;
+  auto const str_col_idx = blockIdx.y;
   // Index of the column in the `orc_columns` array
-  auto const col_idx     = str_col_indexes[str_col_idx];
-  uint32_t row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const col_idx       = str_col_indexes[str_col_idx];
+  auto const row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (row_group_idx >= rowgroup_bounds.size().first) { return; }
 
   auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin;
@@ -248,9 +246,10 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
                                    rmm::cuda_stream_view stream)
 {
   if (dictionaries.count() == 0) { return; }
+  constexpr int block_size = 256;
   dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
-  populate_dictionary_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
-    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(dictionaries, columns);
+  populate_dictionary_hash_maps_kernel<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(dictionaries, columns);
 }
 
 void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
