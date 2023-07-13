@@ -492,7 +492,7 @@ def _normalize_cudf_frame(obj):
 
 @normalize_token.register(cudf.core.index.RangeIndex)
 def _normalize_cudf_rangeindex(index):
-    return index.to_pandas()
+    return (type(index), index.start, index.stop, index.step)
 
 
 def _default_backend(func, *args, **kwargs):
