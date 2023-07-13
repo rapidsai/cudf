@@ -38,16 +38,16 @@ static void bench_hash(nvbench::state& state)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  if (hash_name == "murmur32") {
+  if (hash_name == "murmur_hash3_32") {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::hashing::murmur_hash3_32(data->view());
     });
   } else if (hash_name == "md5") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = cudf::hashing::md5(data->view()); });
-  } else if (hash_name == "spark_murmur32") {
+  } else if (hash_name == "spark_murmur_hash3_32") {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = cudf::hashing::murmur_hash3_32(data->view());
+      auto result = cudf::hashing::spark_murmur_hash3_32(data->view());
     });
   } else {
     state.skip(hash_name + ": unknown hash name");
@@ -56,6 +56,6 @@ static void bench_hash(nvbench::state& state)
 
 NVBENCH_BENCH(bench_hash)
   .set_name("hashing")
-  .add_int64_axis("num_rows", {16384, 65536, 262144, 1048576, 4194304, 16777216})
+  .add_int64_axis("num_rows", {65536, 16777216})
   .add_int64_axis("nulls", {0, 1})
-  .add_string_axis("hash_name", {"murmur32", "md5", "spark_murmur32"});
+  .add_string_axis("hash_name", {"murmur_hash3_32", "md5", "spark_murmur_hash3_32"});
