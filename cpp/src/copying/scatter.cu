@@ -253,8 +253,8 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
-      auto row_slr =
-        get_element(typed_s->view().column(i), 0, stream, rmm::mr::get_current_device_resource());
+      auto row_slr = detail::get_element(
+        typed_s->view().column(i), 0, stream, rmm::mr::get_current_device_resource());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -328,7 +328,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                              scatter_map.data(),
                              nullptr,
                              0);
-  return scatter(source, map_col, target, stream, mr);
+  return detail::scatter(source, map_col, target, stream, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>> const& source,
@@ -495,38 +495,42 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, scatter_map, target, cudf::get_default_stream(), mr);
+  return detail::scatter(source, scatter_map, target, stream, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>> const& source,
                                column_view const& indices,
                                table_view const& target,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, indices, target, cudf::get_default_stream(), mr);
+  return detail::scatter(source, indices, target, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             table_view const& target,
                                             column_view const& boolean_mask,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, stream, mr);
 }
 
 }  // namespace cudf
