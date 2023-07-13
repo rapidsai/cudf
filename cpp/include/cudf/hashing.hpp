@@ -105,7 +105,7 @@ std::unique_ptr<column> murmur_hash3_32(
  *
  * @returns A table of two UINT64 columns
  */
-std::unique_ptr<table> murmur_hash3_64_128(
+std::unique_ptr<table> murmur_hash3_x64_128(
   table_view const& input,
   uint64_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
