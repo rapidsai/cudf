@@ -876,17 +876,40 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
                                                     : s->page.repetition_level_encoding;
 
   auto start = cur;
-  if (level_bits == 0) {
+
+  // this is a little redundant. if level_bits == 0, then nothing should be encoded
+  // for the level, but some V2 files in the wild violate this and encode the data anyway.
+  // thus we will handle V2 headers separately.
+  if (s->page.flags & PAGEINFO_FLAGS_V2 != 0) {
+     // V2 only uses RLE encoding so no need to check encoding
+    len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
+    s->abs_lvl_start[lvl] = cur;
+    if (len == 0) {
+      s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
+      s->initial_rle_value[lvl] = 0;
+      s->lvl_start[lvl]         = cur;
+    } else {
+      s->initial_rle_run[lvl] = run;
+      if (!(run & 1)) {
+        int v = (cur < end) ? cur[0] : 0;
+        cur++;
+        if (level_bits > 8) {
+          v |= ((cur < end) ? cur[0] : 0) << 8;
+          cur++;
+        }
+        s->initial_rle_value[lvl] = v;
+      }
+      s->lvl_start[lvl] = cur;
+    }
+  }
+  else if (level_bits == 0) {
     len                       = 0;
     s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
     s->abs_lvl_start[lvl]     = cur;
   } else if (encoding == Encoding::RLE) {
-    // V2 only uses RLE encoding, so only perform check here
-    if (s->page.def_lvl_bytes || s->page.rep_lvl_bytes) {
-      len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
-    } else if (cur + 4 < end) {
+    if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
     } else {
@@ -1247,7 +1270,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dict_val  = 0;
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
-        case Encoding::RLE: s->dict_run = 0; break;
+        // The only data encoded with RLE is boolean. There should be a 4 byte length encoded
+        // at the start
+        case Encoding::RLE:
+          // TODO: decode 4 bytes of length and make sure it's not out-of-bounds
+          cur += 4;
+          s->dict_run = 0;
+          break;
         default:
           s->error = 1;  // Unsupported encoding
           break;
