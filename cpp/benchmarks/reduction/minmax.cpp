@@ -27,7 +27,7 @@ class Reduction : public cudf::benchmark {};
 template <typename type>
 void BM_reduction(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
   auto const input_column =
     create_random_column(dtype, row_count{column_size}, data_profile_builder().no_validity());
