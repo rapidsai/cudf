@@ -126,7 +126,7 @@ struct RowHandle {
 template <FunctorType functor_type>
 __global__ void device_dispatching_kernel(cudf::mutable_table_device_view source)
 {
-  const cudf::size_type n_rows = source.num_rows();
+  cudf::size_type const n_rows = source.num_rows();
   cudf::size_type index        = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (index < n_rows) {
@@ -141,8 +141,8 @@ __global__ void device_dispatching_kernel(cudf::mutable_table_device_view source
 template <FunctorType functor_type, DispatchingType dispatching_type, class T>
 void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_thread)
 {
-  const cudf::size_type n_rows = input.num_rows();
-  const cudf::size_type n_cols = input.num_columns();
+  cudf::size_type const n_rows = input.num_rows();
+  cudf::size_type const n_cols = input.num_columns();
 
   cudf::detail::grid_1d grid_config{n_rows, block_size};
   int grid_size = grid_config.num_blocks;
@@ -169,9 +169,9 @@ void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_threa
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(::benchmark::State& state)
 {
-  const auto n_cols          = static_cast<cudf::size_type>(state.range(0));
-  const auto source_size     = static_cast<cudf::size_type>(state.range(1));
-  const auto work_per_thread = static_cast<cudf::size_type>(state.range(2));
+  auto const n_cols          = static_cast<cudf::size_type>(state.range(0));
+  auto const source_size     = static_cast<cudf::size_type>(state.range(1));
+  auto const work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
   auto init = cudf::make_fixed_width_scalar<TypeParam>(static_cast<TypeParam>(0));
 
