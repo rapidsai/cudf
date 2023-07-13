@@ -2132,10 +2132,12 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
 
   // Clear map slots; hash map storage is deallocated at the end of this function
-  for (auto& sd : stripe_dicts.host_view().flat_view()) {
-    sd.map_slots = {};
-  }
-  stripe_dicts.host_to_device_async(stream);
+  auto device_dicts_flat = stripe_dicts.device_view().flat_view();
+  thrust::for_each(rmm::exec_policy(stream),
+                   device_dicts_flat.begin(),
+                   device_dicts_flat.end(),
+                   [] __device__(auto& sd) { sd.map_slots = {}; });
+  stripe_dicts.device_to_host_async(stream);
 
   return {std::move(stripe_dicts), std::move(dict_data_owner), std::move(dict_index_owner)};
 }
