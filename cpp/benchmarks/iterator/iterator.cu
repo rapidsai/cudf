@@ -131,7 +131,7 @@ class Iterator : public cudf::benchmark {};
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
 void BM_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
 
@@ -195,7 +195,7 @@ void pair_iterator_bench_thrust(cudf::column_view& col,
 template <class TypeParam, bool cub_or_thrust>
 void BM_pair_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
   auto null_gen =
