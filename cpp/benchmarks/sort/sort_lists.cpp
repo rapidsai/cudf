@@ -84,7 +84,7 @@ void sort_lists_of_structs(nvbench::state& state)
 
 void nvbench_sort_lists(nvbench::state& state)
 {
-  const auto has_lists_of_structs = state.get_int64("lists_of_structs") > 0;
+  auto const has_lists_of_structs = state.get_int64("lists_of_structs") > 0;
   if (has_lists_of_structs) {
     sort_lists_of_structs(state);
   } else {
