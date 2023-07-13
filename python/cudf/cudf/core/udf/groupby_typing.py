@@ -167,6 +167,13 @@ class GroupIdxMin(AbstractTemplate):
         return nb_signature(self.this.index_type, recvr=self.this)
 
 
+class GroupCorr(AbstractTemplate):
+    key = "GroupType.corr"
+
+    def generic(self, args, kws):
+        return nb_signature(types.float64, args[0], recvr=self.this)
+
+
 @cuda_registry.register_attr
 class GroupAttr(AttributeTemplate):
     key = GroupType
@@ -195,6 +202,11 @@ class GroupAttr(AttributeTemplate):
     def resolve_idxmin(self, mod):
         return types.BoundFunction(
             GroupIdxMin, GroupType(mod.group_scalar_type, mod.index_type)
+        )
+
+    def resolve_corr(self, mod):
+        return types.BoundFunction(
+            GroupCorr, GroupType(mod.group_scalar_type, mod.index_type)
         )
 
 

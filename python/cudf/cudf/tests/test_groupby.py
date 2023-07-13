@@ -3302,3 +3302,27 @@ def test_group_by_pandas_sort_order(groups, sort):
             pdf.groupby(groups, sort=sort).sum(),
             df.groupby(groups, sort=sort).sum(),
         )
+
+
+def test_corr_jit():
+    def func(group):
+        return group["b"].corr(group["c"])
+
+    size = int(1000000)
+    gdf = cudf.DataFrame(
+        {
+            "a": np.random.randint(0, 10000, size),
+            "b": np.random.randint(0, 1000, size),
+            "c": np.random.randint(0, 1000, size),
+        }
+    )
+    gdf = gdf.sort_values("a")
+    pdf = gdf.to_pandas()
+
+    gdf_grouped = gdf.groupby("a")
+    pdf_grouped = pdf.groupby("a", as_index=False)
+
+    expect = pdf_grouped.apply(func)
+    got = gdf_grouped.apply(func, engine="jit")
+
+    assert_eq(expect, got)

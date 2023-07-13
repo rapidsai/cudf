@@ -2,7 +2,7 @@
 
 from functools import partial
 
-from numba import types
+from numba import cuda, types
 from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
@@ -53,6 +53,62 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
         nb_signature(retty, group_dataty, grp_type.group_size_type),
         (builder.load(group_data_ptr), grp.size),
     )
+
+
+block_corr = cuda.declare_device(
+    "BlockCorr",
+    types.float64(
+        types.CPointer(types.int64),
+        types.CPointer(types.int64),
+        group_size_type,
+    ),
+)
+
+
+def _block_corr(lhs_ptr, rhs_ptr, size):
+    return block_corr(lhs_ptr, rhs_ptr, size)
+
+
+@cuda_lower(
+    "GroupType.corr",
+    GroupType(types.int64, types.int64),
+    GroupType(types.int64, types.int64),
+)
+def group_corr(context, builder, sig, args):
+    """
+    Instruction boilerplate used for calling a groupby correlation
+    """
+    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
+        context, builder, value=args[1]
+    )
+
+    # logically take the address of the group's data pointer
+    lhs_group_data_ptr = builder.alloca(lhs_grp.group_data.type)
+    builder.store(lhs_grp.group_data, lhs_group_data_ptr)
+
+    # logically take the address of the group's data pointer
+    rhs_group_data_ptr = builder.alloca(rhs_grp.group_data.type)
+    builder.store(rhs_grp.group_data, rhs_group_data_ptr)
+
+    result = context.compile_internal(
+        builder,
+        _block_corr,
+        nb_signature(
+            types.float64,
+            types.CPointer(types.int64),
+            types.CPointer(types.int64),
+            group_size_type,
+        ),
+        (
+            builder.load(lhs_group_data_ptr),
+            builder.load(rhs_group_data_ptr),
+            lhs_grp.size,
+        ),
+    )
+    return result
 
 
 @lower_builtin(Group, types.Array, group_size_type, types.Array)
