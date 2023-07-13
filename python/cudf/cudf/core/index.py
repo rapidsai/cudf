@@ -915,6 +915,17 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __abs__(self):
         return abs(self._as_int_index())
 
+    def __dask_tokenize__(self):
+        try:
+            # Import dask_cudf (if available) in case
+            # this is being called within Dask Dataframe
+            import dask_cudf  # noqa: F401
+
+        except ImportError:
+            pass
+
+        return (type(self), self.start, self.stop, self.step)
+
 
 class GenericIndex(SingleColumnFrame, BaseIndex):
     """
@@ -1542,6 +1553,19 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def _indices_of(self, value):
         """Return indices of value in index"""
         return self._column.indices_of(value)
+
+    def __dask_tokenize__(self):
+        try:
+            # Import dask_cudf (if available) in case
+            # this is being called within Dask Dataframe
+            import dask_cudf  # noqa: F401
+
+        except ImportError:
+            pass
+
+        # TODO: Avoid `to_pandas` once gpu hashing can
+        # produce a single (deterministic) token
+        return (type(self), self.to_pandas())
 
 
 class NumericIndex(GenericIndex):

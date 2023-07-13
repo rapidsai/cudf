@@ -44,20 +44,18 @@ def test_pyarrow_conversion_dispatch():
 def test_deterministic_tokenize():
     # Checks that `dask.base.normalize_token` correctly
     # dispatches to the logic defined in `backends.py`
-    # when "tokenize.ensure-deterministic" == `True`
     # (making `tokenize(<cudf-data>)` deterministic).
     df = cudf.DataFrame({"A": list(range(10)), "B": ["dog", "cat"] * 5})
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        # Matching data should produce the same token
-        assert tokenize(df) == tokenize(df)
-        assert tokenize(df.A) == tokenize(df.A)
-        assert tokenize(df.index) == tokenize(df.index)
-        assert tokenize(df) == tokenize(df.copy(deep=True))
-        assert tokenize(df.A) == tokenize(df.A.copy(deep=True))
-        assert tokenize(df.index) == tokenize(df.index.copy(deep=True))
+    # Matching data should produce the same token
+    assert tokenize(df) == tokenize(df)
+    assert tokenize(df.A) == tokenize(df.A)
+    assert tokenize(df.index) == tokenize(df.index)
+    assert tokenize(df) == tokenize(df.copy(deep=True))
+    assert tokenize(df.A) == tokenize(df.A.copy(deep=True))
+    assert tokenize(df.index) == tokenize(df.index.copy(deep=True))
 
-        # Modifying an element should change the token
-        original_token = tokenize(df.A)
-        df.A.iloc[2] = 10
-        assert original_token != tokenize(df.A)
+    # Modifying an element should change the token
+    original_token = tokenize(df.A)
+    df.A.iloc[2] = 10
+    assert original_token != tokenize(df.A)

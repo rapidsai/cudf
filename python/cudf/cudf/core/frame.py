@@ -2839,6 +2839,25 @@ class Frame(BinaryOperand, Scannable):
 
         return libcudf.filling.repeat(columns, repeats)
 
+    def __dask_tokenize__(self):
+        try:
+            # Import dask_cudf (if available) in case
+            # this is being called within Dask Dataframe
+            import dask_cudf  # noqa: F401
+
+        except ImportError:
+            pass
+
+        # TODO: Avoid `to_pandas` once gpu hashing can
+        # produce a single (deterministic) token
+        return [
+            type(self),
+            self._dtypes,
+            (
+                self.hash_values() if hasattr(self, "hash_values") else self
+            ).to_pandas(),
+        ]
+
 
 def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
     """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
