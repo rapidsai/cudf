@@ -122,7 +122,11 @@ void BM_lists_scatter(::benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    scatter(cudf::table_view{{*source}}, *scatter_map, cudf::table_view{{*target}}, mr);
+    scatter(cudf::table_view{{*source}},
+            *scatter_map,
+            cudf::table_view{{*target}},
+            cudf::get_default_stream(),
+            mr);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * 2 *
