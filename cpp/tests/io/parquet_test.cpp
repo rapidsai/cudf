@@ -5667,7 +5667,7 @@ auto create_parquet_with_stats(std::string const& filename)
   auto const filepath = temp_env->get_temp_filepath(filename);
   const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(&expected_metadata)
+      .metadata(std::move(expected_metadata))
       .row_group_size_rows(8000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
@@ -5776,7 +5776,7 @@ auto create_parquet_typed_with_stats(std::string const& filename)
 
     const cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-        .metadata(&expected_metadata)
+        .metadata(std::move(expected_metadata))
         .row_group_size_rows(8000);
     cudf::io::write_parquet(out_opts);
   }
