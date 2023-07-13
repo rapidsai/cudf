@@ -123,18 +123,19 @@ bool may_have_nonempty_nulls(column_view const& input)
 /**
  * @copydoc cudf::has_nonempty_nulls
  */
-bool has_nonempty_nulls(column_view const& input)
+bool has_nonempty_nulls(column_view const& input, rmm::cuda_stream_view stream)
 {
-  return detail::has_nonempty_nulls(input, cudf::get_default_stream());
+  return detail::has_nonempty_nulls(input, stream);
 }
 
 /**
  * @copydoc cudf::purge_nonempty_nulls(column_view const&, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::purge_nonempty_nulls(input, cudf::get_default_stream(), mr);
+  return detail::purge_nonempty_nulls(input, stream, mr);
 }
 
 }  // namespace cudf
