@@ -922,7 +922,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             import dask_cudf  # noqa: F401
 
         except ImportError:
-            pass
+            warnings.warn(
+                f"Using dask to tokenize a {type(self)} object, "
+                f"but `dask_cudf` is not installed. Please install "
+                f"`dask_cudf` for proper dispatching."
+            )
 
         return (type(self), self.start, self.stop, self.step)
 
@@ -1561,7 +1565,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             import dask_cudf  # noqa: F401
 
         except ImportError:
-            pass
+            warnings.warn(
+                f"Using dask to tokenize a {type(self)} object, "
+                f"but `dask_cudf` is not installed. Please install "
+                f"`dask_cudf` for proper dispatching."
+            )
 
         # TODO: Avoid `to_pandas` once gpu hashing can
         # produce a single (deterministic) token

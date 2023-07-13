@@ -41,11 +41,15 @@ def test_pyarrow_conversion_dispatch():
     assert_eq(df1, df2)
 
 
-def test_deterministic_tokenize():
+@pytest.mark.parametrize("index", [None, [1, 2] * 5])
+def test_deterministic_tokenize(index):
     # Checks that `dask.base.normalize_token` correctly
     # dispatches to the logic defined in `backends.py`
     # (making `tokenize(<cudf-data>)` deterministic).
-    df = cudf.DataFrame({"A": list(range(10)), "B": ["dog", "cat"] * 5})
+    df = cudf.DataFrame(
+        {"A": list(range(10)), "B": ["dog", "cat"] * 5},
+        index=index,
+    )
 
     # Matching data should produce the same token
     assert tokenize(df) == tokenize(df)
