@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/detail/join.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -29,6 +28,8 @@
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
+
+#include <cuda/atomic>
 
 #include <limits>
 

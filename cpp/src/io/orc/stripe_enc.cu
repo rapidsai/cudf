@@ -88,7 +88,7 @@ struct orcenc_state_s {
     byterle_enc_state_s byterle;
     intrle_enc_state_s intrle;
     strdata_enc_state_s strenc;
-    StripeDictionary dict_stripe;
+    stripe_dictionary const* dict_stripe;
   } u;
   union {
     uint8_t u8[scratch_buffer_size];  // gblock_vminscratch buffer
@@ -996,14 +996,16 @@ __global__ void __launch_bounds__(block_size)
 /**
  * @brief Encode column dictionaries
  *
- * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] stripes Stripe dictionaries device array
+ * @param[in] columns Pre-order flattened device array of ORC column views
  * @param[in] chunks EncChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
  */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuEncodeStringDictionaries(StripeDictionary const* stripes,
+  gpuEncodeStringDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1015,20 +1017,20 @@ __global__ void __launch_bounds__(block_size)
   uint32_t cid            = (blockIdx.y) ? CI_DICTIONARY : CI_DATA2;
   int t                   = threadIdx.x;
 
-  if (t == 0) s->u.dict_stripe = stripes[stripe_id];
+  if (t == 0) s->u.dict_stripe = &stripes[stripe_id];
 
   __syncthreads();
-  auto const strm_ptr = &streams[s->u.dict_stripe.column_id][s->u.dict_stripe.start_chunk];
+  auto const strm_ptr = &streams[s->u.dict_stripe->column_idx][s->u.dict_stripe->start_rowgroup];
   if (t == 0) {
-    s->chunk         = chunks[s->u.dict_stripe.column_id][s->u.dict_stripe.start_chunk];
+    s->chunk         = chunks[s->u.dict_stripe->column_idx][s->u.dict_stripe->start_rowgroup];
     s->stream        = *strm_ptr;
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
-    s->nrows         = s->u.dict_stripe.num_strings;
+    s->nrows         = s->u.dict_stripe->entry_count;
     s->cur_row       = 0;
   }
-  auto const string_column = s->u.dict_stripe.leaf_column;
-  auto const dict_data     = s->u.dict_stripe.dict_data;
+  auto const string_column = columns[s->u.dict_stripe->column_idx];
+  auto const dict_data     = s->u.dict_stripe->data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
@@ -1042,7 +1044,7 @@ __global__ void __launch_bounds__(block_size)
       char const* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
-        auto string_val = string_column->element<string_view>(string_idx);
+        auto string_val = string_column.element<string_view>(string_idx);
         ptr             = string_val.data();
         count           = string_val.size_bytes();
       }
@@ -1056,7 +1058,7 @@ __global__ void __launch_bounds__(block_size)
       // Encoding string lengths
       uint32_t count =
         (t < numvals)
-          ? static_cast<uint32_t>(string_column->element<string_view>(string_idx).size_bytes())
+          ? static_cast<uint32_t>(string_column.element<string_view>(string_idx).size_bytes())
           : 0;
       uint32_t nz_idx = (s->cur_row + t) & 0x3ff;
       if (t < numvals) s->lengths.u32[nz_idx] = count;
@@ -1268,7 +1270,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
     <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
 }
 
-void EncodeStripeDictionaries(StripeDictionary const* stripes,
+void EncodeStripeDictionaries(stripe_dictionary const* stripes,
+                              device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
@@ -1278,7 +1281,7 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,

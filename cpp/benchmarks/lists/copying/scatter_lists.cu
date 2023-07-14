@@ -40,9 +40,9 @@ void BM_lists_scatter(::benchmark::State& state)
   auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
 
-  const cudf::size_type base_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type num_elements_per_row{(cudf::size_type)state.range(1)};
-  const auto num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
+  cudf::size_type const base_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const num_elements_per_row{(cudf::size_type)state.range(1)};
+  auto const num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
 
   auto source_base_col = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                                  base_size,
@@ -122,7 +122,11 @@ void BM_lists_scatter(::benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    scatter(cudf::table_view{{*source}}, *scatter_map, cudf::table_view{{*target}}, mr);
+    scatter(cudf::table_view{{*source}},
+            *scatter_map,
+            cudf::table_view{{*target}},
+            cudf::get_default_stream(),
+            mr);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * 2 *

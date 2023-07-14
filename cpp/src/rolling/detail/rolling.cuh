@@ -22,7 +22,7 @@
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
 
-#include <reductions/struct_minmax_util.cuh>
+#include <reductions/nested_type_minmax_util.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
