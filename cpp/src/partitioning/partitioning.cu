@@ -731,9 +731,9 @@ namespace {
  */
 template <typename Key>
 struct IdentityHash {
-  using result_type = uint32_t;
-  IdentityHash()    = default;
-  constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
+  using result_type        = uint32_t;
+  constexpr IdentityHash() = default;
+  constexpr IdentityHash(uint32_t) {}
 
   template <typename return_type = result_type>
   constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
@@ -748,9 +748,6 @@ struct IdentityHash {
   {
     return static_cast<result_type>(key);
   }
-
- private:
-  uint32_t m_seed{0};
 };
 
 template <template <typename> class hash_function>
