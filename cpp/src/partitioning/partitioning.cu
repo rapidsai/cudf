@@ -726,8 +726,8 @@ namespace detail {
 namespace {
 
 /**
- * @brief  This hash function simply returns the value that is asked to be hash
- * reinterpreted as the result_type of the functor.
+ * @brief This hash function simply returns the input value cast to the
+ * result_type of the functor.
  */
 template <typename Key>
 struct IdentityHash {

@@ -21,9 +21,6 @@
 namespace cudf::hashing::detail {
 
 template <typename Key>
-struct MurmurHash3_x86_32;
-
-template <typename Key>
 using default_hash = MurmurHash3_x86_32<Key>;
 
 }  // namespace cudf::hashing::detail
