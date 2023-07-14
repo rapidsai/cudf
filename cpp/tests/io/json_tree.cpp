@@ -258,6 +258,7 @@ tree_meta_t2 get_tree_representation_cpu(
       case cuio_json::token_t::ValueEnd: return "VE";
       case cuio_json::token_t::StructMemberBegin: return " <";
       case cuio_json::token_t::StructMemberEnd: return " >";
+      case cuio_json::token_t::LineEnd: return ";";
       default: return ".";
     }
   };
