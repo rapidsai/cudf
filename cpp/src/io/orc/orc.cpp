@@ -24,9 +24,19 @@
 
 #include <string>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc {
+
+namespace {
+[[nodiscard]] constexpr uint32_t varint_size(uint64_t val)
+{
+  auto len = 1u;
+  while (val > 0x7f) {
+    val >>= 7;
+    ++len;
+  }
+  return len;
+}
+}  // namespace
 
 uint32_t ProtobufReader::read_field_size(uint8_t const* end)
 {
@@ -515,6 +525,4 @@ void metadata::init_parent_descriptors()
   }
 }
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc

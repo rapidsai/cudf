@@ -29,8 +29,8 @@ static void BM_sort(benchmark::State& state, bool nulls)
 {
   using Type       = int;
   auto const dtype = cudf::type_to_id<Type>();
-  const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
-  const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
+  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
+  cudf::size_type const n_cols{(cudf::size_type)state.range(1)};
 
   // Create table with values in the range [0,100)
   data_profile const profile = data_profile_builder()
