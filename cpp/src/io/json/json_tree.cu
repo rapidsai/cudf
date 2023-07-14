@@ -28,14 +28,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cuco/static_map.cuh>
-
-#include <cub/device/device_radix_sort.cuh>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
+
+#include <cub/device/device_radix_sort.cuh>
+
+#include <cuco/static_map.cuh>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>

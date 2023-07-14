@@ -23,11 +23,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
-#include <cuco/static_map.cuh>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
+
+#include <cuco/static_map.cuh>
 
 #include <cstdint>
 
