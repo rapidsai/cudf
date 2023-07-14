@@ -37,6 +37,7 @@
 
 namespace cudf::io::detail::parquet {
 
+namespace {
 /**
  * @brief Converts statistics in column chunks to 2 device columns - min, max values.
  *
@@ -367,6 +368,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
 };
+}  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
