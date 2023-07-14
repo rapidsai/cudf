@@ -32,13 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 //! IO interfaces
 namespace io {
@@ -286,8 +279,6 @@ constexpr inline auto is_byte_like_type()
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
-
   source_info() = default;
 
   /**
@@ -438,12 +429,6 @@ struct source_info {
    * @return The device buffers of the input
    */
   [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
-  /**
-   * @brief Get the input files
-   *
-   * @return The input files
-   */
-  [[nodiscard]] auto const& files() const { return _files; }
   /**
    * @brief Get the user sources of the input
    *
