@@ -83,7 +83,7 @@ class murmur_device_row_hasher {
       if (_check_nulls && col.is_null(row_index)) {
         return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
       }
-      auto const hasher = MurmurHash3_64_128<T>{_seed.first};
+      auto const hasher = MurmurHash3_x64_128<T>{_seed.first};
       return hasher(col.element<T>(row_index));
     }
 
@@ -106,10 +106,10 @@ class murmur_device_row_hasher {
 
 }  // namespace
 
-std::unique_ptr<table> murmur_hash3_x64_128(table_view const& input,
-                                            uint64_t seed,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
+                                           uint64_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto output1 = make_numeric_column(
     data_type(type_id::UINT64), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
@@ -137,13 +137,13 @@ std::unique_ptr<table> murmur_hash3_x64_128(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<table> murmur_hash3_x64_128(table_view const& input,
-                                            uint64_t seed,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
+                                           uint64_t seed,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::murmur_hash3_x64_128(input, seed, stream, mr);
+  return detail::murmurhash3_x64_128(input, seed, stream, mr);
 }
 
 }  // namespace hashing
