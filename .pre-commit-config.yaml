@@ -40,7 +40,7 @@ repos:
                 types_or: [python, cython]
                 additional_dependencies: ["flake8-force"]
       - repo: https://github.com/MarcoGorelli/cython-lint
-        rev: v0.1.10
+        rev: v0.15.0
         hooks:
               - id: cython-lint
       - repo: https://github.com/pre-commit/mirrors-mypy

@@ -49,7 +49,7 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as c_null_count
+from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -323,7 +323,7 @@ cdef class Column:
         with acquire_spill_lock():
             if not self.nullable:
                 return 0
-            return c_null_count(
+            return cpp_null_count(
                 <libcudf_types.bitmask_type*><uintptr_t>(
                     self.base_mask.get_ptr(mode="read")
                 ),
