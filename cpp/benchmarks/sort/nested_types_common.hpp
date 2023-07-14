@@ -17,7 +17,6 @@
 #pragma once
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -33,8 +32,8 @@ inline std::unique_ptr<cudf::table> create_lists_data(nvbench::state& state,
                                                       cudf::size_type const min_val     = 0,
                                                       cudf::size_type const max_val     = 5)
 {
-  const size_t size_bytes(state.get_int64("size_bytes"));
-  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
+  size_t const size_bytes(state.get_int64("size_bytes"));
+  cudf::size_type const depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
   auto const null_frequency{state.get_float64("null_frequency")};
 
   data_profile table_profile;
@@ -55,9 +54,9 @@ inline std::unique_ptr<cudf::table> create_structs_data(nvbench::state& state,
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution(0, 100);
 
-  const cudf::size_type n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
-  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
-  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
+  cudf::size_type const depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
+  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
