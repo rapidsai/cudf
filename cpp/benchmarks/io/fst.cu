@@ -60,7 +60,7 @@ auto make_test_json_data(nvbench::state& state)
 
   auto d_input_scalar                = cudf::make_string_scalar(input);
   auto& d_string_scalar              = static_cast<cudf::string_scalar&>(*d_input_scalar);
-  const cudf::size_type repeat_times = string_size / input.size();
+  cudf::size_type const repeat_times = string_size / input.size();
   return cudf::strings::repeat_string(d_string_scalar, repeat_times);
 }
 
