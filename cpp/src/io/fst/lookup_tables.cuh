@@ -274,12 +274,8 @@ auto make_symbol_group_lut(std::array<std::string, NUM_SYMBOL_GROUPS> const& sym
  *
  * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
- * @tparam PreMapOpT A function object that is invoked with `(lut, state_id, match_id)` and must
- * return the new target state for the given `(state_id, match_id)`-combination.  lut` is an
- * instance of the lookup table. If no particular mapping is needed, an instance of `IdentityOp`
- * can be used.
  */
-template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES, typename PreMapOpT>
+template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES>
 class TransitionTable {
  private:
   // Type used
@@ -294,16 +290,14 @@ class TransitionTable {
   using TempStorage                   = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
-    using LookupTableT = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES, PreMapOpT>;
+    using LookupTableT = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES>;
 
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
-    PreMapOpT pre_map_op;
   };
 
   template <typename StateIdT>
   static KernelParameter InitDeviceTransitionTable(
-    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
-    PreMapOpT pre_map_op)
+    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table)
   {
     KernelParameter init_data{};
     // translation_table[state][symbol] -> new state
@@ -318,15 +312,12 @@ class TransitionTable {
       }
     }
 
-    // Initialize function object used for transition table lookups
-    init_data.pre_map_op = pre_map_op;
-
     return init_data;
   }
 
   constexpr CUDF_HOST_DEVICE TransitionTable(KernelParameter const& kernel_param,
                                              TempStorage& temp_storage)
-    : temp_storage(temp_storage.Alias()), pre_map_op(kernel_param.pre_map_op)
+    : temp_storage(temp_storage.Alias())
   {
 #if CUB_PTX_ARCH > 0
     for (int i = threadIdx.x; i < MAX_NUM_STATES * MAX_NUM_SYMBOLS; i += blockDim.x) {
@@ -351,27 +342,11 @@ class TransitionTable {
   constexpr CUDF_HOST_DEVICE int32_t operator()(StateIndexT const state_id,
                                                 SymbolIndexT const match_id) const
   {
-    return pre_map_op(*this, state_id, match_id);
-  }
-
-  /**
-   * @brief Returns a random-access iterator to lookup all the state transitions for one specific
-   * symbol from an arbitrary old_state, i.e., it[old_state] -> new_state.
-   *
-   * @param state_id The DFA's current state index from which we'll transition
-   * @param match_id The symbol group id of the symbol that we just read in
-   * @return
-   */
-  template <typename StateIndexT, typename SymbolIndexT>
-  constexpr CUDF_HOST_DEVICE int32_t lookup(StateIndexT const state_id,
-                                            SymbolIndexT const match_id) const
-  {
     return temp_storage.transitions[match_id * MAX_NUM_STATES + state_id];
   }
 
  private:
   _TempStorage& temp_storage;
-  PreMapOpT pre_map_op;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
   {
@@ -380,34 +355,6 @@ class TransitionTable {
     return private_storage;
   }
 };
-
-/**
- * @brief Creates a transition table of type `TransitionTable` that uses a two-staged lookup
- * approach. @p pre_map_op is a function object that is invoked with `(lut, state_id, match_id)` and
- * must return the new target state for the given `(state_id, match_id)`-combination.  lut` is an
- * instance of the lookup table specified by @p transition_table.
- *
- * @tparam StateIdT An integral type used to represent state indexes
- * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
- * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
- * @tparam PreMapOpT A unary function object type that returns the new target state for a given
- * `(state_id, match_id)`-combination
- * @param transition_table The transition table
- * @param pre_map_op A unary function object that returns the new target state for a given
- * `(state_id, match_id)`-combination
- * @return A transition table of type `TransitionTable`
- */
-template <typename StateIdT,
-          std::size_t MAX_NUM_SYMBOLS,
-          std::size_t MAX_NUM_STATES,
-          typename PreMapOpT>
-auto make_transition_table(
-  std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table,
-  PreMapOpT pre_map_op)
-{
-  using transition_table_t = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES, PreMapOpT>;
-  return transition_table_t::InitDeviceTransitionTable(transition_table, pre_map_op);
-}
 
 /**
  * @brief Creates a transition table of type `TransitionTable` that maps `(state_id, match_id)`
@@ -423,7 +370,8 @@ template <typename StateIdT, std::size_t MAX_NUM_SYMBOLS, std::size_t MAX_NUM_ST
 auto make_transition_table(
   std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table)
 {
-  return make_transition_table(transition_table, IdentityOp{});
+  using transition_table_t = TransitionTable<MAX_NUM_SYMBOLS, MAX_NUM_STATES>;
+  return transition_table_t::InitDeviceTransitionTable(transition_table);
 }
 
 /**
@@ -528,11 +476,6 @@ class dfa_device_view {
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
  * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
  * be used.
- * @tparam PreMapOpT A function object that must implement two signatures: (1) with `(lut, state_id,
- * match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset, read_symbol)`.
- * Invocations of the first signature, (1), must return the number of symbols that are emitted for
- * the given transition. The second signature, (2), must return the i-th symbol to be emitted for
- * that transition, where `i` corresponds to `relative_offse`.
  */
 template <typename OutSymbolT,
           typename OutSymbolOffsetT,
