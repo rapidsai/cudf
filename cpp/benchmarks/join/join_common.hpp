@@ -96,8 +96,8 @@ void BM_join(state_type& state, Join JoinFunc)
     }
   }();
 
-  const double selectivity = 0.3;
-  const int multiplicity   = 1;
+  double const selectivity = 0.3;
+  int const multiplicity   = 1;
 
   // Generate build and probe tables
   auto build_random_null_mask = [](int size) {
