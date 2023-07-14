@@ -23,8 +23,8 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>

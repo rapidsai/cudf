@@ -21,7 +21,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 

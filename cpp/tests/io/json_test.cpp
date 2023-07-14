@@ -23,7 +23,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>

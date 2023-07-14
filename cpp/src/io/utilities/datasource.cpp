@@ -17,6 +17,7 @@
 #include "file_io_utilities.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
