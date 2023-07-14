@@ -538,8 +538,7 @@ template <typename OutSymbolT,
           typename OutSymbolOffsetT,
           int32_t MAX_NUM_SYMBOLS,
           int32_t MAX_NUM_STATES,
-          int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES),
-          typename PreMapOpT     = IdentityOp>
+          int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES)>
 class TransducerLookupTable {
  private:
   struct _TempStorage {
@@ -555,12 +554,10 @@ class TransducerLookupTable {
                                                OutSymbolOffsetT,
                                                MAX_NUM_SYMBOLS,
                                                MAX_NUM_STATES,
-                                               MAX_TABLE_SIZE,
-                                               PreMapOpT>;
+                                               MAX_TABLE_SIZE>;
 
     OutSymbolOffsetT d_out_offsets[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
     OutSymbolT d_out_symbols[MAX_TABLE_SIZE];
-    PreMapOpT pre_map_op;
   };
 
   /**
@@ -571,8 +568,7 @@ class TransducerLookupTable {
    */
   static KernelParameter InitDeviceTranslationTable(
     std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
-      translation_table,
-    PreMapOpT pre_map_op)
+      translation_table)
   {
     KernelParameter init_data;
     std::vector<OutSymbolT> out_symbols;
@@ -609,14 +605,11 @@ class TransducerLookupTable {
       std::cbegin(out_symbol_offsets), std::cend(out_symbol_offsets), init_data.d_out_offsets);
     std::copy(std::cbegin(out_symbols), std::cend(out_symbols), init_data.d_out_symbols);
 
-    init_data.pre_map_op = pre_map_op;
-
     return init_data;
   }
 
  private:
   _TempStorage& temp_storage;
-  PreMapOpT pre_map_op;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
   {
@@ -633,7 +626,7 @@ class TransducerLookupTable {
    */
   CUDF_HOST_DEVICE TransducerLookupTable(KernelParameter const& kernel_param,
                                          TempStorage& temp_storage)
-    : temp_storage(temp_storage.Alias()), pre_map_op(kernel_param.pre_map_op)
+    : temp_storage(temp_storage.Alias())
   {
     constexpr uint32_t num_offsets = MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1;
 #if CUB_PTX_ARCH > 0
@@ -659,77 +652,21 @@ class TransducerLookupTable {
   constexpr CUDF_HOST_DEVICE auto operator()(StateIndexT const state_id,
                                              SymbolIndexT const match_id,
                                              RelativeOffsetT const relative_offset,
-                                             SymbolT const read_symbol) const
-  {
-    return pre_map_op(*this, state_id, match_id, relative_offset, read_symbol);
-  }
-
-  template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
-  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT operator()(StateIndexT const state_id,
-                                                         SymbolIndexT const match_id,
-                                                         SymbolT const read_symbol) const
-  {
-    return pre_map_op(*this, state_id, match_id, read_symbol);
-  }
-
-  template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT, typename SymbolT>
-  constexpr CUDF_HOST_DEVICE auto lookup(StateIndexT const state_id,
-                                         SymbolIndexT const match_id,
-                                         RelativeOffsetT const relative_offset,
-                                         SymbolT const /*read_symbol*/) const
+                                             SymbolT const /*read_symbol*/) const
   {
     auto offset = temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id] + relative_offset;
     return temp_storage.out_symbols[offset];
   }
 
   template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
-  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT lookup(StateIndexT const state_id,
-                                                     SymbolIndexT const match_id,
-                                                     SymbolT const /*read_symbol*/) const
+  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT operator()(StateIndexT const state_id,
+                                                         SymbolIndexT const match_id,
+                                                         SymbolT const /*read_symbol*/) const
   {
     return temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id + 1] -
            temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id];
   }
 };
-
-/**
- * @brief Creates a translation table that maps (old_state, symbol_group_id) transitions to a
- * sequence of symbols that the finite-state transducer is supposed to output for each transition.
- *
- * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
- * be used
- * @tparam OutSymbolT The symbol type being output
- * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
- * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
- * @tparam PreMapOpT A function object type that must implement two signatures: (1) with `(lut,
- * state_id, match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset,
- * read_symbol)`
- * @param translation_table The translation table
- * @param pre_map_op A function object that must implement two signatures: (1) with `(lut, state_id,
- * match_id, read_symbol)` and (2) with `(lut, state_id, match_id, relative_offset, read_symbol)`.
- * Invocations of the first signature, (1), must return the number of symbols that are emitted for
- * the given transition. The second signature, (2), must return the i-th symbol to be emitted for
- * that transition, where `i` corresponds to `relative_offse`
- * @return A translation table of type `TransducerLookupTable`.
- */
-template <std::size_t MAX_TABLE_SIZE,
-          typename OutSymbolT,
-          std::size_t MAX_NUM_SYMBOLS,
-          std::size_t MAX_NUM_STATES,
-          typename PreMapOpT>
-auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>,
-                                       MAX_NUM_STATES> const& translation_table,
-                            PreMapOpT pre_map_op)
-{
-  using OutSymbolOffsetT    = int32_t;
-  using translation_table_t = TransducerLookupTable<OutSymbolT,
-                                                    OutSymbolOffsetT,
-                                                    MAX_NUM_SYMBOLS,
-                                                    MAX_NUM_STATES,
-                                                    MAX_TABLE_SIZE,
-                                                    PreMapOpT>;
-  return translation_table_t::InitDeviceTranslationTable(translation_table, pre_map_op);
-}
 
 /**
  * @brief Creates a translation table that maps (old_state, symbol_group_id) transitions to a
@@ -750,7 +687,13 @@ template <std::size_t MAX_TABLE_SIZE,
 auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>,
                                        MAX_NUM_STATES> const& translation_table)
 {
-  return make_translation_table<MAX_TABLE_SIZE>(translation_table, IdentityOp{});
+  using OutSymbolOffsetT    = int32_t;
+  using translation_table_t = TransducerLookupTable<OutSymbolT,
+                                                    OutSymbolOffsetT,
+                                                    MAX_NUM_SYMBOLS,
+                                                    MAX_NUM_STATES,
+                                                    MAX_TABLE_SIZE>;
+  return translation_table_t::InitDeviceTranslationTable(translation_table);
 }
 
 template <typename TranslationOpT>
