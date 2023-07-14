@@ -597,7 +597,7 @@ def test_parquet_read_filter_and_project(tmpdir):
     columns = ["b"]
     filters = [[("a", "==", 5), ("c", ">", 20)]]
     got = dask_cudf.read_parquet(path, columns=columns, filters=filters)
-    got.compute(scheduler="synchronous")
+
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     dd.assert_eq(got, expected)
